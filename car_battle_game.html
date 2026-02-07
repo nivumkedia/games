@@ -1,0 +1,1777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stunt Car Battle Royale!</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
+            color: white;
+        }
+        #gameCanvas {
+            border: 4px solid white;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            background: #87ceeb;
+            display: none;
+        }
+        #startMenu {
+            text-align: center;
+            background: rgba(0,0,0,0.7);
+            padding: 60px 80px;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+        #startMenu h1 {
+            font-size: 48px;
+            margin-bottom: 40px;
+            text-shadow: 3px 3px 6px rgba(0,0,0,0.8);
+        }
+        #startMenu p {
+            font-size: 20px;
+            margin-bottom: 30px;
+        }
+        #storySelect {
+            font-size: 24px;
+            padding: 12px 24px;
+            margin: 10px 0;
+            border-radius: 10px;
+            border: none;
+            background: #667eea;
+            color: white;
+            cursor: pointer;
+        }
+        #startButton {
+            font-size: 28px;
+            padding: 18px 60px;
+            margin-top: 10px;
+            border-radius: 15px;
+            border: none;
+            background: #00ff88;
+            color: #000;
+            cursor: pointer;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+        #startButton:hover {
+            transform: scale(1.1);
+        }
+        #info {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 18px;
+            background: rgba(0,0,0,0.3);
+            padding: 15px 30px;
+            border-radius: 10px;
+            display: none;
+        }
+        #status {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="startMenu">
+        <h1>🏎️ STUNT CAR BATTLE ROYALE 🏎️</h1>
+        <p style="margin-bottom: 30px;">Choose your arena size!</p>
+        <label for="storySelect" style="font-size: 20px;">Number of Stories (Levels):</label><br>
+        <select id="storySelect" style="margin-top: 10px;">
+            <option value="3">3 Stories (3 Bots)</option>
+            <option value="4">4 Stories (4 Bots)</option>
+            <option value="5" selected>5 Stories (5 Bots)</option>
+            <option value="6">6 Stories (6 Bots)</option>
+            <option value="7">7 Stories (7 Bots)</option>
+            <option value="8">8 Stories (8 Bots)</option>
+            <option value="9">9 Stories (9 Bots)</option>
+            <option value="10">10 Stories (10 Bots) - INSANE!</option>
+        </select>
+        <div style="margin-top: 30px; margin-bottom: 30px;">
+            <input type="checkbox" id="challengeCheck" style="width: 20px; height: 20px; cursor: pointer;">
+            <label for="challengeCheck" style="font-size: 20px; cursor: pointer;"> Challenge Mode (All Bots vs YOU!)</label>
+        </div>
+        <button id="startButton">START BATTLE!</button>
+    </div>
+
+    <canvas id="gameCanvas" width="1400" height="900"></canvas>
+
+    <div id="info">
+        <div id="status">BATTLE ROYALE - Last Car Standing Wins!</div>
+        <div class="controls">
+            Arrow Keys: Move | Arrow Up: Jump | Space: Brake | Press R to restart<br>
+            ⚠️ WARNING: 4 seconds idle = ELIMINATION!
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const statusText = document.getElementById('status');
+        const startMenu = document.getElementById('startMenu');
+        const infoDiv = document.getElementById('info');
+        const storySelect = document.getElementById('storySelect');
+        const startButton = document.getElementById('startButton');
+        const challengeCheck = document.getElementById('challengeCheck');
+
+        let gameOver = false;
+        let gameStarted = false;
+        let numStories = 5;
+        let numBots = 5;
+        let challengeMode = false;
+        const GRAVITY = 0.6;
+        const STORY_HEIGHT = 150;
+        const GROUND_Y = 850;
+
+        let track = {};
+        let player = {};
+        let aiCars = [];
+        let particles = [];
+        let gameTimer = 0;
+        let hunterBot = null;
+        let lastKeyPressTime = 0;
+        const IDLE_TIMEOUT = 240; // 4 seconds at 60fps
+        let cameraX = 0;
+        let cameraY = 0;
+        let cameraShakeX = 0;
+        let cameraShakeY = 0;
+
+        // Particle system for visual effects
+        class Particle {
+            constructor(x, y, color, vx, vy) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.vx = vx;
+                this.vy = vy;
+                this.life = 1.0;
+                this.size = Math.random() * 4 + 2;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += GRAVITY * 0.3;
+                this.life -= 0.02;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        function spawnParticles(x, y, count, color) {
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 5 + 2;
+                particles.push(new Particle(
+                    x, y, color,
+                    Math.cos(angle) * speed,
+                    Math.sin(angle) * speed - 3
+                ));
+            }
+        }
+
+        startButton.addEventListener('click', () => {
+            numStories = parseInt(storySelect.value);
+            numBots = numStories;
+            challengeMode = challengeCheck.checked;
+            startGame();
+        });
+
+        function generateTrack() {
+            track = {
+                platforms: [],
+                ramps: [],
+                jumpPads: [],
+                teleporters: [],
+                movingPlatforms: [],
+                icePatches: [],
+                fans: [],
+                spikes: [],
+                boostPads: [],
+                obstacles: [],
+                walls: [
+                    { x: 0, y: 0, width: 20, height: canvas.height },
+                    { x: canvas.width - 20, y: 0, width: 20, height: canvas.height }
+                ]
+            };
+
+            // Generate ground - bigger platforms
+            for (let i = 0; i < 5; i++) {
+                track.platforms.push({
+                    x: i * 280,
+                    y: GROUND_Y,
+                    width: 500,
+                    height: 100,
+                    type: 'ground'
+                });
+            }
+
+            // Generate platforms for each story
+            for (let story = 1; story <= numStories; story++) {
+                const y = GROUND_Y - story * STORY_HEIGHT;
+                const numPlatforms = 5 + Math.floor(Math.random() * 2);
+
+                for (let i = 0; i < numPlatforms; i++) {
+                    const x = 50 + i * (canvas.width - 100) / numPlatforms + (Math.random() - 0.5) * 50;
+                    const width = 250 + Math.random() * 200;
+
+                    track.platforms.push({
+                        x: x,
+                        y: y + (Math.random() - 0.5) * 30,
+                        width: width,
+                        height: 65,
+                        type: story === numStories ? 'penthouse' : 'platform'
+                    });
+                }
+            }
+
+            // Generate ramps between stories
+            for (let story = 0; story < numStories; story++) {
+                const y = GROUND_Y - story * STORY_HEIGHT;
+                const numRamps = 3 + Math.floor(Math.random() * 2);
+
+                for (let i = 0; i < numRamps; i++) {
+                    const x = 100 + i * (canvas.width - 200) / numRamps;
+                    track.ramps.push({
+                        x: x,
+                        y: y,
+                        width: 130 + Math.random() * 100,
+                        height: 150 + Math.random() * 80,
+                        angle: -0.8 - Math.random() * 0.4
+                    });
+                }
+            }
+
+            // Generate jump pads
+            for (let story = 0; story <= numStories; story++) {
+                const y = GROUND_Y - story * STORY_HEIGHT - 5;
+                if (Math.random() < 0.4) {
+                    const x = 200 + Math.random() * (canvas.width - 400);
+                    track.jumpPads.push({
+                        x: x,
+                        y: y,
+                        width: 170,
+                        height: 32,
+                        power: 20 + Math.random() * 10,
+                        animation: 0
+                    });
+                }
+            }
+
+            // Generate teleporters (pairs)
+            for (let i = 0; i < Math.min(1, Math.floor(numStories / 3)); i++) {
+                const story1 = Math.floor(Math.random() * numStories);
+                const story2 = Math.floor(Math.random() * numStories);
+                const x1 = 100 + Math.random() * (canvas.width - 300);
+                const x2 = 100 + Math.random() * (canvas.width - 300);
+
+                const tp1 = {
+                    x: x1,
+                    y: GROUND_Y - story1 * STORY_HEIGHT - 50,
+                    width: 130,
+                    height: 130,
+                    linkedTo: null,
+                    cooldown: 0
+                };
+
+                const tp2 = {
+                    x: x2,
+                    y: GROUND_Y - story2 * STORY_HEIGHT - 50,
+                    width: 130,
+                    height: 130,
+                    linkedTo: tp1,
+                    cooldown: 0
+                };
+
+                tp1.linkedTo = tp2;
+                track.teleporters.push(tp1, tp2);
+            }
+
+            // Generate moving platforms
+            for (let story = 1; story <= numStories; story++) {
+                if (Math.random() < 0.6) {
+                    const y = GROUND_Y - story * STORY_HEIGHT;
+                    track.movingPlatforms.push({
+                        x: 200,
+                        y: y,
+                        width: 210,
+                        height: 55,
+                        startX: 200,
+                        endX: canvas.width - 300,
+                        speed: 1 + Math.random(),
+                        direction: 1
+                    });
+                }
+            }
+
+            // Generate ice patches
+            for (let story = 0; story <= numStories; story++) {
+                const y = GROUND_Y - story * STORY_HEIGHT - 5;
+                if (Math.random() < 0.25) {
+                    track.icePatches.push({
+                        x: 150 + Math.random() * (canvas.width - 400),
+                        y: y,
+                        width: 210 + Math.random() * 100,
+                        height: 22
+                    });
+                }
+            }
+
+            // Generate wind fans
+            for (let story = 0; story <= numStories; story++) {
+                const y = GROUND_Y - story * STORY_HEIGHT - 40;
+                if (Math.random() < 0.2) {
+                    track.fans.push({
+                        x: 100 + Math.random() * (canvas.width - 300),
+                        y: y,
+                        width: 105,
+                        height: 105,
+                        force: 0.3 + Math.random() * 0.3,
+                        direction: Math.random() < 0.5 ? 1 : -1,
+                        animation: 0
+                    });
+                }
+            }
+
+            // Generate spikes - reduced frequency
+            for (let story = 0; story <= numStories; story++) {
+                const y = GROUND_Y - story * STORY_HEIGHT;
+                if (Math.random() < 0.1) {
+                    track.spikes.push({
+                        x: 150 + Math.random() * (canvas.width - 400),
+                        y: y - 40,
+                        width: 130,
+                        height: 42
+                    });
+                }
+            }
+
+            // Generate boost pads
+            for (let story = 0; story <= numStories; story++) {
+                const y = GROUND_Y - story * STORY_HEIGHT - 5;
+                const numBoosts = 1 + Math.floor(Math.random() * 2);
+
+                for (let i = 0; i < numBoosts; i++) {
+                    track.boostPads.push({
+                        x: 100 + Math.random() * (canvas.width - 300),
+                        y: y,
+                        width: 190,
+                        height: 22
+                    });
+                }
+            }
+
+            // Generate bumpers - reduced frequency
+            for (let story = 0; story <= numStories; story++) {
+                const y = GROUND_Y - story * STORY_HEIGHT - 40;
+                if (Math.random() < 0.15) {
+                    track.obstacles.push({
+                        x: 150 + Math.random() * (canvas.width - 400),
+                        y: y,
+                        width: 75 + Math.random() * 35,
+                        height: 75 + Math.random() * 35,
+                        type: 'bumper'
+                    });
+                }
+            }
+
+            // Generate walls
+            for (let story = 0; story <= numStories; story++) {
+                const y = GROUND_Y - story * STORY_HEIGHT - 50;
+                if (Math.random() < 0.2) {
+                    track.obstacles.push({
+                        x: 200 + Math.random() * (canvas.width - 500),
+                        y: y,
+                        width: 85 + Math.random() * 45,
+                        height: 95 + Math.random() * 35,
+                        type: 'wall'
+                    });
+                }
+            }
+        }
+
+        function initializeCars() {
+            player = {
+                x: 700,
+                y: GROUND_Y - 50,
+                vx: 0,
+                vy: 0,
+                width: 105,
+                height: 60,
+                onGround: false,
+                color: '#ff0000',
+                maxSpeed: 11,
+                acceleration: 0.6,
+                jumpPower: -15,
+                rotation: 0,
+                rotationVel: 0,
+                alive: true,
+                id: 'player',
+                teleportCooldown: 0
+            };
+
+            aiCars = [];
+            const aiColors = ['#1a1a1a', '#1a1a1a', '#1a1a1a', '#1a1a1a', '#1a1a1a',
+                             '#1a1a1a', '#1a1a1a', '#1a1a1a', '#1a1a1a', '#1a1a1a'];
+
+            for (let i = 0; i < numBots; i++) {
+                const story = i % (numStories + 1);
+                const xPos = 150 + (i * 200) % (canvas.width - 300);
+                aiCars.push({
+                    x: xPos,
+                    y: GROUND_Y - story * STORY_HEIGHT - 50,
+                    vx: 0,
+                    vy: 0,
+                    width: 100,
+                    height: 55,
+                    onGround: false,
+                    color: aiColors[i],
+                    maxSpeed: 6 + Math.random() * 2,
+                    acceleration: 0.35 + Math.random() * 0.15,
+                    jumpPower: -12 - Math.random() * 2,
+                    rotation: 0,
+                    rotationVel: 0,
+                    aiTimer: Math.random() * 100,
+                    lastJump: 0,
+                    target: null,
+                    alive: true,
+                    id: `ai${i}`,
+                    teleportCooldown: 0,
+                    isHunter: false,
+                    lastHitByPlayer: 0
+                });
+            }
+        }
+
+        function startGame() {
+            startMenu.style.display = 'none';
+            canvas.style.display = 'block';
+            infoDiv.style.display = 'block';
+            gameStarted = true;
+            generateTrack();
+            initializeCars();
+            particles = [];
+            gameTimer = 0;
+            lastKeyPressTime = 0;
+            hunterBot = null;
+            cameraX = 0;
+            cameraY = 0;
+            cameraShakeX = 0;
+            cameraShakeY = 0;
+            gameLoop();
+        }
+
+        const keys = {};
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+
+            // Reset idle timer when player presses game control keys
+            if (gameStarted && !gameOver && player.alive &&
+                (e.key === 'ArrowUp' || e.key === 'ArrowDown' ||
+                 e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === ' ')) {
+                lastKeyPressTime = gameTimer;
+            }
+
+            e.preventDefault();
+        });
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+            e.preventDefault();
+        });
+
+        function updateCamera() {
+            if (!player.alive) return;
+
+            // No horizontal scrolling - world is exactly canvas width
+            cameraX = 0;
+
+            // Center camera on player vertically
+            const targetY = player.y - canvas.height / 2;
+
+            // Smooth camera movement
+            cameraY += (targetY - cameraY) * 0.1;
+
+            // Clamp camera vertically to world bounds
+            const worldTop = -(numStories * STORY_HEIGHT + 300);
+            const worldBottom = GROUND_Y + 100;
+            cameraY = Math.max(worldTop, Math.min(cameraY, worldBottom - canvas.height));
+
+            // Apply and decay screen shake
+            cameraShakeX *= 0.8;
+            cameraShakeY *= 0.8;
+            if (Math.abs(cameraShakeX) < 0.1) cameraShakeX = 0;
+            if (Math.abs(cameraShakeY) < 0.1) cameraShakeY = 0;
+        }
+
+        function addScreenShake(intensity) {
+            cameraShakeX = (Math.random() - 0.5) * intensity;
+            cameraShakeY = (Math.random() - 0.5) * intensity;
+        }
+
+        function drawBackground() {
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#1a1a2e');
+            gradient.addColorStop(0.3, '#4a5568');
+            gradient.addColorStop(0.6, '#87ceeb');
+            gradient.addColorStop(1, '#b8d4f1');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Stars - fixed in screen space
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            for (let i = 0; i < 40; i++) {
+                const x = (i * 73) % canvas.width;
+                const y = (i * 47) % 250;
+                ctx.beginPath();
+                ctx.arc(x, y, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Clouds - fixed in screen space
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            for (let i = 0; i < 8; i++) {
+                const x = 100 + i * 180;
+                const y = 200 + (i % 3) * 150;
+                ctx.beginPath();
+                ctx.arc(x, y, 20, 0, Math.PI * 2);
+                ctx.arc(x + 15, y, 25, 0, Math.PI * 2);
+                ctx.arc(x + 30, y, 20, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function drawWalls() {
+            // Walls with gradient
+            track.walls.forEach(wall => {
+                const wallGrad = ctx.createLinearGradient(wall.x, 0, wall.x + wall.width, 0);
+                wallGrad.addColorStop(0, '#1a1a1a');
+                wallGrad.addColorStop(1, '#2d3748');
+                ctx.fillStyle = wallGrad;
+                ctx.fillRect(wall.x, wall.y, wall.width, wall.height);
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(wall.x, wall.y, wall.width, wall.height);
+            });
+        }
+
+        function drawPlatforms() {
+            track.platforms.forEach(platform => {
+                ctx.save();
+
+                // Shadow
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.fillRect(platform.x + 5, platform.y + 5, platform.width, platform.height);
+
+                // Platform gradient
+                const gradient = ctx.createLinearGradient(0, platform.y, 0, platform.y + platform.height);
+                if (platform.type === 'penthouse') {
+                    gradient.addColorStop(0, '#ffd700');
+                    gradient.addColorStop(1, '#ff8c00');
+                } else if (platform.type === 'ground') {
+                    gradient.addColorStop(0, '#8b6914');
+                    gradient.addColorStop(1, '#654321');
+                } else {
+                    gradient.addColorStop(0, '#a0826d');
+                    gradient.addColorStop(1, '#6d5c4d');
+                }
+                ctx.fillStyle = gradient;
+                ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(platform.x, platform.y, platform.width, platform.height);
+
+                if (platform.type === 'penthouse') {
+                    ctx.fillStyle = '#fff';
+                    ctx.font = 'bold 14px Arial';
+                    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+                    ctx.shadowBlur = 4;
+                    ctx.fillText('👑 TOP LEVEL 👑', platform.x + platform.width / 2 - 50, platform.y + 20);
+                    ctx.shadowBlur = 0;
+                }
+
+                ctx.restore();
+            });
+        }
+
+        function drawMovingPlatforms() {
+            track.movingPlatforms.forEach(plat => {
+                // Update position
+                plat.x += plat.speed * plat.direction;
+                if (plat.x >= plat.endX || plat.x <= plat.startX) {
+                    plat.direction *= -1;
+                }
+
+                // Draw shadow
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.fillRect(plat.x + 5, plat.y + 5, plat.width, plat.height);
+
+                // Draw platform
+                const gradient = ctx.createLinearGradient(0, plat.y, 0, plat.y + plat.height);
+                gradient.addColorStop(0, '#667eea');
+                gradient.addColorStop(1, '#4a5fb8');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(plat.x, plat.y, plat.width, plat.height);
+
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(plat.x, plat.y, plat.width, plat.height);
+
+                // Arrow indicator
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 16px Arial';
+                ctx.fillText(plat.direction > 0 ? '→' : '←', plat.x + plat.width / 2 - 8, plat.y + 18);
+            });
+        }
+
+        function drawRamps() {
+            track.ramps.forEach(ramp => {
+                ctx.save();
+
+                // Shadow
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.beginPath();
+                ctx.moveTo(ramp.x + 5, ramp.y + 5);
+                ctx.lineTo(ramp.x + ramp.width + 5, ramp.y + 5);
+                ctx.lineTo(ramp.x + ramp.width + 5, ramp.y - ramp.height + 5);
+                ctx.closePath();
+                ctx.fill();
+
+                // Ramp gradient
+                const gradient = ctx.createLinearGradient(0, ramp.y, 0, ramp.y - ramp.height);
+                gradient.addColorStop(0, '#8b7355');
+                gradient.addColorStop(1, '#a0826d');
+                ctx.fillStyle = gradient;
+
+                ctx.beginPath();
+                ctx.moveTo(ramp.x, ramp.y);
+                ctx.lineTo(ramp.x + ramp.width, ramp.y);
+                ctx.lineTo(ramp.x + ramp.width, ramp.y - ramp.height);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.strokeStyle = '#654321';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                // Speed lines
+                ctx.strokeStyle = '#ffff00';
+                ctx.lineWidth = 2;
+                const lines = Math.abs(ramp.height) > 80 ? 3 : 2;
+                for (let i = 1; i <= lines; i++) {
+                    const t = i / (lines + 1);
+                    ctx.beginPath();
+                    ctx.moveTo(ramp.x + ramp.width * t, ramp.y);
+                    ctx.lineTo(ramp.x + ramp.width * t, ramp.y - ramp.height * t);
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+            });
+        }
+
+        function drawJumpPads() {
+            track.jumpPads.forEach(pad => {
+                pad.animation += 0.1;
+                const bounce = Math.sin(pad.animation) * 3;
+
+                // Shadow
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.fillRect(pad.x + 3, pad.y + 3 + bounce, pad.width, pad.height);
+
+                // Gradient
+                const gradient = ctx.createLinearGradient(0, pad.y + bounce, 0, pad.y + pad.height + bounce);
+                gradient.addColorStop(0, '#ff00ff');
+                gradient.addColorStop(1, '#ff66ff');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(pad.x, pad.y + bounce, pad.width, pad.height);
+
+                ctx.strokeStyle = '#990099';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(pad.x, pad.y + bounce, pad.width, pad.height);
+
+                // Spring icon
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(pad.x + pad.width / 2 - 10, pad.y + pad.height / 2 + bounce);
+                ctx.lineTo(pad.x + pad.width / 2, pad.y + bounce);
+                ctx.lineTo(pad.x + pad.width / 2 + 10, pad.y + pad.height / 2 + bounce);
+                ctx.stroke();
+            });
+        }
+
+        function drawTeleporters() {
+            track.teleporters.forEach((tp, idx) => {
+                const time = Date.now() / 100 + idx;
+                const pulse = Math.sin(time) * 0.2 + 0.8;
+
+                // Glow effect
+                ctx.save();
+                ctx.shadowColor = '#00ffff';
+                ctx.shadowBlur = 20 * pulse;
+
+                // Portal gradient
+                const gradient = ctx.createRadialGradient(
+                    tp.x + tp.width / 2, tp.y + tp.height / 2, 0,
+                    tp.x + tp.width / 2, tp.y + tp.height / 2, tp.width / 2
+                );
+                gradient.addColorStop(0, 'rgba(0, 255, 255, ' + pulse + ')');
+                gradient.addColorStop(1, 'rgba(0, 150, 200, ' + pulse * 0.5 + ')');
+                ctx.fillStyle = gradient;
+
+                ctx.beginPath();
+                ctx.arc(tp.x + tp.width / 2, tp.y + tp.height / 2, tp.width / 2, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.strokeStyle = '#00ffff';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                ctx.shadowBlur = 0;
+                ctx.restore();
+
+                // Teleport symbol
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 24px Arial';
+                ctx.fillText('⚡', tp.x + tp.width / 2 - 10, tp.y + tp.height / 2 + 8);
+
+                if (tp.cooldown > 0) tp.cooldown--;
+            });
+        }
+
+        function drawIcePatches() {
+            track.icePatches.forEach(ice => {
+                const gradient = ctx.createLinearGradient(ice.x, 0, ice.x + ice.width, 0);
+                gradient.addColorStop(0, 'rgba(200, 230, 255, 0.7)');
+                gradient.addColorStop(0.5, 'rgba(220, 240, 255, 0.9)');
+                gradient.addColorStop(1, 'rgba(200, 230, 255, 0.7)');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(ice.x, ice.y, ice.width, ice.height);
+
+                ctx.strokeStyle = '#88ccff';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(ice.x, ice.y, ice.width, ice.height);
+
+                // Ice crystals
+                ctx.fillStyle = '#fff';
+                for (let i = 0; i < 3; i++) {
+                    const cx = ice.x + (i + 1) * ice.width / 4;
+                    const cy = ice.y + ice.height / 2;
+                    ctx.beginPath();
+                    ctx.moveTo(cx, cy - 3);
+                    ctx.lineTo(cx + 3, cy);
+                    ctx.lineTo(cx, cy + 3);
+                    ctx.lineTo(cx - 3, cy);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+            });
+        }
+
+        function drawFans() {
+            track.fans.forEach(fan => {
+                fan.animation += 0.2;
+
+                // Shadow
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.fillRect(fan.x + 3, fan.y + 3, fan.width, fan.height);
+
+                // Fan body
+                const gradient = ctx.createLinearGradient(fan.x, fan.y, fan.x + fan.width, fan.y);
+                gradient.addColorStop(0, '#555');
+                gradient.addColorStop(1, '#888');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(fan.x, fan.y, fan.width, fan.height);
+
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(fan.x, fan.y, fan.width, fan.height);
+
+                // Spinning blades
+                ctx.save();
+                ctx.translate(fan.x + fan.width / 2, fan.y + fan.height / 2);
+                ctx.rotate(fan.animation);
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(-15, 0);
+                ctx.lineTo(15, 0);
+                ctx.moveTo(0, -15);
+                ctx.lineTo(0, 15);
+                ctx.stroke();
+                ctx.restore();
+
+                // Wind particles
+                for (let i = 0; i < 3; i++) {
+                    const offset = (fan.animation + i) % 3;
+                    const wx = fan.x + fan.width / 2 + fan.direction * offset * 20;
+                    const wy = fan.y + fan.height / 2 + (Math.random() - 0.5) * 20;
+                    ctx.fillStyle = 'rgba(200, 200, 255, 0.4)';
+                    ctx.beginPath();
+                    ctx.arc(wx, wy, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+        }
+
+        function drawSpikes() {
+            track.spikes.forEach(spike => {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                for (let i = 0; i < spike.width / 20; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(spike.x + i * 20 + 3, spike.y + spike.height + 3);
+                    ctx.lineTo(spike.x + i * 20 + 10 + 3, spike.y + 3);
+                    ctx.lineTo(spike.x + (i + 1) * 20 + 3, spike.y + spike.height + 3);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+
+                const gradient = ctx.createLinearGradient(0, spike.y, 0, spike.y + spike.height);
+                gradient.addColorStop(0, '#ff0000');
+                gradient.addColorStop(1, '#990000');
+                ctx.fillStyle = gradient;
+
+                for (let i = 0; i < spike.width / 20; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(spike.x + i * 20, spike.y + spike.height);
+                    ctx.lineTo(spike.x + i * 20 + 10, spike.y);
+                    ctx.lineTo(spike.x + (i + 1) * 20, spike.y + spike.height);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+            });
+        }
+
+        function drawBoostPads() {
+            track.boostPads.forEach((pad, idx) => {
+                const time = Date.now() / 200;
+                const offset = Math.sin(time + idx) * 2;
+
+                // Shadow
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.fillRect(pad.x + 3, pad.y + offset + 3, pad.width, pad.height);
+
+                // Gradient
+                const gradient = ctx.createLinearGradient(pad.x, 0, pad.x + pad.width, 0);
+                gradient.addColorStop(0, '#ff6600');
+                gradient.addColorStop(0.5, '#ffdd00');
+                gradient.addColorStop(1, '#ff6600');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(pad.x, pad.y + offset, pad.width, pad.height);
+
+                // Animated stripes
+                ctx.fillStyle = '#ff4400';
+                const stripeWidth = 15;
+                const stripeOffset = (Date.now() / 50) % (stripeWidth * 2);
+                for (let i = -stripeOffset; i < pad.width; i += stripeWidth * 2) {
+                    ctx.fillRect(pad.x + i, pad.y + offset, stripeWidth, pad.height);
+                }
+
+                ctx.strokeStyle = '#ff4400';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(pad.x, pad.y + offset, pad.width, pad.height);
+            });
+        }
+
+        function drawObstacles() {
+            track.obstacles.forEach(obs => {
+                if (obs.type === 'bumper') {
+                    const centerX = obs.x + obs.width / 2;
+                    const centerY = obs.y + obs.height / 2;
+                    const radius = obs.width / 2;
+
+                    // Shadow
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                    ctx.beginPath();
+                    ctx.arc(centerX + 3, centerY + 3, radius, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Gradient
+                    const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
+                    gradient.addColorStop(0, '#ff6666');
+                    gradient.addColorStop(1, '#ff0000');
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath();
+                    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+
+                    // Hazard stripes
+                    ctx.strokeStyle = '#ffff00';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(centerX, centerY, radius - 5, 0, Math.PI * 2);
+                    ctx.stroke();
+                } else {
+                    // Shadow
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                    ctx.fillRect(obs.x + 3, obs.y + 3, obs.width, obs.height);
+
+                    // Gradient
+                    const gradient = ctx.createLinearGradient(0, obs.y, 0, obs.y + obs.height);
+                    gradient.addColorStop(0, '#666');
+                    gradient.addColorStop(1, '#333');
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(obs.x, obs.y, obs.width, obs.height);
+
+                    // Hazard stripes
+                    ctx.strokeStyle = '#ffff00';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(obs.x, obs.y);
+                    ctx.lineTo(obs.x + obs.width, obs.y + obs.height);
+                    ctx.moveTo(obs.x + obs.width, obs.y);
+                    ctx.lineTo(obs.x, obs.y + obs.height);
+                    ctx.stroke();
+                }
+            });
+        }
+
+        function drawCar(car) {
+            if (!car.alive) return;
+
+            ctx.save();
+            ctx.translate(car.x, car.y);
+            ctx.rotate(car.rotation);
+
+            // Hunter bot glow
+            if (car.isHunter) {
+                ctx.shadowColor = '#ff0000';
+                ctx.shadowBlur = 20;
+                ctx.strokeStyle = '#ff0000';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(-car.width / 2 - 2, -car.height / 2 - 2, car.width + 4, car.height + 4);
+                ctx.shadowBlur = 0;
+            }
+
+            // Shadow
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+            ctx.fillRect(-car.width / 2 + 3, -car.height / 2 + 3, car.width, car.height);
+
+            // Car body gradient
+            const gradient = ctx.createLinearGradient(0, -car.height / 2, 0, car.height / 2);
+            gradient.addColorStop(0, car.color);
+            gradient.addColorStop(1, adjustBrightness(car.color, -30));
+            ctx.fillStyle = gradient;
+            ctx.fillRect(-car.width / 2, -car.height / 2, car.width, car.height);
+
+            // Outline
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(-car.width / 2, -car.height / 2, car.width, car.height);
+
+            // Windows
+            ctx.fillStyle = 'rgba(100, 150, 200, 0.8)';
+            ctx.fillRect(-15, -car.height / 2 + 5, 24, 13);
+
+            // Spoiler
+            ctx.fillStyle = car.color;
+            ctx.fillRect(-car.width / 2 - 8, -car.height / 2, 8, 16);
+
+            // Wheels with shine
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(-car.width / 3, car.height / 2 + 3, 9, 0, Math.PI * 2);
+            ctx.arc(car.width / 3, car.height / 2 + 3, 9, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#444';
+            ctx.beginPath();
+            ctx.arc(-car.width / 3, car.height / 2 + 3, 5, 0, Math.PI * 2);
+            ctx.arc(car.width / 3, car.height / 2 + 3, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        function adjustBrightness(color, amount) {
+            const num = parseInt(color.replace('#', ''), 16);
+            const r = Math.min(255, Math.max(0, (num >> 16) + amount));
+            const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00FF) + amount));
+            const b = Math.min(255, Math.max(0, (num & 0x0000FF) + amount));
+            return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+        }
+
+        function checkPlatformCollision(car) {
+            // Check regular platforms
+            for (let platform of track.platforms) {
+                const carBottom = car.y + car.height / 2;
+                const carLeft = car.x - car.width / 2;
+                const carRight = car.x + car.width / 2;
+
+                if (carRight > platform.x && carLeft < platform.x + platform.width) {
+                    if (carBottom >= platform.y && carBottom <= platform.y + platform.height && car.vy >= 0) {
+                        car.y = platform.y - car.height / 2;
+                        car.vy = 0;
+                        car.onGround = true;
+                        car.rotation = 0;
+                        return true;
+                    }
+                }
+            }
+
+            // Check moving platforms
+            for (let plat of track.movingPlatforms) {
+                const carBottom = car.y + car.height / 2;
+                const carLeft = car.x - car.width / 2;
+                const carRight = car.x + car.width / 2;
+
+                if (carRight > plat.x && carLeft < plat.x + plat.width) {
+                    if (carBottom >= plat.y && carBottom <= plat.y + plat.height && car.vy >= 0) {
+                        car.y = plat.y - car.height / 2;
+                        car.vy = 0;
+                        car.onGround = true;
+                        car.rotation = 0;
+                        car.vx += plat.speed * plat.direction * 0.5;
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        function checkRampCollision(car) {
+            for (let ramp of track.ramps) {
+                const carBottom = car.y + car.height / 2;
+                const carLeft = car.x - car.width / 2;
+                const carRight = car.x + car.width / 2;
+
+                if (carRight > ramp.x && carLeft < ramp.x + ramp.width) {
+                    const relX = car.x - ramp.x;
+                    const rampHeightAtX = (relX / ramp.width) * ramp.height;
+                    const rampY = ramp.y - rampHeightAtX;
+
+                    if (carBottom >= rampY - 5 && carBottom <= rampY + 10 && car.vy >= 0) {
+                        car.y = rampY - car.height / 2;
+                        car.vy = 0;
+                        car.onGround = true;
+                        car.rotation = Math.atan(ramp.height / ramp.width);
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function checkInteractives(car) {
+            // Boost pads
+            for (let pad of track.boostPads) {
+                if (car.x + car.width / 2 > pad.x &&
+                    car.x - car.width / 2 < pad.x + pad.width &&
+                    car.y + car.height / 2 >= pad.y - 5 &&
+                    car.y + car.height / 2 <= pad.y + pad.height + 5 &&
+                    car.onGround) {
+
+                    if (car.vx > 0) car.vx = Math.min(car.vx + 2, car.maxSpeed * 1.8);
+                    else if (car.vx < 0) car.vx = Math.max(car.vx - 2, -car.maxSpeed * 1.8);
+                    spawnParticles(car.x, car.y, 5, '#ff6600');
+                }
+            }
+
+            // Jump pads
+            for (let pad of track.jumpPads) {
+                if (car.x + car.width / 2 > pad.x &&
+                    car.x - car.width / 2 < pad.x + pad.width &&
+                    car.y + car.height / 2 >= pad.y - 5 &&
+                    car.y + car.height / 2 <= pad.y + pad.height + 5 &&
+                    car.vy >= 0) {
+
+                    car.vy = -pad.power;
+                    car.onGround = false;
+                    spawnParticles(car.x, car.y, 10, '#ff00ff');
+                }
+            }
+
+            // Teleporters
+            for (let tp of track.teleporters) {
+                if (car.teleportCooldown <= 0) {
+                    const dx = car.x - (tp.x + tp.width / 2);
+                    const dy = car.y - (tp.y + tp.height / 2);
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < tp.width / 2 + car.width / 2 && tp.linkedTo && tp.cooldown <= 0) {
+                        car.x = tp.linkedTo.x + tp.linkedTo.width / 2;
+                        car.y = tp.linkedTo.y + tp.linkedTo.height / 2;
+                        car.teleportCooldown = 60;
+                        tp.cooldown = 60;
+                        tp.linkedTo.cooldown = 60;
+                        spawnParticles(car.x, car.y, 15, '#00ffff');
+                    }
+                }
+            }
+
+            // Ice patches
+            for (let ice of track.icePatches) {
+                if (car.x + car.width / 2 > ice.x &&
+                    car.x - car.width / 2 < ice.x + ice.width &&
+                    car.y + car.height / 2 >= ice.y - 5 &&
+                    car.y + car.height / 2 <= ice.y + ice.height + 5 &&
+                    car.onGround) {
+                    car.vx *= 1.01; // Ice = less friction
+                }
+            }
+
+            // Fans
+            for (let fan of track.fans) {
+                if (car.x + car.width / 2 > fan.x &&
+                    car.x - car.width / 2 < fan.x + fan.width &&
+                    Math.abs(car.y - fan.y) < 100) {
+                    car.vx += fan.force * fan.direction;
+                }
+            }
+
+            // Spikes
+            for (let spike of track.spikes) {
+                if (car.x + car.width / 2 > spike.x &&
+                    car.x - car.width / 2 < spike.x + spike.width &&
+                    car.y + car.height / 2 >= spike.y &&
+                    car.y - car.height / 2 <= spike.y + spike.height) {
+                    car.vy = -15;
+                    car.vx *= 1.5;
+                    car.onGround = false;
+                    spawnParticles(car.x, car.y, 8, '#ff0000');
+                }
+            }
+
+            if (car.teleportCooldown > 0) car.teleportCooldown--;
+        }
+
+        function findNearestTarget(car, allCars) {
+            // In challenge mode, always target the player
+            if (challengeMode) {
+                if (player.alive) return player;
+                return null;
+            }
+
+            // 70% chance to target the player, 30% chance to target other bots
+            if (Math.random() < 0.7) {
+                // Target the player
+                if (player.alive) {
+                    return player;
+                }
+            }
+
+            // 30% chance: target other bots
+            let potentialTargets = [];
+
+            for (let other of allCars) {
+                if (other === car || !other.alive || other === player) continue;
+
+                const dx = other.x - car.x;
+                const dy = other.y - car.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                // Add other bots within range to potential targets
+                if (dist < 800) {
+                    potentialTargets.push({car: other, dist: dist});
+                }
+            }
+
+            if (potentialTargets.length === 0) {
+                // If no other bots available, target player as fallback
+                if (player.alive) return player;
+                return null;
+            }
+
+            // Pick a random bot from available targets
+            const randomIndex = Math.floor(Math.random() * potentialTargets.length);
+            return potentialTargets[randomIndex].car;
+        }
+
+        function updateCar(car, isPlayer, allCars) {
+            if (!car.alive) return;
+
+            if (isPlayer && !gameOver) {
+                if (keys['ArrowRight']) {
+                    car.vx += car.acceleration;
+                }
+                if (keys['ArrowLeft']) {
+                    car.vx -= car.acceleration;
+                }
+                if (keys[' '] && car.onGround) {
+                    car.vx *= 0.85;
+                }
+                if (keys['ArrowUp'] && car.onGround) {
+                    car.vy = car.jumpPower;
+                    car.onGround = false;
+                }
+            }
+
+            if (!isPlayer && !gameOver) {
+                car.aiTimer++;
+
+                // Hunter bot special behavior
+                if (car.isHunter) {
+                    // Check if player is near other bots
+                    let playerNearOthers = false;
+                    for (let other of allCars) {
+                        if (other !== player && other.alive && other !== car) {
+                            const dx = player.x - other.x;
+                            const dy = player.y - other.y;
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+                            if (dist < 200) {
+                                playerNearOthers = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (playerNearOthers) {
+                        // Player is fighting others, leave them alone
+                        if (car.aiTimer % 90 === 0) {
+                            car.target = findNearestTarget(car, allCars);
+                        }
+                    } else {
+                        // Player is alone, hunt them!
+                        car.target = player;
+                    }
+                } else {
+                    // Normal bot behavior
+                    if (!car.target || !car.target.alive || car.aiTimer % 90 === 0) {
+                        car.target = findNearestTarget(car, allCars);
+                    }
+                }
+
+                if (car.target) {
+                    const distToTarget = car.target.x - car.x;
+                    const heightDiff = car.y - car.target.y;
+
+                    if (distToTarget > 80) {
+                        car.vx += car.acceleration;
+                    } else if (distToTarget < -80) {
+                        car.vx -= car.acceleration;
+                    } else {
+                        if (Math.abs(heightDiff) < 100) {
+                            if (distToTarget > 0) car.vx += car.acceleration * 1.3;
+                            else car.vx -= car.acceleration * 1.3;
+                        }
+                    }
+
+                    const canJump = car.onGround && car.aiTimer - car.lastJump > 40;
+                    if (canJump) {
+                        if (heightDiff > 100 && Math.abs(distToTarget) < 200 && Math.random() < 0.2) {
+                            car.vy = car.jumpPower;
+                            car.onGround = false;
+                            car.lastJump = car.aiTimer;
+                        } else if (Math.abs(distToTarget) < 100 && Math.abs(heightDiff) < 50 && Math.random() < 0.15) {
+                            car.vy = car.jumpPower;
+                            car.onGround = false;
+                            car.lastJump = car.aiTimer;
+                        }
+                    }
+                } else {
+                    car.vx += (Math.random() - 0.5) * car.acceleration;
+                    if (car.onGround && Math.random() < 0.01) {
+                        car.vy = car.jumpPower;
+                        car.onGround = false;
+                    }
+                }
+            }
+
+            car.vx = Math.max(-car.maxSpeed, Math.min(car.maxSpeed, car.vx));
+
+            if (!car.onGround) {
+                car.vy += GRAVITY;
+                car.rotationVel = car.vx * 0.015;
+                car.rotation += car.rotationVel;
+            } else {
+                car.vx *= 0.96;
+            }
+
+            car.x += car.vx;
+            car.y += car.vy;
+
+            const onRamp = checkRampCollision(car);
+            if (!onRamp) {
+                const onPlatform = checkPlatformCollision(car);
+                if (!onPlatform) {
+                    car.onGround = false;
+                }
+            }
+
+            checkInteractives(car);
+
+            if (car.x - car.width / 2 < 20) {
+                car.x = 20 + car.width / 2;
+                car.vx = Math.abs(car.vx) * 0.5;
+            }
+            if (car.x + car.width / 2 > canvas.width - 20) {
+                car.x = canvas.width - 20 - car.width / 2;
+                car.vx = -Math.abs(car.vx) * 0.5;
+            }
+
+            if (car.y > canvas.height + 50 || car.y < -100) {
+                // In challenge mode, bots can only die if player hit them recently
+                if (challengeMode && !isPlayer && car.lastHitByPlayer !== undefined) {
+                    const timeSinceHit = gameTimer - car.lastHitByPlayer;
+                    if (timeSinceHit > 180) { // 3 seconds grace period
+                        // Respawn bot instead of killing
+                        car.y = GROUND_Y - Math.floor(Math.random() * numStories) * STORY_HEIGHT - 50;
+                        car.x = 200 + Math.random() * (canvas.width - 400);
+                        car.vx = 0;
+                        car.vy = 0;
+                        car.rotation = 0;
+                        return;
+                    }
+                }
+                car.alive = false;
+                spawnParticles(car.x, canvas.height, 20, car.color);
+            }
+        }
+
+        function checkCollisions() {
+            if (gameOver) return;
+
+            const allCars = [player, ...aiCars];
+
+            for (let i = 0; i < allCars.length; i++) {
+                for (let j = i + 1; j < allCars.length; j++) {
+                    const car1 = allCars[i];
+                    const car2 = allCars[j];
+
+                    if (!car1.alive || !car2.alive) continue;
+
+                    const dx = car1.x - car2.x;
+                    const dy = car1.y - car2.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < (car1.width + car2.width) / 2) {
+                        const angle = Math.atan2(dy, dx);
+
+                        // Calculate velocities and momentum
+                        const car1Speed = Math.sqrt(car1.vx * car1.vx + car1.vy * car1.vy);
+                        const car2Speed = Math.sqrt(car2.vx * car2.vx + car2.vy * car2.vy);
+
+                        // Relative velocity (how fast are they approaching each other)
+                        const relVelX = car1.vx - car2.vx;
+                        const relVelY = car1.vy - car2.vy;
+                        const relSpeed = Math.sqrt(relVelX * relVelX + relVelY * relVelY);
+
+                        // Direction of collision
+                        const normalX = Math.cos(angle);
+                        const normalY = Math.sin(angle);
+
+                        // Calculate relative velocity along collision normal
+                        const velAlongNormal = relVelX * normalX + relVelY * normalY;
+
+                        // Don't resolve if velocities are separating
+                        if (velAlongNormal > 0) {
+                            // Calculate restitution (bounciness) and mass ratio
+                            const restitution = 0.8; // How bouncy the collision is
+
+                            // Give player a slight mass advantage for better ramming
+                            const mass1 = car1 === player ? 1.3 : 1.0;
+                            const mass2 = car2 === player ? 1.3 : 1.0;
+
+                            // Calculate impulse scalar
+                            const impulseScalar = -(1 + restitution) * velAlongNormal / (mass1 + mass2);
+
+                            // Apply impulse to separate the cars
+                            const impulseX = impulseScalar * normalX;
+                            const impulseY = impulseScalar * normalY;
+
+                            // Realistic momentum transfer
+                            car1.vx -= impulseX * mass2 * 1.5;
+                            car1.vy -= impulseY * mass2 * 1.5;
+
+                            car2.vx += impulseX * mass1 * 1.5;
+                            car2.vy += impulseY * mass1 * 1.5;
+
+                            // Add extra knockback based on impact speed (for gameplay feel)
+                            const impactForce = relSpeed * 0.3;
+                            car1.vx += normalX * impactForce;
+                            car1.vy += normalY * impactForce - 2;
+
+                            car2.vx -= normalX * impactForce;
+                            car2.vy -= normalY * impactForce - 2;
+
+                            // Push cars apart to prevent sticking
+                            const overlap = (car1.width + car2.width) / 2 - dist;
+                            const separationX = normalX * overlap * 0.5;
+                            const separationY = normalY * overlap * 0.5;
+
+                            car1.x += separationX;
+                            car1.y += separationY;
+                            car2.x -= separationX;
+                            car2.y -= separationY;
+
+                            car1.onGround = false;
+                            car2.onGround = false;
+
+                            // More particles for harder impacts
+                            const particleCount = Math.floor(relSpeed * 2) + 5;
+                            spawnParticles(car1.x, car1.y, particleCount, car1.color);
+                            spawnParticles(car2.x, car2.y, particleCount, car2.color);
+
+                            // Screen shake if player is involved
+                            if (car1 === player || car2 === player) {
+                                addScreenShake(relSpeed * 0.8);
+                                // Track when player hits a bot (for challenge mode)
+                                if (car1 === player && car2.lastHitByPlayer !== undefined) {
+                                    car2.lastHitByPlayer = gameTimer;
+                                }
+                                if (car2 === player && car1.lastHitByPlayer !== undefined) {
+                                    car1.lastHitByPlayer = gameTimer;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            track.obstacles.forEach(obs => {
+                allCars.forEach(car => {
+                    if (!car.alive) return;
+
+                    const carLeft = car.x - car.width / 2;
+                    const carRight = car.x + car.width / 2;
+                    const carTop = car.y - car.height / 2;
+                    const carBottom = car.y + car.height / 2;
+
+                    if (obs.type === 'bumper') {
+                        const centerX = obs.x + obs.width / 2;
+                        const centerY = obs.y + obs.height / 2;
+                        const radius = obs.width / 2;
+
+                        const distX = car.x - centerX;
+                        const distY = car.y - centerY;
+                        const distance = Math.sqrt(distX * distX + distY * distY);
+
+                        if (distance < radius + car.width / 2) {
+                            const angle = Math.atan2(distY, distX);
+
+                            // Calculate car's speed and direction
+                            const carSpeed = Math.sqrt(car.vx * car.vx + car.vy * car.vy);
+
+                            // Reflect velocity off bumper (like a real bumper)
+                            const normalX = Math.cos(angle);
+                            const normalY = Math.sin(angle);
+
+                            // Bounce with amplification
+                            const bounceMultiplier = 1.3 + carSpeed * 0.1;
+                            car.vx = normalX * carSpeed * bounceMultiplier;
+                            car.vy = normalY * carSpeed * bounceMultiplier - 4;
+
+                            // Push car out of bumper
+                            const overlap = radius + car.width / 2 - distance;
+                            car.x += normalX * overlap;
+                            car.y += normalY * overlap;
+
+                            car.onGround = false;
+                            spawnParticles(car.x, car.y, Math.floor(carSpeed * 2) + 8, car.color);
+
+                            // Screen shake if player hit bumper
+                            if (car === player) {
+                                addScreenShake(carSpeed * 0.5);
+                            }
+                        }
+                    } else {
+                        if (carRight > obs.x && carLeft < obs.x + obs.width &&
+                            carBottom > obs.y && carTop < obs.y + obs.height) {
+
+                            // Calculate which side was hit
+                            const carCenterX = car.x;
+                            const carCenterY = car.y;
+                            const obsCenterX = obs.x + obs.width / 2;
+                            const obsCenterY = obs.y + obs.height / 2;
+
+                            const dx = carCenterX - obsCenterX;
+                            const dy = carCenterY - obsCenterY;
+
+                            // Determine collision side
+                            const overlapX = (car.width + obs.width) / 2 - Math.abs(dx);
+                            const overlapY = (car.height + obs.height) / 2 - Math.abs(dy);
+
+                            const carSpeed = Math.sqrt(car.vx * car.vx + car.vy * car.vy);
+
+                            if (overlapX < overlapY) {
+                                // Hit from left or right
+                                if (dx < 0) {
+                                    // Hit from left
+                                    car.vx = -Math.abs(car.vx) * 1.2 - carSpeed * 0.3;
+                                    car.x = obs.x - car.width / 2 - 2;
+                                } else {
+                                    // Hit from right
+                                    car.vx = Math.abs(car.vx) * 1.2 + carSpeed * 0.3;
+                                    car.x = obs.x + obs.width + car.width / 2 + 2;
+                                }
+                                car.vy -= 5 + carSpeed * 0.2;
+                            } else {
+                                // Hit from top or bottom
+                                if (dy < 0) {
+                                    // Hit from top
+                                    car.vy = -Math.abs(car.vy) * 1.2;
+                                    car.y = obs.y - car.height / 2 - 2;
+                                } else {
+                                    // Hit from bottom
+                                    car.vy = Math.abs(car.vy) * 1.2;
+                                    car.y = obs.y + obs.height + car.height / 2 + 2;
+                                }
+                                car.vx *= 0.7; // Lose some horizontal speed
+                            }
+
+                            car.onGround = false;
+                            spawnParticles(car.x, car.y, Math.floor(carSpeed) + 5, car.color);
+
+                            // Screen shake if player hit wall
+                            if (car === player) {
+                                addScreenShake(carSpeed * 0.4);
+                            }
+                        }
+                    }
+                });
+            });
+        }
+
+        function checkWinCondition() {
+            if (gameOver) return;
+
+            const aliveCars = [player, ...aiCars].filter(car => car.alive);
+
+            if (aliveCars.length === 1) {
+                gameOver = true;
+                if (aliveCars[0] === player) {
+                    statusText.textContent = '🏆 YOU WIN! Last car standing! Press R to restart 🏆';
+                    statusText.style.color = '#00ff88';
+                } else {
+                    statusText.textContent = '💀 YOU LOST! Press R to restart';
+                    statusText.style.color = '#ff4444';
+                }
+            } else if (aliveCars.length === 0) {
+                gameOver = true;
+                statusText.textContent = 'EVERYONE FELL! Press R to restart';
+                statusText.style.color = '#ffaa00';
+            }
+        }
+
+        function drawUI() {
+            // Speed indicator
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(10, 10, 200, 35);
+
+            const speedPercent = Math.abs(player.vx) / player.maxSpeed;
+            const speedGradient = ctx.createLinearGradient(15, 0, 205, 0);
+            speedGradient.addColorStop(0, '#00ff88');
+            speedGradient.addColorStop(0.7, '#ffdd00');
+            speedGradient.addColorStop(1, '#ff4444');
+            ctx.fillStyle = speedGradient;
+            ctx.fillRect(15, 15, speedPercent * 190, 20);
+
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(15, 15, 190, 20);
+
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 14px Arial';
+            ctx.shadowColor = 'rgba(0,0,0,0.8)';
+            ctx.shadowBlur = 4;
+            ctx.fillText('SPEED', 85, 30);
+            ctx.shadowBlur = 0;
+
+            // Cars remaining
+            const aliveCars = [player, ...aiCars].filter(car => car.alive);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(10, 55, 200, 35);
+            ctx.fillStyle = '#ffdd00';
+            ctx.font = 'bold 16px Arial';
+            ctx.shadowColor = 'rgba(0,0,0,0.8)';
+            ctx.shadowBlur = 4;
+            ctx.fillText(`CARS LEFT: ${aliveCars.length}`, 30, 78);
+            ctx.shadowBlur = 0;
+
+            // Challenge mode indicator
+            if (challengeMode) {
+                ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+                ctx.fillRect(10, 100, 200, 35);
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 14px Arial';
+                ctx.shadowColor = 'rgba(0,0,0,0.8)';
+                ctx.shadowBlur = 4;
+                ctx.fillText('⚔️ CHALLENGE MODE ⚔️', 30, 122);
+                ctx.shadowBlur = 0;
+            }
+
+            // Idle warning
+            if (player.alive) {
+                const idleTime = gameTimer - lastKeyPressTime;
+                const timeLeft = IDLE_TIMEOUT - idleTime;
+
+                if (timeLeft <= 120 && timeLeft > 0) { // Warning in last 2 seconds
+                    const seconds = Math.ceil(timeLeft / 60);
+                    const warningAlpha = (Math.sin(gameTimer * 0.3) + 1) / 2; // Pulsing effect
+                    const warningY = challengeMode ? 145 : 100;
+
+                    ctx.fillStyle = `rgba(255, 0, 0, ${0.5 + warningAlpha * 0.5})`;
+                    ctx.fillRect(10, warningY, 200, 40);
+
+                    ctx.fillStyle = '#fff';
+                    ctx.font = 'bold 18px Arial';
+                    ctx.shadowColor = 'rgba(0,0,0,0.9)';
+                    ctx.shadowBlur = 6;
+                    ctx.fillText(`⏱️ MOVE IN ${seconds}s!`, 35, warningY + 25);
+                    ctx.shadowBlur = 0;
+                }
+            }
+
+            if (!player.alive) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#ff0000';
+                ctx.font = 'bold 64px Arial';
+                ctx.textAlign = 'center';
+                ctx.shadowColor = 'rgba(0,0,0,0.9)';
+                ctx.shadowBlur = 10;
+                ctx.fillText('💥 ELIMINATED! 💥', canvas.width / 2, canvas.height / 2);
+                ctx.font = 'bold 32px Arial';
+                ctx.fillStyle = '#fff';
+                ctx.fillText('Press R to restart', canvas.width / 2, canvas.height / 2 + 60);
+                ctx.shadowBlur = 0;
+                ctx.textAlign = 'left';
+            }
+        }
+
+        function updateParticles() {
+            particles = particles.filter(p => p.life > 0);
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+        }
+
+        function reset() {
+            gameOver = false;
+            startMenu.style.display = 'block';
+            canvas.style.display = 'none';
+            infoDiv.style.display = 'none';
+            gameStarted = false;
+            challengeMode = false;
+            keys['r'] = false;
+            keys['R'] = false;
+            gameTimer = 0;
+            lastKeyPressTime = 0;
+            hunterBot = null;
+            cameraX = 0;
+            cameraY = 0;
+            cameraShakeX = 0;
+            cameraShakeY = 0;
+        }
+
+        function gameLoop() {
+            if (!gameStarted) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Update camera to follow player
+            updateCamera();
+
+            drawBackground();
+
+            // Save context and apply camera transform for world objects
+            ctx.save();
+            ctx.translate(-cameraX + cameraShakeX, -cameraY + cameraShakeY);
+
+            drawWalls();
+            drawPlatforms();
+            drawMovingPlatforms();
+            drawBoostPads();
+            drawRamps();
+            drawJumpPads();
+            drawTeleporters();
+            drawIcePatches();
+            drawFans();
+            drawSpikes();
+            drawObstacles();
+
+            const allCars = [player, ...aiCars];
+            allCars.forEach(car => drawCar(car));
+
+            updateParticles();
+
+            // Draw world-space UI (follows player)
+            if (player.alive && !player.onGround) {
+                ctx.fillStyle = 'rgba(255, 200, 0, 0.9)';
+                ctx.font = 'bold 28px Arial';
+                ctx.shadowColor = 'rgba(0,0,0,0.9)';
+                ctx.shadowBlur = 8;
+                ctx.fillText('✈️ AIRBORNE!', player.x - 70, player.y - 50);
+                ctx.shadowBlur = 0;
+            }
+
+            // Restore context for UI (drawn in screen space)
+            ctx.restore();
+
+            drawUI();
+
+            // Assign hunter bot after 2 seconds (120 frames) - not in challenge mode
+            if (!gameOver) {
+                gameTimer++;
+                if (!challengeMode && gameTimer === 120 && hunterBot === null) {
+                    // Clear all hunter flags first
+                    aiCars.forEach(car => car.isHunter = false);
+
+                    // Pick a random alive bot to be the hunter
+                    const aliveBots = aiCars.filter(car => car.alive);
+                    if (aliveBots.length > 0) {
+                        hunterBot = aliveBots[Math.floor(Math.random() * aliveBots.length)];
+                        hunterBot.isHunter = true;
+                    }
+                }
+
+                // If hunter died, clear it
+                if (hunterBot && !hunterBot.alive) {
+                    hunterBot.isHunter = false;
+                    hunterBot = null;
+                }
+            }
+
+            updateCar(player, true, allCars);
+            aiCars.forEach(car => updateCar(car, false, allCars));
+
+            checkCollisions();
+            checkWinCondition();
+
+            // Check for idle timeout
+            if (!gameOver && player.alive && gameTimer - lastKeyPressTime > IDLE_TIMEOUT) {
+                player.alive = false;
+                spawnParticles(player.x, player.y, 30, player.color);
+                statusText.textContent = '⏱️ ELIMINATED - 4 SECOND IDLE TIMEOUT!';
+                statusText.style.color = '#ff4444';
+            }
+
+            if ((gameOver || !player.alive) && (keys['r'] || keys['R'])) {
+                reset();
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+    </script>
+</body>
+</html>

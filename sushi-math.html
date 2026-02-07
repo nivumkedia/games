@@ -1,0 +1,2723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sushi Stack - Multiplayer Math Game!</title>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Nunito', sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(180deg, #87CEEB 0%, #B0E0E6 50%, #ADD8E6 100%);
+            overflow: auto;
+        }
+
+        /* Main container */
+        .game-container {
+            width: 100vw;
+            min-height: 100vh;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.4);
+            z-index: 100;
+        }
+
+        .game-title {
+            font-size: 1.8rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, #ff6b6b, #feca57, #48dbfb);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .turn-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .round-display {
+            font-size: 1.1rem;
+            color: #a55eea;
+            font-weight: 800;
+            background: rgba(165, 94, 234, 0.2);
+            padding: 8px 16px;
+            border-radius: 12px;
+        }
+
+        .current-player {
+            font-size: 1.2rem;
+            color: #2c3e50;
+            font-weight: 700;
+        }
+
+        .current-player .player-name {
+            padding: 5px 15px;
+            border-radius: 20px;
+            margin-left: 10px;
+        }
+
+        .timer-display {
+            font-size: 2rem;
+            font-weight: 900;
+            color: #feca57;
+            min-width: 80px;
+            text-align: center;
+        }
+
+        .timer-display.warning {
+            color: #ff6b6b;
+            animation: pulse 0.5s infinite;
+        }
+
+        .end-game-btn {
+            padding: 8px 16px;
+            font-size: 0.9rem;
+            font-weight: 700;
+            background: rgba(255, 107, 107, 0.2);
+            border: 2px solid rgba(255, 107, 107, 0.5);
+            border-radius: 10px;
+            color: #ff6b6b;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: inherit;
+        }
+
+        .end-game-btn:hover {
+            background: rgba(255, 107, 107, 0.4);
+            transform: scale(1.05);
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        /* Player scores */
+        .player-scores {
+            display: flex;
+            gap: 15px;
+        }
+
+        .player-score {
+            padding: 10px 20px;
+            border-radius: 15px;
+            text-align: center;
+            color: #fff;
+            font-weight: 700;
+            opacity: 0.6;
+            transition: all 0.3s;
+        }
+
+        .player-score.active {
+            opacity: 1;
+            transform: scale(1.1);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .player-score .name {
+            font-size: 0.85rem;
+            margin-bottom: 5px;
+        }
+
+        .player-score .score {
+            font-size: 1.5rem;
+        }
+
+        /* Game stage */
+        .game-stage {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Main game area - zoomed in view */
+        .game-main {
+            display: flex;
+            align-items: center;
+            gap: 40px;
+        }
+
+        /* Sushi viewport - shows only current area */
+        .sushi-viewport {
+            width: 800px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Sushi tower */
+        .sushi-tower {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column-reverse;
+            align-items: center;
+            transition: transform 0.5s ease-out;
+            will-change: transform;
+        }
+
+        .sushi-platform {
+            position: relative;
+            width: 400px;
+            height: 250px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 12rem;
+            transition: all 0.3s;
+            z-index: 1;
+        }
+
+        .sushi-platform.current {
+            transform: scale(1.1);
+            filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.6));
+        }
+
+        .sushi-platform.completed {
+            opacity: 0.4;
+        }
+
+        .sushi-platform.collapsing {
+            animation: collapse 0.3s ease-out forwards;
+        }
+
+        @keyframes collapse {
+            0% {
+                transform: scale(1) rotate(0deg);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(0.3) rotate(180deg);
+                opacity: 0;
+            }
+        }
+
+        .sushi-platform.locked {
+            filter: grayscale(0.8) opacity(0.3);
+        }
+
+        /* Character */
+        .character {
+            position: absolute;
+            font-size: 10rem;
+            left: 50%;
+            bottom: auto;
+            transform: translateX(-50%);
+            z-index: 10;
+            filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.4));
+            transition: bottom 0.3s;
+        }
+
+        .character.walking {
+            animation: walk 0.3s ease-in-out infinite;
+        }
+
+        @keyframes walk {
+            0%, 100% { transform: translateX(-50%) translateY(0) rotate(-5deg); }
+            50% { transform: translateX(-50%) translateY(-10px) rotate(5deg); }
+        }
+
+        .character.falling {
+            animation: fall 1s ease-in forwards;
+        }
+
+        @keyframes fall {
+            0% { transform: translateX(-50%) translateY(0) rotate(0deg); }
+            100% { transform: translateX(-50%) translateY(500px) rotate(720deg); opacity: 0; }
+        }
+
+        .character.sliding {
+            transition: bottom 1.5s cubic-bezier(0.6, 0.0, 0.8, 0.2);
+            animation: tumble 1.5s ease-out;
+        }
+
+        @keyframes tumble {
+            0% { transform: translateX(-50%) rotate(0deg); }
+            100% { transform: translateX(-50%) rotate(720deg); }
+        }
+
+        .character.celebrating {
+            animation: celebrate 0.5s ease-in-out infinite;
+        }
+
+        @keyframes celebrate {
+            0%, 100% { transform: translateX(-50%) translateY(0) scale(1); }
+            50% { transform: translateX(-50%) translateY(-20px) scale(1.2); }
+        }
+
+        /* Tower shake */
+        .sushi-tower.shaking {
+            animation: shake 0.5s ease-in-out;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-20px) rotate(-2deg); }
+            40% { transform: translateX(20px) rotate(2deg); }
+            60% { transform: translateX(-15px) rotate(-1deg); }
+            80% { transform: translateX(15px) rotate(1deg); }
+        }
+
+        /* Completed stacks display */
+        .completed-stacks {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            z-index: 50;
+        }
+
+        .completed-stack {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(38, 222, 129, 0.2);
+            border: 2px solid rgba(38, 222, 129, 0.5);
+            border-radius: 15px;
+            padding: 10px;
+            animation: stackComplete 0.5s ease-out;
+        }
+
+        @keyframes stackComplete {
+            0% { transform: scale(0) rotate(-10deg); opacity: 0; }
+            50% { transform: scale(1.2) rotate(5deg); }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+
+        .completed-stack .stack-sushi {
+            display: flex;
+            flex-direction: column-reverse;
+            font-size: 0.9rem;
+            line-height: 1;
+        }
+
+        .completed-stack .stack-label {
+            color: #26de81;
+            font-size: 0.7rem;
+            font-weight: 700;
+            margin-top: 5px;
+        }
+
+        /* Ground/plate */
+        .plate {
+            width: 120px;
+            height: 15px;
+            background: linear-gradient(180deg, #8B4513 0%, #654321 100%);
+            border-radius: 50%;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        /* Inline equation panel */
+        .equation-panel {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .equation-display {
+            font-size: 3rem;
+            font-weight: 900;
+            color: #fff;
+            text-align: center;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .equation-display .operator {
+            color: #feca57;
+        }
+
+        .inline-input {
+            font-size: 2.5rem;
+            font-weight: 700;
+            padding: 15px 25px;
+            width: 150px;
+            text-align: center;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        .inline-input:focus {
+            border-color: #48dbfb;
+            box-shadow: 0 0 25px rgba(72, 219, 251, 0.4);
+        }
+
+        .inline-input.correct {
+            border-color: #26de81;
+            background: rgba(38, 222, 129, 0.2);
+        }
+
+        .inline-input.wrong {
+            border-color: #ff6b6b;
+            background: rgba(255, 107, 107, 0.2);
+        }
+
+        .input-hint {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        /* Height progress */
+        .height-progress {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .height-number {
+            font-size: 2.5rem;
+            font-weight: 900;
+            color: #feca57;
+        }
+
+        .height-label {
+            color: #888;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Math problem overlay - HIDDEN (not used anymore) */
+        .problem-overlay {
+            display: none !important;
+        }
+
+        .problem-card {
+            background: linear-gradient(135deg, #2d2d44 0%, #1a1a2e 100%);
+            padding: 50px 80px;
+            border-radius: 30px;
+            text-align: center;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            transform: scale(0.8);
+            transition: transform 0.3s;
+        }
+
+        .problem-overlay.show .problem-card {
+            transform: scale(1);
+        }
+
+        .problem-sushi {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+
+        .problem-text {
+            font-size: 2.8rem;
+            font-weight: 900;
+            color: #fff;
+            margin-bottom: 30px;
+            line-height: 1.3;
+        }
+
+        .problem-text .operator {
+            color: #feca57;
+            margin: 0 10px;
+        }
+
+        .problem-input {
+            font-size: 3rem;
+            font-weight: 700;
+            padding: 15px 30px;
+            width: 200px;
+            text-align: center;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        .problem-input:focus {
+            border-color: #48dbfb;
+            box-shadow: 0 0 30px rgba(72, 219, 251, 0.3);
+        }
+
+        .problem-hint {
+            color: #888;
+            margin-top: 20px;
+            font-size: 1rem;
+        }
+
+        /* Start screen */
+        .screen-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, #87CEEB 0%, #B0E0E6 50%, #ADD8E6 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 300;
+            transition: opacity 0.5s, visibility 0.5s;
+            overflow-y: auto;
+        }
+
+        .screen-overlay.hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        .screen-content {
+            text-align: center;
+            max-width: 600px;
+            padding: 40px;
+        }
+
+        .screen-title {
+            font-size: 3.5rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, #ff6b6b, #feca57, #48dbfb);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 20px;
+        }
+
+        .screen-sushi {
+            font-size: 5rem;
+            margin-bottom: 30px;
+            animation: bounce 2s ease-in-out infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+
+        .screen-subtitle {
+            color: #2c3e50;
+            font-size: 1.2rem;
+            margin-bottom: 40px;
+        }
+
+        /* Player setup */
+        .player-setup {
+            margin-bottom: 40px;
+        }
+
+        .setup-label {
+            color: #2c3e50;
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+            display: block;
+        }
+
+        .player-count-btns {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .count-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 3px solid rgba(44, 62, 80, 0.3);
+            background: rgba(255, 255, 255, 0.6);
+            color: #2c3e50;
+            font-size: 1.5rem;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: inherit;
+        }
+
+        .count-btn:hover {
+            background: rgba(255, 255, 255, 0.9);
+            transform: scale(1.1);
+        }
+
+        .count-btn.selected {
+            border-color: #48dbfb;
+            background: rgba(72, 219, 251, 0.3);
+        }
+
+        .solo-mode-hint {
+            color: #feca57;
+            font-size: 1rem;
+            font-weight: 700;
+            margin-top: 10px;
+            animation: pulse 2s infinite;
+        }
+
+        .player-names {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .player-name-input {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        .player-avatar {
+            font-size: 2rem;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 50%;
+        }
+
+        .player-name-input input {
+            padding: 12px 20px;
+            border-radius: 15px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            font-size: 1.1rem;
+            font-family: inherit;
+            width: 200px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .player-name-input input:focus {
+            border-color: #48dbfb;
+        }
+
+        /* Difficulty buttons */
+        .difficulty-btns {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+
+        .diff-btn {
+            padding: 15px 20px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: inherit;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            min-width: 100px;
+        }
+
+        .diff-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-3px);
+        }
+
+        .diff-btn.selected {
+            border-color: #feca57;
+            background: rgba(254, 202, 87, 0.2);
+            box-shadow: 0 5px 20px rgba(254, 202, 87, 0.3);
+        }
+
+        .diff-icon {
+            font-size: 1.8rem;
+        }
+
+        .diff-name {
+            color: #fff;
+            font-weight: 700;
+            font-size: 1rem;
+        }
+
+        .diff-desc {
+            color: #888;
+            font-size: 0.75rem;
+        }
+
+        .diff-btn[data-diff="easy"] .diff-name { color: #26de81; }
+        .diff-btn[data-diff="medium"] .diff-name { color: #48dbfb; }
+        .diff-btn[data-diff="hard"] .diff-name { color: #feca57; }
+        .diff-btn[data-diff="brutal"] .diff-name { color: #e17055; }
+        .diff-btn[data-diff="insane"] .diff-name { color: #ff6b6b; }
+        .diff-btn[data-diff="custom"] .diff-name { color: #a55eea; }
+        .diff-btn[data-diff="perplayer"] .diff-name { color: #fd79a8; }
+
+        /* Custom difficulty slider */
+        .custom-diff-container {
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(165, 94, 234, 0.1);
+            border-radius: 15px;
+            border: 2px solid rgba(165, 94, 234, 0.3);
+        }
+
+        .slider-label {
+            color: #fff;
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 15px;
+        }
+
+        .slider-label span {
+            color: #a55eea;
+            font-size: 1.5rem;
+        }
+
+        .diff-slider {
+            width: 100%;
+            height: 12px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .diff-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #a55eea, #8854d0);
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(165, 94, 234, 0.5);
+            transition: transform 0.2s;
+        }
+
+        .diff-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .diff-slider::-moz-range-thumb {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #a55eea, #8854d0);
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 4px 15px rgba(165, 94, 234, 0.5);
+        }
+
+        .slider-labels {
+            display: flex;
+            justify-content: space-between;
+            color: #888;
+            font-size: 0.8rem;
+            margin-top: 10px;
+        }
+
+        /* Per-player difficulty selector */
+        .player-diff-select {
+            padding: 8px 12px;
+            border-radius: 10px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            font-size: 0.9rem;
+            font-family: inherit;
+            cursor: pointer;
+            outline: none;
+            min-width: 90px;
+        }
+
+        .player-diff-select:focus {
+            border-color: #fd79a8;
+        }
+
+        .player-diff-select option {
+            background: #1a1a2e;
+            color: #fff;
+        }
+
+        .start-btn {
+            padding: 20px 60px;
+            font-size: 1.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #ff6b6b, #feca57);
+            border: none;
+            border-radius: 20px;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: inherit;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .start-btn:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(255, 107, 107, 0.4);
+        }
+
+        /* Turn transition */
+        .turn-transition {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 250;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s;
+        }
+
+        .turn-transition.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .turn-player-avatar {
+            font-size: 6rem;
+            margin-bottom: 20px;
+            animation: bounce 1s ease-in-out infinite;
+        }
+
+        .turn-player-name {
+            font-size: 2.5rem;
+            font-weight: 900;
+            color: #fff;
+            margin-bottom: 10px;
+        }
+
+        .turn-message {
+            font-size: 1.5rem;
+            color: #feca57;
+            margin-bottom: 30px;
+        }
+
+        .ready-btn {
+            padding: 15px 50px;
+            font-size: 1.3rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #26de81, #20bf6b);
+            border: none;
+            border-radius: 15px;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: inherit;
+        }
+
+        .ready-btn:hover {
+            transform: scale(1.05);
+        }
+
+        /* Results screen */
+        .results-content {
+            text-align: center;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .results-title {
+            font-size: 3rem;
+            font-weight: 900;
+            color: #feca57;
+            margin-bottom: 30px;
+        }
+
+        .winner-display {
+            margin-bottom: 40px;
+        }
+
+        .winner-avatar {
+            font-size: 6rem;
+            margin-bottom: 15px;
+        }
+
+        .winner-name {
+            font-size: 2.5rem;
+            font-weight: 900;
+            color: #fff;
+            margin-bottom: 10px;
+        }
+
+        .winner-score {
+            font-size: 1.5rem;
+            color: #48dbfb;
+        }
+
+        .final-scores {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+        }
+
+        .final-score-card {
+            padding: 20px 25px;
+            border-radius: 20px;
+            text-align: center;
+            min-width: 180px;
+            max-width: 220px;
+        }
+
+        .final-score-card .avatar {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .final-score-card .name {
+            color: #fff;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .final-score-card .score {
+            font-size: 1.8rem;
+            font-weight: 900;
+            color: #fff;
+        }
+
+        .final-score-card .height {
+            color: #aaa;
+            font-size: 0.9rem;
+        }
+
+        .final-score-card .rank {
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+        }
+
+        .final-score-card .score-label {
+            color: #aaa;
+            font-size: 0.85rem;
+            margin-top: -5px;
+        }
+
+        .final-score-card .stats {
+            display: flex;
+            gap: 15px;
+            color: #888;
+            font-size: 0.8rem;
+            margin: 10px 0;
+            justify-content: center;
+        }
+
+        .final-score-card .last-position-label,
+        .final-score-card .stacks-label {
+            color: #feca57;
+            font-size: 0.75rem;
+            margin-top: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .final-score-card .no-stacks {
+            color: #666;
+            font-size: 0.75rem;
+            margin-top: 10px;
+            font-style: italic;
+        }
+
+        /* Position tower in results */
+        .position-tower {
+            display: flex;
+            flex-direction: column-reverse;
+            align-items: center;
+            margin: 5px 0;
+            gap: 2px;
+        }
+
+        .position-tower .pos-sushi {
+            font-size: 1rem;
+            line-height: 1;
+        }
+
+        .position-tower .pos-more {
+            font-size: 0.7rem;
+            color: #888;
+        }
+
+        /* Completed stacks display in results */
+        .player-stacks {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 8px;
+            max-width: 200px;
+        }
+
+        .mini-stack {
+            display: flex;
+            flex-direction: column-reverse;
+            align-items: center;
+            background: rgba(38, 222, 129, 0.15);
+            border: 1px solid rgba(38, 222, 129, 0.3);
+            border-radius: 8px;
+            padding: 5px;
+            gap: 1px;
+        }
+
+        .mini-stack .mini-sushi {
+            font-size: 0.7rem;
+            line-height: 1;
+        }
+
+        .mini-stack .mini-more {
+            font-size: 0.5rem;
+            color: #888;
+        }
+
+        /* Solo mode results */
+        .solo-result {
+            margin-bottom: 30px;
+        }
+
+        .solo-avatar {
+            font-size: 5rem;
+            margin-bottom: 10px;
+        }
+
+        .solo-name {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 10px;
+        }
+
+        .solo-score-big {
+            font-size: 4rem;
+            font-weight: 900;
+            color: #feca57;
+            line-height: 1;
+        }
+
+        .solo-score-label {
+            color: #888;
+            font-size: 1rem;
+            margin-bottom: 15px;
+        }
+
+        .new-high-score {
+            background: linear-gradient(135deg, #ff6b6b, #feca57);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-size: 1.5rem;
+            font-weight: 900;
+            animation: pulse 1s infinite;
+            margin-bottom: 15px;
+        }
+
+        .solo-stats {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin: 20px 0;
+        }
+
+        .solo-stat {
+            text-align: center;
+        }
+
+        .solo-stat .stat-value {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #48dbfb;
+        }
+
+        .solo-stat .stat-label {
+            color: #888;
+            font-size: 0.85rem;
+        }
+
+        .stacks-section {
+            margin-top: 20px;
+        }
+
+        .stacks-title {
+            color: #feca57;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .solo-stacks {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        /* Leaderboard */
+        .leaderboard {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 20px;
+            padding: 20px;
+            margin: 20px auto;
+            max-width: 400px;
+        }
+
+        .leaderboard h3 {
+            color: #feca57;
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+        }
+
+        .leaderboard-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .leaderboard-entry {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            transition: all 0.3s;
+        }
+
+        .leaderboard-entry.current {
+            background: rgba(254, 202, 87, 0.2);
+            border: 2px solid rgba(254, 202, 87, 0.5);
+        }
+
+        .leaderboard-entry .lb-rank {
+            font-size: 1rem;
+            min-width: 35px;
+        }
+
+        .leaderboard-entry .lb-name {
+            flex: 1;
+            color: #fff;
+            font-weight: 600;
+            text-align: left;
+        }
+
+        .leaderboard-entry .lb-score {
+            color: #48dbfb;
+            font-weight: 800;
+            font-size: 1.1rem;
+        }
+
+        .leaderboard-entry .lb-diff {
+            color: #888;
+            font-size: 0.75rem;
+            min-width: 60px;
+            text-align: right;
+        }
+
+        .no-scores {
+            color: #666;
+            font-style: italic;
+            padding: 20px;
+        }
+
+        /* Feedback flash */
+        .feedback-flash {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 150;
+            opacity: 0;
+            transition: opacity 0.1s;
+        }
+
+        .feedback-flash.correct {
+            background: rgba(38, 222, 129, 0.3);
+            opacity: 1;
+        }
+
+        .feedback-flash.wrong {
+            background: rgba(255, 107, 107, 0.3);
+            opacity: 1;
+        }
+
+        /* Height indicator */
+        .height-indicator {
+            position: absolute;
+            right: 50px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .height-label {
+            color: #fff;
+            font-weight: 700;
+            font-size: 1rem;
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            letter-spacing: 2px;
+        }
+
+        .height-value {
+            font-size: 3rem;
+            font-weight: 900;
+            color: #feca57;
+        }
+
+        .height-unit {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        /* Clouds decoration */
+        .cloud {
+            position: absolute;
+            font-size: 4rem;
+            opacity: 0.1;
+            pointer-events: none;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 15px;
+                padding: 10px;
+            }
+
+            .player-scores {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            .problem-card {
+                padding: 30px 40px;
+                margin: 20px;
+            }
+
+            .problem-text {
+                font-size: 2.5rem;
+            }
+
+            .problem-input {
+                font-size: 2rem;
+                width: 150px;
+            }
+
+            .screen-title {
+                font-size: 2.5rem;
+            }
+
+            .height-indicator {
+                right: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <!-- Header -->
+        <div class="header" id="header" style="display: none;">
+            <div class="game-title">Sushi Stack</div>
+            <div class="turn-info">
+                <div class="round-display">Round <span id="roundDisplay">1</span>/5</div>
+                <div class="current-player">
+                    Current: <span class="player-name" id="currentPlayerName">Player 1</span>
+                </div>
+                <div class="timer-display" id="timerDisplay">2:00</div>
+                <button class="end-game-btn" id="endGameBtn">End Game</button>
+            </div>
+            <div class="player-scores" id="playerScores"></div>
+        </div>
+
+        <!-- Game stage -->
+        <div class="game-stage" id="gameStage" style="display: none;">
+            <!-- Completed stacks display -->
+            <div class="completed-stacks" id="completedStacks"></div>
+
+            <div class="game-main">
+                <!-- Height progress -->
+                <div class="height-progress">
+                    <div class="height-number" id="heightValue">0</div>
+                    <div class="height-label">Height</div>
+                </div>
+
+                <!-- Sushi viewport -->
+                <div class="sushi-viewport">
+                    <div class="sushi-tower" id="sushiTower">
+                        <!-- Sushi platforms will be generated here -->
+                        <div class="character" id="character">🧑‍🍳</div>
+                    </div>
+                    <div class="plate"></div>
+                </div>
+
+                <!-- Equation panel -->
+                <div class="equation-panel">
+                    <div class="equation-display" id="equationDisplay">5 + 3 <span class="operator">=</span> ?</div>
+                    <input type="number" class="inline-input" id="inlineInput" placeholder="?" autofocus>
+                    <div class="input-hint">Press Enter</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Clouds -->
+        <div class="cloud" style="top: 10%; left: 5%;">☁️</div>
+        <div class="cloud" style="top: 25%; right: 10%;">☁️</div>
+        <div class="cloud" style="top: 40%; left: 15%;">☁️</div>
+    </div>
+
+    <!-- Math problem overlay -->
+    <div class="problem-overlay" id="problemOverlay">
+        <div class="problem-card">
+            <div class="problem-sushi" id="problemSushi">🍣</div>
+            <div class="problem-text" id="problemText">
+                <span id="probNum1">5 + 3</span>
+                <span class="operator">=</span>
+                <span>?</span>
+            </div>
+            <input type="number" class="problem-input" id="problemInput" placeholder="?" autofocus>
+            <div class="problem-hint">Press Enter to submit</div>
+        </div>
+    </div>
+
+    <!-- Feedback flash -->
+    <div class="feedback-flash" id="feedbackFlash"></div>
+
+    <!-- Start screen -->
+    <div class="screen-overlay" id="startScreen">
+        <div class="screen-content">
+            <div class="screen-sushi">🍣🗼</div>
+            <h1 class="screen-title">Sushi Stack</h1>
+            <p class="screen-subtitle">Climb the sushi tower by solving math problems!<br>Wrong answer? You fall!</p>
+
+            <div class="player-setup">
+                <span class="setup-label">How many players?</span>
+                <div class="player-count-btns">
+                    <button class="count-btn" data-count="1">1</button>
+                    <button class="count-btn" data-count="2">2</button>
+                    <button class="count-btn selected" data-count="3">3</button>
+                    <button class="count-btn" data-count="4">4</button>
+                </div>
+                <div class="solo-mode-hint" id="soloModeHint" style="display: none;">
+                    Endless mode - climb until you fall!
+                </div>
+
+                <div class="player-names" id="playerNames">
+                    <!-- Generated dynamically -->
+                </div>
+
+                <span class="setup-label" style="margin-top: 25px;">Difficulty Level</span>
+                <div class="difficulty-btns">
+                    <button class="diff-btn" data-diff="easy">
+                        <span class="diff-icon">🍙</span>
+                        <span class="diff-name">Easy</span>
+                        <span class="diff-desc">+ − only</span>
+                    </button>
+                    <button class="diff-btn selected" data-diff="medium">
+                        <span class="diff-icon">🍣</span>
+                        <span class="diff-name">Medium</span>
+                        <span class="diff-desc">+ − ×</span>
+                    </button>
+                    <button class="diff-btn" data-diff="hard">
+                        <span class="diff-icon">🐙</span>
+                        <span class="diff-name">Hard</span>
+                        <span class="diff-desc">+ − × ÷ x²</span>
+                    </button>
+                    <button class="diff-btn" data-diff="brutal">
+                        <span class="diff-icon">💀</span>
+                        <span class="diff-name">Brutal</span>
+                        <span class="diff-desc">+ − × ÷ x² √</span>
+                    </button>
+                    <button class="diff-btn" data-diff="insane">
+                        <span class="diff-icon">🔥</span>
+                        <span class="diff-name">INSANE</span>
+                        <span class="diff-desc">Everything!</span>
+                    </button>
+                    <button class="diff-btn" data-diff="custom">
+                        <span class="diff-icon">🎚️</span>
+                        <span class="diff-name">Custom</span>
+                        <span class="diff-desc">Level 1-10</span>
+                    </button>
+                    <button class="diff-btn" data-diff="perplayer">
+                        <span class="diff-icon">👥</span>
+                        <span class="diff-name">Per Player</span>
+                        <span class="diff-desc">Individual</span>
+                    </button>
+                </div>
+
+                <!-- Custom difficulty slider -->
+                <div class="custom-diff-container" id="customDiffContainer" style="display: none;">
+                    <div class="slider-label">Difficulty Level: <span id="customLevelDisplay">5</span></div>
+                    <input type="range" class="diff-slider" id="customDiffSlider" min="1" max="10" value="5">
+                    <div class="slider-labels">
+                        <span>1 (Easy)</span>
+                        <span>5 (Medium)</span>
+                        <span>10 (Brutal)</span>
+                    </div>
+                </div>
+            </div>
+
+            <button class="start-btn" id="startBtn">Start Game!</button>
+        </div>
+    </div>
+
+    <!-- Turn transition screen -->
+    <div class="turn-transition" id="turnTransition">
+        <div class="turn-player-avatar" id="turnAvatar">🧑‍🍳</div>
+        <div class="turn-player-name" id="turnName">Player 1</div>
+        <div class="turn-message">Your turn to climb!</div>
+        <button class="ready-btn" id="readyBtn">Ready!</button>
+    </div>
+
+    <!-- Results screen -->
+    <div class="screen-overlay hidden" id="resultsScreen">
+        <div class="results-content">
+            <h1 class="results-title">🏆 Game Over! 🏆</h1>
+            <div class="winner-display">
+                <div class="winner-avatar" id="winnerAvatar">🧑‍🍳</div>
+                <div class="winner-name" id="winnerName">Player 1</div>
+                <div class="winner-score">Winner with <span id="winnerScore">0</span> sushi climbed!</div>
+            </div>
+            <div class="final-scores" id="finalScores"></div>
+            <button class="start-btn" id="playAgainBtn">Play Again!</button>
+        </div>
+    </div>
+
+    <script>
+        // Player avatars and colors
+        const PLAYER_DATA = [
+            { avatar: '🧑‍🍳', color: '#ff6b6b', name: 'Chef Red' },
+            { avatar: '👨‍🍳', color: '#48dbfb', name: 'Chef Blue' },
+            { avatar: '👩‍🍳', color: '#26de81', name: 'Chef Green' },
+            { avatar: '🧑‍🍳', color: '#feca57', name: 'Chef Gold' }
+        ];
+
+        // Sushi types for the tower
+        const SUSHI_TYPES = ['🍣', '🍙', '🍥', '🍤', '🍱', '🦐', '🐟', '🐙', '🦑', '🦀', '🥢', '🍘', '🥟', '🍡', '🍢'];
+
+        // Game state
+        let gameState = {
+            playerCount: 3,
+            players: [],
+            currentPlayerIndex: 0,
+            currentRound: 1,
+            maxRounds: 5,
+            turnTimeLeft: 120,
+            turnTimer: null,
+            currentHeight: 0,
+            maxTowerHeight: 15,
+            currentAnswer: 0,
+            isShowingProblem: false,
+            towerSushi: [],
+            completedStacks: [],
+            difficulty: 'medium',
+            customLevel: 5,
+            perPlayerMode: false,
+            soloMode: false,
+            soloTotalScore: 0
+        };
+
+        // High scores storage key
+        const HIGH_SCORES_KEY = 'sushiStackHighScores';
+
+        // Load high scores from localStorage
+        function loadHighScores() {
+            try {
+                const scores = localStorage.getItem(HIGH_SCORES_KEY);
+                return scores ? JSON.parse(scores) : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        // Save high score to localStorage
+        function saveHighScore(name, score, difficulty, stacks) {
+            const scores = loadHighScores();
+            scores.push({
+                name: name,
+                score: score,
+                difficulty: difficulty,
+                stacks: stacks,
+                date: new Date().toLocaleDateString()
+            });
+            // Sort by score descending and keep top 10
+            scores.sort((a, b) => b.score - a.score);
+            scores.splice(10);
+            try {
+                localStorage.setItem(HIGH_SCORES_KEY, JSON.stringify(scores));
+            } catch (e) {
+                console.log('Could not save high scores');
+            }
+            return scores;
+        }
+
+        // Get player's rank in high scores
+        function getScoreRank(score) {
+            const scores = loadHighScores();
+            for (let i = 0; i < scores.length; i++) {
+                if (score >= scores[i].score) {
+                    return i + 1;
+                }
+            }
+            return scores.length + 1;
+        }
+
+        // Audio context for sound effects
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        // Sound: Falling whistle (descending pitch)
+        function playFallSound() {
+            initAudio();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(150, audioCtx.currentTime + 0.8);
+
+            gainNode.gain.setValueAtTime(0.4, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.8);
+
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 0.8);
+        }
+
+        // Sound: Splat/crash when hitting ground
+        function playSplatSound() {
+            initAudio();
+
+            // Create noise for splat
+            const bufferSize = audioCtx.sampleRate * 0.3;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.1));
+            }
+
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = buffer;
+
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 400;
+
+            const gainNode = audioCtx.createGain();
+            gainNode.gain.setValueAtTime(0.6, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+
+            noise.connect(filter);
+            filter.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            noise.start();
+        }
+
+        // Sound: Correct answer (happy ding)
+        function playCorrectSound() {
+            initAudio();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+            oscillator.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.1); // E5
+            oscillator.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.2); // G5
+
+            gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 0.4);
+        }
+
+        // Sound: Wrong answer buzzer
+        function playWrongSound() {
+            initAudio();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            oscillator.type = 'sawtooth';
+            oscillator.frequency.setValueAtTime(150, audioCtx.currentTime);
+            oscillator.frequency.setValueAtTime(120, audioCtx.currentTime + 0.15);
+
+            gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 0.3);
+        }
+
+        // Sound: Climb up
+        function playClimbSound() {
+            initAudio();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(300, audioCtx.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.15);
+
+            gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 0.15);
+        }
+
+        // Sound: Stack complete fanfare
+        function playStackCompleteSound() {
+            initAudio();
+            const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+            notes.forEach((freq, i) => {
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                oscillator.type = 'sine';
+                oscillator.frequency.value = freq;
+                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime + i * 0.1);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + i * 0.1 + 0.3);
+                oscillator.start(audioCtx.currentTime + i * 0.1);
+                oscillator.stop(audioCtx.currentTime + i * 0.1 + 0.3);
+            });
+        }
+
+        // DOM elements
+        const elements = {
+            header: document.getElementById('header'),
+            completedStacks: document.getElementById('completedStacks'),
+            gameStage: document.getElementById('gameStage'),
+            startScreen: document.getElementById('startScreen'),
+            turnTransition: document.getElementById('turnTransition'),
+            resultsScreen: document.getElementById('resultsScreen'),
+            playerScores: document.getElementById('playerScores'),
+            currentPlayerName: document.getElementById('currentPlayerName'),
+            timerDisplay: document.getElementById('timerDisplay'),
+            sushiTower: document.getElementById('sushiTower'),
+            character: document.getElementById('character'),
+            heightValue: document.getElementById('heightValue'),
+            problemOverlay: document.getElementById('problemOverlay'),
+            problemSushi: document.getElementById('problemSushi'),
+            probNum1: document.getElementById('probNum1'),
+            problemInput: document.getElementById('problemInput'),
+            equationDisplay: document.getElementById('equationDisplay'),
+            inlineInput: document.getElementById('inlineInput'),
+            feedbackFlash: document.getElementById('feedbackFlash'),
+            turnAvatar: document.getElementById('turnAvatar'),
+            turnName: document.getElementById('turnName'),
+            winnerAvatar: document.getElementById('winnerAvatar'),
+            winnerName: document.getElementById('winnerName'),
+            winnerScore: document.getElementById('winnerScore'),
+            finalScores: document.getElementById('finalScores'),
+            playerNames: document.getElementById('playerNames')
+        };
+
+        // Initialize player name inputs
+        function updatePlayerNameInputs() {
+            elements.playerNames.innerHTML = '';
+            for (let i = 0; i < gameState.playerCount; i++) {
+                const div = document.createElement('div');
+                div.className = 'player-name-input';
+
+                let diffSelector = '';
+                if (gameState.perPlayerMode) {
+                    diffSelector = `
+                        <select class="player-diff-select" data-player="${i}">
+                            <option value="easy">Easy</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="hard">Hard</option>
+                            <option value="brutal">Brutal</option>
+                            <option value="insane">Insane</option>
+                            <optgroup label="Custom Level">
+                                <option value="1">Level 1</option>
+                                <option value="2">Level 2</option>
+                                <option value="3">Level 3</option>
+                                <option value="4">Level 4</option>
+                                <option value="5">Level 5</option>
+                                <option value="6">Level 6</option>
+                                <option value="7">Level 7</option>
+                                <option value="8">Level 8</option>
+                                <option value="9">Level 9</option>
+                                <option value="10">Level 10</option>
+                            </optgroup>
+                        </select>
+                    `;
+                }
+
+                div.innerHTML = `
+                    <div class="player-avatar" style="background: ${PLAYER_DATA[i].color}40;">${PLAYER_DATA[i].avatar}</div>
+                    <input type="text" placeholder="${PLAYER_DATA[i].name}" data-player="${i}" value="${PLAYER_DATA[i].name}">
+                    ${diffSelector}
+                `;
+                elements.playerNames.appendChild(div);
+            }
+        }
+
+        // Build the sushi tower
+        function buildTower() {
+            elements.sushiTower.innerHTML = '';
+            gameState.towerSushi = [];
+
+            for (let i = 0; i < gameState.maxTowerHeight; i++) {
+                const sushi = SUSHI_TYPES[Math.floor(Math.random() * SUSHI_TYPES.length)];
+                gameState.towerSushi.push(sushi);
+
+                const platform = document.createElement('div');
+                platform.className = 'sushi-platform' + (i === 0 ? ' current' : ' locked');
+                platform.textContent = sushi;
+                platform.dataset.index = i;
+                elements.sushiTower.appendChild(platform);
+            }
+
+            // Add plate
+            const plate = document.createElement('div');
+            plate.className = 'plate';
+            elements.sushiTower.appendChild(plate);
+        }
+
+        // Update tower visuals
+        function updateTowerVisuals() {
+            const platforms = document.querySelectorAll('.sushi-platform');
+            platforms.forEach((p, i) => {
+                p.classList.remove('current', 'completed', 'locked');
+                if (i < gameState.currentHeight) {
+                    p.classList.add('completed');
+                } else if (i === gameState.currentHeight) {
+                    p.classList.add('current');
+                } else {
+                    p.classList.add('locked');
+                }
+            });
+
+            // Auto-scroll the tower to keep current platform visible
+            scrollTowerToCurrentHeight();
+        }
+
+        // Scroll tower to keep current platform in view
+        function scrollTowerToCurrentHeight() {
+            // Each platform is about 250px tall based on CSS
+            const platformHeight = 250;
+            const viewportHeight = 900; // Based on CSS .sushi-viewport height
+            const baseBottom = 100; // Initial bottom position from CSS
+
+            // Calculate how much to shift the tower
+            // We want to keep the current platform in the middle-lower part of the viewport
+            const currentPlatformBottom = baseBottom + (gameState.currentHeight * platformHeight);
+            const targetVisibleHeight = viewportHeight * 0.6; // Keep it in lower 60% of viewport
+
+            if (currentPlatformBottom > targetVisibleHeight) {
+                const scrollOffset = currentPlatformBottom - targetVisibleHeight;
+                elements.sushiTower.style.transform = `translateX(-50%) translateY(-${scrollOffset}px)`;
+            } else {
+                elements.sushiTower.style.transform = 'translateX(-50%)';
+            }
+        }
+
+        // Position character
+        function positionCharacter(animate = true) {
+            const platforms = document.querySelectorAll('.sushi-platform');
+            if (platforms.length === 0) return;
+
+            // Position character based on current height
+            // Each platform is 250px tall, character sits on top of current platform
+            const platformHeight = 250;
+            const characterBottom = gameState.currentHeight * platformHeight + 200;
+
+            if (animate) {
+                elements.character.classList.add('walking');
+                setTimeout(() => {
+                    elements.character.classList.remove('walking');
+                }, 500);
+            }
+
+            elements.character.style.bottom = characterBottom + 'px';
+
+            elements.heightValue.textContent = gameState.currentHeight;
+        }
+
+        // Update player scores display
+        function updatePlayerScores() {
+            elements.playerScores.innerHTML = '';
+            gameState.players.forEach((player, i) => {
+                const div = document.createElement('div');
+                div.className = 'player-score' + (i === gameState.currentPlayerIndex ? ' active' : '');
+                div.style.background = player.color + '40';
+                div.innerHTML = `
+                    <div class="name">${player.avatar} ${player.name}</div>
+                    <div class="score">${player.totalScore}</div>
+                `;
+                elements.playerScores.appendChild(div);
+            });
+        }
+
+        // Update current player display
+        function updateCurrentPlayer() {
+            const player = gameState.players[gameState.currentPlayerIndex];
+            elements.currentPlayerName.textContent = player.name;
+            elements.currentPlayerName.style.background = player.color + '60';
+            elements.character.textContent = player.avatar;
+        }
+
+        // Format time
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // Update timer display
+        function updateTimerDisplay() {
+            elements.timerDisplay.textContent = formatTime(gameState.turnTimeLeft);
+            if (gameState.turnTimeLeft <= 30) {
+                elements.timerDisplay.classList.add('warning');
+            } else {
+                elements.timerDisplay.classList.remove('warning');
+            }
+        }
+
+        // Difficulty settings
+        const DIFFICULTY_SETTINGS = {
+            easy: {
+                // Addition and subtraction only
+                baseMax: 20,
+                heightScale: 5,
+                maxNum: 50,
+                operations: ['add', 'sub']
+            },
+            medium: {
+                // Add, sub, multiply
+                baseMax: 30,
+                heightScale: 10,
+                maxNum: 100,
+                operations: ['add', 'sub', 'mul', 'mul']
+            },
+            hard: {
+                // Add, sub, mul, div, squares
+                baseMax: 50,
+                heightScale: 15,
+                maxNum: 200,
+                operations: ['add', 'sub', 'mul', 'div', 'square', 'mul2digit']
+            },
+            brutal: {
+                // Hard + sqrt, order of operations
+                baseMax: 70,
+                heightScale: 20,
+                maxNum: 400,
+                operations: ['add', 'sub', 'mul', 'div', 'square', 'mul2digit', 'sqrt', 'orderOps', 'orderOps2']
+            },
+            insane: {
+                // EVERYTHING
+                baseMax: 100,
+                heightScale: 30,
+                maxNum: 999,
+                operations: ['add3digit', 'sub3digit', 'mul2digit', 'div', 'square', 'cube', 'sqrt', 'orderOps', 'orderOps2', 'parentheses', 'percent', 'negative', 'tripleMul', 'divMul', 'power2', 'fraction']
+            }
+        };
+
+        // Custom level settings (1-10 scale)
+        function getCustomDifficultySettings(level) {
+            const ops = [
+                ['add', 'sub'],                                          // Level 1
+                ['add', 'sub', 'mul'],                                   // Level 2
+                ['add', 'sub', 'mul', 'mul'],                            // Level 3
+                ['add', 'sub', 'mul', 'div'],                            // Level 4
+                ['add', 'sub', 'mul', 'div', 'square'],                  // Level 5
+                ['add', 'sub', 'mul', 'div', 'square', 'mul2digit'],     // Level 6
+                ['add', 'sub', 'mul', 'div', 'square', 'mul2digit', 'sqrt', 'orderOps'], // Level 7
+                ['add', 'sub', 'mul2digit', 'div', 'square', 'sqrt', 'orderOps', 'orderOps2', 'parentheses'], // Level 8
+                ['add3digit', 'sub3digit', 'mul2digit', 'div', 'square', 'cube', 'sqrt', 'orderOps', 'percent', 'negative'], // Level 9
+                ['add3digit', 'sub3digit', 'mul2digit', 'div', 'square', 'cube', 'sqrt', 'orderOps', 'orderOps2', 'parentheses', 'percent', 'negative', 'tripleMul', 'divMul', 'power2', 'fraction'] // Level 10
+            ];
+            return {
+                baseMax: 15 + level * 10,
+                heightScale: 3 + level * 3,
+                maxNum: 30 + level * 100,
+                operations: ops[level - 1] || ops[4]
+            };
+        }
+
+        // Generate math problem based on difficulty
+        function generateProblem() {
+            const height = gameState.currentHeight;
+
+            // Determine which difficulty settings to use
+            let diff;
+            if (gameState.perPlayerMode) {
+                // Use current player's individual difficulty
+                const playerDiff = gameState.players[gameState.currentPlayerIndex].difficulty;
+                if (typeof playerDiff === 'number') {
+                    diff = getCustomDifficultySettings(playerDiff);
+                } else {
+                    diff = DIFFICULTY_SETTINGS[playerDiff] || DIFFICULTY_SETTINGS.medium;
+                }
+            } else if (gameState.difficulty === 'custom') {
+                diff = getCustomDifficultySettings(gameState.customLevel);
+            } else {
+                diff = DIFFICULTY_SETTINGS[gameState.difficulty] || DIFFICULTY_SETTINGS.medium;
+            }
+
+            let problemText, answer;
+
+            // Scale numbers with height
+            const scale = Math.min(1 + height * 0.1, 2);
+            const maxNum = Math.floor(Math.min(diff.baseMax + height * diff.heightScale, diff.maxNum) * scale);
+
+            // Pick random operation from available ones
+            const op = diff.operations[Math.floor(Math.random() * diff.operations.length)];
+
+            switch (op) {
+                case 'add': {
+                    const a = Math.floor(Math.random() * maxNum) + 1;
+                    const b = Math.floor(Math.random() * maxNum) + 1;
+                    answer = a + b;
+                    problemText = `${a} + ${b}`;
+                    break;
+                }
+                case 'sub': {
+                    const a = Math.floor(Math.random() * maxNum) + 10;
+                    const b = Math.floor(Math.random() * a) + 1;
+                    answer = a - b;
+                    problemText = `${a} − ${b}`;
+                    break;
+                }
+                case 'mul': {
+                    const a = Math.floor(Math.random() * 12) + 2;
+                    const b = Math.floor(Math.random() * 12) + 2;
+                    answer = a * b;
+                    problemText = `${a} × ${b}`;
+                    break;
+                }
+                case 'div': {
+                    const b = Math.floor(Math.random() * 12) + 2;
+                    answer = Math.floor(Math.random() * 12) + 2;
+                    const a = b * answer;
+                    problemText = `${a} ÷ ${b}`;
+                    break;
+                }
+                case 'square': {
+                    const a = Math.floor(Math.random() * 15) + 5;
+                    answer = a * a;
+                    problemText = `${a}²`;
+                    break;
+                }
+                case 'mul2digit': {
+                    const a = Math.floor(Math.random() * 40) + 10;
+                    const b = Math.floor(Math.random() * 20) + 10;
+                    answer = a * b;
+                    problemText = `${a} × ${b}`;
+                    break;
+                }
+                case 'add3digit': {
+                    const a = Math.floor(Math.random() * 900) + 100;
+                    const b = Math.floor(Math.random() * 900) + 100;
+                    answer = a + b;
+                    problemText = `${a} + ${b}`;
+                    break;
+                }
+                case 'sub3digit': {
+                    const a = Math.floor(Math.random() * 900) + 100;
+                    const b = Math.floor(Math.random() * a) + 1;
+                    answer = a - b;
+                    problemText = `${a} − ${b}`;
+                    break;
+                }
+                case 'cube': {
+                    const a = Math.floor(Math.random() * 10) + 3;
+                    answer = a * a * a;
+                    problemText = `${a}³`;
+                    break;
+                }
+                case 'sqrt': {
+                    answer = Math.floor(Math.random() * 15) + 5;
+                    const a = answer * answer;
+                    problemText = `√${a}`;
+                    break;
+                }
+                case 'orderOps': {
+                    const a = Math.floor(Math.random() * 15) + 5;
+                    const b = Math.floor(Math.random() * 10) + 2;
+                    const c = Math.floor(Math.random() * 20) + 5;
+                    answer = a * b + c;
+                    problemText = `${a} × ${b} + ${c}`;
+                    break;
+                }
+                case 'orderOps2': {
+                    const a = Math.floor(Math.random() * 15) + 10;
+                    const b = Math.floor(Math.random() * 8) + 2;
+                    const c = Math.floor(Math.random() * 10) + 2;
+                    answer = a * b - c;
+                    problemText = `${a} × ${b} − ${c}`;
+                    break;
+                }
+                case 'parentheses': {
+                    const a = Math.floor(Math.random() * 20) + 10;
+                    const b = Math.floor(Math.random() * 15) + 5;
+                    const c = Math.floor(Math.random() * 8) + 2;
+                    answer = (a + b) * c;
+                    problemText = `(${a} + ${b}) × ${c}`;
+                    break;
+                }
+                case 'percent': {
+                    const percent = [10, 15, 20, 25, 50, 75][Math.floor(Math.random() * 6)];
+                    const base = Math.floor(Math.random() * 19 + 1) * 20;
+                    answer = (percent / 100) * base;
+                    problemText = `${percent}% of ${base}`;
+                    break;
+                }
+                case 'negative': {
+                    const a = Math.floor(Math.random() * 40) + 10;
+                    const b = Math.floor(Math.random() * 60) + 30;
+                    answer = a - b;
+                    problemText = `${a} − ${b}`;
+                    break;
+                }
+                case 'tripleMul': {
+                    const a = Math.floor(Math.random() * 8) + 2;
+                    const b = Math.floor(Math.random() * 8) + 2;
+                    const c = Math.floor(Math.random() * 8) + 2;
+                    answer = a * b * c;
+                    problemText = `${a} × ${b} × ${c}`;
+                    break;
+                }
+                case 'divMul': {
+                    const divisor = Math.floor(Math.random() * 8) + 2;
+                    const quotient = Math.floor(Math.random() * 12) + 3;
+                    const a = divisor * quotient;
+                    const c = Math.floor(Math.random() * 6) + 2;
+                    answer = quotient * c;
+                    problemText = `${a} ÷ ${divisor} × ${c}`;
+                    break;
+                }
+                case 'power2': {
+                    const exp = Math.floor(Math.random() * 6) + 4;
+                    answer = Math.pow(2, exp);
+                    problemText = `2^${exp}`;
+                    break;
+                }
+                case 'fraction': {
+                    const whole = Math.floor(Math.random() * 8) + 2;
+                    const denom = Math.floor(Math.random() * 6) + 2;
+                    const numer = Math.floor(Math.random() * (denom - 1)) + 1;
+                    answer = whole * denom + numer;
+                    problemText = `${whole} ${numer}/${denom} = ?/${denom}`;
+                    break;
+                }
+                default: {
+                    const a = Math.floor(Math.random() * maxNum) + 1;
+                    const b = Math.floor(Math.random() * maxNum) + 1;
+                    answer = a + b;
+                    problemText = `${a} + ${b}`;
+                }
+            }
+
+            gameState.currentAnswer = answer;
+
+            // Update display
+            elements.probNum1.textContent = problemText;
+            elements.problemSushi.textContent = gameState.towerSushi[gameState.currentHeight] || '🍣';
+            elements.problemInput.value = '';
+        }
+
+        // Show problem
+        function showProblem() {
+            if (gameState.currentHeight >= gameState.maxTowerHeight) {
+                // Completed the stack! Show it at top and give new stack
+                completeStack();
+                return;
+            }
+
+            gameState.isShowingProblem = true;
+            generateProblem();
+            // Update inline equation display instead of showing overlay
+            updateInlineDisplay();
+            setTimeout(() => elements.inlineInput.focus(), 100);
+        }
+
+        // Update inline equation display
+        function updateInlineDisplay() {
+            // Get the problem text (it's already set in generateProblem)
+            elements.equationDisplay.innerHTML = elements.probNum1.textContent + ' <span class="operator">=</span> ?';
+            elements.inlineInput.value = '';
+            elements.inlineInput.classList.remove('correct', 'wrong');
+        }
+
+        // Complete a stack and start a new one
+        function completeStack() {
+            playStackCompleteSound();
+
+            // Add visual completed stack
+            const stackDiv = document.createElement('div');
+            stackDiv.className = 'completed-stack';
+
+            const sushiDiv = document.createElement('div');
+            sushiDiv.className = 'stack-sushi';
+            // Show mini version of the completed stack (just a few sushi)
+            for (let i = 0; i < Math.min(5, gameState.towerSushi.length); i++) {
+                const s = document.createElement('span');
+                s.textContent = gameState.towerSushi[i];
+                sushiDiv.appendChild(s);
+            }
+            if (gameState.towerSushi.length > 5) {
+                const more = document.createElement('span');
+                more.textContent = '...';
+                more.style.fontSize = '0.7rem';
+                sushiDiv.appendChild(more);
+            }
+
+            const label = document.createElement('div');
+            label.className = 'stack-label';
+            gameState.completedStacks.push(gameState.towerSushi.length);
+            // Also track per-player completed stacks
+            gameState.players[gameState.currentPlayerIndex].completedStacks.push([...gameState.towerSushi]);
+            label.textContent = `+${gameState.maxTowerHeight}`;
+
+            stackDiv.appendChild(sushiDiv);
+            stackDiv.appendChild(label);
+            elements.completedStacks.appendChild(stackDiv);
+
+            // Celebrate
+            elements.character.classList.add('celebrating');
+
+            // Add points for completing the stack
+            gameState.players[gameState.currentPlayerIndex].totalScore += gameState.maxTowerHeight;
+            updatePlayerScores();
+
+            // Reset and build new tower
+            setTimeout(() => {
+                elements.character.classList.remove('celebrating');
+                gameState.currentHeight = 0;
+                buildTower();
+                updateTowerVisuals();
+                positionCharacter(false);
+
+                // Continue if time left (or solo mode)
+                if (gameState.soloMode || gameState.turnTimeLeft > 0) {
+                    setTimeout(() => showProblem(), 300);
+                }
+            }, 800);
+        }
+
+        // Clear completed stacks display
+        function clearCompletedStacks() {
+            elements.completedStacks.innerHTML = '';
+            gameState.completedStacks = [];
+        }
+
+        // Hide problem
+        function hideProblem() {
+            gameState.isShowingProblem = false;
+            elements.problemOverlay.classList.remove('show');
+        }
+
+        // Check answer
+        function checkAnswer() {
+            const userAnswer = parseInt(elements.inlineInput.value);
+            if (isNaN(userAnswer)) return;
+
+            gameState.isShowingProblem = false;
+
+            if (userAnswer === gameState.currentAnswer) {
+                // Correct!
+                elements.inlineInput.classList.add('correct');
+                playCorrectSound();
+                playClimbSound();
+                showFeedback(true);
+                gameState.currentHeight++;
+                updateTowerVisuals();
+                positionCharacter();
+
+                // Update best height
+                if (gameState.currentHeight > gameState.players[gameState.currentPlayerIndex].bestHeight) {
+                    gameState.players[gameState.currentPlayerIndex].bestHeight = gameState.currentHeight;
+                    updatePlayerScores();
+                }
+
+                // Celebrate briefly then show next problem
+                elements.character.classList.add('celebrating');
+                setTimeout(() => {
+                    elements.character.classList.remove('celebrating');
+                    if (gameState.soloMode || gameState.turnTimeLeft > 0) {
+                        showProblem();
+                    }
+                }, 800);
+            } else {
+                // Wrong! Slide down!
+                elements.inlineInput.classList.add('wrong');
+                playWrongSound();
+                showFeedback(false);
+                elements.sushiTower.classList.add('shaking');
+
+                setTimeout(() => {
+                    elements.sushiTower.classList.remove('shaking');
+
+                    // Start sliding down
+                    playFallSound(); // Falling whistle sound
+                    elements.character.classList.add('sliding');
+
+                    // Make platforms collapse sequentially from top to bottom
+                    const platforms = document.querySelectorAll('.sushi-platform');
+                    const completedPlatforms = Array.from(platforms).filter((p, i) => i < gameState.currentHeight);
+                    completedPlatforms.reverse().forEach((platform, index) => {
+                        setTimeout(() => {
+                            platform.classList.add('collapsing');
+                        }, index * 100); // Stagger the collapse
+                    });
+
+                    // Slide character to bottom
+                    elements.character.style.bottom = '200px'; // Base position
+
+                    // Scroll tower back to bottom
+                    elements.sushiTower.style.transition = 'transform 1.5s cubic-bezier(0.6, 0.0, 0.8, 0.2)';
+                    elements.sushiTower.style.transform = 'translateX(-50%)';
+
+                    // Wait for slide animation to complete (1.5s)
+                    setTimeout(() => {
+                        playSplatSound(); // Splat when hitting ground
+                        elements.character.classList.remove('sliding');
+
+                        // Remove collapsing class from all platforms
+                        platforms.forEach(p => p.classList.remove('collapsing'));
+
+                        // Reset tower transition for normal scrolling
+                        elements.sushiTower.style.transition = 'transform 0.5s ease-out';
+
+                        if (gameState.soloMode) {
+                            // Solo mode - game over on fall!
+                            endSoloGame();
+                        } else {
+                            gameState.currentHeight = 0;
+                            updateTowerVisuals();
+                            positionCharacter(false);
+
+                            // Continue turn if time left
+                            if (gameState.turnTimeLeft > 0) {
+                                setTimeout(() => showProblem(), 500);
+                            }
+                        }
+                    }, 1500);
+                }, 500);
+            }
+        }
+
+        // End solo game
+        function endSoloGame() {
+            const player = gameState.players[0];
+            player.lastHeight = gameState.currentHeight;
+
+            // Calculate total score (completed stacks + current height)
+            const totalScore = player.completedStacks.length * gameState.maxTowerHeight + gameState.currentHeight;
+            player.totalScore = totalScore;
+
+            // Get difficulty name for high score
+            let diffName = gameState.difficulty;
+            if (gameState.difficulty === 'custom') {
+                diffName = `Level ${gameState.customLevel}`;
+            }
+
+            // Save to high scores
+            const scores = saveHighScore(player.name, totalScore, diffName, player.completedStacks.length);
+
+            // Show solo results
+            showSoloResults(player, scores);
+        }
+
+        // Show solo results with leaderboard
+        function showSoloResults(player, highScores) {
+            elements.header.style.display = 'none';
+            elements.gameStage.style.display = 'none';
+
+            const rank = highScores.findIndex(s => s.score === player.totalScore && s.name === player.name) + 1;
+
+            // Build completed stacks display
+            let stacksHtml = '';
+            if (player.completedStacks.length > 0) {
+                stacksHtml = '<div class="solo-stacks">';
+                player.completedStacks.forEach((stack, idx) => {
+                    stacksHtml += '<div class="mini-stack">';
+                    for (let j = 0; j < Math.min(5, stack.length); j++) {
+                        stacksHtml += `<span class="mini-sushi">${stack[j]}</span>`;
+                    }
+                    if (stack.length > 5) {
+                        stacksHtml += '<span class="mini-more">...</span>';
+                    }
+                    stacksHtml += '</div>';
+                });
+                stacksHtml += '</div>';
+            }
+
+            // Build leaderboard
+            let leaderboardHtml = '<div class="leaderboard"><h3>High Scores</h3><div class="leaderboard-list">';
+            highScores.forEach((score, i) => {
+                const isCurrentPlayer = score.score === player.totalScore && score.name === player.name && i === rank - 1;
+                leaderboardHtml += `
+                    <div class="leaderboard-entry ${isCurrentPlayer ? 'current' : ''}">
+                        <span class="lb-rank">${i === 0 ? '👑' : `#${i + 1}`}</span>
+                        <span class="lb-name">${score.name}</span>
+                        <span class="lb-score">${score.score}</span>
+                        <span class="lb-diff">${score.difficulty}</span>
+                    </div>
+                `;
+            });
+            if (highScores.length === 0) {
+                leaderboardHtml += '<div class="no-scores">No high scores yet!</div>';
+            }
+            leaderboardHtml += '</div></div>';
+
+            elements.resultsScreen.querySelector('.results-content').innerHTML = `
+                <h1 class="results-title">Game Over!</h1>
+                <div class="solo-result">
+                    <div class="solo-avatar">${player.avatar}</div>
+                    <div class="solo-name">${player.name}</div>
+                    <div class="solo-score-big">${player.totalScore}</div>
+                    <div class="solo-score-label">Total Sushi Climbed</div>
+                    ${rank <= 10 ? `<div class="new-high-score">New High Score! #${rank}</div>` : ''}
+                    <div class="solo-stats">
+                        <div class="solo-stat">
+                            <div class="stat-value">${player.completedStacks.length}</div>
+                            <div class="stat-label">Stacks</div>
+                        </div>
+                        <div class="solo-stat">
+                            <div class="stat-value">${player.lastHeight}</div>
+                            <div class="stat-label">Last Height</div>
+                        </div>
+                    </div>
+                    ${stacksHtml ? `<div class="stacks-section"><div class="stacks-title">Completed Stacks</div>${stacksHtml}</div>` : ''}
+                </div>
+                ${leaderboardHtml}
+                <button class="start-btn" id="playAgainBtnSolo">Play Again!</button>
+            `;
+
+            // Re-attach play again handler
+            document.getElementById('playAgainBtnSolo').addEventListener('click', () => {
+                elements.resultsScreen.classList.add('hidden');
+                elements.startScreen.classList.remove('hidden');
+                // Restore original results content structure
+                restoreResultsContent();
+            });
+
+            elements.resultsScreen.classList.remove('hidden');
+        }
+
+        // Restore original results content for multiplayer
+        function restoreResultsContent() {
+            elements.resultsScreen.querySelector('.results-content').innerHTML = `
+                <h1 class="results-title">Game Over!</h1>
+                <div class="winner-display">
+                    <div class="winner-avatar" id="winnerAvatar">🧑‍🍳</div>
+                    <div class="winner-name" id="winnerName">Player 1</div>
+                    <div class="winner-score">Winner with <span id="winnerScore">0</span> sushi climbed!</div>
+                </div>
+                <div class="final-scores" id="finalScores"></div>
+                <button class="start-btn" id="playAgainBtn">Play Again!</button>
+            `;
+            // Re-attach event listener
+            document.getElementById('playAgainBtn').addEventListener('click', () => {
+                elements.resultsScreen.classList.add('hidden');
+                elements.startScreen.classList.remove('hidden');
+            });
+            // Update element references
+            elements.winnerAvatar = document.getElementById('winnerAvatar');
+            elements.winnerName = document.getElementById('winnerName');
+            elements.winnerScore = document.getElementById('winnerScore');
+            elements.finalScores = document.getElementById('finalScores');
+        }
+
+        // Show feedback
+        function showFeedback(correct) {
+            elements.feedbackFlash.className = 'feedback-flash ' + (correct ? 'correct' : 'wrong');
+            setTimeout(() => {
+                elements.feedbackFlash.className = 'feedback-flash';
+            }, 200);
+        }
+
+        // Start turn timer
+        function startTurnTimer() {
+            gameState.turnTimeLeft = 120;
+            updateTimerDisplay();
+
+            gameState.turnTimer = setInterval(() => {
+                gameState.turnTimeLeft--;
+                updateTimerDisplay();
+
+                if (gameState.turnTimeLeft <= 0) {
+                    endTurn();
+                }
+            }, 1000);
+        }
+
+        // End turn
+        function endTurn() {
+            clearInterval(gameState.turnTimer);
+            hideProblem();
+
+            // Save best height, last height, and add to total score
+            const player = gameState.players[gameState.currentPlayerIndex];
+            player.bestHeight = Math.max(player.bestHeight, gameState.currentHeight);
+            player.lastHeight = gameState.currentHeight; // Track where they ended
+            player.totalScore += gameState.currentHeight;
+            updatePlayerScores();
+
+            // Check if all players have played this round
+            gameState.currentPlayerIndex++;
+            if (gameState.currentPlayerIndex >= gameState.players.length) {
+                // All players finished this round
+                if (gameState.currentRound >= gameState.maxRounds) {
+                    // All 5 rounds complete - game over!
+                    showResults();
+                } else {
+                    // Start next round
+                    gameState.currentRound++;
+                    gameState.currentPlayerIndex = 0;
+                    updateRoundDisplay();
+                    showTurnTransition();
+                }
+            } else {
+                // Next player's turn
+                showTurnTransition();
+            }
+        }
+
+        // Update round display
+        function updateRoundDisplay() {
+            document.getElementById('roundDisplay').textContent = gameState.currentRound;
+        }
+
+        // Show turn transition
+        function showTurnTransition() {
+            const player = gameState.players[gameState.currentPlayerIndex];
+            elements.turnAvatar.textContent = player.avatar;
+            elements.turnName.textContent = player.name;
+            elements.turnName.style.color = player.color;
+
+            // Update turn message with round info
+            document.querySelector('.turn-message').textContent =
+                `Round ${gameState.currentRound} of ${gameState.maxRounds} - Your turn to climb!`;
+
+            elements.turnTransition.classList.add('show');
+        }
+
+        // Start turn
+        function startTurn() {
+            elements.turnTransition.classList.remove('show');
+
+            gameState.currentHeight = 0;
+            clearCompletedStacks();
+            updateCurrentPlayer();
+            updatePlayerScores();
+            buildTower();
+            updateTowerVisuals();
+
+            setTimeout(() => {
+                positionCharacter(false);
+                startTurnTimer();
+                setTimeout(() => showProblem(), 500);
+            }, 300);
+        }
+
+        // Show results
+        function showResults() {
+            elements.header.style.display = 'none';
+            elements.gameStage.style.display = 'none';
+
+            // Find winner (by total score across all rounds)
+            const sortedPlayers = [...gameState.players].sort((a, b) => b.totalScore - a.totalScore);
+            const winner = sortedPlayers[0];
+
+            elements.winnerAvatar.textContent = winner.avatar;
+            elements.winnerName.textContent = winner.name;
+            elements.winnerName.style.color = winner.color;
+            elements.winnerScore.textContent = winner.totalScore;
+
+            // Show all scores with completed stacks
+            elements.finalScores.innerHTML = '';
+            sortedPlayers.forEach((player, i) => {
+                const card = document.createElement('div');
+                card.className = 'final-score-card';
+                card.style.background = player.color + '40';
+
+                // Build completed stacks display
+                let stacksHtml = '';
+                if (player.completedStacks.length > 0) {
+                    stacksHtml = '<div class="player-stacks">';
+                    player.completedStacks.forEach((stack, stackIdx) => {
+                        stacksHtml += '<div class="mini-stack">';
+                        // Show first 5 sushi of each stack
+                        for (let j = 0; j < Math.min(5, stack.length); j++) {
+                            stacksHtml += `<span class="mini-sushi">${stack[j]}</span>`;
+                        }
+                        if (stack.length > 5) {
+                            stacksHtml += '<span class="mini-more">...</span>';
+                        }
+                        stacksHtml += '</div>';
+                    });
+                    stacksHtml += '</div>';
+                }
+
+                // Build current position tower
+                let positionHtml = '';
+                if (player.lastHeight > 0) {
+                    positionHtml = '<div class="position-tower">';
+                    for (let j = 0; j < Math.min(player.lastHeight, 5); j++) {
+                        positionHtml += `<span class="pos-sushi">${SUSHI_TYPES[j % SUSHI_TYPES.length]}</span>`;
+                    }
+                    if (player.lastHeight > 5) {
+                        positionHtml += `<span class="pos-more">+${player.lastHeight - 5}</span>`;
+                    }
+                    positionHtml += '</div>';
+                }
+
+                card.innerHTML = `
+                    <div class="rank">${i === 0 ? '👑' : `#${i + 1}`}</div>
+                    <div class="avatar">${player.avatar}</div>
+                    <div class="name">${player.name}</div>
+                    <div class="score">${player.totalScore}</div>
+                    <div class="score-label">total sushi</div>
+                    <div class="stats">
+                        <span>Best: ${player.bestHeight}</span>
+                        <span>Stacks: ${player.completedStacks.length}</span>
+                    </div>
+                    ${positionHtml ? `<div class="last-position-label">Last climb:</div>${positionHtml}` : ''}
+                    ${stacksHtml ? `<div class="stacks-label">Completed Stacks (${player.completedStacks.length}):</div>${stacksHtml}` : '<div class="no-stacks">No stacks completed</div>'}
+                `;
+                elements.finalScores.appendChild(card);
+            });
+
+            elements.resultsScreen.classList.remove('hidden');
+        }
+
+        // Start game
+        function startGame() {
+            // Get player names and difficulties
+            gameState.players = [];
+            const inputs = elements.playerNames.querySelectorAll('input[type="text"]');
+            const diffSelects = elements.playerNames.querySelectorAll('.player-diff-select');
+
+            inputs.forEach((input, i) => {
+                let playerDiff = 'medium';
+                if (gameState.perPlayerMode && diffSelects[i]) {
+                    const val = diffSelects[i].value;
+                    // Check if it's a number (custom level) or preset
+                    playerDiff = isNaN(val) ? val : parseInt(val);
+                }
+
+                gameState.players.push({
+                    name: input.value || PLAYER_DATA[i].name,
+                    avatar: PLAYER_DATA[i].avatar,
+                    color: PLAYER_DATA[i].color,
+                    bestHeight: 0,
+                    totalScore: 0,
+                    difficulty: playerDiff,
+                    completedStacks: [], // Track all completed stacks for this player
+                    lastHeight: 0 // Track where they ended
+                });
+            });
+
+            gameState.currentPlayerIndex = 0;
+            gameState.currentRound = 1;
+
+            elements.startScreen.classList.add('hidden');
+            elements.header.style.display = 'flex';
+            elements.gameStage.style.display = 'flex';
+
+            // Reset round display visibility
+            document.getElementById('roundDisplay').parentElement.style.display = '';
+
+            if (gameState.soloMode) {
+                // Solo mode - start immediately, no timer
+                startSoloGame();
+            } else {
+                updateRoundDisplay();
+                showTurnTransition();
+            }
+        }
+
+        // Start solo game
+        function startSoloGame() {
+            const player = gameState.players[0];
+
+            // Update header for solo mode
+            document.getElementById('roundDisplay').parentElement.style.display = 'none';
+            elements.timerDisplay.textContent = '∞';
+            elements.timerDisplay.classList.remove('warning');
+
+            gameState.currentHeight = 0;
+            clearCompletedStacks();
+            updateCurrentPlayer();
+            updatePlayerScores();
+            buildTower();
+            updateTowerVisuals();
+
+            setTimeout(() => {
+                positionCharacter(false);
+                setTimeout(() => showProblem(), 500);
+            }, 300);
+        }
+
+        // Event listeners
+        document.querySelectorAll('.count-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.count-btn').forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+                gameState.playerCount = parseInt(btn.dataset.count);
+                gameState.soloMode = gameState.playerCount === 1;
+
+                // Show/hide solo mode hint
+                const soloHint = document.getElementById('soloModeHint');
+                soloHint.style.display = gameState.soloMode ? 'block' : 'none';
+
+                updatePlayerNameInputs();
+            });
+        });
+
+        document.querySelectorAll('.diff-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+
+                const diff = btn.dataset.diff;
+                gameState.difficulty = diff;
+
+                // Show/hide custom slider
+                const customContainer = document.getElementById('customDiffContainer');
+                if (diff === 'custom') {
+                    customContainer.style.display = 'block';
+                    gameState.perPlayerMode = false;
+                } else {
+                    customContainer.style.display = 'none';
+                }
+
+                // Handle per-player mode
+                if (diff === 'perplayer') {
+                    gameState.perPlayerMode = true;
+                } else {
+                    gameState.perPlayerMode = false;
+                }
+
+                // Refresh player inputs to show/hide difficulty selectors
+                updatePlayerNameInputs();
+            });
+        });
+
+        // Custom difficulty slider
+        document.getElementById('customDiffSlider').addEventListener('input', (e) => {
+            gameState.customLevel = parseInt(e.target.value);
+            document.getElementById('customLevelDisplay').textContent = gameState.customLevel;
+        });
+
+        document.getElementById('startBtn').addEventListener('click', startGame);
+
+        document.getElementById('readyBtn').addEventListener('click', startTurn);
+
+        document.getElementById('playAgainBtn').addEventListener('click', () => {
+            elements.resultsScreen.classList.add('hidden');
+            elements.startScreen.classList.remove('hidden');
+        });
+
+        document.getElementById('endGameBtn').addEventListener('click', () => {
+            if (confirm('Are you sure you want to end the game?')) {
+                clearInterval(gameState.turnTimer);
+                hideProblem();
+
+                if (gameState.soloMode) {
+                    endSoloGame();
+                } else {
+                    // For multiplayer, save current player's progress and show results
+                    const player = gameState.players[gameState.currentPlayerIndex];
+                    player.bestHeight = Math.max(player.bestHeight, gameState.currentHeight);
+                    player.lastHeight = gameState.currentHeight;
+                    player.totalScore += gameState.currentHeight;
+                    showResults();
+                }
+            }
+        });
+
+        elements.problemInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                checkAnswer();
+            }
+        });
+
+        elements.inlineInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                checkAnswer();
+            }
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (elements.gameStage.style.display !== 'none') {
+                positionCharacter(false);
+            }
+        });
+
+        // Initialize
+        updatePlayerNameInputs();
+    </script>
+</body>
+</html>

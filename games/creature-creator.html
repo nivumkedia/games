@@ -1,0 +1,2579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Creature Creator - Populate the World</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(to bottom, #87CEEB 0%, #98D8C8 100%);
+            overflow: hidden;
+            user-select: none;
+        }
+
+        #game-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            padding: 20px;
+            gap: 20px;
+        }
+
+        #header {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px 25px;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #header h1 {
+            color: #2c3e50;
+            font-size: 28px;
+        }
+
+        #stats {
+            display: flex;
+            gap: 20px;
+            font-size: 16px;
+            color: #34495e;
+        }
+
+        #main-area {
+            display: flex;
+            gap: 20px;
+            flex: 1;
+            min-height: 0;
+        }
+
+        #parts-panel {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            width: 200px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            overflow-y: auto;
+        }
+
+        #parts-panel h2 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .body-part {
+            background: #fff;
+            border: 3px solid #3498db;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 10px;
+            cursor: grab;
+            text-align: center;
+            font-weight: bold;
+            color: #2c3e50;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .body-part:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .body-part:active {
+            cursor: grabbing;
+        }
+
+        .body-part.head { border-color: #e74c3c; background: #ffe5e5; }
+        .body-part.body { border-color: #2ecc71; background: #e5ffe5; }
+        .body-part.legs { border-color: #f39c12; background: #fff5e5; }
+        .body-part.arms { border-color: #9b59b6; background: #f5e5ff; }
+        .body-part.tail { border-color: #e67e22; background: #ffede5; }
+        .body-part.wings { border-color: #3498db; background: #e5f3ff; }
+        .body-part.horns { border-color: #c0392b; background: #ffe0db; }
+        .body-part.antennae { border-color: #16a085; background: #e0f5f1; }
+        .body-part.fins { border-color: #1abc9c; background: #e0f7f4; }
+        .body-part.spikes { border-color: #7f8c8d; background: #f0f1f1; }
+        .body-part.eyes { border-color: #8e44ad; background: #f4e8fb; }
+
+        #world-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            min-width: 0;
+        }
+
+        #creation-platform {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            height: 200px;
+            position: relative;
+            border: 3px dashed #95a5a6;
+        }
+
+        #creation-platform h2 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+
+        #platform-area {
+            position: relative;
+            height: calc(100% - 80px);
+            background: #ecf0f1;
+            border-radius: 10px;
+            border: 2px solid #bdc3c7;
+        }
+
+        #create-button {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            padding: 12px 30px;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+            transition: all 0.2s;
+        }
+
+        #create-button:hover:not(:disabled) {
+            background: #229954;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 10px rgba(0,0,0,0.3);
+        }
+
+        #create-button:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+        }
+
+        #world-canvas {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            min-height: 0;
+        }
+
+        canvas {
+            border-radius: 15px;
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .part-on-platform {
+            position: absolute;
+            padding: 8px 12px;
+            background: white;
+            border: 2px solid #3498db;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: move;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .part-on-platform.head { border-color: #e74c3c; color: #e74c3c; }
+        .part-on-platform.body { border-color: #2ecc71; color: #2ecc71; }
+        .part-on-platform.legs { border-color: #f39c12; color: #f39c12; }
+        .part-on-platform.arms { border-color: #9b59b6; color: #9b59b6; }
+        .part-on-platform.tail { border-color: #e67e22; color: #e67e22; }
+        .part-on-platform.wings { border-color: #3498db; color: #3498db; }
+        .part-on-platform.horns { border-color: #c0392b; color: #c0392b; }
+        .part-on-platform.antennae { border-color: #16a085; color: #16a085; }
+        .part-on-platform.fins { border-color: #1abc9c; color: #1abc9c; }
+        .part-on-platform.spikes { border-color: #7f8c8d; color: #7f8c8d; }
+        .part-on-platform.eyes { border-color: #8e44ad; color: #8e44ad; }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="header">
+            <h1>🦎 Creature Creator</h1>
+            <div id="stats">
+                <div>Population: <span id="population">0</span></div>
+                <div>Species: <span id="species">0</span></div>
+            </div>
+        </div>
+
+        <div id="main-area">
+            <div id="parts-panel">
+                <h2>Body Parts</h2>
+                <div class="body-part head" draggable="true" data-part="head">👁️ Round Head</div>
+                <div class="body-part head" draggable="true" data-part="head-long">🐴 Long Head</div>
+                <div class="body-part head" draggable="true" data-part="head-tiny">🐭 Tiny Head</div>
+                <div class="body-part head" draggable="true" data-part="head-angular">🦕 Angular Head</div>
+                <div class="body-part body" draggable="true" data-part="body">🫀 Round Body</div>
+                <div class="body-part body" draggable="true" data-part="body-thin">🐍 Thin Body</div>
+                <div class="body-part body" draggable="true" data-part="body-large">🐘 Large Body</div>
+                <div class="body-part body" draggable="true" data-part="body-segment">🐛 Segmented</div>
+                <div class="body-part legs" draggable="true" data-part="legs">🦵 Normal Legs</div>
+                <div class="body-part legs" draggable="true" data-part="legs-long">🦒 Long Legs</div>
+                <div class="body-part legs" draggable="true" data-part="legs-short">🦆 Short Legs</div>
+                <div class="body-part legs" draggable="true" data-part="legs-many">🕷️ Many Legs</div>
+                <div class="body-part legs" draggable="true" data-part="hooves">🐴 Hooves</div>
+                <div class="body-part arms" draggable="true" data-part="arms">💪 Normal Arms</div>
+                <div class="body-part arms" draggable="true" data-part="arms-long">🦧 Long Arms</div>
+                <div class="body-part arms" draggable="true" data-part="arms-short">🦖 Short Arms</div>
+                <div class="body-part arms" draggable="true" data-part="claws">🦅 Claws</div>
+                <div class="body-part arms" draggable="true" data-part="arms-many">🐙 Many Arms</div>
+                <div class="body-part tail" draggable="true" data-part="tail">🦎 Tail</div>
+                <div class="body-part tail" draggable="true" data-part="tail-long">🦕 Long Tail</div>
+                <div class="body-part tail" draggable="true" data-part="tail-bushy">🦊 Bushy Tail</div>
+                <div class="body-part wings" draggable="true" data-part="wings">🪽 Wings</div>
+                <div class="body-part wings" draggable="true" data-part="wings-large">🦅 Large Wings</div>
+                <div class="body-part horns" draggable="true" data-part="horns">🦌 Horns</div>
+                <div class="body-part antennae" draggable="true" data-part="antennae">📡 Antennae</div>
+                <div class="body-part fins" draggable="true" data-part="fins">🐟 Fins</div>
+                <div class="body-part spikes" draggable="true" data-part="spikes">🦔 Spikes</div>
+                <div class="body-part eyes" draggable="true" data-part="eyes">👀 Extra Eyes</div>
+            </div>
+
+            <div id="world-container">
+                <div id="creation-platform">
+                    <h2>Assembly Platform - Drag parts here!</h2>
+                    <div id="platform-area"></div>
+                    <button id="create-button" disabled>Create Creature!</button>
+                </div>
+
+                <div id="world-canvas">
+                    <canvas id="canvas"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Game State
+        const gameState = {
+            creatures: [],
+            partsOnPlatform: [],
+            population: 0,
+            speciesTypes: new Set(),
+            draggedElement: null,
+            offset: { x: 0, y: 0 },
+            camera: { x: 0, y: 800 },  // Start at ground level
+            worldWidth: 3000,
+            worldHeight: 2000,
+            isDraggingCamera: false,
+            lastMousePos: { x: 0, y: 0 },
+            technologies: []  // Track discovered technologies
+        };
+
+        // Canvas Setup
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            const container = document.getElementById('world-canvas');
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Generate static grass and tree positions (so they don't flicker)
+        const staticGrass = [];
+        for (let i = 0; i < 500; i++) {
+            staticGrass.push({
+                x: (i * gameState.worldWidth / 500) + Math.random() * 12,
+                y: gameState.worldHeight * 0.75 + Math.random() * (gameState.worldHeight * 0.20),
+                height: 8 + Math.random() * 18,
+                darkness: Math.random() * 40,
+                colorIndex: Math.floor(Math.random() * 3),
+                curvature: Math.random() * 6 - 3,
+                lineWidth: 1.5 + Math.random()
+            });
+        }
+
+        const staticTrees = [];
+        for (let i = 0; i < 20; i++) {
+            staticTrees.push({
+                x: (i * gameState.worldWidth / 20) + Math.random() * 100,
+                y: gameState.worldHeight * 0.75,
+                size: 0.8 + Math.random() * 0.6
+            });
+        }
+
+        // Biome System - different environments based on x position
+        const BIOME_WIDTH = 4000; // Width of each biome in pixels
+        const biomes = [
+            {
+                name: 'forest',
+                skyTop: '#4A90E2',
+                skyBottom: '#E8F4FA',
+                mountainColor: '#8BA3C7',
+                hillTop: '#6B8E5F',
+                hillBottom: '#7A9B6E',
+                groundTop: '#7CB97C',
+                groundBottom: '#4A8548',
+                grassColors: ['#5A9A5A', '#6BAA6B', '#4A8A4A'],
+                hasGrass: true,
+                hasTrees: true,
+                treeType: 'normal'
+            },
+            {
+                name: 'desert',
+                skyTop: '#E8B84A',
+                skyBottom: '#FFE8C5',
+                mountainColor: '#C9A36A',
+                hillTop: '#D4A76A',
+                hillBottom: '#E5C79F',
+                groundTop: '#EDC9A3',
+                groundBottom: '#C4A777',
+                grassColors: ['#B89968', '#C9AA79', '#A88858'],
+                hasGrass: false,
+                hasTrees: true,
+                treeType: 'cactus'
+            },
+            {
+                name: 'tundra',
+                skyTop: '#A8C5E0',
+                skyBottom: '#E5F2FF',
+                mountainColor: '#D0DDE8',
+                hillTop: '#C8D8E5',
+                hillBottom: '#DCE8F0',
+                groundTop: '#E8F0F8',
+                groundBottom: '#BDD1E0',
+                grassColors: ['#B8C8D5', '#C8D8E5', '#A8B8C5'],
+                hasGrass: false,
+                hasTrees: true,
+                treeType: 'pine'
+            },
+            {
+                name: 'savanna',
+                skyTop: '#E89A4A',
+                skyBottom: '#FFE0B5',
+                mountainColor: '#B89A7A',
+                hillTop: '#C4A870',
+                hillBottom: '#D4B880',
+                groundTop: '#D4B880',
+                groundBottom: '#A89860',
+                grassColors: ['#C4A870', '#D4B880', '#B49860'],
+                hasGrass: true,
+                hasTrees: true,
+                treeType: 'acacia'
+            }
+        ];
+
+        function getBiome(worldX) {
+            const biomeIndex = Math.floor(Math.abs(worldX) / BIOME_WIDTH) % biomes.length;
+            return biomes[biomeIndex];
+        }
+
+        // Technology System - creatures can discover tech through cooperation
+        const technologyTypes = {
+            'tool-use': {
+                name: 'Tool Use',
+                description: 'Can use simple tools',
+                requires: ['arms'],
+                attackBonus: 15,
+                color: '#FFD700',
+                icon: '🔧'
+            },
+            'flight-mastery': {
+                name: 'Flight Mastery',
+                description: 'Advanced aerial maneuvers',
+                requires: ['wings'],
+                speedBonus: 1.5,
+                color: '#87CEEB',
+                icon: '✈️'
+            },
+            'pack-hunting': {
+                name: 'Pack Hunting',
+                description: 'Coordinated group attacks',
+                requires: ['head'],
+                attackBonus: 20,
+                healthBonus: 20,
+                color: '#FF6B6B',
+                icon: '🐺'
+            },
+            'architecture': {
+                name: 'Architecture',
+                description: 'Build shelters and defenses',
+                requires: ['arms', 'body-large'],
+                defenseBonus: 25,
+                healthBonus: 30,
+                color: '#8B4513',
+                icon: '🏛️'
+            },
+            'swimming': {
+                name: 'Advanced Swimming',
+                description: 'Master of water',
+                requires: ['fins'],
+                speedBonus: 2,
+                color: '#1ABC9C',
+                icon: '🌊'
+            },
+            'camouflage': {
+                name: 'Camouflage',
+                description: 'Blend with environment',
+                requires: ['body'],
+                defenseBonus: 15,
+                color: '#2ECC71',
+                icon: '👁️'
+            },
+            'fire-making': {
+                name: 'Fire Making',
+                description: 'Control of fire',
+                requires: ['arms', 'head'],
+                attackBonus: 25,
+                color: '#E74C3C',
+                icon: '🔥'
+            }
+        };
+
+        function canDiscoverTech(creature, techKey) {
+            const tech = technologyTypes[techKey];
+            // Check if creature has required parts
+            return tech.requires.every(reqPart =>
+                creature.parts.some(p => p.startsWith(reqPart))
+            );
+        }
+
+        function getSpeciesKey(creature) {
+            return creature.parts.slice().sort().join('-');
+        }
+
+        function applyTechBonuses(creature) {
+            // Apply health bonuses from technologies
+            let baseMaxHealth = 100;
+            let healthBonus = 0;
+
+            if (creature.technologies) {
+                creature.technologies.forEach(techKey => {
+                    const tech = technologyTypes[techKey];
+                    if (tech && tech.healthBonus) {
+                        healthBonus += tech.healthBonus;
+                    }
+                });
+            }
+
+            const newMaxHealth = baseMaxHealth + healthBonus;
+            if (creature.maxHealth !== newMaxHealth) {
+                // Increase current health proportionally
+                const healthPercent = creature.health / creature.maxHealth;
+                creature.maxHealth = newMaxHealth;
+                creature.health = creature.maxHealth * healthPercent;
+            }
+        }
+
+        // Body Parts Drag and Drop
+        const bodyParts = document.querySelectorAll('.body-part');
+        const platformArea = document.getElementById('platform-area');
+        const createButton = document.getElementById('create-button');
+
+        bodyParts.forEach(part => {
+            part.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('partType', e.target.dataset.part);
+                e.dataTransfer.effectAllowed = 'copy';
+            });
+        });
+
+        platformArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+        });
+
+        platformArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const partType = e.dataTransfer.getData('partType');
+            const rect = platformArea.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            addPartToPlatform(partType, x, y);
+        });
+
+        function addPartToPlatform(partType, x, y) {
+            const partElement = document.createElement('div');
+            partElement.className = `part-on-platform ${partType}`;
+            partElement.textContent = getPartEmoji(partType);
+            partElement.dataset.part = partType;
+            partElement.style.left = (x - 20) + 'px';
+            partElement.style.top = (y - 15) + 'px';
+
+            // Make parts draggable within platform
+            partElement.addEventListener('mousedown', startDragPart);
+
+            platformArea.appendChild(partElement);
+            gameState.partsOnPlatform.push({ type: partType, element: partElement });
+
+            updateCreateButton();
+        }
+
+        function getPartEmoji(partType) {
+            const emojis = {
+                head: '👁️',
+                'head-long': '🐴',
+                'head-tiny': '🐭',
+                'head-angular': '🦕',
+                body: '🫀',
+                'body-thin': '🐍',
+                'body-large': '🐘',
+                'body-segment': '🐛',
+                legs: '🦵',
+                'legs-long': '🦒',
+                'legs-short': '🦆',
+                'legs-many': '🕷️',
+                hooves: '🐴',
+                arms: '💪',
+                'arms-long': '🦧',
+                'arms-short': '🦖',
+                claws: '🦅',
+                'arms-many': '🐙',
+                tail: '🦎',
+                'tail-long': '🦕',
+                'tail-bushy': '🦊',
+                wings: '🪽',
+                'wings-large': '🦅',
+                horns: '🦌',
+                antennae: '📡',
+                fins: '🐟',
+                spikes: '🦔',
+                eyes: '👀'
+            };
+            return emojis[partType] || '?';
+        }
+
+        function startDragPart(e) {
+            gameState.draggedElement = e.target;
+            const rect = e.target.getBoundingClientRect();
+            gameState.offset.x = e.clientX - rect.left;
+            gameState.offset.y = e.clientY - rect.top;
+
+            document.addEventListener('mousemove', dragPart);
+            document.addEventListener('mouseup', stopDragPart);
+        }
+
+        function dragPart(e) {
+            if (!gameState.draggedElement) return;
+
+            const platformRect = platformArea.getBoundingClientRect();
+            let x = e.clientX - platformRect.left - gameState.offset.x;
+            let y = e.clientY - platformRect.top - gameState.offset.y;
+
+            // Keep within bounds
+            x = Math.max(0, Math.min(x, platformRect.width - 40));
+            y = Math.max(0, Math.min(y, platformRect.height - 30));
+
+            gameState.draggedElement.style.left = x + 'px';
+            gameState.draggedElement.style.top = y + 'px';
+        }
+
+        function stopDragPart() {
+            gameState.draggedElement = null;
+            document.removeEventListener('mousemove', dragPart);
+            document.removeEventListener('mouseup', stopDragPart);
+        }
+
+        function updateCreateButton() {
+            const parts = gameState.partsOnPlatform.map(p => p.type);
+            const hasHead = parts.some(p => p.startsWith('head'));
+            const hasBody = parts.some(p => p.startsWith('body'));
+
+            createButton.disabled = !(hasHead && hasBody);
+        }
+
+        // Creature Creation
+        createButton.addEventListener('click', createCreature);
+
+        function createCreature() {
+            const parts = gameState.partsOnPlatform.map(p => p.type);
+
+            // Spawn creature near the center of current view so user can see it
+            const spawnX = gameState.camera.x + canvas.width / 2 + (Math.random() - 0.5) * 100;
+            const spawnY = gameState.camera.y + canvas.height * 0.7 + (Math.random() - 0.5) * 50;
+
+            const creature = {
+                id: Date.now() + Math.random(),
+                x: spawnX,
+                y: spawnY,
+                vx: (Math.random() - 0.5) * 2,
+                vy: (Math.random() - 0.5) * 2,
+                parts: parts,
+                color: getRandomColor(),
+                baseSize: 20 + (parts.length * 5),
+                size: 20 + (parts.length * 5),
+                energy: 100,
+                age: 0,
+                maturity: 0,
+                breedCooldown: 0,
+                generation: 1,
+                health: 100,
+                maxHealth: 100,
+                fightCooldown: 0,
+                fleeing: false,
+                fleeTimer: 0,
+                frozen: false,
+                spawnTimer: 240,  // Stay near spawn for ~4 seconds (240 frames)
+                technologies: [],  // Technologies this creature has discovered
+                techDiscoveryCooldown: 0,  // Cooldown between tech discoveries
+                hasBreed: false,  // Can only breed once in lifetime
+                maxAge: 3600  // Die after 1 minute (60 seconds * 60 fps)
+            };
+
+            gameState.creatures.push(creature);
+            gameState.population++;
+            gameState.speciesTypes.add(parts.sort().join('-'));
+
+            // Clear platform
+            platformArea.innerHTML = '';
+            gameState.partsOnPlatform = [];
+            updateCreateButton();
+            updateStats();
+        }
+
+        function getRandomColor() {
+            const colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22'];
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+
+        function updateStats() {
+            document.getElementById('population').textContent = gameState.population;
+            document.getElementById('species').textContent = gameState.speciesTypes.size;
+        }
+
+        // Helper function for color shading
+        function shadeColor(color, percent) {
+            const num = parseInt(color.replace("#",""), 16);
+            const amt = Math.round(2.55 * percent);
+            const R = (num >> 16) + amt;
+            const G = (num >> 8 & 0x00FF) + amt;
+            const B = (num & 0x0000FF) + amt;
+            return "#" + (0x1000000 + (R<255?R<1?0:R:255)*0x10000 +
+                (G<255?G<1?0:G:255)*0x100 + (B<255?B<1?0:B:255))
+                .toString(16).slice(1);
+        }
+
+        // Creature Class
+        class Creature {
+            static draw(ctx, creature) {
+                ctx.save();
+                ctx.translate(creature.x, creature.y);
+
+                const size = creature.size;
+
+                // Draw shadow (softer, more realistic)
+                const shadowGradient = ctx.createRadialGradient(0, size * 1.3, 0, 0, size * 1.3, size * 0.8);
+                shadowGradient.addColorStop(0, 'rgba(0, 0, 0, 0.25)');
+                shadowGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                ctx.fillStyle = shadowGradient;
+                ctx.beginPath();
+                ctx.ellipse(0, size * 1.3, size * 0.8, size * 0.3, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Body variants
+                const bodyPart = creature.parts.find(p => p.startsWith('body'));
+                if (bodyPart) {
+                    const bodyGradient = ctx.createRadialGradient(-size * 0.3, -size * 0.3, size * 0.1, 0, 0, size * 1.2);
+                    bodyGradient.addColorStop(0, shadeColor(creature.color, 20));
+                    bodyGradient.addColorStop(0.6, creature.color);
+                    bodyGradient.addColorStop(1, shadeColor(creature.color, -40));
+                    ctx.fillStyle = bodyGradient;
+
+                    if (bodyPart === 'body') {
+                        // Round body with realistic shading
+                        ctx.beginPath();
+                        ctx.ellipse(0, 0, size * 0.6, size * 0.8, 0, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.strokeStyle = shadeColor(creature.color, -50);
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+
+                        // Add fur/texture pattern
+                        ctx.strokeStyle = shadeColor(creature.color, -20);
+                        ctx.globalAlpha = 0.3;
+                        ctx.lineWidth = 1;
+                        for (let i = 0; i < 15; i++) {
+                            const angle = (i / 15) * Math.PI * 2;
+                            const startR = size * 0.3;
+                            const endR = size * 0.6;
+                            ctx.beginPath();
+                            ctx.moveTo(Math.cos(angle) * startR, Math.sin(angle) * startR * 1.3);
+                            ctx.lineTo(Math.cos(angle) * endR, Math.sin(angle) * endR * 1.3);
+                            ctx.stroke();
+                        }
+                        ctx.globalAlpha = 1;
+                    } else if (bodyPart === 'body-thin') {
+                        // Thin body with scale pattern
+                        ctx.beginPath();
+                        ctx.ellipse(0, 0, size * 0.4, size * 1.0, 0, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.strokeStyle = shadeColor(creature.color, -50);
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+
+                        // Scale pattern
+                        ctx.globalAlpha = 0.4;
+                        ctx.fillStyle = shadeColor(creature.color, -30);
+                        for (let i = 0; i < 8; i++) {
+                            const y = -size * 0.8 + (i * size * 0.22);
+                            ctx.beginPath();
+                            ctx.arc(-size * 0.2, y, size * 0.15, 0, Math.PI * 2);
+                            ctx.arc(size * 0.2, y, size * 0.15, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                        ctx.globalAlpha = 1;
+                    } else if (bodyPart === 'body-large') {
+                        // Large body with wrinkles
+                        ctx.beginPath();
+                        ctx.ellipse(0, 0, size * 0.9, size * 0.9, 0, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.strokeStyle = shadeColor(creature.color, -50);
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+
+                        // Wrinkle lines
+                        ctx.strokeStyle = shadeColor(creature.color, -30);
+                        ctx.globalAlpha = 0.5;
+                        ctx.lineWidth = 2;
+                        for (let i = 0; i < 5; i++) {
+                            ctx.beginPath();
+                            ctx.arc(0, -size * 0.5 + i * size * 0.25, size * 0.8, 0, Math.PI);
+                            ctx.stroke();
+                        }
+                        ctx.globalAlpha = 1;
+                    } else if (bodyPart === 'body-segment') {
+                        // Segmented body with chitin texture
+                        for (let i = 0; i < 3; i++) {
+                            const segGradient = ctx.createRadialGradient(0, -size * 0.4 + i * size * 0.4, size * 0.1, 0, -size * 0.4 + i * size * 0.4, size * 0.5);
+                            segGradient.addColorStop(0, shadeColor(creature.color, 20));
+                            segGradient.addColorStop(1, shadeColor(creature.color, -30));
+                            ctx.fillStyle = segGradient;
+                            ctx.beginPath();
+                            ctx.ellipse(0, -size * 0.4 + i * size * 0.4, size * 0.5, size * 0.35, 0, 0, Math.PI * 2);
+                            ctx.fill();
+                            ctx.strokeStyle = shadeColor(creature.color, -50);
+                            ctx.lineWidth = 2;
+                            ctx.stroke();
+                        }
+                    }
+
+                    // Belly highlight (lighter underside)
+                    if (bodyPart !== 'body-segment') {
+                        ctx.fillStyle = shadeColor(creature.color, 40);
+                        ctx.globalAlpha = 0.5;
+                        ctx.beginPath();
+                        ctx.ellipse(0, size * 0.3, size * 0.35, size * 0.5, 0, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.globalAlpha = 1;
+                    }
+                }
+
+                // Legs variants
+                const legPart = creature.parts.find(p => p.startsWith('legs') || p === 'hooves');
+                if (legPart) {
+                    ctx.strokeStyle = shadeColor(creature.color, -20);
+                    ctx.lineWidth = 5;
+                    ctx.lineCap = 'round';
+
+                    if (legPart === 'legs') {
+                        // Normal legs with joints
+                        // Left leg
+                        const legGradient1 = ctx.createLinearGradient(-size * 0.4, size * 0.8, -size * 0.2, size * 1.2);
+                        legGradient1.addColorStop(0, shadeColor(creature.color, -10));
+                        legGradient1.addColorStop(1, shadeColor(creature.color, -40));
+                        ctx.strokeStyle = legGradient1;
+                        ctx.beginPath();
+                        ctx.moveTo(-size * 0.3, size * 0.8);
+                        ctx.lineTo(-size * 0.35, size * 1.0);
+                        ctx.lineTo(-size * 0.3, size * 1.2);
+                        ctx.stroke();
+
+                        // Joints/knees
+                        ctx.fillStyle = shadeColor(creature.color, -20);
+                        ctx.beginPath();
+                        ctx.arc(-size * 0.35, size * 1.0, size * 0.08, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.strokeStyle = shadeColor(creature.color, -50);
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+
+                        // Right leg
+                        const legGradient2 = ctx.createLinearGradient(size * 0.2, size * 0.8, size * 0.4, size * 1.2);
+                        legGradient2.addColorStop(0, shadeColor(creature.color, -10));
+                        legGradient2.addColorStop(1, shadeColor(creature.color, -40));
+                        ctx.strokeStyle = legGradient2;
+                        ctx.lineWidth = 5;
+                        ctx.beginPath();
+                        ctx.moveTo(size * 0.3, size * 0.8);
+                        ctx.lineTo(size * 0.35, size * 1.0);
+                        ctx.lineTo(size * 0.3, size * 1.2);
+                        ctx.stroke();
+
+                        // Joints/knees
+                        ctx.fillStyle = shadeColor(creature.color, -20);
+                        ctx.beginPath();
+                        ctx.arc(size * 0.35, size * 1.0, size * 0.08, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.strokeStyle = shadeColor(creature.color, -50);
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+
+                        // Feet
+                        ctx.fillStyle = shadeColor(creature.color, -30);
+                        ctx.beginPath();
+                        ctx.ellipse(-size * 0.3, size * 1.25, size * 0.12, size * 0.08, 0, 0, Math.PI * 2);
+                        ctx.ellipse(size * 0.3, size * 1.25, size * 0.12, size * 0.08, 0, 0, Math.PI * 2);
+                        ctx.fill();
+                    } else if (legPart === 'legs-long') {
+                        // Long legs
+                        ctx.beginPath();
+                        ctx.moveTo(-size * 0.3, size * 0.8);
+                        ctx.lineTo(-size * 0.35, size * 1.6);
+                        ctx.moveTo(size * 0.3, size * 0.8);
+                        ctx.lineTo(size * 0.35, size * 1.6);
+                        ctx.stroke();
+                    } else if (legPart === 'legs-short') {
+                        // Short legs
+                        ctx.lineWidth = 4;
+                        ctx.beginPath();
+                        ctx.moveTo(-size * 0.3, size * 0.8);
+                        ctx.lineTo(-size * 0.3, size * 1.0);
+                        ctx.moveTo(size * 0.3, size * 0.8);
+                        ctx.lineTo(size * 0.3, size * 1.0);
+                        ctx.stroke();
+                    } else if (legPart === 'legs-many') {
+                        // Many legs (spider-like)
+                        ctx.lineWidth = 3;
+                        for (let i = 0; i < 4; i++) {
+                            const offset = -size * 0.5 + (i * size * 0.33);
+                            ctx.beginPath();
+                            ctx.moveTo(offset, size * 0.3);
+                            ctx.lineTo(offset - size * 0.4, size * 0.9);
+                            ctx.moveTo(offset, size * 0.3);
+                            ctx.lineTo(offset + size * 0.4, size * 0.9);
+                            ctx.stroke();
+                        }
+                    } else if (legPart === 'hooves') {
+                        // Hooves
+                        ctx.beginPath();
+                        ctx.moveTo(-size * 0.3, size * 0.8);
+                        ctx.lineTo(-size * 0.3, size * 1.2);
+                        ctx.moveTo(size * 0.3, size * 0.8);
+                        ctx.lineTo(size * 0.3, size * 1.2);
+                        ctx.stroke();
+
+                        ctx.fillStyle = '#000';
+                        ctx.fillRect(-size * 0.35, size * 1.2, size * 0.1, size * 0.15);
+                        ctx.fillRect(size * 0.25, size * 1.2, size * 0.1, size * 0.15);
+                    }
+                }
+
+                // Arms variants
+                const armPart = creature.parts.find(p => p.startsWith('arms') || p === 'claws');
+                if (armPart) {
+                    ctx.strokeStyle = shadeColor(creature.color, -20);
+                    ctx.lineWidth = 5;
+                    ctx.lineCap = 'round';
+
+                    if (armPart === 'arms') {
+                        // Normal arms
+                        ctx.beginPath();
+                        ctx.moveTo(-size * 0.6, 0);
+                        ctx.lineTo(-size * 0.9, -size * 0.3);
+                        ctx.moveTo(size * 0.6, 0);
+                        ctx.lineTo(size * 0.9, -size * 0.3);
+                        ctx.stroke();
+                    } else if (armPart === 'arms-long') {
+                        // Long arms
+                        ctx.beginPath();
+                        ctx.moveTo(-size * 0.6, 0);
+                        ctx.lineTo(-size * 1.2, size * 0.5);
+                        ctx.moveTo(size * 0.6, 0);
+                        ctx.lineTo(size * 1.2, size * 0.5);
+                        ctx.stroke();
+                    } else if (armPart === 'arms-short') {
+                        // Short arms (T-Rex style)
+                        ctx.lineWidth = 4;
+                        ctx.beginPath();
+                        ctx.moveTo(-size * 0.5, -size * 0.2);
+                        ctx.lineTo(-size * 0.65, -size * 0.1);
+                        ctx.moveTo(size * 0.5, -size * 0.2);
+                        ctx.lineTo(size * 0.65, -size * 0.1);
+                        ctx.stroke();
+                    } else if (armPart === 'claws') {
+                        // Claws
+                        ctx.beginPath();
+                        ctx.moveTo(-size * 0.6, 0);
+                        ctx.lineTo(-size * 0.9, -size * 0.3);
+                        ctx.moveTo(size * 0.6, 0);
+                        ctx.lineTo(size * 0.9, -size * 0.3);
+                        ctx.stroke();
+
+                        // Draw claw tips
+                        ctx.fillStyle = '#333';
+                        for (let i = 0; i < 3; i++) {
+                            ctx.beginPath();
+                            ctx.moveTo(-size * 0.9, -size * 0.3);
+                            ctx.lineTo(-size * 0.9 - size * 0.1, -size * 0.3 + (i - 1) * size * 0.08);
+                            ctx.lineTo(-size * 0.85, -size * 0.3);
+                            ctx.closePath();
+                            ctx.fill();
+
+                            ctx.beginPath();
+                            ctx.moveTo(size * 0.9, -size * 0.3);
+                            ctx.lineTo(size * 0.9 + size * 0.1, -size * 0.3 + (i - 1) * size * 0.08);
+                            ctx.lineTo(size * 0.85, -size * 0.3);
+                            ctx.closePath();
+                            ctx.fill();
+                        }
+                    } else if (armPart === 'arms-many') {
+                        // Many arms (octopus style)
+                        ctx.lineWidth = 4;
+                        for (let i = 0; i < 3; i++) {
+                            const angleOffset = (i - 1) * 0.4;
+                            ctx.beginPath();
+                            ctx.moveTo(-size * 0.5, -size * 0.3 + i * size * 0.3);
+                            ctx.quadraticCurveTo(-size * 0.8, -size * 0.2 + i * size * 0.3, -size * 1.0, 0 + i * size * 0.2);
+                            ctx.stroke();
+
+                            ctx.beginPath();
+                            ctx.moveTo(size * 0.5, -size * 0.3 + i * size * 0.3);
+                            ctx.quadraticCurveTo(size * 0.8, -size * 0.2 + i * size * 0.3, size * 1.0, 0 + i * size * 0.2);
+                            ctx.stroke();
+                        }
+                    }
+                }
+
+                // Head variants
+                const headPart = creature.parts.find(p => p.startsWith('head'));
+                if (headPart) {
+                    const headGradient = ctx.createRadialGradient(-size * 0.1, -size * 0.8, size * 0.1, 0, -size * 0.7, size * 0.5);
+                    headGradient.addColorStop(0, creature.color);
+                    headGradient.addColorStop(1, shadeColor(creature.color, -30));
+                    ctx.fillStyle = headGradient;
+
+                    if (headPart === 'head') {
+                        // Round head with gradient
+                        ctx.beginPath();
+                        ctx.arc(0, -size * 0.7, size * 0.4, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.strokeStyle = shadeColor(creature.color, -50);
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+
+                        // Realistic eyes with depth
+                        const eyePositions = [
+                            [-size * 0.15, -size * 0.7],
+                            [size * 0.15, -size * 0.7]
+                        ];
+
+                        eyePositions.forEach(([eyeX, eyeY]) => {
+                            // Eye socket shadow
+                            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                            ctx.beginPath();
+                            ctx.arc(eyeX, eyeY, size * 0.14, 0, Math.PI * 2);
+                            ctx.fill();
+
+                            // Eye white
+                            ctx.fillStyle = '#fff';
+                            ctx.beginPath();
+                            ctx.arc(eyeX, eyeY, size * 0.12, 0, Math.PI * 2);
+                            ctx.fill();
+
+                            // Iris with gradient
+                            const irisGradient = ctx.createRadialGradient(eyeX, eyeY - size * 0.02, size * 0.02, eyeX, eyeY, size * 0.08);
+                            irisGradient.addColorStop(0, shadeColor(creature.color, 30));
+                            irisGradient.addColorStop(1, shadeColor(creature.color, -40));
+                            ctx.fillStyle = irisGradient;
+                            ctx.beginPath();
+                            ctx.arc(eyeX, eyeY, size * 0.08, 0, Math.PI * 2);
+                            ctx.fill();
+
+                            // Pupil
+                            ctx.fillStyle = '#000';
+                            ctx.beginPath();
+                            ctx.arc(eyeX, eyeY, size * 0.04, 0, Math.PI * 2);
+                            ctx.fill();
+
+                            // Eye shine/highlight
+                            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                            ctx.beginPath();
+                            ctx.arc(eyeX - size * 0.03, eyeY - size * 0.03, size * 0.02, 0, Math.PI * 2);
+                            ctx.fill();
+
+                            // Eye outline
+                            ctx.strokeStyle = '#000';
+                            ctx.lineWidth = 1;
+                            ctx.beginPath();
+                            ctx.arc(eyeX, eyeY, size * 0.12, 0, Math.PI * 2);
+                            ctx.stroke();
+                        });
+
+                        // Nose/snout
+                        ctx.fillStyle = shadeColor(creature.color, -20);
+                        ctx.beginPath();
+                        ctx.ellipse(0, -size * 0.5, size * 0.08, size * 0.06, 0, 0, Math.PI * 2);
+                        ctx.fill();
+
+                        // Mouth
+                        ctx.strokeStyle = shadeColor(creature.color, -40);
+                        ctx.lineWidth = 1.5;
+                        ctx.beginPath();
+                        ctx.arc(0, -size * 0.5, size * 0.15, 0.2, Math.PI - 0.2);
+                        ctx.stroke();
+                    } else if (headPart === 'head-long') {
+                        // Long head (horse-like)
+                        ctx.beginPath();
+                        ctx.ellipse(0, -size * 0.85, size * 0.35, size * 0.6, 0, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.strokeStyle = '#000';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+
+                        // Eyes
+                        ctx.fillStyle = '#fff';
+                        ctx.beginPath();
+                        ctx.arc(-size * 0.2, -size * 0.9, size * 0.1, 0, Math.PI * 2);
+                        ctx.arc(size * 0.2, -size * 0.9, size * 0.1, 0, Math.PI * 2);
+                        ctx.fill();
+
+                        ctx.fillStyle = '#000';
+                        ctx.beginPath();
+                        ctx.arc(-size * 0.2, -size * 0.9, size * 0.05, 0, Math.PI * 2);
+                        ctx.arc(size * 0.2, -size * 0.9, size * 0.05, 0, Math.PI * 2);
+                        ctx.fill();
+
+                        // Snout
+                        ctx.fillStyle = shadeColor(creature.color, -40);
+                        ctx.beginPath();
+                        ctx.ellipse(0, -size * 0.5, size * 0.25, size * 0.2, 0, 0, Math.PI * 2);
+                        ctx.fill();
+                    } else if (headPart === 'head-tiny') {
+                        // Tiny head
+                        ctx.beginPath();
+                        ctx.arc(0, -size * 0.7, size * 0.25, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.strokeStyle = '#000';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+
+                        // Eyes
+                        ctx.fillStyle = '#fff';
+                        ctx.beginPath();
+                        ctx.arc(-size * 0.1, -size * 0.7, size * 0.08, 0, Math.PI * 2);
+                        ctx.arc(size * 0.1, -size * 0.7, size * 0.08, 0, Math.PI * 2);
+                        ctx.fill();
+
+                        ctx.fillStyle = '#000';
+                        ctx.beginPath();
+                        ctx.arc(-size * 0.1, -size * 0.7, size * 0.04, 0, Math.PI * 2);
+                        ctx.arc(size * 0.1, -size * 0.7, size * 0.04, 0, Math.PI * 2);
+                        ctx.fill();
+                    } else if (headPart === 'head-angular') {
+                        // Angular head (dinosaur-like)
+                        ctx.beginPath();
+                        ctx.moveTo(-size * 0.3, -size * 0.5);
+                        ctx.lineTo(-size * 0.2, -size * 1.0);
+                        ctx.lineTo(size * 0.2, -size * 1.0);
+                        ctx.lineTo(size * 0.3, -size * 0.5);
+                        ctx.lineTo(0, -size * 0.4);
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.strokeStyle = '#000';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+
+                        // Eyes
+                        ctx.fillStyle = '#fff';
+                        ctx.beginPath();
+                        ctx.arc(-size * 0.15, -size * 0.75, size * 0.1, 0, Math.PI * 2);
+                        ctx.arc(size * 0.15, -size * 0.75, size * 0.1, 0, Math.PI * 2);
+                        ctx.fill();
+
+                        ctx.fillStyle = '#000';
+                        ctx.beginPath();
+                        ctx.arc(-size * 0.15, -size * 0.75, size * 0.05, 0, Math.PI * 2);
+                        ctx.arc(size * 0.15, -size * 0.75, size * 0.05, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+
+                // Tail variants
+                const tailPart = creature.parts.find(p => p.startsWith('tail'));
+                if (tailPart) {
+                    ctx.strokeStyle = shadeColor(creature.color, -20);
+                    ctx.lineWidth = 6;
+                    ctx.lineCap = 'round';
+
+                    if (tailPart === 'tail') {
+                        // Normal tail
+                        ctx.beginPath();
+                        ctx.moveTo(0, size * 0.8);
+                        ctx.quadraticCurveTo(size * 0.5, size * 1.3, size * 0.8, size * 1.6);
+                        ctx.stroke();
+                    } else if (tailPart === 'tail-long') {
+                        // Long tail (dinosaur-like)
+                        ctx.beginPath();
+                        ctx.moveTo(0, size * 0.8);
+                        ctx.quadraticCurveTo(size * 0.7, size * 1.5, size * 1.2, size * 2.0);
+                        ctx.stroke();
+                    } else if (tailPart === 'tail-bushy') {
+                        // Bushy tail (fox-like)
+                        ctx.beginPath();
+                        ctx.moveTo(0, size * 0.8);
+                        ctx.quadraticCurveTo(size * 0.5, size * 1.3, size * 0.8, size * 1.6);
+                        ctx.stroke();
+
+                        // Add fur effect
+                        ctx.fillStyle = creature.color;
+                        for (let i = 0; i < 8; i++) {
+                            const t = i / 7;
+                            const x = size * 0.8 * t;
+                            const y = size * 0.8 + size * 0.8 * t;
+                            ctx.beginPath();
+                            ctx.ellipse(x, y, size * 0.15, size * 0.25, t * Math.PI / 2, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                    }
+                }
+
+                // Wings variants
+                const wingPart = creature.parts.find(p => p.startsWith('wings'));
+                if (wingPart) {
+                    ctx.fillStyle = creature.color;
+                    ctx.globalAlpha = 0.7;
+
+                    if (wingPart === 'wings') {
+                        // Normal wings
+                        // Left wing
+                        ctx.beginPath();
+                        ctx.ellipse(-size * 0.5, -size * 0.2, size * 0.6, size * 0.4, -Math.PI / 4, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.strokeStyle = '#000';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+
+                        // Right wing
+                        ctx.beginPath();
+                        ctx.ellipse(size * 0.5, -size * 0.2, size * 0.6, size * 0.4, Math.PI / 4, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                    } else if (wingPart === 'wings-large') {
+                        // Large wings
+                        // Left wing
+                        ctx.beginPath();
+                        ctx.ellipse(-size * 0.7, -size * 0.3, size * 0.9, size * 0.6, -Math.PI / 4, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.strokeStyle = '#000';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+
+                        // Wing details
+                        ctx.strokeStyle = shadeColor(creature.color, -30);
+                        ctx.beginPath();
+                        ctx.moveTo(-size * 0.5, -size * 0.3);
+                        ctx.lineTo(-size * 1.2, -size * 0.5);
+                        ctx.moveTo(-size * 0.5, -size * 0.2);
+                        ctx.lineTo(-size * 1.0, 0);
+                        ctx.stroke();
+
+                        // Right wing
+                        ctx.fillStyle = creature.color;
+                        ctx.beginPath();
+                        ctx.ellipse(size * 0.7, -size * 0.3, size * 0.9, size * 0.6, Math.PI / 4, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.strokeStyle = '#000';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+
+                        // Wing details
+                        ctx.strokeStyle = shadeColor(creature.color, -30);
+                        ctx.beginPath();
+                        ctx.moveTo(size * 0.5, -size * 0.3);
+                        ctx.lineTo(size * 1.2, -size * 0.5);
+                        ctx.moveTo(size * 0.5, -size * 0.2);
+                        ctx.lineTo(size * 1.0, 0);
+                        ctx.stroke();
+                    }
+
+                    ctx.globalAlpha = 1.0;
+                }
+
+                // Horns
+                if (creature.parts.includes('horns')) {
+                    ctx.strokeStyle = creature.color;
+                    ctx.lineWidth = 5;
+                    ctx.lineCap = 'round';
+
+                    // Left horn
+                    ctx.beginPath();
+                    ctx.moveTo(-size * 0.25, -size * 0.9);
+                    ctx.lineTo(-size * 0.35, -size * 1.3);
+                    ctx.stroke();
+
+                    // Right horn
+                    ctx.beginPath();
+                    ctx.moveTo(size * 0.25, -size * 0.9);
+                    ctx.lineTo(size * 0.35, -size * 1.3);
+                    ctx.stroke();
+                }
+
+                // Antennae
+                if (creature.parts.includes('antennae')) {
+                    ctx.strokeStyle = creature.color;
+                    ctx.lineWidth = 3;
+
+                    // Left antenna
+                    ctx.beginPath();
+                    ctx.moveTo(-size * 0.2, -size * 0.95);
+                    ctx.lineTo(-size * 0.3, -size * 1.2);
+                    ctx.stroke();
+
+                    ctx.fillStyle = creature.color;
+                    ctx.beginPath();
+                    ctx.arc(-size * 0.3, -size * 1.2, size * 0.08, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Right antenna
+                    ctx.beginPath();
+                    ctx.moveTo(size * 0.2, -size * 0.95);
+                    ctx.lineTo(size * 0.3, -size * 1.2);
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.arc(size * 0.3, -size * 1.2, size * 0.08, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // Fins
+                if (creature.parts.includes('fins')) {
+                    ctx.fillStyle = creature.color;
+                    ctx.globalAlpha = 0.8;
+
+                    // Top fin
+                    ctx.beginPath();
+                    ctx.moveTo(0, -size * 0.3);
+                    ctx.lineTo(-size * 0.15, -size * 0.8);
+                    ctx.lineTo(size * 0.15, -size * 0.8);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+
+                    // Side fins
+                    ctx.beginPath();
+                    ctx.ellipse(-size * 0.7, size * 0.2, size * 0.3, size * 0.15, -Math.PI / 6, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.ellipse(size * 0.7, size * 0.2, size * 0.3, size * 0.15, Math.PI / 6, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    ctx.globalAlpha = 1.0;
+                }
+
+                // Spikes
+                if (creature.parts.includes('spikes')) {
+                    ctx.fillStyle = '#555';
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = 1;
+
+                    for (let i = 0; i < 5; i++) {
+                        const spikeX = -size * 0.3 + (i * size * 0.15);
+                        const spikeY = -size * 0.4;
+
+                        ctx.beginPath();
+                        ctx.moveTo(spikeX - size * 0.08, spikeY);
+                        ctx.lineTo(spikeX, spikeY - size * 0.25);
+                        ctx.lineTo(spikeX + size * 0.08, spikeY);
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.stroke();
+                    }
+                }
+
+                // Extra Eyes
+                if (creature.parts.includes('eyes')) {
+                    ctx.fillStyle = '#fff';
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = 2;
+
+                    // Extra eyes on body
+                    const eyePositions = [
+                        [-size * 0.35, 0],
+                        [size * 0.35, 0],
+                        [0, size * 0.4]
+                    ];
+
+                    eyePositions.forEach(([x, y]) => {
+                        ctx.beginPath();
+                        ctx.arc(x, y, size * 0.1, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+
+                        ctx.fillStyle = '#000';
+                        ctx.beginPath();
+                        ctx.arc(x, y, size * 0.05, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.fillStyle = '#fff';
+                    });
+                }
+
+                ctx.restore();
+            }
+
+            static update(creature, allCreatures) {
+                // Skip update if frozen
+                if (creature.frozen) return;
+
+                // Handle spawn timer - newly created creatures stay near spawn point
+                if (creature.spawnTimer !== undefined && creature.spawnTimer > 0) {
+                    creature.spawnTimer--;
+                    // Slow down movement significantly while spawning
+                    creature.vx *= 0.95;
+                    creature.vy *= 0.95;
+                    // Add gentle wandering
+                    if (Math.random() < 0.02) {
+                        creature.vx += (Math.random() - 0.5) * 0.3;
+                        creature.vy += (Math.random() - 0.5) * 0.3;
+                    }
+                }
+
+                // Age and develop the creature
+                creature.age++;
+                creature.breedCooldown = Math.max(0, creature.breedCooldown - 1);
+                creature.fightCooldown = Math.max(0, creature.fightCooldown - 1);
+                creature.fleeTimer = Math.max(0, creature.fleeTimer - 1);
+                creature.techDiscoveryCooldown = Math.max(0, creature.techDiscoveryCooldown - 1);
+                if (creature.fleeTimer === 0) creature.fleeing = false;
+
+                // Regenerate health slowly
+                if (creature.health < creature.maxHealth && creature.age % 60 === 0) {
+                    creature.health = Math.min(creature.maxHealth, creature.health + 5);
+                }
+
+                // Die of old age after 1 minute
+                if (creature.age >= creature.maxAge) {
+                    creature.health = 0;
+                    const index = allCreatures.indexOf(creature);
+                    if (index > -1) {
+                        allCreatures.splice(index, 1);
+                        gameState.population--;
+                        updateStats();
+                        createDeathEffect(creature.x, creature.y);
+                    }
+                    return;  // Stop updating this creature
+                }
+
+                // Growth/development - creatures grow from baby to adult
+                if (creature.maturity < 1) {
+                    creature.maturity = Math.min(1, creature.age / 300);
+                    creature.size = creature.baseSize * (0.5 + creature.maturity * 0.5);
+                }
+
+                // Flying vs walking behavior
+                const hasWings = creature.parts.some(p => p.startsWith('wings'));
+                const groundLevel = gameState.worldHeight * 0.75;
+
+                // Movement
+                creature.x += creature.vx;
+                creature.y += creature.vy;
+
+                // Flying creatures can go in the air
+                if (hasWings) {
+                    // Gravity effect (lighter for flying)
+                    creature.vy += 0.05;
+
+                    // Flapping to stay in air
+                    if (Math.random() < 0.1) {
+                        creature.vy -= 0.3;
+                    }
+
+                    // Wrap around horizontally (walk off screen)
+                    if (creature.x < -creature.size) {
+                        creature.x = gameState.worldWidth + creature.size;
+                    } else if (creature.x > gameState.worldWidth + creature.size) {
+                        creature.x = -creature.size;
+                    }
+
+                    // Bounce off ceiling and ground vertically
+                    if (creature.y < creature.size * 2 || creature.y > gameState.worldHeight - creature.size) {
+                        creature.vy *= -1;
+                        creature.y = Math.max(creature.size * 2, Math.min(creature.y, gameState.worldHeight - creature.size));
+                    }
+                } else {
+                    // Ground creatures stay on the ground
+                    const targetY = groundLevel - creature.size * 0.5;
+
+                    // Gravity pulls to ground
+                    if (creature.y < targetY) {
+                        creature.vy += 0.2;
+                    } else {
+                        creature.y = targetY;
+                        creature.vy = 0;
+                    }
+
+                    // Wrap around horizontally (walk off screen)
+                    if (creature.x < -creature.size) {
+                        creature.x = gameState.worldWidth + creature.size;
+                    } else if (creature.x > gameState.worldWidth + creature.size) {
+                        creature.x = -creature.size;
+                    }
+                }
+
+                // Random direction changes (more frequent)
+                if (Math.random() < 0.03) {
+                    creature.vx += (Math.random() - 0.5) * 0.5;
+                    creature.vy += (Math.random() - 0.5) * 0.5;
+
+                    // Limit speed based on parts
+                    const speed = Math.sqrt(creature.vx * creature.vx + creature.vy * creature.vy);
+                    let maxSpeed = 2;
+                    if (creature.parts.some(p => p.startsWith('legs'))) maxSpeed = 3;
+                    if (creature.parts.some(p => p.startsWith('wings'))) maxSpeed = 3.5;
+                    if (speed > maxSpeed) {
+                        creature.vx = (creature.vx / speed) * maxSpeed;
+                        creature.vy = (creature.vy / speed) * maxSpeed;
+                    }
+                }
+
+                // Enhanced social behavior - more frequent interactions
+                if (Math.random() < 0.05) {
+                    const nearby = allCreatures.filter(c => {
+                        if (c.id === creature.id) return false;
+                        const dx = c.x - creature.x;
+                        const dy = c.y - creature.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        return dist < 200;
+                    });
+
+                    if (nearby.length > 0) {
+                        // Find creatures with similar parts (same species)
+                        const sameSpecies = nearby.filter(c => {
+                            const similarity = c.parts.filter(p => creature.parts.includes(p)).length;
+                            return similarity >= Math.min(c.parts.length, creature.parts.length) * 0.5;
+                        });
+
+                        const target = sameSpecies.length > 0
+                            ? sameSpecies[Math.floor(Math.random() * sameSpecies.length)]
+                            : nearby[Math.floor(Math.random() * nearby.length)];
+
+                        const dx = target.x - creature.x;
+                        const dy = target.y - creature.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+
+                        if (dist > 0 && dist > 80) {  // Only attract if not too close
+                            // Move towards similar creatures (reduced force)
+                            creature.vx += (dx / dist) * 0.08;
+                            creature.vy += (dy / dist) * 0.08;
+
+                            // Try to breed if close enough (can only breed once in lifetime)
+                            if (dist < 60 && creature.maturity >= 1 && target.maturity >= 1 &&
+                                !creature.hasBreed && !target.hasBreed &&
+                                Math.random() < 0.01) {  // Only 1% chance per frame when conditions are met
+
+                                const similarity = target.parts.filter(p => creature.parts.includes(p)).length;
+                                if (similarity >= Math.min(target.parts.length, creature.parts.length) * 0.6) {
+                                    Creature.breed(creature, target, allCreatures);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Flocking behavior - stay with nearby creatures
+                if (Math.random() < 0.08) {
+                    const veryClose = allCreatures.filter(c => {
+                        if (c.id === creature.id) return false;
+                        const dx = c.x - creature.x;
+                        const dy = c.y - creature.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        return dist < 80;
+                    });
+
+                    if (veryClose.length > 0) {
+                        // Calculate average position
+                        let avgX = 0, avgY = 0;
+                        veryClose.forEach(c => {
+                            avgX += c.x;
+                            avgY += c.y;
+                        });
+                        avgX /= veryClose.length;
+                        avgY /= veryClose.length;
+
+                        const dx = avgX - creature.x;
+                        const dy = avgY - creature.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+
+                        if (dist > 0) {
+                            creature.vx += (dx / dist) * 0.05;
+                            creature.vy += (dy / dist) * 0.05;
+                        }
+                    }
+                }
+
+                // Separation behavior - avoid crowding (spread out more)
+                const tooClose = allCreatures.filter(c => {
+                    if (c.id === creature.id) return false;
+                    const dx = c.x - creature.x;
+                    const dy = c.y - creature.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    return dist < 60;  // Personal space
+                });
+
+                if (tooClose.length > 0) {
+                    // Push away from creatures that are too close
+                    tooClose.forEach(c => {
+                        const dx = creature.x - c.x;
+                        const dy = creature.y - c.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist > 0 && dist < 60) {
+                            const pushForce = (60 - dist) / 60;  // Stronger when closer
+                            creature.vx += (dx / dist) * pushForce * 0.3;
+                            creature.vy += (dy / dist) * pushForce * 0.3;
+                        }
+                    });
+                }
+
+                // Technology discovery system - creatures work together to discover tech
+                if (creature.maturity >= 1 && creature.techDiscoveryCooldown === 0 && Math.random() < 0.08) {
+                    const speciesKey = getSpeciesKey(creature);
+                    const sameSpecies = allCreatures.filter(c => {
+                        if (c.id === creature.id) return false;
+                        if (getSpeciesKey(c) !== speciesKey) return false;
+                        const dx = c.x - creature.x;
+                        const dy = c.y - creature.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        return dist < 150;  // Must be nearby
+                    });
+
+                    // Need at least 2 other creatures to discover tech (3 total)
+                    if (sameSpecies.length >= 2) {
+                        // Try to discover a technology
+                        for (const techKey in technologyTypes) {
+                            if (!creature.technologies.includes(techKey) && canDiscoverTech(creature, techKey)) {
+                                // Success! Discover this technology
+                                creature.technologies.push(techKey);
+                                creature.techDiscoveryCooldown = 1200;  // 20 second cooldown
+                                applyTechBonuses(creature);  // Apply stat bonuses
+
+                                // Share tech with nearby same-species creatures
+                                sameSpecies.forEach(ally => {
+                                    if (!ally.technologies.includes(techKey)) {
+                                        ally.technologies.push(techKey);
+                                        applyTechBonuses(ally);  // Apply stat bonuses to allies
+                                    }
+                                });
+
+                                // Create visual effect
+                                createTechEffect(creature.x, creature.y, technologyTypes[techKey]);
+                                break;  // Only discover one tech at a time
+                            }
+                        }
+                    }
+                }
+
+                // Combat system - fight different species sometimes
+                if (!creature.fleeing && creature.fightCooldown === 0 && creature.maturity >= 1 && Math.random() < 0.15) {
+                    const enemies = allCreatures.filter(c => {
+                        if (c.id === creature.id || c.fleeing) return false;
+                        const dx = c.x - creature.x;
+                        const dy = c.y - creature.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist > 100) return false;
+
+                        // Check if different species (less than 40% similarity)
+                        const similarity = c.parts.filter(p => creature.parts.includes(p)).length;
+                        return similarity < Math.min(c.parts.length, creature.parts.length) * 0.4;
+                    });
+
+                    if (enemies.length > 0) {
+                        const enemy = enemies[Math.floor(Math.random() * enemies.length)];
+                        const dx = enemy.x - creature.x;
+                        const dy = enemy.y - creature.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+
+                        // Move aggressively towards enemy
+                        if (dist > 50) {
+                            creature.vx += (dx / dist) * 0.25;
+                            creature.vy += (dy / dist) * 0.25;
+                        }
+
+                        // Fight if very close
+                        if (dist < 50 && enemy.fightCooldown === 0) {
+                            Creature.fight(creature, enemy);
+                        }
+                    }
+                }
+
+                // Fleeing behavior
+                if (creature.fleeing) {
+                    // Move away from all nearby creatures
+                    const nearby = allCreatures.filter(c => {
+                        if (c.id === creature.id) return false;
+                        const dx = c.x - creature.x;
+                        const dy = c.y - creature.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        return dist < 150;
+                    });
+
+                    if (nearby.length > 0) {
+                        let fleeX = 0, fleeY = 0;
+                        nearby.forEach(c => {
+                            const dx = creature.x - c.x;
+                            const dy = creature.y - c.y;
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+                            if (dist > 0) {
+                                fleeX += dx / dist;
+                                fleeY += dy / dist;
+                            }
+                        });
+
+                        const fleeDist = Math.sqrt(fleeX * fleeX + fleeY * fleeY);
+                        if (fleeDist > 0) {
+                            creature.vx += (fleeX / fleeDist) * 0.4;
+                            creature.vy += (fleeY / fleeDist) * 0.4;
+                        }
+                    }
+                }
+            }
+
+            static fight(attacker, defender) {
+                // Calculate attack power based on parts
+                let attackPower = 10;
+                if (attacker.parts.some(p => p === 'claws')) attackPower += 8;
+                if (attacker.parts.some(p => p === 'horns')) attackPower += 6;
+                if (attacker.parts.some(p => p === 'spikes')) attackPower += 5;
+                if (attacker.parts.some(p => p.startsWith('arms-long'))) attackPower += 4;
+                attackPower += attacker.size * 0.2;
+
+                // Add technology bonuses to attack
+                if (attacker.technologies) {
+                    attacker.technologies.forEach(techKey => {
+                        const tech = technologyTypes[techKey];
+                        if (tech && tech.attackBonus) {
+                            attackPower += tech.attackBonus;
+                        }
+                    });
+                }
+
+                // Calculate defense based on parts
+                let defense = 0;
+                if (defender.parts.some(p => p === 'spikes')) defense += 5;
+                if (defender.parts.some(p => p.startsWith('body-large'))) defense += 4;
+                if (defender.parts.some(p => p === 'horns')) defense += 3;
+                defense += defender.size * 0.1;
+
+                // Add technology bonuses to defense
+                if (defender.technologies) {
+                    defender.technologies.forEach(techKey => {
+                        const tech = technologyTypes[techKey];
+                        if (tech && tech.defenseBonus) {
+                            defense += tech.defenseBonus;
+                        }
+                    });
+                }
+
+                const damage = Math.max(5, attackPower - defense + Math.random() * 10);
+
+                // Apply damage
+                defender.health -= damage;
+                attacker.fightCooldown = 120;  // 2 seconds at 60fps
+                defender.fightCooldown = 120;
+
+                // Create combat effect
+                createCombatEffect((attacker.x + defender.x) / 2, (attacker.y + defender.y) / 2, damage);
+
+                // If health is low, flee
+                if (defender.health < 30 && !defender.fleeing) {
+                    defender.fleeing = true;
+                    defender.fleeTimer = 300;
+                }
+
+                // Check if creature died
+                if (defender.health <= 0) {
+                    const index = gameState.creatures.indexOf(defender);
+                    if (index > -1) {
+                        gameState.creatures.splice(index, 1);
+                        gameState.population--;
+                        updateStats();
+                        createDeathEffect(defender.x, defender.y);
+                    }
+                }
+            }
+
+            static breed(parent1, parent2, allCreatures) {
+                // Create offspring
+                const childParts = [];
+                const allParts = [...new Set([...parent1.parts, ...parent2.parts])];
+
+                // Inherit parts from parents with some randomness
+                allParts.forEach(part => {
+                    const parent1Has = parent1.parts.includes(part);
+                    const parent2Has = parent2.parts.includes(part);
+
+                    if (parent1Has && parent2Has) {
+                        childParts.push(part); // Both have it, inherit for sure
+                    } else if (parent1Has || parent2Has) {
+                        if (Math.random() < 0.7) childParts.push(part); // One has it, 70% chance
+                    }
+                });
+
+                // Must have at least head and body
+                if (!childParts.some(p => p.startsWith('head'))) {
+                    const headPart = parent1.parts.find(p => p.startsWith('head')) ||
+                                   parent2.parts.find(p => p.startsWith('head'));
+                    if (headPart) childParts.push(headPart);
+                }
+                if (!childParts.some(p => p.startsWith('body'))) {
+                    const bodyPart = parent1.parts.find(p => p.startsWith('body')) ||
+                                   parent2.parts.find(p => p.startsWith('body'));
+                    if (bodyPart) childParts.push(bodyPart);
+                }
+
+                // Mix colors
+                const color1 = parent1.color;
+                const color2 = parent2.color;
+                const childColor = blendColors(color1, color2);
+
+                const child = {
+                    id: Date.now() + Math.random(),
+                    x: (parent1.x + parent2.x) / 2 + (Math.random() - 0.5) * 40,
+                    y: (parent1.y + parent2.y) / 2 + (Math.random() - 0.5) * 40,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: (Math.random() - 0.5) * 2,
+                    parts: childParts,
+                    color: childColor,
+                    baseSize: 20 + (childParts.length * 5),
+                    size: 10 + (childParts.length * 2.5), // Start small
+                    energy: 100,
+                    age: 0,
+                    maturity: 0,
+                    breedCooldown: 0,
+                    generation: Math.max(parent1.generation, parent2.generation) + 1,
+                    health: 100,
+                    maxHealth: 100,
+                    fightCooldown: 0,
+                    fleeing: false,
+                    fleeTimer: 0,
+                    frozen: false,
+                    spawnTimer: 240,  // Stay near spawn for ~4 seconds
+                    technologies: [...new Set([...parent1.technologies, ...parent2.technologies])],  // Inherit all parent tech
+                    techDiscoveryCooldown: 0,
+                    hasBreed: false,  // Can only breed once in lifetime
+                    maxAge: 3600  // Die after 1 minute
+                };
+
+                allCreatures.push(child);
+                applyTechBonuses(child);  // Apply inherited tech bonuses
+                gameState.population++;
+                gameState.speciesTypes.add(childParts.sort().join('-'));
+                updateStats();
+
+                // Mark parents as having bred (can only breed once)
+                parent1.hasBreed = true;
+                parent2.hasBreed = true;
+
+                // Create heart effect
+                createBreedingEffect((parent1.x + parent2.x) / 2, (parent1.y + parent2.y) / 2);
+            }
+        }
+
+        function blendColors(color1, color2) {
+            const c1 = parseInt(color1.replace('#', ''), 16);
+            const c2 = parseInt(color2.replace('#', ''), 16);
+
+            const r1 = (c1 >> 16) & 0xff;
+            const g1 = (c1 >> 8) & 0xff;
+            const b1 = c1 & 0xff;
+
+            const r2 = (c2 >> 16) & 0xff;
+            const g2 = (c2 >> 8) & 0xff;
+            const b2 = c2 & 0xff;
+
+            const r = Math.floor((r1 + r2) / 2);
+            const g = Math.floor((g1 + g2) / 2);
+            const b = Math.floor((b1 + b2) / 2);
+
+            return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
+        }
+
+        // Breeding effects
+        const breedingEffects = [];
+
+        function createBreedingEffect(x, y) {
+            breedingEffects.push({
+                x: x,
+                y: y,
+                age: 0,
+                maxAge: 60
+            });
+        }
+
+        function drawBreedingEffects() {
+            breedingEffects.forEach((effect, index) => {
+                effect.age++;
+
+                const alpha = 1 - (effect.age / effect.maxAge);
+                const size = 10 + (effect.age * 0.3);
+
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = '#ff69b4';
+                ctx.font = `${size}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.fillText('💕', effect.x, effect.y - effect.age * 0.5);
+                ctx.restore();
+
+                if (effect.age >= effect.maxAge) {
+                    breedingEffects.splice(index, 1);
+                }
+            });
+        }
+
+        // Combat effects
+        const combatEffects = [];
+
+        function createCombatEffect(x, y, damage) {
+            combatEffects.push({
+                x: x,
+                y: y,
+                damage: Math.floor(damage),
+                age: 0,
+                maxAge: 40,
+                vx: (Math.random() - 0.5) * 2,
+                vy: -2 - Math.random() * 2
+            });
+        }
+
+        // Technology discovery effects
+        const techEffects = [];
+
+        function createTechEffect(x, y, tech) {
+            techEffects.push({
+                x: x,
+                y: y,
+                tech: tech,
+                age: 0,
+                maxAge: 90
+            });
+        }
+
+        function drawCombatEffects() {
+            combatEffects.forEach((effect, index) => {
+                effect.age++;
+                effect.x += effect.vx;
+                effect.y += effect.vy;
+                effect.vy += 0.1; // Gravity
+
+                const alpha = 1 - (effect.age / effect.maxAge);
+                const size = 14 + Math.sin(effect.age * 0.3) * 3;
+
+                ctx.save();
+                ctx.globalAlpha = alpha;
+
+                // Impact flash
+                if (effect.age < 8) {
+                    ctx.fillStyle = '#ff4444';
+                    ctx.beginPath();
+                    ctx.arc(effect.x, effect.y, 20 - effect.age * 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // Damage number
+                ctx.fillStyle = '#ff0000';
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 3;
+                ctx.font = `bold ${size}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.strokeText(`-${effect.damage}`, effect.x, effect.y);
+                ctx.fillText(`-${effect.damage}`, effect.x, effect.y);
+
+                // Impact stars
+                if (effect.age < 15) {
+                    ctx.fillStyle = '#ffff00';
+                    ctx.font = `${18 - effect.age}px Arial`;
+                    ctx.fillText('💥', effect.x + Math.cos(effect.age) * 15, effect.y + Math.sin(effect.age) * 15);
+                }
+
+                ctx.restore();
+
+                if (effect.age >= effect.maxAge) {
+                    combatEffects.splice(index, 1);
+                }
+            });
+        }
+
+        function drawTechEffects() {
+            techEffects.forEach((effect, index) => {
+                effect.age++;
+
+                const alpha = 1 - (effect.age / effect.maxAge);
+
+                ctx.save();
+                ctx.translate(effect.x, effect.y);
+                ctx.globalAlpha = alpha;
+
+                // Tech icon with glow
+                const glowSize = 30 + Math.sin(effect.age * 0.2) * 5;
+                ctx.fillStyle = effect.tech.color;
+                ctx.shadowColor = effect.tech.color;
+                ctx.shadowBlur = 20;
+                ctx.font = `${glowSize}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.fillText(effect.tech.icon, 0, 0);
+
+                // Tech name
+                ctx.shadowBlur = 0;
+                ctx.font = 'bold 14px Arial';
+                ctx.fillStyle = '#FFF';
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 3;
+                ctx.strokeText(effect.tech.name, 0, -40);
+                ctx.fillText(effect.tech.name, 0, -40);
+
+                ctx.restore();
+
+                if (effect.age >= effect.maxAge) {
+                    techEffects.splice(index, 1);
+                }
+            });
+        }
+
+        // Death effects
+        const deathEffects = [];
+
+        function createDeathEffect(x, y) {
+            // Create particle explosion
+            for (let i = 0; i < 20; i++) {
+                const angle = (i / 20) * Math.PI * 2;
+                const speed = 2 + Math.random() * 3;
+                deathEffects.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    age: 0,
+                    maxAge: 50 + Math.random() * 30,
+                    size: 3 + Math.random() * 5,
+                    color: `hsl(${Math.random() * 60}, 70%, 50%)`
+                });
+            }
+        }
+
+        function drawDeathEffects() {
+            deathEffects.forEach((particle, index) => {
+                particle.age++;
+                particle.x += particle.vx;
+                particle.y += particle.vy;
+                particle.vy += 0.2; // Gravity
+                particle.vx *= 0.98; // Air resistance
+
+                const alpha = 1 - (particle.age / particle.maxAge);
+
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = particle.color;
+                ctx.beginPath();
+                ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+
+                if (particle.age >= particle.maxAge) {
+                    deathEffects.splice(index, 1);
+                }
+            });
+        }
+
+        // Background drawing functions
+        function drawClouds() {
+            const time = Date.now() * 0.0001;
+
+            for (let i = 0; i < 7; i++) {
+                const x = ((time * 15 + i * 180) % (canvas.width + 250)) - 125;
+                const y = 40 + i * 35 + Math.sin(time + i) * 10;
+                const size = 35 + i * 8;
+
+                // Cloud shadow for depth
+                ctx.fillStyle = 'rgba(200, 200, 200, 0.3)';
+                ctx.beginPath();
+                ctx.arc(x + 3, y + 3, size, 0, Math.PI * 2);
+                ctx.arc(x + size * 0.8 + 3, y + 3, size * 0.8, 0, Math.PI * 2);
+                ctx.arc(x + size * 1.6 + 3, y + 3, size * 0.9, 0, Math.PI * 2);
+                ctx.arc(x + size * 0.4 + 3, y - size * 0.3 + 3, size * 0.7, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Cloud with gradient
+                const cloudGradient = ctx.createRadialGradient(x + size, y, size * 0.2, x + size, y, size * 2);
+                cloudGradient.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+                cloudGradient.addColorStop(0.5, 'rgba(250, 250, 255, 0.8)');
+                cloudGradient.addColorStop(1, 'rgba(240, 245, 255, 0.5)');
+                ctx.fillStyle = cloudGradient;
+                ctx.beginPath();
+                ctx.arc(x, y, size, 0, Math.PI * 2);
+                ctx.arc(x + size * 0.8, y, size * 0.8, 0, Math.PI * 2);
+                ctx.arc(x + size * 1.6, y, size * 0.9, 0, Math.PI * 2);
+                ctx.arc(x + size * 0.4, y - size * 0.3, size * 0.7, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function drawSun() {
+            const sunX = canvas.width * 0.85;
+            const sunY = canvas.height * 0.15;
+            const sunRadius = 40;
+
+            // Sun glow
+            const glowGradient = ctx.createRadialGradient(sunX, sunY, sunRadius * 0.5, sunX, sunY, sunRadius * 3);
+            glowGradient.addColorStop(0, 'rgba(255, 255, 200, 0.4)');
+            glowGradient.addColorStop(1, 'rgba(255, 255, 200, 0)');
+            ctx.fillStyle = glowGradient;
+            ctx.beginPath();
+            ctx.arc(sunX, sunY, sunRadius * 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Sun
+            const sunGradient = ctx.createRadialGradient(sunX - 10, sunY - 10, sunRadius * 0.2, sunX, sunY, sunRadius);
+            sunGradient.addColorStop(0, '#FFF9E6');
+            sunGradient.addColorStop(0.5, '#FFE680');
+            sunGradient.addColorStop(1, '#FFD700');
+            ctx.fillStyle = sunGradient;
+            ctx.beginPath();
+            ctx.arc(sunX, sunY, sunRadius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawGrass() {
+            ctx.lineCap = 'round';
+
+            // Calculate which tiles are visible
+            const startTileX = Math.floor(gameState.camera.x / gameState.worldWidth);
+            const endTileX = Math.ceil((gameState.camera.x + canvas.width) / gameState.worldWidth);
+            const startTileY = Math.floor(gameState.camera.y / gameState.worldHeight);
+            const endTileY = Math.ceil((gameState.camera.y + canvas.height) / gameState.worldHeight);
+
+            // Draw grass for each visible tile
+            for (let tileY = startTileY; tileY <= endTileY; tileY++) {
+                for (let tileX = startTileX; tileX <= endTileX; tileX++) {
+                    const offsetX = tileX * gameState.worldWidth;
+                    const offsetY = tileY * gameState.worldHeight;
+
+                    // Get biome for this tile
+                    const tileBiome = getBiome(offsetX + gameState.worldWidth / 2);
+
+                    // Only draw grass if biome has it
+                    if (!tileBiome.hasGrass) continue;
+
+                    staticGrass.forEach(grass => {
+                        // Use biome-specific grass colors
+                        const grassColors = tileBiome.grassColors.map(color => shadeColor(color, -grass.darkness));
+                        ctx.strokeStyle = grassColors[grass.colorIndex];
+                        ctx.lineWidth = grass.lineWidth;
+
+                        const x = offsetX + grass.x;
+                        const y = offsetY + grass.y;
+
+                        ctx.beginPath();
+                        ctx.moveTo(x, y);
+                        ctx.quadraticCurveTo(x + grass.curvature, y - grass.height / 2, x + grass.curvature * 1.5, y - grass.height);
+                        ctx.stroke();
+                    });
+                }
+            }
+        }
+
+        function drawTrees() {
+            // Calculate which tiles are visible
+            const startTileX = Math.floor(gameState.camera.x / gameState.worldWidth);
+            const endTileX = Math.ceil((gameState.camera.x + canvas.width) / gameState.worldWidth);
+            const startTileY = Math.floor(gameState.camera.y / gameState.worldHeight);
+            const endTileY = Math.ceil((gameState.camera.y + canvas.height) / gameState.worldHeight);
+
+            // Draw trees for each visible tile
+            for (let tileY = startTileY; tileY <= endTileY; tileY++) {
+                for (let tileX = startTileX; tileX <= endTileX; tileX++) {
+                    const offsetX = tileX * gameState.worldWidth;
+                    const offsetY = tileY * gameState.worldHeight;
+
+                    // Get biome for this tile
+                    const tileBiome = getBiome(offsetX + gameState.worldWidth / 2);
+                    if (!tileBiome.hasTrees) continue;
+
+                    staticTrees.forEach(tree => {
+                        const x = offsetX + tree.x;
+                        const y = offsetY + tree.y;
+
+                        // Draw different tree types based on biome
+                        if (tileBiome.treeType === 'cactus') {
+                            // Desert cactus
+                            const cactusWidth = 12 * tree.size;
+                            const cactusHeight = 70 * tree.size;
+                            ctx.fillStyle = '#5A7A3A';
+                            ctx.fillRect(x - cactusWidth / 2, y - cactusHeight, cactusWidth, cactusHeight);
+                            // Arms
+                            ctx.fillRect(x - cactusWidth * 2, y - cactusHeight * 0.6, cactusWidth, cactusHeight * 0.3);
+                            ctx.fillRect(x + cactusWidth, y - cactusHeight * 0.7, cactusWidth, cactusHeight * 0.35);
+                        } else if (tileBiome.treeType === 'pine') {
+                            // Tundra pine tree
+                            const trunkWidth = 10 * tree.size;
+                            const trunkHeight = 50 * tree.size;
+                            ctx.fillStyle = '#5A4A3A';
+                            ctx.fillRect(x - trunkWidth / 2, y - trunkHeight, trunkWidth, trunkHeight);
+                            // Triangle foliage
+                            ctx.fillStyle = '#2A5A3A';
+                            ctx.beginPath();
+                            ctx.moveTo(x, y - trunkHeight - 60 * tree.size);
+                            ctx.lineTo(x - 30 * tree.size, y - trunkHeight);
+                            ctx.lineTo(x + 30 * tree.size, y - trunkHeight);
+                            ctx.closePath();
+                            ctx.fill();
+                        } else if (tileBiome.treeType === 'acacia') {
+                            // Savanna acacia (flat-topped)
+                            const trunkWidth = 12 * tree.size;
+                            const trunkHeight = 50 * tree.size;
+                            ctx.fillStyle = '#8B6A3A';
+                            ctx.fillRect(x - trunkWidth / 2, y - trunkHeight, trunkWidth, trunkHeight);
+                            // Flat crown
+                            ctx.fillStyle = '#6A8A4A';
+                            ctx.beginPath();
+                            ctx.ellipse(x, y - trunkHeight - 15 * tree.size, 45 * tree.size, 20 * tree.size, 0, 0, Math.PI * 2);
+                            ctx.fill();
+                        } else {
+                            // Normal forest tree
+                            const trunkWidth = 15 * tree.size;
+                            const trunkHeight = 60 * tree.size;
+                            const crownRadius = 40 * tree.size;
+
+                            // Trunk
+                            const trunkGradient = ctx.createLinearGradient(x - trunkWidth / 2, 0, x + trunkWidth / 2, 0);
+                            trunkGradient.addColorStop(0, '#654321');
+                            trunkGradient.addColorStop(0.5, '#8B4513');
+                            trunkGradient.addColorStop(1, '#654321');
+                            ctx.fillStyle = trunkGradient;
+                            ctx.fillRect(x - trunkWidth / 2, y - trunkHeight, trunkWidth, trunkHeight);
+
+                            // Crown (foliage)
+                            const crownGradient = ctx.createRadialGradient(x, y - trunkHeight - crownRadius / 2, crownRadius * 0.3, x, y - trunkHeight - crownRadius / 2, crownRadius);
+                            crownGradient.addColorStop(0, '#4a7c4e');
+                            crownGradient.addColorStop(1, '#2d5a2f');
+                            ctx.fillStyle = crownGradient;
+
+                            ctx.beginPath();
+                            ctx.arc(x, y - trunkHeight - crownRadius / 2, crownRadius, 0, Math.PI * 2);
+                            ctx.fill();
+
+                            // Additional foliage layers for depth
+                            ctx.fillStyle = 'rgba(74, 124, 78, 0.6)';
+                            ctx.beginPath();
+                            ctx.arc(x - crownRadius * 0.4, y - trunkHeight - crownRadius * 0.3, crownRadius * 0.7, 0, Math.PI * 2);
+                            ctx.fill();
+
+                            ctx.beginPath();
+                            ctx.arc(x + crownRadius * 0.4, y - trunkHeight - crownRadius * 0.3, crownRadius * 0.7, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                    });
+                }
+            }
+        }
+
+        // Game Loop
+        function gameLoop() {
+            // Get current biome for sky color
+            const currentBiome = getBiome(gameState.camera.x + canvas.width / 2);
+
+            // Clear and draw sky with biome colors
+            const skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height * 0.7);
+            skyGradient.addColorStop(0, currentBiome.skyTop);
+            skyGradient.addColorStop(1, currentBiome.skyBottom);
+            ctx.fillStyle = skyGradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw sun (fixed in sky)
+            drawSun();
+
+            // Draw clouds (fixed in sky)
+            drawClouds();
+
+            // Save context and apply camera transform for world elements
+            ctx.save();
+            ctx.translate(-gameState.camera.x, -gameState.camera.y);
+
+            // Calculate which horizontal tiles are visible for infinite scrolling
+            const startTileX = Math.floor(gameState.camera.x / gameState.worldWidth);
+            const endTileX = Math.ceil((gameState.camera.x + canvas.width) / gameState.worldWidth);
+            const startTileY = Math.floor(gameState.camera.y / gameState.worldHeight);
+            const endTileY = Math.ceil((gameState.camera.y + canvas.height) / gameState.worldHeight);
+
+            // Draw background elements for each visible tile
+            for (let tileY = startTileY; tileY <= endTileY; tileY++) {
+                for (let tileX = startTileX; tileX <= endTileX; tileX++) {
+                    const offsetX = tileX * gameState.worldWidth;
+                    const offsetY = tileY * gameState.worldHeight;
+
+                    // Get biome for this tile
+                    const tileBiome = getBiome(offsetX + gameState.worldWidth / 2);
+
+                    // Draw distant mountains with atmospheric perspective
+                    ctx.fillStyle = tileBiome.mountainColor;
+                    ctx.globalAlpha = 0.6;
+                    ctx.beginPath();
+                    ctx.moveTo(offsetX, offsetY + gameState.worldHeight * 0.55);
+                    for (let x = 0; x < gameState.worldWidth; x += 30) {
+                        ctx.lineTo(offsetX + x, offsetY + gameState.worldHeight * 0.55 - Math.abs(Math.sin(x * 0.008) * 80));
+                    }
+                    ctx.lineTo(offsetX + gameState.worldWidth, offsetY + gameState.worldHeight);
+                    ctx.lineTo(offsetX, offsetY + gameState.worldHeight);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.globalAlpha = 1.0;
+
+                    // Draw closer hills with more saturation
+                    const hillGradient = ctx.createLinearGradient(0, offsetY + gameState.worldHeight * 0.6, 0, offsetY + gameState.worldHeight * 0.75);
+                    hillGradient.addColorStop(0, tileBiome.hillTop);
+                    hillGradient.addColorStop(1, tileBiome.hillBottom);
+                    ctx.fillStyle = hillGradient;
+                    ctx.beginPath();
+                    ctx.moveTo(offsetX, offsetY + gameState.worldHeight * 0.65);
+                    for (let x = 0; x < gameState.worldWidth; x += 40) {
+                        ctx.lineTo(offsetX + x, offsetY + gameState.worldHeight * 0.65 + Math.sin(x * 0.012) * 35 - 10);
+                    }
+                    ctx.lineTo(offsetX + gameState.worldWidth, offsetY + gameState.worldHeight * 0.65);
+                    ctx.lineTo(offsetX + gameState.worldWidth, offsetY + gameState.worldHeight);
+                    ctx.lineTo(offsetX, offsetY + gameState.worldHeight);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    // Draw ground with biome-specific gradient
+                    const groundGradient = ctx.createLinearGradient(0, offsetY + gameState.worldHeight * 0.75, 0, offsetY + gameState.worldHeight);
+                    groundGradient.addColorStop(0, tileBiome.groundTop);
+                    groundGradient.addColorStop(1, tileBiome.groundBottom);
+                    ctx.fillStyle = groundGradient;
+                    ctx.fillRect(offsetX, offsetY + gameState.worldHeight * 0.75, gameState.worldWidth, gameState.worldHeight * 0.25);
+                }
+            }
+
+            // Draw grass blades
+            drawGrass();
+
+            // Draw trees
+            drawTrees();
+
+            // Update and draw creatures
+            gameState.creatures.forEach(creature => {
+                Creature.update(creature, gameState.creatures);
+                Creature.draw(ctx, creature);
+
+                // Draw health bar if damaged or fleeing
+                if (creature.health < creature.maxHealth || creature.fleeing) {
+                    const barWidth = 40;
+                    const barHeight = 4;
+                    const barX = creature.x - barWidth / 2;
+                    const barY = creature.y - creature.size - 15;
+
+                    // Background
+                    ctx.fillStyle = '#000';
+                    ctx.fillRect(barX - 1, barY - 1, barWidth + 2, barHeight + 2);
+
+                    // Health bar
+                    const healthPercent = creature.health / creature.maxHealth;
+                    const healthColor = healthPercent > 0.6 ? '#4CAF50' : healthPercent > 0.3 ? '#FFC107' : '#F44336';
+                    ctx.fillStyle = healthColor;
+                    ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
+
+                    // Border
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(barX, barY, barWidth, barHeight);
+
+                    // Fleeing indicator
+                    if (creature.fleeing) {
+                        ctx.fillStyle = '#ffeb3b';
+                        ctx.font = '12px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('💨', creature.x, barY - 5);
+                    }
+                }
+
+                // Draw technology indicators
+                if (creature.technologies && creature.technologies.length > 0) {
+                    const iconSize = 16;
+                    const startX = creature.x - (creature.technologies.length * iconSize / 2);
+                    const iconY = creature.y - creature.size - 25;
+
+                    creature.technologies.forEach((techKey, index) => {
+                        const tech = technologyTypes[techKey];
+                        if (tech) {
+                            const x = startX + (index * iconSize);
+
+                            // Small glow
+                            ctx.save();
+                            ctx.shadowColor = tech.color;
+                            ctx.shadowBlur = 5;
+                            ctx.font = `${iconSize}px Arial`;
+                            ctx.textAlign = 'center';
+                            ctx.fillText(tech.icon, x, iconY);
+                            ctx.restore();
+                        }
+                    });
+                }
+            });
+
+            // Draw all effects
+            drawBreedingEffects();
+            drawCombatEffects();
+            drawTechEffects();
+            drawDeathEffects();
+
+            // Draw instructions if no creatures
+            if (gameState.creatures.length === 0) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.font = 'bold 24px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('Drag body parts to the platform to create your first creature!', canvas.width / 2, canvas.height / 2);
+            }
+
+            // Restore context (end of world space drawing)
+            ctx.restore();
+
+            // Draw UI elements in screen space (not affected by camera)
+            // Draw frozen creature info panel
+            gameState.creatures.forEach(creature => {
+                if (creature.frozen) {
+                    drawCreatureInfoScreenSpace(creature);
+                }
+            });
+
+            // Draw world bounds indicator
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.font = '12px Arial';
+            ctx.fillText(`World: ${Math.floor(gameState.camera.x)}x${Math.floor(gameState.camera.y)} | Drag to scroll`, 10, canvas.height - 10);
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Camera controls
+        let dragStartPos = { x: 0, y: 0 };
+        let dragStartTime = 0;
+
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            dragStartPos = { x: mouseX, y: mouseY };
+            dragStartTime = Date.now();
+            gameState.isDraggingCamera = true;
+            gameState.lastMousePos = { x: mouseX, y: mouseY };
+            canvas.style.cursor = 'grabbing';
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (gameState.isDraggingCamera) {
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+
+                const dx = mouseX - gameState.lastMousePos.x;
+                const dy = mouseY - gameState.lastMousePos.y;
+
+                gameState.camera.x -= dx;
+                gameState.camera.y -= dy;
+
+                // No camera clamping for infinite scrolling
+
+                gameState.lastMousePos = { x: mouseX, y: mouseY };
+            }
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            // Check if this was a click (not a drag)
+            const dragDist = Math.sqrt(
+                Math.pow(mouseX - dragStartPos.x, 2) +
+                Math.pow(mouseY - dragStartPos.y, 2)
+            );
+            const dragTime = Date.now() - dragStartTime;
+
+            // Only treat as click if barely moved and quick
+            if (dragDist < 5 && dragTime < 300) {
+                const worldX = mouseX + gameState.camera.x;
+                const worldY = mouseY + gameState.camera.y;
+
+                // Check if clicked on a creature
+                for (let i = gameState.creatures.length - 1; i >= 0; i--) {
+                    const creature = gameState.creatures[i];
+                    const dx = worldX - creature.x;
+                    const dy = worldY - creature.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < creature.size * 1.5) {
+                        creature.frozen = !creature.frozen;
+                        break;
+                    }
+                }
+            }
+
+            gameState.isDraggingCamera = false;
+            canvas.style.cursor = 'grab';
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            gameState.isDraggingCamera = false;
+            canvas.style.cursor = 'grab';
+        });
+
+        // Set initial cursor
+        canvas.style.cursor = 'grab';
+
+        // Function to draw creature information panel (in screen space)
+        function drawCreatureInfoScreenSpace(creature) {
+            const panelWidth = 250;
+            const panelHeight = 200;
+            // Convert world coordinates to screen coordinates
+            const screenX = creature.x - gameState.camera.x;
+            const screenY = creature.y - gameState.camera.y;
+            const panelX = screenX + creature.size + 20;
+            const panelY = screenY - panelHeight / 2;
+
+            // Adjust panel position if it goes off screen
+            let finalX = panelX;
+            let finalY = panelY;
+            if (panelX + panelWidth > canvas.width) {
+                finalX = creature.x - creature.size - panelWidth - 20;
+            }
+            if (panelY < 10) finalY = 10;
+            if (panelY + panelHeight > canvas.height - 10) {
+                finalY = canvas.height - panelHeight - 10;
+            }
+
+            // Draw panel background
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+            ctx.strokeStyle = creature.color;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.roundRect(finalX, finalY, panelWidth, panelHeight, 10);
+            ctx.fill();
+            ctx.stroke();
+
+            // Draw title
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 18px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText('Creature Info', finalX + 15, finalY + 25);
+
+            // Draw separator line
+            ctx.strokeStyle = creature.color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(finalX + 15, finalY + 35);
+            ctx.lineTo(finalX + panelWidth - 15, finalY + 35);
+            ctx.stroke();
+
+            // Draw stats
+            ctx.font = '14px Arial';
+            let yOffset = finalY + 55;
+
+            // Generation
+            ctx.fillStyle = '#FFD700';
+            ctx.fillText(`Generation: ${creature.generation}`, finalX + 15, yOffset);
+            yOffset += 20;
+
+            // Age
+            const maturityText = creature.maturity >= 1 ? 'Adult' : 'Growing';
+            ctx.fillStyle = '#90EE90';
+            ctx.fillText(`Age: ${Math.floor(creature.age / 60)}s (${maturityText})`, finalX + 15, yOffset);
+            yOffset += 20;
+
+            // Health
+            const healthPercent = Math.floor((creature.health / creature.maxHealth) * 100);
+            ctx.fillStyle = healthPercent > 60 ? '#4CAF50' : healthPercent > 30 ? '#FFC107' : '#F44336';
+            ctx.fillText(`Health: ${Math.floor(creature.health)}/${creature.maxHealth} (${healthPercent}%)`, finalX + 15, yOffset);
+            yOffset += 25;
+
+            // Body Parts title
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 14px Arial';
+            ctx.fillText('Body Parts:', finalX + 15, yOffset);
+            yOffset += 20;
+
+            // List body parts
+            ctx.font = '13px Arial';
+            creature.parts.forEach(part => {
+                const partName = formatPartName(part);
+                const partEmoji = getPartEmoji(part);
+
+                ctx.fillStyle = getPartColor(part);
+                ctx.fillText(`${partEmoji} ${partName}`, finalX + 25, yOffset);
+                yOffset += 18;
+            });
+
+            // Draw frozen indicator
+            ctx.fillStyle = '#87CEEB';
+            ctx.font = 'bold 12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('(Click to unfreeze)', finalX + panelWidth / 2, finalY + panelHeight - 10);
+
+            // Draw pointer line to creature
+            ctx.strokeStyle = creature.color;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(screenX, screenY);
+            if (finalX > screenX) {
+                ctx.lineTo(finalX, screenY);
+            } else {
+                ctx.lineTo(finalX + panelWidth, screenY);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Draw freeze icon above creature
+            ctx.fillStyle = '#87CEEB';
+            ctx.font = '24px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('❄️', screenX, screenY - creature.size - 25);
+        }
+
+        function formatPartName(part) {
+            return part.split('-').map(word =>
+                word.charAt(0).toUpperCase() + word.slice(1)
+            ).join(' ');
+        }
+
+        function getPartColor(part) {
+            if (part.startsWith('head')) return '#e74c3c';
+            if (part.startsWith('body')) return '#2ecc71';
+            if (part.startsWith('legs') || part === 'hooves') return '#f39c12';
+            if (part.startsWith('arms') || part === 'claws') return '#9b59b6';
+            if (part.startsWith('tail')) return '#e67e22';
+            if (part.startsWith('wings')) return '#3498db';
+            if (part === 'horns') return '#c0392b';
+            if (part === 'antennae') return '#16a085';
+            if (part === 'fins') return '#1abc9c';
+            if (part === 'spikes') return '#7f8c8d';
+            if (part === 'eyes') return '#8e44ad';
+            return '#fff';
+        }
+
+        // Start the game
+        gameLoop();
+    </script>
+</body>
+</html>

@@ -1,0 +1,4801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Puzzle</title>
+    <style>
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f5f5f5;
+            --text-primary: #1a1a1a;
+            --text-secondary: #666666;
+            --accent: #4a90d9;
+            --accent-hover: #357abd;
+            --success: #4caf50;
+            --error: #f44336;
+            --border: #e0e0e0;
+            --cell-bg: #ffffff;
+            --cell-selected: #e3f2fd;
+            --cell-found: #c8e6c9;
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #2d2d2d;
+            --text-primary: #f5f5f5;
+            --text-secondary: #aaaaaa;
+            --accent: #64b5f6;
+            --accent-hover: #42a5f5;
+            --border: #444444;
+            --cell-bg: #2d2d2d;
+            --cell-selected: #1e3a5f;
+            --cell-found: #1b5e20;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .title-section h1 {
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+        }
+
+        .day-counter {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .theme-toggle {
+            background: none;
+            border: 2px solid var(--border);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: border-color 0.3s;
+        }
+
+        .theme-toggle:hover {
+            border-color: var(--accent);
+        }
+
+        .puzzle-type {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .puzzle-type h2 {
+            font-size: 1.3rem;
+            color: var(--accent);
+            margin-bottom: 10px;
+        }
+
+        .instructions {
+            background-color: var(--bg-secondary);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .puzzle-area {
+            background-color: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        /* Word Search Styles */
+        .word-search-grid {
+            display: grid;
+            gap: 2px;
+            margin-bottom: 20px;
+            user-select: none;
+        }
+
+        .word-search-cell {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--cell-bg);
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .word-search-cell.selected {
+            background-color: var(--cell-selected);
+        }
+
+        .word-search-cell.found {
+            background-color: var(--cell-found);
+        }
+
+        .word-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .word-item {
+            padding: 5px 12px;
+            background-color: var(--cell-bg);
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+
+        .word-item.found {
+            text-decoration: line-through;
+            opacity: 0.6;
+        }
+
+        /* Word Ladder Styles */
+        .word-ladder-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .ladder-word {
+            display: flex;
+            gap: 5px;
+        }
+
+        .ladder-letter {
+            width: 45px;
+            height: 50px;
+            border: 2px solid var(--border);
+            border-radius: 6px;
+            text-align: center;
+            font-size: 1.3rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            background-color: var(--cell-bg);
+            color: var(--text-primary);
+        }
+
+        .ladder-letter:focus {
+            border-color: var(--accent);
+            outline: none;
+        }
+
+        .ladder-letter.fixed {
+            background-color: var(--bg-secondary);
+            color: var(--text-secondary);
+        }
+
+        .ladder-letter.correct {
+            border-color: var(--success);
+            background-color: var(--cell-found);
+        }
+
+        .ladder-letter.incorrect {
+            border-color: var(--error);
+            background-color: rgba(244, 67, 54, 0.1);
+        }
+
+        .ladder-arrow {
+            font-size: 1.5rem;
+            color: var(--text-secondary);
+        }
+
+        /* Anagram Styles */
+        .anagram-container {
+            text-align: center;
+        }
+
+        .scrambled-word {
+            font-size: 2rem;
+            font-weight: bold;
+            letter-spacing: 8px;
+            margin-bottom: 20px;
+            color: var(--accent);
+        }
+
+        .anagram-hint {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+            font-style: italic;
+        }
+
+        .anagram-input {
+            width: 100%;
+            max-width: 300px;
+            padding: 15px;
+            font-size: 1.2rem;
+            text-align: center;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            background-color: var(--cell-bg);
+            color: var(--text-primary);
+            text-transform: uppercase;
+            letter-spacing: 4px;
+        }
+
+        .anagram-input:focus {
+            border-color: var(--accent);
+            outline: none;
+        }
+
+        .anagram-feedback {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 15px;
+            min-height: 45px;
+        }
+
+        .anagram-letter-box {
+            width: 35px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--cell-bg);
+            border: 2px solid var(--border);
+            border-radius: 6px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .anagram-letter-box.correct {
+            border-color: var(--success);
+            background-color: var(--cell-found);
+        }
+
+        .anagram-letter-box.incorrect {
+            border-color: var(--error);
+            background-color: rgba(244, 67, 54, 0.1);
+        }
+
+        /* Cryptogram Styles */
+        .cryptogram-container {
+            text-align: center;
+        }
+
+        .cryptogram-text {
+            font-size: 1.1rem;
+            line-height: 2.5;
+            margin-bottom: 20px;
+            word-wrap: break-word;
+        }
+
+        .crypto-char {
+            display: inline-block;
+            margin: 3px 4px;
+        }
+
+        .crypto-letter {
+            width: 25px;
+            height: 30px;
+            border: none;
+            border-bottom: 2px solid var(--border);
+            text-align: center;
+            font-size: 1rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            background: transparent;
+            color: var(--text-primary);
+        }
+
+        .crypto-letter:focus {
+            border-bottom-color: var(--accent);
+            outline: none;
+        }
+
+        .crypto-letter.correct {
+            border-bottom-color: var(--success);
+            background-color: rgba(76, 175, 80, 0.1);
+        }
+
+        .crypto-letter.incorrect {
+            border-bottom-color: var(--error);
+            background-color: rgba(244, 67, 54, 0.1);
+        }
+
+        .crypto-letter.unchecked {
+            border-bottom-color: var(--border);
+            background-color: transparent;
+        }
+
+        .check-hint-btn {
+            margin-right: 10px;
+        }
+
+        .checks-remaining {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 10px;
+        }
+
+        .crypto-hint {
+            display: block;
+            font-size: 0.7rem;
+            color: var(--accent);
+        }
+
+        .crypto-word {
+            display: inline-block;
+            white-space: nowrap;
+            margin: 5px 0;
+        }
+
+        .crypto-space {
+            width: 25px;
+            display: inline-block;
+        }
+
+        .crypto-punct {
+            font-weight: bold;
+            margin: 0 2px;
+        }
+
+        /* Number Sequence Styles */
+        .sequence-container {
+            text-align: center;
+        }
+
+        .sequence-numbers {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .sequence-num {
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--cell-bg);
+            border-radius: 8px;
+            font-size: 1.3rem;
+            font-weight: bold;
+        }
+
+        .sequence-input {
+            width: 60px;
+            height: 60px;
+            border: 2px dashed var(--accent);
+            border-radius: 8px;
+            text-align: center;
+            font-size: 1.3rem;
+            font-weight: bold;
+            background-color: var(--cell-bg);
+            color: var(--text-primary);
+        }
+
+        .sequence-input:focus {
+            border-style: solid;
+            outline: none;
+        }
+
+        .sequence-hint {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-top: 15px;
+        }
+
+        /* Word Guess Styles */
+        .word-guess-container {
+            text-align: center;
+        }
+
+        .guess-hint {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+            font-style: italic;
+        }
+
+        .guess-word-display {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-bottom: 25px;
+        }
+
+        .guess-letter-box {
+            width: 45px;
+            height: 55px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--cell-bg);
+            border: 2px solid var(--border);
+            border-radius: 6px;
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .guess-letter-box.revealed {
+            border-color: var(--success);
+            background-color: var(--cell-found);
+        }
+
+        .guess-attempts {
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .guess-keyboard {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            justify-content: center;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .guess-key {
+            width: 35px;
+            height: 40px;
+            border: none;
+            border-radius: 4px;
+            background-color: var(--cell-bg);
+            color: var(--text-primary);
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        .guess-key:hover:not(:disabled) {
+            background-color: var(--accent);
+            color: white;
+        }
+
+        .guess-key:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .guess-key.correct {
+            background-color: var(--success);
+            color: white;
+        }
+
+        .guess-key.wrong {
+            background-color: var(--error);
+            color: white;
+            opacity: 0.6;
+        }
+
+        /* Math Puzzle Styles */
+        .math-puzzle-container {
+            text-align: center;
+        }
+
+        .math-sub-problems {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+
+        .math-sub-problem {
+            background-color: var(--cell-bg);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            padding: 15px;
+            min-width: 140px;
+        }
+
+        .math-sub-problem.solved {
+            border-color: var(--success);
+            background-color: var(--cell-found);
+        }
+
+        .sub-problem-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .sub-problem-equation {
+            font-size: 1.1rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .sub-problem-input {
+            width: 50px;
+            padding: 8px;
+            font-size: 1.2rem;
+            text-align: center;
+            border: 2px solid var(--border);
+            border-radius: 6px;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        .sub-problem-input:focus {
+            border-color: var(--accent);
+            outline: none;
+        }
+
+        .sub-problem-input.correct {
+            border-color: var(--success);
+            background-color: var(--cell-found);
+        }
+
+        .sub-problem-input.incorrect {
+            border-color: var(--error);
+        }
+
+        .math-divider {
+            width: 100%;
+            height: 2px;
+            background: var(--border);
+            margin: 20px 0;
+        }
+
+        .math-main-problem {
+            background-color: var(--bg-secondary);
+            border: 3px solid var(--accent);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .main-problem-label {
+            font-size: 0.9rem;
+            color: var(--accent);
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .main-problem-equation {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 15px;
+            letter-spacing: 2px;
+        }
+
+        .main-problem-answer {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .main-digit-box {
+            width: 45px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--cell-bg);
+            border: 2px dashed var(--accent);
+            border-radius: 6px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--text-secondary);
+        }
+
+        .main-digit-box.filled {
+            border-style: solid;
+            color: var(--text-primary);
+            background-color: var(--cell-found);
+            border-color: var(--success);
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 12px 30px;
+            font-size: 1rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.1s;
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+        }
+
+        .btn-primary {
+            background-color: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--accent-hover);
+        }
+
+        .btn-container {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        /* Message */
+        .message {
+            text-align: center;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-weight: bold;
+            display: none;
+        }
+
+        .message.success {
+            background-color: var(--cell-found);
+            color: #1b5e20;
+            display: block;
+        }
+
+        .message.error {
+            background-color: #ffebee;
+            color: var(--error);
+            display: block;
+        }
+
+        [data-theme="dark"] .message.success {
+            color: #a5d6a7;
+        }
+
+        [data-theme="dark"] .message.error {
+            background-color: #3e2723;
+            color: #ef9a9a;
+        }
+
+        /* Celebration */
+        .celebration {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            animation: confetti-fall 3s ease-out forwards;
+        }
+
+        @keyframes confetti-fall {
+            0% {
+                transform: translateY(-100%) rotate(0deg);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(100vh) rotate(720deg);
+                opacity: 0;
+            }
+        }
+
+        /* Completed State */
+        .completed-message {
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .completed-message h2 {
+            color: var(--success);
+            margin-bottom: 15px;
+        }
+
+        .completed-message p {
+            color: var(--text-secondary);
+        }
+
+        /* Saved Puzzle Banner */
+        .saved-puzzle-card {
+            background: linear-gradient(135deg, #ff9800, #f57c00);
+            border-radius: 12px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .saved-puzzle-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .saved-puzzle-title {
+            font-weight: bold;
+            font-size: 1rem;
+        }
+
+        .saved-puzzle-details {
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+
+        .saved-puzzle-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .saved-puzzle-actions .btn {
+            padding: 8px 16px;
+            font-size: 0.85rem;
+        }
+
+        .btn-secondary {
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 2px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background-color: var(--border);
+            border-color: var(--accent);
+        }
+
+        .btn-secondary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-light {
+            background-color: white;
+            color: #f57c00;
+        }
+
+        .btn-light:hover {
+            background-color: #f5f5f5;
+        }
+
+        /* Home Screen */
+        .home-screen {
+            text-align: center;
+        }
+
+        .home-screen.hidden {
+            display: none;
+        }
+
+        .home-title {
+            font-size: 2rem;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .home-subtitle {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            margin-bottom: 25px;
+        }
+
+        .daily-puzzle-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            padding: 25px 20px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+            color: white;
+            border: none;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 15px rgba(74, 144, 217, 0.3);
+        }
+
+        .daily-puzzle-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(74, 144, 217, 0.4);
+        }
+
+        .daily-puzzle-btn:active {
+            transform: translateY(-1px);
+        }
+
+        .daily-puzzle-icon {
+            font-size: 2.5rem;
+        }
+
+        .daily-puzzle-label {
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        .daily-puzzle-day {
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+
+        .daily-puzzle-status {
+            font-size: 0.75rem;
+            opacity: 0.8;
+        }
+
+        .puzzle-screen {
+            display: none;
+        }
+
+        .puzzle-screen.active {
+            display: block;
+        }
+
+        .back-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 5px;
+            margin-right: 10px;
+            transition: color 0.2s;
+        }
+
+        .back-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .back-btn.hidden {
+            display: none;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+        }
+
+        /* Practice Mode Styles */
+        .section-divider {
+            display: flex;
+            align-items: center;
+            margin: 30px 0 20px;
+            gap: 15px;
+        }
+
+        .section-divider::before,
+        .section-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background-color: var(--border);
+        }
+
+        .section-divider span {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .puzzle-type-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .puzzle-type-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            padding: 20px 15px;
+            background-color: var(--bg-secondary);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .puzzle-type-btn:hover {
+            border-color: var(--accent);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .puzzle-type-btn .puzzle-icon {
+            font-size: 2rem;
+        }
+
+        .puzzle-type-btn .puzzle-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            text-align: center;
+        }
+
+        .puzzle-type-btn .puzzle-difficulty {
+            font-size: 0.65rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .puzzle-difficulty.easy {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .puzzle-difficulty.medium {
+            background-color: #fff3e0;
+            color: #ef6c00;
+        }
+
+        .puzzle-difficulty.hard {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+
+        [data-theme="dark"] .puzzle-difficulty.easy {
+            background-color: rgba(46, 125, 50, 0.2);
+            color: #81c784;
+        }
+
+        [data-theme="dark"] .puzzle-difficulty.medium {
+            background-color: rgba(239, 108, 0, 0.2);
+            color: #ffb74d;
+        }
+
+        [data-theme="dark"] .puzzle-difficulty.hard {
+            background-color: rgba(198, 40, 40, 0.2);
+            color: #ef9a9a;
+        }
+
+        /* Special Mode - Golden Theme */
+        .section-divider.golden::before,
+        .section-divider.golden::after {
+            background: linear-gradient(90deg, transparent, #d4af37, transparent);
+            height: 2px;
+        }
+
+        .section-divider.golden span {
+            color: #d4af37;
+            font-weight: 600;
+        }
+
+        .special-mode-container {
+            margin-top: 20px;
+        }
+
+        .special-mode-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .special-mode-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            padding: 25px 15px;
+            background: linear-gradient(135deg, #d4af37 0%, #f4d03f 50%, #d4af37 100%);
+            border: 2px solid #b8860b;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
+            color: #5c4813;
+        }
+
+        .special-mode-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(212, 175, 55, 0.5);
+        }
+
+        .special-mode-btn:active {
+            transform: translateY(-1px);
+        }
+
+        .special-mode-icon {
+            font-size: 2.5rem;
+        }
+
+        .special-mode-label {
+            font-size: 1rem;
+            font-weight: bold;
+        }
+
+        .special-mode-sublabel {
+            font-size: 0.75rem;
+            opacity: 0.8;
+            text-align: center;
+        }
+
+        .special-mode-status {
+            font-size: 0.7rem;
+            padding: 3px 10px;
+            background-color: rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+        }
+
+        /* Weekly Set Difficulty Selection */
+        .weekly-set-screen {
+            display: none;
+        }
+
+        .weekly-set-screen.active {
+            display: block;
+        }
+
+        .difficulty-selection {
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        .difficulty-selection h3 {
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+
+        .difficulty-btn-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-width: 300px;
+            margin: 0 auto;
+        }
+
+        .difficulty-select-btn {
+            padding: 18px 30px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border: 3px solid;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .difficulty-select-btn.easy {
+            background-color: #e8f5e9;
+            border-color: #4caf50;
+            color: #2e7d32;
+        }
+
+        .difficulty-select-btn.medium {
+            background-color: #fff3e0;
+            border-color: #ff9800;
+            color: #ef6c00;
+        }
+
+        .difficulty-select-btn.hard {
+            background-color: #ffebee;
+            border-color: #f44336;
+            color: #c62828;
+        }
+
+        .difficulty-select-btn:hover {
+            transform: scale(1.02);
+        }
+
+        [data-theme="dark"] .difficulty-select-btn.easy {
+            background-color: rgba(76, 175, 80, 0.2);
+            color: #81c784;
+        }
+
+        [data-theme="dark"] .difficulty-select-btn.medium {
+            background-color: rgba(255, 152, 0, 0.2);
+            color: #ffb74d;
+        }
+
+        [data-theme="dark"] .difficulty-select-btn.hard {
+            background-color: rgba(244, 67, 54, 0.2);
+            color: #ef9a9a;
+        }
+
+        .difficulty-puzzles-count {
+            font-size: 0.8rem;
+            opacity: 0.8;
+        }
+
+        /* Weekly Set Progress */
+        .weekly-progress {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin: 15px 0;
+        }
+
+        .weekly-progress-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background-color: var(--border);
+            transition: all 0.3s;
+        }
+
+        .weekly-progress-dot.completed {
+            background-color: #d4af37;
+            box-shadow: 0 0 8px rgba(212, 175, 55, 0.5);
+        }
+
+        .weekly-progress-dot.current {
+            background-color: #d4af37;
+            transform: scale(1.3);
+            box-shadow: 0 0 12px rgba(212, 175, 55, 0.7);
+        }
+
+        /* Weekly Challenge Card */
+        .weekly-challenge-info {
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, rgba(212, 175, 55, 0.1), rgba(244, 208, 63, 0.1));
+            border: 2px solid #d4af37;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+
+        .weekly-challenge-info h3 {
+            color: #d4af37;
+            margin-bottom: 10px;
+        }
+
+        .weekly-challenge-info p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        /* Puzzle Selection Screen */
+        .puzzle-selection-screen {
+            display: none;
+        }
+
+        .puzzle-selection-screen.active {
+            display: block;
+        }
+
+        .puzzle-selection-header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .puzzle-selection-header h2 {
+            font-size: 1.5rem;
+            color: var(--text-primary);
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .puzzle-selection-header p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .puzzle-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .puzzle-list-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 18px 20px;
+            background-color: var(--bg-secondary);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .puzzle-list-item:hover {
+            border-color: var(--accent);
+            transform: translateX(5px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .puzzle-list-item-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .puzzle-list-number {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--accent);
+            color: white;
+            border-radius: 50%;
+            font-weight: bold;
+            font-size: 1rem;
+        }
+
+        .puzzle-list-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .puzzle-list-title {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+
+        .puzzle-list-description {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .puzzle-list-item-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .puzzle-list-difficulty {
+            font-size: 0.7rem;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .puzzle-list-difficulty.easy {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .puzzle-list-difficulty.medium {
+            background-color: #fff3e0;
+            color: #ef6c00;
+        }
+
+        .puzzle-list-difficulty.hard {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+
+        [data-theme="dark"] .puzzle-list-difficulty.easy {
+            background-color: rgba(46, 125, 50, 0.2);
+            color: #81c784;
+        }
+
+        [data-theme="dark"] .puzzle-list-difficulty.medium {
+            background-color: rgba(239, 108, 0, 0.2);
+            color: #ffb74d;
+        }
+
+        [data-theme="dark"] .puzzle-list-difficulty.hard {
+            background-color: rgba(198, 40, 40, 0.2);
+            color: #ef9a9a;
+        }
+
+        .puzzle-list-arrow {
+            color: var(--text-secondary);
+            font-size: 1.2rem;
+        }
+
+        /* Slide animation for puzzle transitions */
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .puzzle-area.slide-in {
+            animation: slideInRight 0.3s ease-out;
+        }
+
+        /* Challenge Mode Styles */
+        .challenge-section {
+            margin-top: 10px;
+        }
+
+        .section-divider.challenge {
+            color: #e53935;
+        }
+
+        .section-divider.challenge::before,
+        .section-divider.challenge::after {
+            background: linear-gradient(90deg, transparent, #e53935, transparent);
+        }
+
+        .challenge-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .challenge-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            padding: 18px 10px;
+            background: linear-gradient(135deg, #e53935, #c62828);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 15px rgba(229, 57, 53, 0.3);
+        }
+
+        .challenge-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(229, 57, 53, 0.4);
+        }
+
+        .challenge-btn:active {
+            transform: translateY(-1px);
+        }
+
+        .challenge-btn .challenge-icon {
+            font-size: 1.8rem;
+        }
+
+        .challenge-btn .challenge-name {
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .challenge-btn .challenge-time {
+            font-size: 0.7rem;
+            opacity: 0.85;
+        }
+
+        /* Challenge Timer Display */
+        .challenge-timer {
+            display: none;
+            text-align: center;
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #e53935, #c62828);
+            color: white;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .challenge-timer.active {
+            display: block;
+        }
+
+        .challenge-timer .timer-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.9;
+            margin-bottom: 5px;
+        }
+
+        .challenge-timer .timer-display {
+            font-size: 1.8rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+
+        .challenge-timer.warning {
+            animation: timerPulse 1s ease-in-out infinite;
+        }
+
+        .challenge-timer.critical {
+            animation: timerPulse 0.5s ease-in-out infinite;
+        }
+
+        @keyframes timerPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* Challenge Failed/Success Overlay */
+        .challenge-result {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1001;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .challenge-result.active {
+            display: flex;
+        }
+
+        .challenge-result-content {
+            background: var(--bg-primary);
+            padding: 40px;
+            border-radius: 16px;
+            text-align: center;
+            max-width: 350px;
+            margin: 20px;
+        }
+
+        .challenge-result-content.failed {
+            border: 3px solid #e53935;
+        }
+
+        .challenge-result-content.success {
+            border: 3px solid var(--success);
+        }
+
+        .challenge-result-icon {
+            font-size: 4rem;
+            margin-bottom: 15px;
+        }
+
+        .challenge-result-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .challenge-result-content.failed .challenge-result-title {
+            color: #e53935;
+        }
+
+        .challenge-result-content.success .challenge-result-title {
+            color: var(--success);
+        }
+
+        .challenge-result-message {
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+        }
+
+        .challenge-result-btn {
+            padding: 12px 30px;
+            font-size: 1rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            background: var(--accent);
+            color: white;
+            transition: background-color 0.2s;
+        }
+
+        .challenge-result-btn:hover {
+            background: var(--accent-hover);
+        }
+
+        /* Insane Gauntlet Styles */
+        .gauntlet-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            padding: 20px 15px;
+            margin-top: 15px;
+            background: linear-gradient(135deg, #4a0080, #7b1fa2, #4a0080);
+            background-size: 200% 200%;
+            animation: insaneGradient 3s ease infinite;
+            color: white;
+            border: 2px solid #9c27b0;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 20px rgba(156, 39, 176, 0.4);
+            width: 100%;
+        }
+
+        @keyframes insaneGradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .gauntlet-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 25px rgba(156, 39, 176, 0.6);
+        }
+
+        .gauntlet-btn:active {
+            transform: translateY(-1px);
+        }
+
+        .gauntlet-btn .gauntlet-icon {
+            font-size: 2rem;
+        }
+
+        .gauntlet-btn .gauntlet-name {
+            font-size: 1.1rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .gauntlet-btn .gauntlet-desc {
+            font-size: 0.75rem;
+            opacity: 0.9;
+            text-align: center;
+        }
+
+        .gauntlet-btn .gauntlet-status {
+            font-size: 0.7rem;
+            padding: 3px 10px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            margin-top: 5px;
+        }
+
+        .puzzle-difficulty.insane {
+            background: linear-gradient(135deg, #7b1fa2, #4a0080);
+            color: white;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        .puzzle-list-difficulty.insane {
+            background: linear-gradient(135deg, #7b1fa2, #4a0080);
+            color: white;
+        }
+
+        /* Gauntlet Progress */
+        .gauntlet-progress {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .gauntlet-progress-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background-color: var(--border);
+            transition: all 0.3s;
+        }
+
+        .gauntlet-progress-dot.completed {
+            background: linear-gradient(135deg, #7b1fa2, #9c27b0);
+            box-shadow: 0 0 10px rgba(156, 39, 176, 0.6);
+        }
+
+        .gauntlet-progress-dot.current {
+            background: linear-gradient(135deg, #7b1fa2, #9c27b0);
+            transform: scale(1.3);
+            box-shadow: 0 0 15px rgba(156, 39, 176, 0.8);
+            animation: pulseDot 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulseDot {
+            0%, 100% { transform: scale(1.3); }
+            50% { transform: scale(1.5); }
+        }
+
+        /* Responsive */
+        @media (max-width: 400px) {
+            .container {
+                padding: 15px;
+            }
+
+            .ladder-letter {
+                width: 38px;
+                height: 42px;
+                font-size: 1.1rem;
+            }
+
+            .sequence-num, .sequence-input {
+                width: 50px;
+                height: 50px;
+                font-size: 1.1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <button class="back-btn hidden" id="backBtn" aria-label="Back to home">←</button>
+                <div class="title-section">
+                    <h1>Daily Puzzle</h1>
+                    <div class="day-counter" id="dayCounter">Day 1</div>
+                </div>
+            </div>
+            <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+                <span id="themeIcon">🌙</span>
+            </button>
+        </header>
+
+        <!-- Home Screen -->
+        <div class="home-screen" id="homeScreen">
+            <h2 class="home-title">Daily Puzzle</h2>
+            <p class="home-subtitle">A new challenge every day</p>
+
+            <!-- Saved Puzzle Banner (hidden by default) -->
+            <div class="saved-puzzle-card" id="savedPuzzleCard" style="display: none;">
+                <div class="saved-puzzle-info">
+                    <div class="saved-puzzle-title" id="savedPuzzleTitle">Continue your puzzle</div>
+                    <div class="saved-puzzle-details" id="savedPuzzleDetails">Day X - Word Search</div>
+                </div>
+                <div class="saved-puzzle-actions">
+                    <button class="btn btn-secondary" id="discardSavedBtn">Discard</button>
+                    <button class="btn btn-light" id="continueSavedBtn">Continue</button>
+                </div>
+            </div>
+
+            <button class="daily-puzzle-btn" id="dailyPuzzleBtn">
+                <span class="daily-puzzle-icon">🧩</span>
+                <span class="daily-puzzle-label">Today's Puzzle</span>
+                <span class="daily-puzzle-day" id="puzzleDayLabel">Day 1</span>
+                <span class="daily-puzzle-status" id="puzzleStatus"></span>
+            </button>
+
+            <div class="section-divider">
+                <span>Practice Mode</span>
+            </div>
+
+            <div class="puzzle-type-grid" id="puzzleTypeGrid">
+                <button class="puzzle-type-btn" data-type="wordsearch">
+                    <span class="puzzle-icon">🔍</span>
+                    <span class="puzzle-name">Word Search</span>
+                    <span class="puzzle-difficulty easy">Easy</span>
+                </button>
+                <button class="puzzle-type-btn" data-type="wordladder">
+                    <span class="puzzle-icon">🪜</span>
+                    <span class="puzzle-name">Word Ladder</span>
+                    <span class="puzzle-difficulty medium">Medium</span>
+                </button>
+                <button class="puzzle-type-btn" data-type="anagram">
+                    <span class="puzzle-icon">🔀</span>
+                    <span class="puzzle-name">Anagram</span>
+                    <span class="puzzle-difficulty easy">Easy</span>
+                </button>
+                <button class="puzzle-type-btn" data-type="cryptogram">
+                    <span class="puzzle-icon">🔐</span>
+                    <span class="puzzle-name">Cryptogram</span>
+                    <span class="puzzle-difficulty hard">Hard</span>
+                </button>
+                <button class="puzzle-type-btn" data-type="sequence">
+                    <span class="puzzle-icon">🔢</span>
+                    <span class="puzzle-name">Number Sequence</span>
+                    <span class="puzzle-difficulty medium">Medium</span>
+                </button>
+                <button class="puzzle-type-btn" data-type="wordguess">
+                    <span class="puzzle-icon">❓</span>
+                    <span class="puzzle-name">Word Guess</span>
+                    <span class="puzzle-difficulty easy">Easy</span>
+                </button>
+                <button class="puzzle-type-btn" data-type="mathpuzzle">
+                    <span class="puzzle-icon">🧮</span>
+                    <span class="puzzle-name">Math Puzzle</span>
+                    <span class="puzzle-difficulty hard">Hard</span>
+                </button>
+            </div>
+
+            <div class="section-divider challenge">
+                <span>Challenge Mode</span>
+            </div>
+
+            <div class="challenge-section">
+                <div class="challenge-grid">
+                    <button class="challenge-btn" data-challenge="hour">
+                        <span class="challenge-icon">⏱️</span>
+                        <span class="challenge-name">Hour</span>
+                        <span class="challenge-time">60 minutes</span>
+                    </button>
+                    <button class="challenge-btn" data-challenge="day">
+                        <span class="challenge-icon">🌅</span>
+                        <span class="challenge-name">Day</span>
+                        <span class="challenge-time">24 hours</span>
+                    </button>
+                    <button class="challenge-btn" data-challenge="week">
+                        <span class="challenge-icon">📅</span>
+                        <span class="challenge-name">Week</span>
+                        <span class="challenge-time">7 days</span>
+                    </button>
+                </div>
+                <button class="gauntlet-btn" id="insaneGauntletBtn">
+                    <span class="gauntlet-icon">💀</span>
+                    <span class="gauntlet-name">Insane Gauntlet</span>
+                    <span class="gauntlet-desc">All 7 puzzles at maximum difficulty</span>
+                    <span class="gauntlet-status" id="gauntletStatus">0/7</span>
+                </button>
+            </div>
+
+            <div class="section-divider golden">
+                <span>Special Mode</span>
+            </div>
+
+            <div class="special-mode-container">
+                <div class="special-mode-grid">
+                    <button class="special-mode-btn" id="weeklySetBtn">
+                        <span class="special-mode-icon">🏆</span>
+                        <span class="special-mode-label">Weekly Set</span>
+                        <span class="special-mode-sublabel">Complete all 7 puzzles</span>
+                        <span class="special-mode-status" id="weeklySetStatus">0/7</span>
+                    </button>
+                    <button class="special-mode-btn" id="weeklyChallengeBtn">
+                        <span class="special-mode-icon">⭐</span>
+                        <span class="special-mode-label">Weekly Challenge</span>
+                        <span class="special-mode-sublabel">One special puzzle</span>
+                        <span class="special-mode-status" id="weeklyChallengeStatus">Not started</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Weekly Set Screen -->
+        <div class="weekly-set-screen" id="weeklySetScreen">
+            <div class="puzzle-selection-header">
+                <h2>🏆 Weekly Set</h2>
+                <p>Choose your difficulty level</p>
+            </div>
+            <div class="difficulty-selection">
+                <div class="difficulty-btn-group">
+                    <button class="difficulty-select-btn easy" data-difficulty="easy">
+                        <span>Easy</span>
+                        <span class="difficulty-puzzles-count">7 puzzles</span>
+                    </button>
+                    <button class="difficulty-select-btn medium" data-difficulty="medium">
+                        <span>Medium</span>
+                        <span class="difficulty-puzzles-count">7 puzzles</span>
+                    </button>
+                    <button class="difficulty-select-btn hard" data-difficulty="hard">
+                        <span>Hard</span>
+                        <span class="difficulty-puzzles-count">7 puzzles</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Weekly Set Puzzle List Screen -->
+        <div class="weekly-set-screen" id="weeklySetPuzzleScreen">
+            <div class="puzzle-selection-header">
+                <h2>🏆 Weekly Set - <span id="weeklySetDifficultyLabel">Easy</span></h2>
+                <p>Complete all 7 puzzles this week</p>
+            </div>
+            <div class="weekly-progress" id="weeklySetProgress">
+                <!-- Progress dots will be inserted here -->
+            </div>
+            <div class="puzzle-list" id="weeklySetPuzzleList">
+                <!-- Puzzles will be dynamically inserted here -->
+            </div>
+        </div>
+
+        <!-- Puzzle Selection Screen -->
+        <div class="puzzle-selection-screen" id="puzzleSelectionScreen">
+            <div class="puzzle-selection-header">
+                <h2><span id="selectionIcon">🔍</span> <span id="selectionTitle">Word Search</span></h2>
+                <p>Choose a puzzle to play</p>
+            </div>
+            <div class="puzzle-list" id="puzzleList">
+                <!-- Puzzles will be dynamically inserted here -->
+            </div>
+        </div>
+
+        <!-- Puzzle Screen -->
+        <div class="puzzle-screen" id="puzzleScreen">
+            <div class="puzzle-type">
+                <h2 id="puzzleTitle">Loading...</h2>
+            </div>
+
+            <!-- Challenge Timer -->
+            <div class="challenge-timer" id="challengeTimer">
+                <div class="timer-label">Time Remaining</div>
+                <div class="timer-display" id="timerDisplay">00:00:00</div>
+            </div>
+
+            <div class="instructions" id="instructions"></div>
+
+            <div class="puzzle-area" id="puzzleArea"></div>
+
+            <div class="btn-container" id="btnContainer"></div>
+
+            <div class="message" id="message"></div>
+        </div>
+    </div>
+
+    <!-- Challenge Result Overlay -->
+    <div class="challenge-result" id="challengeResult">
+        <div class="challenge-result-content" id="challengeResultContent">
+            <div class="challenge-result-icon" id="challengeResultIcon">⏰</div>
+            <div class="challenge-result-title" id="challengeResultTitle">Time's Up!</div>
+            <div class="challenge-result-message" id="challengeResultMessage">You ran out of time.</div>
+            <button class="challenge-result-btn" id="challengeResultBtn">Back to Home</button>
+        </div>
+    </div>
+
+    <div class="celebration" id="celebration"></div>
+
+    <script>
+        // ============ SEEDED RANDOM NUMBER GENERATOR ============
+        function mulberry32(seed) {
+            return function() {
+                let t = seed += 0x6D2B79F5;
+                t = Math.imul(t ^ t >>> 15, t | 1);
+                t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+                return ((t ^ t >>> 14) >>> 0) / 4294967296;
+            };
+        }
+
+        function dateToSeed(dateStr) {
+            let hash = 0;
+            for (let i = 0; i < dateStr.length; i++) {
+                const char = dateStr.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
+            }
+            return Math.abs(hash);
+        }
+
+        // ============ PUZZLE DATA ============
+        const WORD_THEMES = {
+            animals: {
+                name: 'Animals',
+                easy: ['CAT', 'DOG', 'BAT', 'RAT', 'ANT', 'BEE', 'OWL', 'PIG', 'COW', 'HEN', 'FOX', 'APE', 'ELK', 'EMU', 'YAK'],
+                medium: ['TIGER', 'ZEBRA', 'EAGLE', 'SNAKE', 'WHALE', 'KOALA', 'LLAMA', 'BISON', 'LEMUR', 'RAVEN', 'MOUSE', 'HORSE', 'SHEEP', 'GOOSE', 'CRANE', 'OTTER', 'PANDA', 'SLOTH'],
+                hard: ['ELEPHANT', 'KANGAROO', 'DINOSAUR', 'DOLPHIN', 'GIRAFFE', 'PENGUIN', 'LEOPARD', 'GORILLA', 'CHEETAH', 'BUFFALO', 'OCTOPUS', 'HAMSTER', 'PEACOCK', 'PANTHER', 'RACCOON']
+            },
+            food: {
+                name: 'Food & Drinks',
+                easy: ['PIE', 'JAM', 'EGG', 'NUT', 'PEA', 'FIG', 'HAM', 'YAM', 'BUN', 'TEA', 'SOY', 'RYE', 'OAT', 'RUM', 'GIN'],
+                medium: ['APPLE', 'GRAPE', 'LEMON', 'BREAD', 'CANDY', 'JELLY', 'HONEY', 'MELON', 'PIZZA', 'SALAD', 'TOAST', 'JUICE', 'MANGO', 'FUDGE', 'PASTA', 'STEAK', 'BACON', 'CREAM'],
+                hard: ['SANDWICH', 'PANCAKES', 'BROCCOLI', 'CUCUMBER', 'MUSHROOM', 'CINNAMON', 'CHOCOLATE', 'BLUEBERRY', 'PINEAPPLE', 'SPAGHETTI', 'HAMBURGER', 'ASPARAGUS', 'CROISSANT', 'OMELETTE']
+            },
+            nature: {
+                name: 'Nature',
+                easy: ['SUN', 'SKY', 'BAY', 'OAK', 'IVY', 'ELM', 'MUD', 'DEW', 'FOG', 'ICE', 'SEA', 'BUD', 'LOG', 'ASH', 'FIR'],
+                medium: ['BEACH', 'RIVER', 'STORM', 'OCEAN', 'CLOUD', 'FLORA', 'MAPLE', 'CORAL', 'MARSH', 'FROST', 'WATER', 'EARTH', 'THORN', 'BLOOM', 'CREEK', 'GRASS', 'STONE', 'GROVE'],
+                hard: ['MOUNTAIN', 'FOUNTAIN', 'SUNSHINE', 'RAINFALL', 'VOLCANIC', 'WATERFALL', 'AVALANCHE', 'RAINFOREST', 'LIGHTNING', 'HURRICANE', 'BLIZZARD', 'WILDFIRE', 'LANDSCAPE', 'SEASHORE']
+            },
+            sports: {
+                name: 'Sports',
+                easy: ['RUN', 'BAT', 'NET', 'GYM', 'SKI', 'BOX', 'ROD', 'ACE', 'PIN', 'CUP', 'WIN', 'HIT', 'JAB', 'LAP', 'OAR'],
+                medium: ['SCORE', 'COACH', 'TRACK', 'RELAY', 'MATCH', 'KAYAK', 'ARENA', 'RUGBY', 'SKATE', 'CLIMB', 'VAULT', 'THROW', 'CATCH', 'SERVE', 'PITCH', 'DIVER', 'RACER', 'CHAMP'],
+                hard: ['MARATHON', 'TEAMWORK', 'CHAMPION', 'BASEBALL', 'FOOTBALL', 'SWIMMING', 'GYMNASTICS', 'BASKETBALL', 'WRESTLING', 'BADMINTON', 'ATHLETICS', 'SNOWBOARD', 'TRIATHLON']
+            },
+            ocean: {
+                name: 'Ocean Life',
+                easy: ['SEA', 'FIN', 'EEL', 'COD', 'BAY', 'NET', 'OAR', 'BOW', 'DAM', 'ICE', 'WET', 'DIP', 'WAX', 'TAR', 'OIL'],
+                medium: ['WHALE', 'CORAL', 'SHARK', 'OCEAN', 'BEACH', 'SHELL', 'WAVES', 'SHORE', 'TROUT', 'SQUID', 'PRAWN', 'KELPS', 'CRABS', 'REEFS', 'TIDAL', 'PEARL', 'BOATS', 'DIVER'],
+                hard: ['DOLPHINS', 'OCTOPUS', 'SEAWEED', 'JELLYFISH', 'STARFISH', 'SAILBOAT', 'LIFEBOAT', 'SEASHORE', 'MERMAIDS', 'HARPOONS', 'PLANKTON', 'SHIPWRECK', 'SUBMARINE', 'COASTLINE']
+            },
+            space: {
+                name: 'Space',
+                easy: ['SUN', 'SKY', 'GAS', 'ORB', 'JET', 'AIR', 'RAY', 'ARC', 'DIM', 'HOT', 'FAR', 'BIG', 'RED', 'ICE', 'DOT'],
+                medium: ['LUNAR', 'ORBIT', 'COMET', 'STARS', 'MARS', 'VENUS', 'EARTH', 'PLUTO', 'SOLAR', 'ALIEN', 'RADAR', 'SPACE', 'ASTRO', 'MOONS', 'ROCKS', 'PROBE', 'RINGS', 'LIGHT'],
+                hard: ['UNIVERSE', 'ASTEROID', 'SATELLITE', 'TELESCOPE', 'ASTRONAUT', 'SPACESHIP', 'SUPERNOVA', 'CELESTIAL', 'STARDUSTS', 'BLACKHOLE', 'MOONLIGHT', 'PLANETARY', 'MILKYWAY', 'GALAXIES']
+            },
+            music: {
+                name: 'Music',
+                easy: ['HUM', 'POP', 'RAP', 'JAM', 'HIT', 'MIX', 'KEY', 'SAX', 'BOW', 'TAP', 'LOW', 'BOP', 'DUO', 'GIG', 'AIR'],
+                medium: ['PIANO', 'TEMPO', 'OPERA', 'ALBUM', 'VOCAL', 'DRUMS', 'CHOIR', 'NOTES', 'FLUTE', 'BRASS', 'DANCE', 'BLUES', 'SOUND', 'BEATS', 'CHORD', 'VIOLA', 'CELLO', 'SONGS'],
+                hard: ['KEYBOARD', 'HARMONIC', 'SYMPHONY', 'XYLOPHONE', 'MUSICIAN', 'ORCHESTRA', 'CONDUCTOR', 'CLASSICAL', 'ACOUSTICS', 'COMPOSERS', 'SAXOPHONE', 'TRUMPETS', 'DRUMSTICK', 'MELODIES']
+            },
+            weather: {
+                name: 'Weather',
+                easy: ['SUN', 'FOG', 'ICE', 'WET', 'HOT', 'DRY', 'DEW', 'AIR', 'SKY', 'RAY', 'LOW', 'DAM', 'MUD', 'BAY', 'SEA'],
+                medium: ['STORM', 'FROST', 'CLOUD', 'RAINY', 'WINDY', 'SUNNY', 'SNOWY', 'FOGGY', 'MISTY', 'HAILS', 'SLEET', 'HUMID', 'FLOOD', 'BLAZE', 'DRAFT', 'GUSTY', 'CHILL', 'CLEAR'],
+                hard: ['RAINFALL', 'SUNSHINE', 'BLIZZARD', 'FORECAST', 'HUMIDITY', 'LIGHTNING', 'HURRICANE', 'SNOWSTORM', 'WINDSTORM', 'HEATWAVES', 'OVERCAST', 'DRIZZLES', 'CYCLONES', 'MONSOONS']
+            },
+            school: {
+                name: 'School',
+                easy: ['PEN', 'ART', 'MAP', 'GYM', 'LAB', 'BUS', 'INK', 'BOX', 'BAG', 'CAP', 'HAT', 'KEY', 'TOY', 'TEN', 'ADD'],
+                medium: ['PAPER', 'CHALK', 'RULER', 'DESKS', 'CHAIR', 'BOARD', 'CLASS', 'BOOKS', 'NOTES', 'GRADE', 'PUPIL', 'STUDY', 'TEACH', 'LEARN', 'WRITE', 'LUNCH', 'CLOCK', 'GLOBE'],
+                hard: ['NOTEBOOK', 'HOMEWORK', 'BACKPACK', 'CALENDAR', 'TEACHING', 'COMPUTER', 'LIBRARIES', 'CLASSROOM', 'TEXTBOOK', 'PRINCIPAL', 'EDUCATION', 'GEOGRAPHY', 'CHEMISTRY', 'HISTORIES']
+            },
+            kitchen: {
+                name: 'Kitchen',
+                easy: ['CUP', 'MUG', 'PAN', 'POT', 'JAR', 'LID', 'MOP', 'TAP', 'TIN', 'OIL', 'WAX', 'ICE', 'GAS', 'PIE', 'TEA'],
+                medium: ['PLATE', 'SPOON', 'KNIFE', 'FORKS', 'GRILL', 'OVENS', 'TOAST', 'BLEND', 'STOVE', 'DRAIN', 'APRON', 'LADLE', 'WHISK', 'BOWLS', 'TRAYS', 'TIMER', 'MIXER', 'FLASK'],
+                hard: ['BLENDERS', 'TOASTERS', 'CUPBOARD', 'MICROWAVE', 'UTENSILS', 'SAUCEPAN', 'COLANDER', 'SPATULAS', 'TABLEWARE', 'COOKWARES', 'COOKBOOKS', 'DISHWASHER', 'APPLIANCE', 'CONTAINER']
+            }
+        };
+
+        // Current theme for word search (set when puzzle loads)
+        let currentWordTheme = null;
+
+        // Keep WORD_LISTS for backward compatibility with daily puzzle
+        const WORD_LISTS = {
+            easy: Object.values(WORD_THEMES).flatMap(t => t.easy),
+            medium: Object.values(WORD_THEMES).flatMap(t => t.medium),
+            hard: Object.values(WORD_THEMES).flatMap(t => t.hard)
+        };
+
+        const WORD_LADDER_PAIRS = [
+            { start: 'CAT', end: 'DOG', steps: 3 },
+            { start: 'HEAD', end: 'TAIL', steps: 4 },
+            { start: 'COLD', end: 'WARM', steps: 4 },
+            { start: 'LOVE', end: 'HATE', steps: 4 },
+            { start: 'SLOW', end: 'FAST', steps: 4 },
+            { start: 'HARD', end: 'SOFT', steps: 4 },
+            { start: 'DARK', end: 'LITE', steps: 3 },
+            { start: 'LEAD', end: 'GOLD', steps: 3 },
+            { start: 'POOR', end: 'RICH', steps: 4 },
+            { start: 'LOSE', end: 'FIND', steps: 4 }
+        ];
+
+        const WORD_LADDER_SOLUTIONS = {
+            'CAT-DOG': ['CAT', 'COT', 'COG', 'DOG'],
+            'HEAD-TAIL': ['HEAD', 'HEAL', 'TEAL', 'TELL', 'TAIL'],
+            'COLD-WARM': ['COLD', 'CORD', 'CARD', 'WARD', 'WARM'],
+            'LOVE-HATE': ['LOVE', 'LAVE', 'HAVE', 'HIVE', 'HATE'],
+            'SLOW-FAST': ['SLOW', 'SLOT', 'SOOT', 'FOOT', 'FAST'],
+            'HARD-SOFT': ['HARD', 'HART', 'TART', 'TORT', 'SOFT'],
+            'DARK-LITE': ['DARK', 'LARK', 'LIKE', 'LITE'],
+            'LEAD-GOLD': ['LEAD', 'LOAD', 'GOAD', 'GOLD'],
+            'POOR-RICH': ['POOR', 'BOOR', 'BOOK', 'RICK', 'RICH'],
+            'LOSE-FIND': ['LOSE', 'LONE', 'LINE', 'FINE', 'FIND']
+        };
+
+        const ANAGRAM_WORDS = {
+            // 5-letter words
+            short: [
+                { word: 'BRAIN', hint: 'Thinking organ' },
+                { word: 'CHAIR', hint: 'Seat with a back' },
+                { word: 'DREAM', hint: 'Sleep vision' },
+                { word: 'EARTH', hint: 'Our planet' },
+                { word: 'FLAME', hint: 'Fire light' },
+                { word: 'GRAPE', hint: 'Wine fruit' },
+                { word: 'HEART', hint: 'Love symbol' },
+                { word: 'LEMON', hint: 'Sour citrus' },
+                { word: 'MELON', hint: 'Summer fruit' },
+                { word: 'PIANO', hint: 'Key instrument' },
+                { word: 'STORM', hint: 'Bad weather' },
+                { word: 'TIGER', hint: 'Striped big cat' }
+            ],
+            // 6-letter words
+            medium: [
+                { word: 'LISTEN', hint: 'To hear attentively' },
+                { word: 'GARDEN', hint: 'Where flowers grow' },
+                { word: 'STREAM', hint: 'A small river' },
+                { word: 'PLANET', hint: 'Earth is one' },
+                { word: 'ORANGE', hint: 'A citrus fruit' },
+                { word: 'CASTLE', hint: 'A royal home' },
+                { word: 'DESERT', hint: 'Sandy and dry place' },
+                { word: 'FOREST', hint: 'Full of trees' },
+                { word: 'MASTER', hint: 'Expert or teacher' },
+                { word: 'DANGER', hint: 'Risk or peril' },
+                { word: 'THREAD', hint: 'Used for sewing' },
+                { word: 'SILVER', hint: 'Precious metal' }
+            ],
+            // 7-letter words
+            tricky: [
+                { word: 'BLANKET', hint: 'Bed covering' },
+                { word: 'CABINET', hint: 'Storage furniture' },
+                { word: 'CHAPTER', hint: 'Book section' },
+                { word: 'DOLPHIN', hint: 'Smart sea mammal' },
+                { word: 'FANTASY', hint: 'Imagination genre' },
+                { word: 'GIRAFFE', hint: 'Tall spotted animal' },
+                { word: 'HARVEST', hint: 'Crop gathering' },
+                { word: 'JOURNEY', hint: 'Long trip' },
+                { word: 'KITCHEN', hint: 'Cooking room' },
+                { word: 'LANTERN', hint: 'Portable light' },
+                { word: 'MYSTERY', hint: 'Unknown puzzle' },
+                { word: 'THUNDER', hint: 'Storm sound' }
+            ],
+            // 8+ letter words
+            long: [
+                { word: 'ABUNDANT', hint: 'Plentiful' },
+                { word: 'BALANCED', hint: 'Equal on both sides' },
+                { word: 'CALENDAR', hint: 'Date tracker' },
+                { word: 'DAUGHTER', hint: 'Female child' },
+                { word: 'ELEPHANT', hint: 'Large grey animal' },
+                { word: 'FRACTION', hint: 'Part of whole' },
+                { word: 'GRATEFUL', hint: 'Feeling thankful' },
+                { word: 'HOSPITAL', hint: 'Medical building' },
+                { word: 'LANGUAGE', hint: 'Words system' },
+                { word: 'MOUNTAIN', hint: 'Tall landform' },
+                { word: 'SANDWICH', hint: 'Bread lunch' },
+                { word: 'UMBRELLA', hint: 'Rain protection' }
+            ]
+        };
+
+        const CRYPTOGRAM_QUOTES = [
+            // Easy (short quotes) - 1 check allowed
+            { text: 'KNOWLEDGE IS POWER', author: 'BACON', difficulty: 'easy' },
+            { text: 'STAY HUNGRY STAY FOOLISH', author: 'STEVE JOBS', difficulty: 'easy' },
+            { text: 'LESS IS MORE', author: 'MIES VAN DER ROHE', difficulty: 'easy' },
+            { text: 'THINK DIFFERENT', author: 'APPLE', difficulty: 'easy' },
+            // Medium (medium quotes) - 2 checks allowed
+            { text: 'BE THE CHANGE YOU WISH TO SEE IN THE WORLD', author: 'GANDHI', difficulty: 'medium' },
+            { text: 'TO BE OR NOT TO BE THAT IS THE QUESTION', author: 'SHAKESPEARE', difficulty: 'medium' },
+            { text: 'THE ONLY THING WE HAVE TO FEAR IS FEAR ITSELF', author: 'FDR', difficulty: 'medium' },
+            { text: 'IN THE MIDDLE OF DIFFICULTY LIES OPPORTUNITY', author: 'EINSTEIN', difficulty: 'medium' },
+            // Hard (long quotes) - 3 checks allowed
+            { text: 'LIFE IS WHAT HAPPENS WHEN YOU ARE BUSY MAKING OTHER PLANS', author: 'LENNON', difficulty: 'hard' },
+            { text: 'THE JOURNEY OF A THOUSAND MILES BEGINS WITH ONE STEP', author: 'LAO TZU', difficulty: 'hard' },
+            { text: 'THE GREATEST GLORY IN LIVING LIES NOT IN NEVER FALLING BUT IN RISING EVERY TIME WE FALL', author: 'MANDELA', difficulty: 'hard' },
+            { text: 'IN THREE WORDS I CAN SUM UP EVERYTHING I HAVE LEARNED ABOUT LIFE IT GOES ON', author: 'FROST', difficulty: 'hard' }
+        ];
+
+        const NUMBER_SEQUENCES = [
+            // Alternating operations
+            { sequence: [2, 6, 4, 12, 10], answer: 30 },  // +4, -2, +8, -2, +20 (×3 then -2)
+            { sequence: [3, 4, 6, 7, 9], answer: 10 },  // +1, +2, +1, +2...
+            { sequence: [1, 2, 6, 24, 120], answer: 720 },  // Factorials: n!
+            { sequence: [2, 3, 5, 9, 17], answer: 33 },  // ×2-1, ×2-1...
+
+            // Differences of differences
+            { sequence: [1, 2, 4, 8, 15], answer: 26 },  // 2nd diff: 1,1,2,3,4
+            { sequence: [2, 5, 11, 23, 47], answer: 95 },  // ×2+1
+            { sequence: [1, 3, 7, 15, 31], answer: 63 },  // 2^n - 1
+            { sequence: [3, 5, 9, 17, 33], answer: 65 },  // 2^n + 1
+
+            // Digit manipulation
+            { sequence: [1, 11, 21, 1211, 111221], answer: 312211 },  // Look-and-say
+            { sequence: [2, 12, 36, 80, 150], answer: 252 },  // n²(n+1)
+
+            // Multiple operations
+            { sequence: [1, 4, 13, 40, 121], answer: 364 },  // ×3+1
+            { sequence: [5, 7, 12, 19, 31], answer: 50 },  // a+b=c (like Fibonacci but starts 5,7)
+            { sequence: [2, 5, 14, 41, 122], answer: 365 },  // ×3-1
+            { sequence: [1, 2, 5, 14, 42], answer: 132 },  // Catalan numbers
+
+            // Powers and roots mixed
+            { sequence: [1, 3, 6, 10, 15, 21], answer: 28 },  // Triangular: +2,+3,+4,+5,+6,+7
+            { sequence: [2, 6, 14, 30, 62], answer: 126 },  // 2^(n+1) - 2
+            { sequence: [1, 5, 14, 30, 55], answer: 91 },  // Square pyramidal: n(n+1)(2n+1)/6
+            { sequence: [4, 9, 25, 49, 121], answer: 169 },  // Prime squares: 2²,3²,5²,7²,11²,13²
+
+            // Tricky patterns
+            { sequence: [1, 11, 111, 1111], answer: 11111 },  // Repunits
+            { sequence: [6, 28, 496], answer: 8128 },  // Perfect numbers
+            { sequence: [1, 2, 3, 5, 7, 11], answer: 15 },  // Lucas numbers
+            { sequence: [0, 1, 8, 27, 64, 125], answer: 216 },  // Cubes from 0
+            { sequence: [1, 4, 27, 256], answer: 3125 },  // n^n: 1¹,2²,3³,4⁴,5⁵
+            { sequence: [2, 8, 18, 32, 50], answer: 72 },  // 2n²
+
+            // Complex multi-step
+            { sequence: [1, 1, 2, 3, 5, 8, 13], answer: 21 },  // Fibonacci
+            { sequence: [3, 7, 16, 35, 74], answer: 153 },  // ×2+n (where n increases)
+            { sequence: [2, 3, 5, 7, 11, 13, 17], answer: 19 },  // Primes
+            { sequence: [1, 8, 9, 64, 25, 216], answer: 49 },  // 1³,2³,3²,4³,5²,6³,7² (alternating ³ and ²)
+            { sequence: [0, 3, 8, 15, 24, 35], answer: 48 },  // n² - 1
+            { sequence: [1, 3, 4, 7, 11, 18], answer: 29 },  // Tribonacci-like (a+b=c, then b+c=d)
+
+            // Really hard
+            { sequence: [2, 12, 36, 80, 150, 252], answer: 392 },  // n(n+1)²
+            { sequence: [1, 2, 6, 15, 31, 56], answer: 92 },  // Pentagonal pyramidal
+            { sequence: [3, 6, 11, 18, 27], answer: 38 },  // n² + 2
+            { sequence: [7, 26, 63, 124, 215], answer: 342 },  // n³ + n² + n + 1... actually (n+1)³-1
+            { sequence: [1, 5, 12, 22, 35], answer: 51 },  // Pentagonal numbers
+        ];
+
+        const WORD_GUESS_WORDS = [
+            { word: 'PUZZLE', hint: 'A game or problem that tests ingenuity' },
+            { word: 'BRIDGE', hint: 'Structure over water' },
+            { word: 'CANDLE', hint: 'Wax light source' },
+            { word: 'FROZEN', hint: 'Turned to ice' },
+            { word: 'GUITAR', hint: 'Six-stringed instrument' },
+            { word: 'JUNGLE', hint: 'Dense tropical forest' },
+            { word: 'KNIGHT', hint: 'Medieval warrior' },
+            { word: 'PLANET', hint: 'Orbits a star' },
+            { word: 'SPIRAL', hint: 'Winding curve shape' },
+            { word: 'VELVET', hint: 'Soft fabric' },
+            { word: 'WHISPER', hint: 'Speak very quietly' },
+            { word: 'ZOMBIE', hint: 'Undead creature' }
+        ];
+
+        // Sub-problems that have single digit answers (0-9) - HARDER versions
+        const DIGIT_PROBLEMS = [
+            // Answer: 0
+            { equation: '100 mod 10 = ?', answer: 0 },
+            { equation: '5² - 25 = ?', answer: 0 },
+            { equation: '(8 × 7) - 56 = ?', answer: 0 },
+            { equation: '√1 - 1 = ?', answer: 0 },
+
+            // Answer: 1
+            { equation: '2⁰ = ?', answer: 1 },
+            { equation: '(3² - 8) ÷ 1 = ?', answer: 1 },
+            { equation: '144 ÷ 144 = ?', answer: 1 },
+            { equation: '7 mod 6 = ?', answer: 1 },
+            { equation: '(50 - 49)² = ?', answer: 1 },
+
+            // Answer: 2
+            { equation: '√4 = ?', answer: 2 },
+            { equation: '128 ÷ 64 = ?', answer: 2 },
+            { equation: '11 mod 9 = ?', answer: 2 },
+            { equation: '(7² - 45) ÷ 2 = ?', answer: 2 },
+            { equation: '3³ - 25 = ?', answer: 2 },
+
+            // Answer: 3
+            { equation: '√9 = ?', answer: 3 },
+            { equation: '81 ÷ 27 = ?', answer: 3 },
+            { equation: '2⁵ - 29 = ?', answer: 3 },
+            { equation: '(15 × 2) ÷ 10 = ?', answer: 3 },
+            { equation: '10 mod 7 = ?', answer: 3 },
+
+            // Answer: 4
+            { equation: '2² = ?', answer: 4 },
+            { equation: '√16 = ?', answer: 4 },
+            { equation: '100 ÷ 25 = ?', answer: 4 },
+            { equation: '(3² + 7) ÷ 4 = ?', answer: 4 },
+            { equation: '2³ - 4 = ?', answer: 4 },
+
+            // Answer: 5
+            { equation: '√25 = ?', answer: 5 },
+            { equation: '125 ÷ 25 = ?', answer: 5 },
+            { equation: '3² - 4 = ?', answer: 5 },
+            { equation: '2⁴ - 11 = ?', answer: 5 },
+            { equation: '(7 × 5) ÷ 7 = ?', answer: 5 },
+
+            // Answer: 6
+            { equation: '√36 = ?', answer: 6 },
+            { equation: '3! = ?', answer: 6 },
+            { equation: '2³ - 2 = ?', answer: 6 },
+            { equation: '(4² - 10) ÷ 1 = ?', answer: 6 },
+            { equation: '42 ÷ 7 = ?', answer: 6 },
+
+            // Answer: 7
+            { equation: '√49 = ?', answer: 7 },
+            { equation: '2³ - 1 = ?', answer: 7 },
+            { equation: '(5² - 18) ÷ 1 = ?', answer: 7 },
+            { equation: '91 ÷ 13 = ?', answer: 7 },
+            { equation: '3² - 2 = ?', answer: 7 },
+
+            // Answer: 8
+            { equation: '2³ = ?', answer: 8 },
+            { equation: '√64 = ?', answer: 8 },
+            { equation: '3² - 1 = ?', answer: 8 },
+            { equation: '(100 - 36) ÷ 8 = ?', answer: 8 },
+            { equation: '4! ÷ 3 = ?', answer: 8 },
+
+            // Answer: 9
+            { equation: '3² = ?', answer: 9 },
+            { equation: '√81 = ?', answer: 9 },
+            { equation: '2⁴ - 7 = ?', answer: 9 },
+            { equation: '(5² + 2) ÷ 3 = ?', answer: 9 },
+            { equation: '108 ÷ 12 = ?', answer: 9 }
+        ];
+
+        // Main problems where the answer uses the digit answers from sub-problems
+        const MAIN_PROBLEMS = [
+            // Multi-step operations
+            { equation: '(? × 2) + 88 = 1000', answer: 456 },
+            { equation: '(? + 100) ÷ 2 = 167', answer: 234 },
+            { equation: '? × 5 - 70 = 360', answer: 86 },
+            { equation: '(1000 - ?) × 2 = 1256', answer: 372 },
+            { equation: '(? × 3) - 9 = 750', answer: 253 },
+            { equation: '(? + 50) × 4 = 2000', answer: 450 },
+            { equation: '? ÷ 5 + 123 = 200', answer: 385 },
+
+            // Squares and roots
+            { equation: '?² = 5476', answer: 74 },
+            { equation: '√? × 10 = 80', answer: 64 },
+            { equation: '?² = 7569', answer: 87 },
+            { equation: '√? + √? = 18', answer: 81 },
+            { equation: '?² - 100 = 8000', answer: 90 },
+
+            // Complex expressions with same variable
+            { equation: '(? ÷ 3) + (? ÷ 9) = 176', answer: 396 },
+            { equation: '? + (? ÷ 2) = 813', answer: 542 },
+            { equation: '(? × 4) - ? = 1926', answer: 642 },
+            { equation: '(1000 - ?) + (? ÷ 2) = 628', answer: 744 },
+            { equation: '? × 2 - ? ÷ 2 = 375', answer: 250 },
+            { equation: '(? × 3 + ?) ÷ 4 = 172', answer: 172 },
+
+            // Word-style problems
+            { equation: 'Half of ? plus 100 = 329', answer: 458 },
+            { equation: 'Triple ? minus 200 = 769', answer: 323 },
+            { equation: 'Double ? plus ? = 2055', answer: 685 },
+            { equation: '? plus quarter of ? = 625', answer: 500 },
+            { equation: 'Five times ? minus ? = 1000', answer: 250 },
+
+            // Percentages
+            { equation: '? + 25% of ? = 435', answer: 348 },
+            { equation: '? - 10% of ? = 567', answer: 630 },
+            { equation: '150% of ? = 927', answer: 618 },
+            { equation: '? + 50% of ? = 750', answer: 500 },
+            { equation: '200% of ? - 100 = 700', answer: 400 },
+
+            // Multi-number equations
+            { equation: '? + 137 + 228 = 900', answer: 535 },
+            { equation: '? × 7 ÷ 2 = 1225', answer: 350 },
+            { equation: '(? - 50) × 3 = 1284', answer: 478 },
+            { equation: '2000 ÷ ? × 10 = 50', answer: 400 },
+            { equation: '(? + 100) × 2 - 50 = 1000', answer: 425 },
+
+            // Powers and roots
+            { equation: '?³ = 512', answer: 8 },
+            { equation: '√? + 3 = 12', answer: 81 },
+            { equation: '? × ? = 2025', answer: 45 },
+            { equation: '?³ = 27000', answer: 30 },
+            { equation: '2^? = 512', answer: 9 },
+            { equation: '?² + ?² = 5000', answer: 50 },
+
+            // Difference of squares
+            { equation: '(? + 10)(? - 10) = 1500', answer: 40 },
+            { equation: '(? + 5)(? - 5) = 2000', answer: 45 },
+            { equation: '100 - (1000 ÷ ?) = 75', answer: 40 },
+
+            // Pattern-based
+            { equation: '? × 11 = 8613', answer: 783 },
+            { equation: '? × 111 = 72594', answer: 654 },
+            { equation: 'Digit sum = 18, ? ÷ 9 = 72', answer: 648 },
+            { equation: '? + reverse(?) = 1111', answer: 506 },
+            { equation: '? is palindrome, ? × 3 = 1221', answer: 407 },
+
+            // Fractions/ratios
+            { equation: '? ÷ 12 = 36', answer: 432 },
+            { equation: '3/4 of ? = 300', answer: 400 },
+            { equation: '? ÷ 8 + ? ÷ 4 = 150', answer: 400 },
+            { equation: '2/3 of ? + 100 = 500', answer: 600 },
+
+            // Challenge problems
+            { equation: 'Product of digits = 72, sum = 14', answer: 389 },
+            { equation: '? mod 7 = 0, ? mod 11 = 0', answer: 77 },
+            { equation: '? is 3-digit, all digits same, ÷9 = 37', answer: 333 },
+            { equation: 'Largest 2-digit prime', answer: 97 }
+        ];
+
+        // ============ GAME STATE ============
+        const PUZZLE_TYPES = ['wordsearch', 'wordladder', 'anagram', 'cryptogram', 'sequence', 'wordguess', 'mathpuzzle'];
+        const EPOCH_DATE = new Date('2024-01-01');
+
+        let currentDate;
+        let dayNumber;
+        let puzzleType;
+        let random;
+        let isCompleted = false;
+
+        // Practice Mode state
+        let isPracticeMode = false;
+        let practiceType = null;
+        let practicePuzzleIndex = 0;
+        let practiceSeed = 0;
+
+        // Challenge Mode state
+        let isChallengeMode = false;
+        let challengeType = null; // 'hour', 'day', 'week'
+        let challengeEndTime = null;
+        let challengeTimerInterval = null;
+        const CHALLENGE_DURATIONS = {
+            hour: 60 * 60 * 1000,        // 1 hour in ms
+            day: 24 * 60 * 60 * 1000,    // 24 hours in ms
+            week: 7 * 24 * 60 * 60 * 1000 // 7 days in ms
+        };
+
+        // Word Search state
+        let wsGrid = [];
+        let wsWords = [];
+        let wsFoundWords = [];
+        let wsSelectedCells = [];
+        let wsIsSelecting = false;
+        let wsFoundCells = []; // Track which cells are found for saving
+
+        // Saved puzzle state
+        let savedPuzzleData = null;
+        let isPlayingSavedPuzzle = false;
+
+        // Cryptogram state
+        let cryptoChecksRemaining = 0;
+        let cryptoDifficulty = 'medium';
+
+        // Word Ladder check state
+        let ladderChecksRemaining = 0;
+
+        // Anagram check state
+        let anagramChecksRemaining = 0;
+
+        // Word Guess check state
+        let wordGuessChecksRemaining = 0;
+
+        // ============ INITIALIZATION ============
+        function init() {
+            currentDate = getTodayString();
+            dayNumber = getDayNumber();
+            random = mulberry32(dateToSeed(currentDate));
+            puzzleType = PUZZLE_TYPES[dayNumber % PUZZLE_TYPES.length];
+
+            document.getElementById('dayCounter').textContent = `Day ${dayNumber}`;
+            document.getElementById('puzzleDayLabel').textContent = `Day ${dayNumber}`;
+
+            // Show completion status on home screen
+            const statusEl = document.getElementById('puzzleStatus');
+            if (checkCompleted()) {
+                statusEl.textContent = '✓ Completed';
+            } else {
+                statusEl.textContent = 'Not completed yet';
+            }
+
+            loadTheme();
+            setupThemeToggle();
+            setupNavigation();
+
+            // Check for saved puzzles
+            checkSavedPuzzles();
+
+            // Show home screen by default
+            showHomeScreen();
+        }
+
+        // ============ SAVE/LOAD PUZZLE STATE ============
+        function getSavedPuzzleKey() {
+            return 'puzzle_saved_progress';
+        }
+
+        function savePuzzleProgress(state) {
+            if (isPracticeMode) return; // Don't save practice mode
+
+            const saveData = {
+                date: currentDate,
+                dayNumber: dayNumber,
+                puzzleType: puzzleType,
+                state: state,
+                timestamp: Date.now()
+            };
+            localStorage.setItem(getSavedPuzzleKey(), JSON.stringify(saveData));
+        }
+
+        function loadSavedPuzzle() {
+            const saved = localStorage.getItem(getSavedPuzzleKey());
+            if (!saved) return null;
+
+            try {
+                return JSON.parse(saved);
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function clearSavedPuzzle() {
+            localStorage.removeItem(getSavedPuzzleKey());
+            savedPuzzleData = null;
+        }
+
+        function checkSavedPuzzles() {
+            savedPuzzleData = loadSavedPuzzle();
+
+            if (savedPuzzleData && savedPuzzleData.date !== currentDate) {
+                // There's a saved puzzle from a previous day
+                showSavedPuzzleCard();
+            } else if (savedPuzzleData && savedPuzzleData.date === currentDate) {
+                // Saved puzzle is from today - will auto-restore when playing today's puzzle
+            }
+        }
+
+        function showSavedPuzzleCard() {
+            const card = document.getElementById('savedPuzzleCard');
+            const title = document.getElementById('savedPuzzleTitle');
+            const details = document.getElementById('savedPuzzleDetails');
+
+            const puzzleNames = {
+                wordsearch: 'Word Search',
+                wordladder: 'Word Ladder',
+                anagram: 'Anagram',
+                cryptogram: 'Cryptogram',
+                sequence: 'Number Sequence',
+                wordguess: 'Word Guess',
+                mathpuzzle: 'Math Puzzle'
+            };
+
+            title.textContent = 'Continue unfinished puzzle';
+            details.textContent = `Day ${savedPuzzleData.dayNumber} - ${puzzleNames[savedPuzzleData.puzzleType]}`;
+
+            card.style.display = 'flex';
+
+            // Wire up buttons
+            document.getElementById('continueSavedBtn').onclick = () => {
+                isPlayingSavedPuzzle = true;
+                card.style.display = 'none';
+                loadSavedPuzzleGame();
+            };
+
+            document.getElementById('discardSavedBtn').onclick = () => {
+                clearSavedPuzzle();
+                card.style.display = 'none';
+            };
+        }
+
+        function loadSavedPuzzleGame() {
+            if (!savedPuzzleData) return;
+
+            // Set the game state to the saved puzzle's date
+            const savedDate = savedPuzzleData.date;
+            const savedDayNumber = savedPuzzleData.dayNumber;
+
+            // Override current date/day for this session
+            currentDate = savedDate;
+            dayNumber = savedDayNumber;
+            random = mulberry32(dateToSeed(savedDate));
+            puzzleType = savedPuzzleData.puzzleType;
+
+            document.getElementById('dayCounter').textContent = `Day ${savedDayNumber} (Saved)`;
+
+            document.getElementById('homeScreen').classList.add('hidden');
+            document.getElementById('puzzleScreen').classList.add('active');
+            document.getElementById('backBtn').classList.remove('hidden');
+
+            document.getElementById('instructions').style.display = 'block';
+
+            loadPuzzleWithState(savedPuzzleData.state);
+        }
+
+        function loadPuzzleWithState(savedState) {
+            // Load the puzzle first (this generates the same puzzle due to seeded random)
+            loadPuzzle();
+
+            // Then restore the saved state
+            setTimeout(() => {
+                restorePuzzleState(savedState);
+            }, 100);
+        }
+
+        function restorePuzzleState(savedState) {
+            switch (puzzleType) {
+                case 'wordsearch':
+                    restoreWordSearchState(savedState);
+                    break;
+                case 'wordladder':
+                    restoreWordLadderState(savedState);
+                    break;
+                case 'anagram':
+                    restoreAnagramState(savedState);
+                    break;
+                case 'cryptogram':
+                    restoreCryptogramState(savedState);
+                    break;
+                case 'sequence':
+                    restoreSequenceState(savedState);
+                    break;
+                case 'wordguess':
+                    restoreWordGuessState(savedState);
+                    break;
+                case 'mathpuzzle':
+                    restoreMathPuzzleState(savedState);
+                    break;
+            }
+        }
+
+        // Restore functions for each puzzle type
+        function restoreWordSearchState(state) {
+            if (state.foundWords) {
+                wsFoundWords = state.foundWords;
+                renderWordList();
+
+                // Mark found cells
+                if (state.foundCells) {
+                    state.foundCells.forEach(({row, col}) => {
+                        const cell = document.querySelector(`.word-search-cell[data-row="${row}"][data-col="${col}"]`);
+                        if (cell) cell.classList.add('found');
+                    });
+                }
+            }
+        }
+
+        function restoreWordLadderState(state) {
+            if (state.inputs) {
+                const inputs = document.querySelectorAll('.ladder-letter:not(.fixed)');
+                inputs.forEach((input, idx) => {
+                    if (state.inputs[idx]) {
+                        input.value = state.inputs[idx];
+                    }
+                });
+            }
+        }
+
+        function restoreAnagramState(state) {
+            if (state.input) {
+                document.getElementById('anagramInput').value = state.input;
+            }
+        }
+
+        function restoreCryptogramState(state) {
+            if (state.inputs) {
+                const inputs = document.querySelectorAll('.crypto-letter');
+                // Group by answer to restore synced letters
+                const letterMap = {};
+                state.inputs.forEach(({answer, value}) => {
+                    letterMap[answer] = value;
+                });
+
+                inputs.forEach(input => {
+                    const answer = input.dataset.answer;
+                    if (letterMap[answer]) {
+                        input.value = letterMap[answer];
+                    }
+                });
+            }
+        }
+
+        function restoreSequenceState(state) {
+            if (state.input !== undefined) {
+                document.getElementById('sequenceInput').value = state.input;
+            }
+        }
+
+        function restoreWordGuessState(state) {
+            if (state.guessedLetters && state.revealed && state.attempts !== undefined) {
+                wgGuessedLetters = state.guessedLetters;
+                wgRevealed = state.revealed;
+                wgAttempts = state.attempts;
+
+                // Update display
+                document.getElementById('guessAttempts').textContent = `Attempts remaining: ${wgAttempts}`;
+
+                // Update word display
+                for (let i = 0; i < wgWord.length; i++) {
+                    if (wgRevealed[i]) {
+                        const box = document.querySelector(`.guess-letter-box[data-index="${i}"]`);
+                        if (box) {
+                            box.textContent = wgWord[i];
+                            box.classList.add('revealed');
+                        }
+                    }
+                }
+
+                // Update keyboard
+                wgGuessedLetters.forEach(letter => {
+                    const keyBtn = document.querySelector(`.guess-key[data-letter="${letter}"]`);
+                    if (keyBtn) {
+                        keyBtn.disabled = true;
+                        if (wgWord.includes(letter)) {
+                            keyBtn.classList.add('correct');
+                        } else {
+                            keyBtn.classList.add('wrong');
+                        }
+                    }
+                });
+            }
+        }
+
+        function restoreMathPuzzleState(state) {
+            if (state.solvedDigits) {
+                state.solvedDigits.forEach(({idx, answer, digitIndex}) => {
+                    const input = document.getElementById(`subInput${idx}`);
+                    const subProblemDiv = document.getElementById(`subProblem${idx}`);
+                    const mainDigitBox = document.getElementById(`mainDigit${digitIndex}`);
+
+                    if (input && subProblemDiv && mainDigitBox) {
+                        input.value = answer;
+                        input.classList.add('correct');
+                        input.disabled = true;
+                        subProblemDiv.classList.add('solved');
+                        mainDigitBox.textContent = answer;
+                        mainDigitBox.classList.add('filled');
+                        mathDigitsSolved[digitIndex] = true;
+                    }
+                });
+            }
+        }
+
+        function setupNavigation() {
+            document.getElementById('dailyPuzzleBtn').addEventListener('click', () => {
+                isPracticeMode = false;
+                showPuzzleScreen();
+            });
+
+            document.getElementById('backBtn').addEventListener('click', () => {
+                // Clean up any active listeners
+                document.removeEventListener('keydown', handleWordGuessKeypress);
+
+                // Navigate appropriately based on current screen
+                const puzzleSelectionScreen = document.getElementById('puzzleSelectionScreen');
+                const puzzleScreen = document.getElementById('puzzleScreen');
+                const weeklySetScreen = document.getElementById('weeklySetScreen');
+                const weeklySetPuzzleScreen = document.getElementById('weeklySetPuzzleScreen');
+
+                if (puzzleScreen.classList.contains('active') && isWeeklySetMode) {
+                    // Go back to weekly set puzzle list
+                    isWeeklySetMode = false;
+                    isPracticeMode = false;
+                    document.getElementById('puzzleScreen').classList.remove('active');
+                    showWeeklySetPuzzleList();
+                } else if (puzzleScreen.classList.contains('active') && isWeeklyChallengeMode) {
+                    // Go back to home from weekly challenge
+                    isWeeklyChallengeMode = false;
+                    isPracticeMode = false;
+                    showHomeScreen();
+                } else if (puzzleScreen.classList.contains('active') && isGauntletMode) {
+                    // Go back to gauntlet puzzle list
+                    isPracticeMode = false;
+                    showGauntletPuzzleList();
+                } else if (puzzleScreen.classList.contains('active') && isChallengeMode) {
+                    // Go back to home from challenge mode (stops the timer)
+                    stopChallengeTimer();
+                    isChallengeMode = false;
+                    showHomeScreen();
+                } else if (puzzleScreen.classList.contains('active') && isPracticeMode) {
+                    // Go back to puzzle selection from practice puzzle
+                    showPuzzleSelectionScreen(practiceType);
+                } else if (weeklySetPuzzleScreen.classList.contains('active')) {
+                    // Go back to difficulty selection
+                    weeklySetPuzzleScreen.classList.remove('active');
+                    weeklySetScreen.classList.add('active');
+                } else if (weeklySetScreen.classList.contains('active')) {
+                    // Go back to home from weekly set
+                    weeklySetScreen.classList.remove('active');
+                    showHomeScreen();
+                } else if (puzzleSelectionScreen.classList.contains('active')) {
+                    // Go back to home from puzzle selection
+                    showHomeScreen();
+                } else {
+                    // Go back to home from daily puzzle
+                    showHomeScreen();
+                }
+            });
+
+            // Setup practice mode buttons
+            document.querySelectorAll('.puzzle-type-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    startPracticeMode(btn.dataset.type);
+                });
+            });
+
+            // Setup special mode buttons
+            document.getElementById('weeklySetBtn').addEventListener('click', showWeeklySetScreen);
+            document.getElementById('weeklyChallengeBtn').addEventListener('click', startWeeklyChallenge);
+
+            // Setup difficulty selection buttons
+            document.querySelectorAll('.difficulty-select-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    startWeeklySet(btn.dataset.difficulty);
+                });
+            });
+
+            // Setup challenge mode buttons
+            document.querySelectorAll('.challenge-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    showChallengePuzzleSelection(btn.dataset.challenge);
+                });
+            });
+
+            // Setup challenge result button
+            document.getElementById('challengeResultBtn').addEventListener('click', () => {
+                document.getElementById('challengeResult').classList.remove('active');
+                showHomeScreen();
+            });
+
+            // Setup insane gauntlet button
+            document.getElementById('insaneGauntletBtn').addEventListener('click', startInsaneGauntlet);
+        }
+
+        // ============ SPECIAL MODE ============
+        let isWeeklySetMode = false;
+        let isWeeklyChallengeMode = false;
+        let weeklySetDifficulty = 'easy';
+        let weeklySetCurrentIndex = 0;
+        let weeklySetCompleted = [];
+
+        function getWeekNumber() {
+            const now = new Date();
+            const start = new Date(now.getFullYear(), 0, 1);
+            const diff = now - start;
+            const oneWeek = 604800000;
+            return Math.floor(diff / oneWeek);
+        }
+
+        function getWeeklySetKey(difficulty) {
+            return `weekly_set_${getWeekNumber()}_${difficulty}`;
+        }
+
+        function getWeeklyChallengeKey() {
+            return `weekly_challenge_${getWeekNumber()}`;
+        }
+
+        function loadWeeklySetProgress(difficulty) {
+            const saved = localStorage.getItem(getWeeklySetKey(difficulty));
+            return saved ? JSON.parse(saved) : Array(7).fill(false);
+        }
+
+        function saveWeeklySetProgress(difficulty, completed) {
+            localStorage.setItem(getWeeklySetKey(difficulty), JSON.stringify(completed));
+        }
+
+        function isWeeklyChallengeCompleted() {
+            return localStorage.getItem(getWeeklyChallengeKey()) === 'completed';
+        }
+
+        function markWeeklyChallengeCompleted() {
+            localStorage.setItem(getWeeklyChallengeKey(), 'completed');
+        }
+
+        function updateSpecialModeStatus() {
+            // Update weekly set status (show best progress across difficulties)
+            let bestProgress = 0;
+            ['easy', 'medium', 'hard'].forEach(diff => {
+                const progress = loadWeeklySetProgress(diff);
+                const completed = progress.filter(p => p).length;
+                if (completed > bestProgress) bestProgress = completed;
+            });
+            document.getElementById('weeklySetStatus').textContent = `${bestProgress}/7`;
+
+            // Update weekly challenge status
+            const challengeStatus = document.getElementById('weeklyChallengeStatus');
+            if (isWeeklyChallengeCompleted()) {
+                challengeStatus.textContent = '✓ Completed';
+            } else {
+                challengeStatus.textContent = 'Not started';
+            }
+        }
+
+        function showWeeklySetScreen() {
+            document.getElementById('homeScreen').classList.add('hidden');
+            document.getElementById('weeklySetScreen').classList.add('active');
+            document.getElementById('backBtn').classList.remove('hidden');
+        }
+
+        function startWeeklySet(difficulty) {
+            weeklySetDifficulty = difficulty;
+            weeklySetCompleted = loadWeeklySetProgress(difficulty);
+            weeklySetCurrentIndex = weeklySetCompleted.findIndex(c => !c);
+            if (weeklySetCurrentIndex === -1) weeklySetCurrentIndex = 0;
+
+            document.getElementById('weeklySetScreen').classList.remove('active');
+            showWeeklySetPuzzleList();
+        }
+
+        function showWeeklySetPuzzleList() {
+            document.getElementById('homeScreen').classList.add('hidden');
+            document.getElementById('weeklySetPuzzleScreen').classList.add('active');
+            document.getElementById('backBtn').classList.remove('hidden');
+
+            const diffLabel = weeklySetDifficulty.charAt(0).toUpperCase() + weeklySetDifficulty.slice(1);
+            document.getElementById('weeklySetDifficultyLabel').textContent = diffLabel;
+
+            // Render progress dots
+            const progressContainer = document.getElementById('weeklySetProgress');
+            progressContainer.innerHTML = weeklySetCompleted.map((completed, idx) => {
+                let cls = 'weekly-progress-dot';
+                if (completed) cls += ' completed';
+                return `<div class="${cls}" data-index="${idx}"></div>`;
+            }).join('');
+
+            // Render puzzle list
+            const puzzleTypes = ['wordsearch', 'wordladder', 'anagram', 'cryptogram', 'sequence', 'wordguess', 'mathpuzzle'];
+            const puzzleList = document.getElementById('weeklySetPuzzleList');
+
+            puzzleList.innerHTML = puzzleTypes.map((type, idx) => {
+                const info = PUZZLE_INFO[type];
+                const isCompleted = weeklySetCompleted[idx];
+                const statusText = isCompleted ? '✓ Completed' : 'Not started';
+                const statusClass = isCompleted ? 'completed' : '';
+
+                return `
+                    <button class="puzzle-list-item ${statusClass}" data-type="${type}" data-index="${idx}">
+                        <div class="puzzle-list-item-left">
+                            <div class="puzzle-list-number" style="${isCompleted ? 'background-color: #d4af37;' : ''}">${idx + 1}</div>
+                            <div class="puzzle-list-info">
+                                <div class="puzzle-list-title">${info.name}</div>
+                                <div class="puzzle-list-description">${statusText}</div>
+                            </div>
+                        </div>
+                        <div class="puzzle-list-item-right">
+                            <span class="puzzle-list-difficulty ${weeklySetDifficulty}">${diffLabel}</span>
+                            <span class="puzzle-list-arrow">→</span>
+                        </div>
+                    </button>
+                `;
+            }).join('');
+
+            // Add click handlers
+            puzzleList.querySelectorAll('.puzzle-list-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const type = item.dataset.type;
+                    const index = parseInt(item.dataset.index);
+                    startWeeklySetPuzzle(type, index);
+                });
+            });
+        }
+
+        function startWeeklySetPuzzle(type, index) {
+            isWeeklySetMode = true;
+            isPracticeMode = true;
+            practiceType = type;
+            weeklySetCurrentIndex = index;
+
+            // Map difficulty to practice puzzle index
+            const difficultyMap = { easy: 0, medium: 2, hard: 4 };
+            practicePuzzleIndex = difficultyMap[weeklySetDifficulty];
+            practiceSeed = getWeekNumber() * 1000 + index;
+
+            document.getElementById('weeklySetPuzzleScreen').classList.remove('active');
+            document.getElementById('puzzleScreen').classList.add('active');
+
+            loadPracticePuzzle();
+        }
+
+        function onWeeklySetComplete() {
+            weeklySetCompleted[weeklySetCurrentIndex] = true;
+            saveWeeklySetProgress(weeklySetDifficulty, weeklySetCompleted);
+
+            setTimeout(() => {
+                isWeeklySetMode = false;
+                showWeeklySetPuzzleList();
+                updateSpecialModeStatus();
+            }, 1500);
+        }
+
+        function startWeeklyChallenge() {
+            if (isWeeklyChallengeCompleted()) {
+                // Already completed, show completion message
+                document.getElementById('homeScreen').classList.add('hidden');
+                document.getElementById('puzzleScreen').classList.add('active');
+                document.getElementById('backBtn').classList.remove('hidden');
+
+                document.getElementById('puzzleTitle').textContent = 'Weekly Challenge Complete!';
+                document.getElementById('instructions').style.display = 'none';
+                document.getElementById('puzzleArea').innerHTML = `
+                    <div class="completed-message">
+                        <h2 style="color: #d4af37;">⭐ Great job! ⭐</h2>
+                        <p>You've completed this week's challenge.</p>
+                        <p>Come back next week for a new challenge!</p>
+                    </div>
+                `;
+                document.getElementById('btnContainer').innerHTML = '';
+                return;
+            }
+
+            isWeeklyChallengeMode = true;
+            isPracticeMode = true;
+
+            // Generate consistent weekly challenge based on week number
+            const weekNum = getWeekNumber();
+            const challengeRandom = mulberry32(weekNum * 12345);
+
+            const puzzleTypes = ['wordsearch', 'wordladder', 'anagram', 'cryptogram', 'sequence', 'wordguess', 'mathpuzzle'];
+            const typeIndex = Math.floor(challengeRandom() * puzzleTypes.length);
+            practiceType = puzzleTypes[typeIndex];
+
+            // Random difficulty weighted toward medium/hard
+            const diffRoll = challengeRandom();
+            if (diffRoll < 0.2) {
+                practicePuzzleIndex = 1; // easy-medium
+            } else if (diffRoll < 0.6) {
+                practicePuzzleIndex = 2; // medium
+            } else {
+                practicePuzzleIndex = 4; // hard
+            }
+
+            practiceSeed = weekNum * 9999;
+
+            document.getElementById('homeScreen').classList.add('hidden');
+            document.getElementById('puzzleScreen').classList.add('active');
+            document.getElementById('backBtn').classList.remove('hidden');
+
+            // Show challenge info
+            const info = PUZZLE_INFO[practiceType];
+            document.getElementById('puzzleTitle').textContent = `⭐ Weekly Challenge: ${info.name}`;
+
+            loadPracticePuzzle();
+        }
+
+        function onWeeklyChallengeComplete() {
+            markWeeklyChallengeCompleted();
+            isWeeklyChallengeMode = false;
+            updateSpecialModeStatus();
+        }
+
+        // ============ INSANE GAUNTLET ============
+        let isGauntletMode = false;
+        let gauntletCurrentIndex = 0;
+        let gauntletCompleted = [];
+
+        function getGauntletKey() {
+            const today = new Date();
+            return `gauntlet_${today.getFullYear()}_${today.getMonth()}_${today.getDate()}`;
+        }
+
+        function loadGauntletProgress() {
+            const saved = localStorage.getItem(getGauntletKey());
+            return saved ? JSON.parse(saved) : Array(7).fill(false);
+        }
+
+        function saveGauntletProgress(completed) {
+            localStorage.setItem(getGauntletKey(), JSON.stringify(completed));
+        }
+
+        function updateGauntletStatus() {
+            const progress = loadGauntletProgress();
+            const completedCount = progress.filter(p => p).length;
+            document.getElementById('gauntletStatus').textContent = `${completedCount}/7`;
+        }
+
+        function startInsaneGauntlet() {
+            isGauntletMode = true;
+            gauntletCompleted = loadGauntletProgress();
+
+            document.getElementById('homeScreen').classList.add('hidden');
+            document.getElementById('puzzleScreen').classList.add('active');
+            document.getElementById('backBtn').classList.remove('hidden');
+
+            showGauntletPuzzleList();
+        }
+
+        function showGauntletPuzzleList() {
+            const puzzleTypes = ['wordsearch', 'wordladder', 'anagram', 'cryptogram', 'sequence', 'wordguess', 'mathpuzzle'];
+            const completedCount = gauntletCompleted.filter(p => p).length;
+
+            if (completedCount === 7) {
+                // All completed!
+                document.getElementById('puzzleTitle').textContent = '💀 Insane Gauntlet Complete! 💀';
+                document.getElementById('instructions').style.display = 'none';
+                document.getElementById('puzzleArea').innerHTML = `
+                    <div class="completed-message" style="text-align: center; padding: 40px;">
+                        <h2 style="color: #7b1fa2; font-size: 28px;">🏆 GAUNTLET CONQUERED! 🏆</h2>
+                        <p style="font-size: 18px; margin: 20px 0;">You've completed all 7 insane puzzles!</p>
+                        <p style="color: #7b1fa2;">You are a true puzzle master!</p>
+                    </div>
+                `;
+                document.getElementById('btnContainer').innerHTML = '';
+                return;
+            }
+
+            document.getElementById('puzzleTitle').textContent = '💀 Insane Gauntlet';
+            document.getElementById('instructions').innerHTML = `<p>Complete all 7 puzzles at INSANE difficulty!</p><p style="color: #7b1fa2; font-weight: bold;">Progress: ${completedCount}/7</p>`;
+            document.getElementById('instructions').style.display = 'block';
+
+            let html = '<div class="puzzle-type-grid">';
+            puzzleTypes.forEach((type, index) => {
+                const info = PUZZLE_INFO[type];
+                const isCompleted = gauntletCompleted[index];
+                html += `
+                    <div class="puzzle-type-card ${isCompleted ? 'completed' : ''}" onclick="startGauntletPuzzle('${type}', ${index})">
+                        <div class="puzzle-type-icon">${info.icon}</div>
+                        <div class="puzzle-type-name">${info.name}</div>
+                        <div class="puzzle-difficulty insane">${isCompleted ? '✓ Complete' : 'INSANE'}</div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+
+            document.getElementById('puzzleArea').innerHTML = html;
+            document.getElementById('btnContainer').innerHTML = '';
+        }
+
+        function startGauntletPuzzle(type, index) {
+            if (gauntletCompleted[index]) {
+                // Already completed this one
+                return;
+            }
+
+            gauntletCurrentIndex = index;
+            practiceType = type;
+            practicePuzzleIndex = 5; // Use index 5 for insane difficulty (beyond the normal 0-4)
+            isPracticeMode = true;
+
+            // Generate a seed based on date and puzzle type
+            const today = new Date();
+            practiceSeed = today.getFullYear() * 10000 + today.getMonth() * 100 + today.getDate() + index * 777;
+
+            const info = PUZZLE_INFO[type];
+            document.getElementById('puzzleTitle').textContent = `💀 ${info.name} - INSANE`;
+
+            loadPracticePuzzle();
+        }
+
+        function onGauntletPuzzleComplete() {
+            gauntletCompleted[gauntletCurrentIndex] = true;
+            saveGauntletProgress(gauntletCompleted);
+            updateGauntletStatus();
+
+            const completedCount = gauntletCompleted.filter(p => p).length;
+
+            // Show completion message briefly then return to puzzle list
+            document.getElementById('puzzleTitle').textContent = '💀 Puzzle Complete!';
+            document.getElementById('puzzleArea').innerHTML = `
+                <div class="completed-message" style="text-align: center; padding: 40px;">
+                    <h2 style="color: #7b1fa2;">✓ Insane Puzzle Conquered!</h2>
+                    <p>${completedCount}/7 puzzles completed</p>
+                </div>
+            `;
+            document.getElementById('btnContainer').innerHTML = '';
+
+            setTimeout(() => {
+                showGauntletPuzzleList();
+            }, 1500);
+        }
+
+        // ============ PRACTICE MODE ============
+        const PUZZLE_INFO = {
+            wordsearch: {
+                icon: '🔍',
+                name: 'Word Search',
+                puzzles: [
+                    { title: 'Quick Find', description: 'Find simple words in the grid', difficulty: 'easy' },
+                    { title: 'Word Hunt', description: 'Search for hidden words', difficulty: 'easy' },
+                    { title: 'Grid Challenge', description: 'Words in all directions', difficulty: 'medium' },
+                    { title: 'Expert Search', description: 'Find the hidden words', difficulty: 'medium' },
+                    { title: 'Master Grid', description: 'Tricky word placements', difficulty: 'hard' }
+                ]
+            },
+            wordladder: {
+                icon: '🪜',
+                name: 'Word Ladder',
+                puzzles: [
+                    { title: '3-Step Ladder', description: 'Transform in 3 steps', difficulty: 'easy' },
+                    { title: '4-Step Climb', description: 'Transform in 4 steps', difficulty: 'medium' },
+                    { title: 'Tricky Transform', description: 'Less obvious word path', difficulty: 'medium' },
+                    { title: 'Long Ladder', description: '5 steps to transform', difficulty: 'hard' },
+                    { title: 'Expert Climb', description: 'Challenging word pairs', difficulty: 'hard' }
+                ]
+            },
+            anagram: {
+                icon: '🔀',
+                name: 'Anagram',
+                puzzles: [
+                    { title: '5-Letter Scramble', description: 'Short word anagram', difficulty: 'easy' },
+                    { title: '6-Letter Mix', description: 'Medium word anagram', difficulty: 'easy' },
+                    { title: 'Word Jumble', description: 'Common word scrambled', difficulty: 'medium' },
+                    { title: 'Tricky Letters', description: 'Less common word', difficulty: 'medium' },
+                    { title: 'Long Word Challenge', description: '8+ letter anagram', difficulty: 'hard' }
+                ]
+            },
+            cryptogram: {
+                icon: '🔐',
+                name: 'Cryptogram',
+                puzzles: [
+                    { title: 'Short Quote', description: 'Brief encoded message', difficulty: 'medium' },
+                    { title: 'Famous Words', description: 'Well-known saying', difficulty: 'medium' },
+                    { title: 'Mystery Quote', description: 'Decode the wisdom', difficulty: 'hard' },
+                    { title: 'Long Message', description: 'Extended cipher text', difficulty: 'hard' },
+                    { title: 'Expert Cipher', description: 'Complex substitution', difficulty: 'hard' }
+                ]
+            },
+            sequence: {
+                icon: '🔢',
+                name: 'Number Sequence',
+                puzzles: [
+                    { title: 'Simple Pattern', description: 'Basic arithmetic sequence', difficulty: 'easy' },
+                    { title: 'Add & Subtract', description: 'Mixed operations', difficulty: 'easy' },
+                    { title: 'Multiply Pattern', description: 'Geometric sequence', difficulty: 'medium' },
+                    { title: 'Fibonacci Style', description: 'Additive pattern', difficulty: 'medium' },
+                    { title: 'Complex Pattern', description: 'Multi-step logic', difficulty: 'hard' }
+                ]
+            },
+            wordguess: {
+                icon: '❓',
+                name: 'Word Guess',
+                puzzles: [
+                    { title: 'Common Word', description: '5-letter everyday word', difficulty: 'easy' },
+                    { title: 'Simple Guess', description: 'Helpful hint provided', difficulty: 'easy' },
+                    { title: '6-Letter Word', description: 'Slightly longer word', difficulty: 'medium' },
+                    { title: 'Tricky Word', description: 'Less common vocabulary', difficulty: 'medium' },
+                    { title: 'Challenge Word', description: '7+ letters, harder hint', difficulty: 'hard' }
+                ]
+            },
+            mathpuzzle: {
+                icon: '🧮',
+                name: 'Math Puzzle',
+                puzzles: [
+                    { title: 'Basic Math', description: 'Simple arithmetic', difficulty: 'medium' },
+                    { title: 'Mixed Operations', description: 'Add, subtract, multiply', difficulty: 'medium' },
+                    { title: 'Multi-Step', description: 'Chain of calculations', difficulty: 'hard' },
+                    { title: 'Brain Teaser', description: 'Tricky math problems', difficulty: 'hard' },
+                    { title: 'Math Master', description: 'Complex equations', difficulty: 'hard' }
+                ]
+            }
+        };
+
+        function startPracticeMode(type) {
+            practiceType = type;
+            practiceSeed = Date.now();
+            showPuzzleSelectionScreen(type);
+        }
+
+        function showPuzzleSelectionScreen(type) {
+            const info = PUZZLE_INFO[type];
+
+            document.getElementById('homeScreen').classList.add('hidden');
+            document.getElementById('puzzleScreen').classList.remove('active');
+            document.getElementById('puzzleSelectionScreen').classList.add('active');
+            document.getElementById('backBtn').classList.remove('hidden');
+
+            document.getElementById('selectionIcon').textContent = info.icon;
+            document.getElementById('selectionTitle').textContent = info.name;
+
+            const puzzleList = document.getElementById('puzzleList');
+            puzzleList.innerHTML = info.puzzles.map((puzzle, index) => `
+                <button class="puzzle-list-item" data-type="${type}" data-index="${index}">
+                    <div class="puzzle-list-item-left">
+                        <div class="puzzle-list-number">${index + 1}</div>
+                        <div class="puzzle-list-info">
+                            <div class="puzzle-list-title">${puzzle.title}</div>
+                            <div class="puzzle-list-description">${puzzle.description}</div>
+                        </div>
+                    </div>
+                    <div class="puzzle-list-item-right">
+                        <span class="puzzle-list-difficulty ${puzzle.difficulty}">${puzzle.difficulty}</span>
+                        <span class="puzzle-list-arrow">→</span>
+                    </div>
+                </button>
+            `).join('');
+
+            // Add click handlers
+            puzzleList.querySelectorAll('.puzzle-list-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const puzzleIndex = parseInt(item.dataset.index);
+                    startSelectedPuzzle(type, puzzleIndex);
+                });
+            });
+        }
+
+        function startSelectedPuzzle(type, index) {
+            isPracticeMode = true;
+            practiceType = type;
+            practicePuzzleIndex = index;
+
+            document.getElementById('puzzleSelectionScreen').classList.remove('active');
+            document.getElementById('puzzleScreen').classList.add('active');
+
+            loadPracticePuzzle();
+        }
+
+        function loadPracticePuzzle() {
+            // Clean up any previous listeners
+            document.removeEventListener('keydown', handleWordGuessKeypress);
+
+            // Create a unique seed for each practice puzzle
+            random = mulberry32(practiceSeed + practicePuzzleIndex * 1000);
+            puzzleType = practiceType;
+            isCompleted = false;
+
+            // Reset word guess state for practice mode
+            wgWord = '';
+            wgRevealed = [];
+            wgAttempts = 6;
+            wgGuessedLetters = [];
+
+            // Clear previous message
+            document.getElementById('message').className = 'message';
+
+            loadPuzzle();
+        }
+
+        function onPracticeComplete() {
+            // Handle special modes
+            if (isWeeklySetMode) {
+                onWeeklySetComplete();
+                return;
+            }
+
+            if (isWeeklyChallengeMode) {
+                onWeeklyChallengeComplete();
+                return;
+            }
+
+            if (isGauntletMode) {
+                onGauntletPuzzleComplete();
+                return;
+            }
+
+            // Regular practice mode - go back to puzzle selection
+            setTimeout(() => {
+                showPuzzleSelectionScreen(practiceType);
+            }, 1500);
+        }
+
+        function showHomeScreen() {
+            document.getElementById('homeScreen').classList.remove('hidden');
+            document.getElementById('puzzleScreen').classList.remove('active');
+            document.getElementById('puzzleSelectionScreen').classList.remove('active');
+            document.getElementById('weeklySetScreen').classList.remove('active');
+            document.getElementById('weeklySetPuzzleScreen').classList.remove('active');
+            document.getElementById('backBtn').classList.add('hidden');
+
+            // Reset all mode states
+            isPracticeMode = false;
+            practiceType = null;
+            isWeeklySetMode = false;
+            isWeeklyChallengeMode = false;
+            isGauntletMode = false;
+            isChallengeMode = false;
+            challengeType = null;
+            stopChallengeTimer();
+            document.getElementById('challengeTimer').classList.remove('active');
+            document.getElementById('instructions').style.display = 'block';
+
+            // Update status in case it changed
+            const statusEl = document.getElementById('puzzleStatus');
+            if (checkCompleted()) {
+                statusEl.textContent = '✓ Completed';
+            }
+
+            // Update special mode status
+            updateSpecialModeStatus();
+            updateGauntletStatus();
+        }
+
+        function showPuzzleScreen() {
+            document.getElementById('homeScreen').classList.add('hidden');
+            document.getElementById('puzzleSelectionScreen').classList.remove('active');
+            document.getElementById('puzzleScreen').classList.add('active');
+            document.getElementById('backBtn').classList.remove('hidden');
+
+            // Show instructions for daily mode
+            document.getElementById('instructions').style.display = 'block';
+
+            // Reset to today's date
+            currentDate = getTodayString();
+            dayNumber = getDayNumber();
+            document.getElementById('dayCounter').textContent = `Day ${dayNumber}`;
+
+            // Reset random for daily puzzle
+            random = mulberry32(dateToSeed(currentDate));
+            puzzleType = PUZZLE_TYPES[dayNumber % PUZZLE_TYPES.length];
+
+            // Load the puzzle if not already loaded
+            if (checkCompleted()) {
+                showCompletedState();
+            } else {
+                // Check if there's saved progress from today
+                const saved = loadSavedPuzzle();
+                if (saved && saved.date === currentDate) {
+                    loadPuzzleWithState(saved.state);
+                } else {
+                    loadPuzzle();
+                }
+            }
+        }
+
+        function getTodayString() {
+            const now = new Date();
+            return now.toISOString().split('T')[0];
+        }
+
+        function getDayNumber() {
+            const now = new Date();
+            const diff = now - EPOCH_DATE;
+            return Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
+        }
+
+        function checkCompleted() {
+            const saved = localStorage.getItem(`puzzle_${currentDate}`);
+            return saved === 'completed';
+        }
+
+        function markCompleted() {
+            if (isChallengeMode) {
+                // In challenge mode, stop timer and show success
+                isCompleted = true;
+                onChallengeComplete();
+            } else if (isPracticeMode) {
+                // In practice mode, trigger the next puzzle
+                isCompleted = true;
+                onPracticeComplete();
+            } else {
+                // Daily mode - save to localStorage
+                localStorage.setItem(`puzzle_${currentDate}`, 'completed');
+                isCompleted = true;
+            }
+        }
+
+        // ============ CHALLENGE MODE ============
+        function showChallengePuzzleSelection(type) {
+            challengeType = type;
+            // Show puzzle selection screen for challenge mode
+            showPuzzleSelectionScreenForChallenge();
+        }
+
+        function showPuzzleSelectionScreenForChallenge() {
+            document.getElementById('homeScreen').classList.add('hidden');
+
+            // Create a challenge puzzle selection overlay
+            let selectionHTML = `
+                <div class="puzzle-selection-header" style="text-align: center; margin-bottom: 20px;">
+                    <h2 style="color: #e53935;">🔥 ${challengeType.charAt(0).toUpperCase() + challengeType.slice(1)} Challenge</h2>
+                    <p style="color: var(--text-secondary);">Choose your puzzle type</p>
+                    <p style="color: #e53935; font-size: 0.85rem; margin-top: 5px;">
+                        Time limit: ${challengeType === 'hour' ? '1 hour' : challengeType === 'day' ? '24 hours' : '7 days'}
+                    </p>
+                </div>
+                <div class="puzzle-type-grid">
+            `;
+
+            const puzzleTypes = [
+                { type: 'wordsearch', icon: '🔍', name: 'Word Search' },
+                { type: 'wordladder', icon: '🪜', name: 'Word Ladder' },
+                { type: 'anagram', icon: '🔀', name: 'Anagram' },
+                { type: 'cryptogram', icon: '🔐', name: 'Cryptogram' },
+                { type: 'sequence', icon: '🔢', name: 'Number Sequence' },
+                { type: 'wordguess', icon: '❓', name: 'Word Guess' },
+                { type: 'mathpuzzle', icon: '🧮', name: 'Math Puzzle' }
+            ];
+
+            puzzleTypes.forEach(p => {
+                selectionHTML += `
+                    <button class="puzzle-type-btn challenge-puzzle-select" data-type="${p.type}" style="border-color: #e53935;">
+                        <span class="puzzle-icon">${p.icon}</span>
+                        <span class="puzzle-name">${p.name}</span>
+                    </button>
+                `;
+            });
+
+            selectionHTML += '</div>';
+
+            const puzzleSelectionScreen = document.getElementById('puzzleSelectionScreen');
+            puzzleSelectionScreen.innerHTML = selectionHTML;
+            puzzleSelectionScreen.classList.add('active');
+            document.getElementById('backBtn').classList.remove('hidden');
+
+            // Add click handlers
+            document.querySelectorAll('.challenge-puzzle-select').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    startChallengeMode(btn.dataset.type);
+                });
+            });
+        }
+
+        function startChallengeMode(selectedPuzzleType) {
+            isChallengeMode = true;
+            isPracticeMode = false;
+            puzzleType = selectedPuzzleType;
+            isCompleted = false;
+
+            // Set up the timer
+            challengeEndTime = Date.now() + CHALLENGE_DURATIONS[challengeType];
+
+            // Hide selection, show puzzle
+            document.getElementById('puzzleSelectionScreen').classList.remove('active');
+            document.getElementById('puzzleScreen').classList.add('active');
+
+            // Show and start the timer
+            const timerEl = document.getElementById('challengeTimer');
+            timerEl.classList.add('active');
+            timerEl.classList.remove('warning', 'critical');
+
+            startChallengeTimer();
+
+            // Generate random seed for challenge
+            random = mulberry32(Date.now());
+
+            // Load the puzzle
+            loadPuzzle();
+        }
+
+        function startChallengeTimer() {
+            updateTimerDisplay();
+            challengeTimerInterval = setInterval(updateTimerDisplay, 1000);
+        }
+
+        function stopChallengeTimer() {
+            if (challengeTimerInterval) {
+                clearInterval(challengeTimerInterval);
+                challengeTimerInterval = null;
+            }
+            document.getElementById('challengeTimer').classList.remove('active', 'warning', 'critical');
+        }
+
+        function updateTimerDisplay() {
+            const remaining = challengeEndTime - Date.now();
+
+            if (remaining <= 0) {
+                // Time's up!
+                stopChallengeTimer();
+                showChallengeResult(false);
+                return;
+            }
+
+            const timerEl = document.getElementById('challengeTimer');
+            const displayEl = document.getElementById('timerDisplay');
+
+            // Format the time
+            const hours = Math.floor(remaining / (1000 * 60 * 60));
+            const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
+
+            if (challengeType === 'hour') {
+                displayEl.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            } else if (challengeType === 'day') {
+                displayEl.textContent = `${hours}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`;
+            } else {
+                const days = Math.floor(remaining / (1000 * 60 * 60 * 24));
+                const hrs = Math.floor((remaining % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                displayEl.textContent = `${days}d ${hrs}h ${String(minutes).padStart(2, '0')}m`;
+            }
+
+            // Add warning classes
+            timerEl.classList.remove('warning', 'critical');
+            if (challengeType === 'hour') {
+                if (remaining < 5 * 60 * 1000) { // Less than 5 minutes
+                    timerEl.classList.add('critical');
+                } else if (remaining < 15 * 60 * 1000) { // Less than 15 minutes
+                    timerEl.classList.add('warning');
+                }
+            } else if (challengeType === 'day') {
+                if (remaining < 60 * 60 * 1000) { // Less than 1 hour
+                    timerEl.classList.add('critical');
+                } else if (remaining < 3 * 60 * 60 * 1000) { // Less than 3 hours
+                    timerEl.classList.add('warning');
+                }
+            } else {
+                if (remaining < 24 * 60 * 60 * 1000) { // Less than 1 day
+                    timerEl.classList.add('critical');
+                } else if (remaining < 2 * 24 * 60 * 60 * 1000) { // Less than 2 days
+                    timerEl.classList.add('warning');
+                }
+            }
+        }
+
+        function showChallengeResult(success) {
+            const resultEl = document.getElementById('challengeResult');
+            const contentEl = document.getElementById('challengeResultContent');
+            const iconEl = document.getElementById('challengeResultIcon');
+            const titleEl = document.getElementById('challengeResultTitle');
+            const messageEl = document.getElementById('challengeResultMessage');
+
+            contentEl.classList.remove('failed', 'success');
+
+            if (success) {
+                contentEl.classList.add('success');
+                iconEl.textContent = '🏆';
+                titleEl.textContent = 'Challenge Complete!';
+                messageEl.textContent = `You beat the ${challengeType} challenge! Amazing work!`;
+                celebrate();
+            } else {
+                contentEl.classList.add('failed');
+                iconEl.textContent = '⏰';
+                titleEl.textContent = "Time's Up!";
+                messageEl.textContent = `You ran out of time on the ${challengeType} challenge. Try again!`;
+            }
+
+            resultEl.classList.add('active');
+        }
+
+        function onChallengeComplete() {
+            stopChallengeTimer();
+            showChallengeResult(true);
+        }
+
+        // ============ THEME ============
+        function loadTheme() {
+            const savedTheme = localStorage.getItem('puzzle_theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            updateThemeIcon(savedTheme);
+        }
+
+        function setupThemeToggle() {
+            document.getElementById('themeToggle').addEventListener('click', () => {
+                const current = document.documentElement.getAttribute('data-theme');
+                const next = current === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', next);
+                localStorage.setItem('puzzle_theme', next);
+                updateThemeIcon(next);
+            });
+        }
+
+        function updateThemeIcon(theme) {
+            document.getElementById('themeIcon').textContent = theme === 'dark' ? '☀️' : '🌙';
+        }
+
+        // ============ PUZZLE LOADER ============
+        function loadPuzzle() {
+            const titles = {
+                wordsearch: 'Word Search',
+                wordladder: 'Word Ladder',
+                anagram: 'Anagram',
+                cryptogram: 'Cryptogram',
+                sequence: 'Number Sequence',
+                wordguess: 'Word Guess',
+                mathpuzzle: 'Math Puzzle'
+            };
+
+            const instructions = {
+                wordsearch: 'Find all the hidden words in the grid. Words can be horizontal, vertical, or diagonal. Click and drag to select letters.',
+                wordladder: 'Transform the top word into the bottom word. Change one letter at a time, and each step must be a valid word.',
+                anagram: 'Unscramble the letters to form a word. Use the hint if you get stuck!',
+                cryptogram: 'Decode the secret message. Each letter has been replaced with another letter. Fill in the blanks to reveal the quote.',
+                sequence: 'Find the next number in the sequence. Look for the pattern!',
+                wordguess: 'Guess the word letter by letter. You have 6 attempts. Use the hint and revealed letters to help you!',
+                mathpuzzle: 'Solve each mini-equation to reveal a digit. The digits combine to form the answer to the final equation!'
+            };
+
+            document.getElementById('puzzleTitle').textContent = titles[puzzleType];
+            document.getElementById('instructions').textContent = instructions[puzzleType];
+
+            switch (puzzleType) {
+                case 'wordsearch': loadWordSearch(); break;
+                case 'wordladder': loadWordLadder(); break;
+                case 'anagram': loadAnagram(); break;
+                case 'cryptogram': loadCryptogram(); break;
+                case 'sequence': loadSequence(); break;
+                case 'wordguess': loadWordGuess(); break;
+                case 'mathpuzzle': loadMathPuzzle(); break;
+            }
+        }
+
+        // ============ WORD SEARCH ============
+        function loadWordSearch() {
+            // Determine word count and difficulty based on practice puzzle index
+            let wordCount = 12;
+            let gridSize = 14;
+            let wordDifficulty = 'medium';
+
+            if (isPracticeMode) {
+                switch (practicePuzzleIndex) {
+                    case 0: // Warm Up - 8 words
+                        wordCount = 8;
+                        gridSize = 12;
+                        wordDifficulty = 'easy';
+                        break;
+                    case 1: // Word Hunt - 10 medium words
+                        wordCount = 10;
+                        gridSize = 14;
+                        wordDifficulty = 'medium';
+                        break;
+                    case 2: // Grid Challenge - 12 words
+                        wordCount = 12;
+                        gridSize = 15;
+                        wordDifficulty = 'medium';
+                        break;
+                    case 3: // Expert Search - 15 hidden words
+                        wordCount = 15;
+                        gridSize = 16;
+                        wordDifficulty = 'medium';
+                        break;
+                    case 4: // Master Grid - 18 words
+                        wordCount = 18;
+                        gridSize = 18;
+                        wordDifficulty = 'hard';
+                        break;
+                    case 5: // INSANE - 24 words
+                        wordCount = 24;
+                        gridSize = 20;
+                        wordDifficulty = 'hard';
+                        break;
+                }
+            }
+
+            // Select a random theme
+            const themeKeys = Object.keys(WORD_THEMES);
+            const themeKey = themeKeys[Math.floor(random() * themeKeys.length)];
+            currentWordTheme = WORD_THEMES[themeKey];
+
+            wsWords = selectThemedWords(wordCount, wordDifficulty, currentWordTheme);
+            wsGrid = generateWordSearchGrid(gridSize, wsWords);
+            wsFoundWords = [];
+            wsFoundCells = [];
+
+            renderWordSearchGrid(gridSize);
+            renderWordList();
+
+            // Update the puzzle title to show the theme
+            document.getElementById('puzzleTitle').textContent = `Word Search: ${currentWordTheme.name}`;
+
+            document.getElementById('btnContainer').innerHTML = '';
+        }
+
+        function selectThemedWords(count, difficulty, theme) {
+            // Get words from the theme based on difficulty
+            let wordPool = [];
+
+            if (difficulty === 'easy') {
+                wordPool = [...theme.easy, ...theme.medium.slice(0, 5)];
+            } else if (difficulty === 'medium') {
+                wordPool = [...theme.easy, ...theme.medium, ...theme.hard.slice(0, 5)];
+            } else {
+                wordPool = [...theme.medium, ...theme.hard];
+            }
+
+            const selected = [];
+            for (let i = 0; i < count && wordPool.length > 0; i++) {
+                const idx = Math.floor(random() * wordPool.length);
+                selected.push(wordPool.splice(idx, 1)[0]);
+            }
+            return selected;
+        }
+
+        function selectRandomWords(count, difficulty = 'medium') {
+            const allWords = [...WORD_LISTS[difficulty]];
+            const selected = [];
+            for (let i = 0; i < count && allWords.length > 0; i++) {
+                const idx = Math.floor(random() * allWords.length);
+                selected.push(allWords.splice(idx, 1)[0]);
+            }
+            return selected;
+        }
+
+        function generateWordSearchGrid(size, words) {
+            const grid = Array(size).fill(null).map(() => Array(size).fill(''));
+            const directions = [
+                [0, 1],   // right
+                [1, 0],   // down
+                [1, 1],   // diagonal down-right
+                [0, -1],  // left
+                [-1, 0],  // up
+                [-1, -1], // diagonal up-left
+                [1, -1],  // diagonal down-left
+                [-1, 1]   // diagonal up-right
+            ];
+
+            for (const word of words) {
+                let placed = false;
+                let attempts = 0;
+
+                while (!placed && attempts < 100) {
+                    const dir = directions[Math.floor(random() * directions.length)];
+                    const row = Math.floor(random() * size);
+                    const col = Math.floor(random() * size);
+
+                    if (canPlaceWord(grid, word, row, col, dir, size)) {
+                        placeWord(grid, word, row, col, dir);
+                        placed = true;
+                    }
+                    attempts++;
+                }
+            }
+
+            // Fill empty cells
+            const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            for (let r = 0; r < size; r++) {
+                for (let c = 0; c < size; c++) {
+                    if (grid[r][c] === '') {
+                        grid[r][c] = letters[Math.floor(random() * letters.length)];
+                    }
+                }
+            }
+
+            return grid;
+        }
+
+        function canPlaceWord(grid, word, row, col, dir, size) {
+            for (let i = 0; i < word.length; i++) {
+                const r = row + dir[0] * i;
+                const c = col + dir[1] * i;
+                if (r < 0 || r >= size || c < 0 || c >= size) return false;
+                if (grid[r][c] !== '' && grid[r][c] !== word[i]) return false;
+            }
+            return true;
+        }
+
+        function placeWord(grid, word, row, col, dir) {
+            for (let i = 0; i < word.length; i++) {
+                grid[row + dir[0] * i][col + dir[1] * i] = word[i];
+            }
+        }
+
+        function renderWordSearchGrid(size) {
+            const area = document.getElementById('puzzleArea');
+            area.innerHTML = `
+                <div class="word-search-grid" id="wsGrid" style="grid-template-columns: repeat(${size}, 1fr);"></div>
+                <div class="word-list" id="wordList"></div>
+            `;
+
+            const gridEl = document.getElementById('wsGrid');
+            for (let r = 0; r < size; r++) {
+                for (let c = 0; c < size; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'word-search-cell';
+                    cell.textContent = wsGrid[r][c];
+                    cell.dataset.row = r;
+                    cell.dataset.col = c;
+                    gridEl.appendChild(cell);
+                }
+            }
+
+            // Touch/mouse events
+            gridEl.addEventListener('mousedown', wsStartSelect);
+            gridEl.addEventListener('mouseover', wsContinueSelect);
+            gridEl.addEventListener('mouseup', wsEndSelect);
+            gridEl.addEventListener('touchstart', wsTouchStart, { passive: false });
+            gridEl.addEventListener('touchmove', wsTouchMove, { passive: false });
+            gridEl.addEventListener('touchend', wsEndSelect);
+        }
+
+        function renderWordList() {
+            const list = document.getElementById('wordList');
+            list.innerHTML = wsWords.map(word =>
+                `<span class="word-item ${wsFoundWords.includes(word) ? 'found' : ''}">${word}</span>`
+            ).join('');
+        }
+
+        function wsStartSelect(e) {
+            if (e.target.classList.contains('word-search-cell')) {
+                wsIsSelecting = true;
+                wsSelectedCells = [e.target];
+                e.target.classList.add('selected');
+            }
+        }
+
+        function wsContinueSelect(e) {
+            if (wsIsSelecting && e.target.classList.contains('word-search-cell')) {
+                if (!wsSelectedCells.includes(e.target)) {
+                    selectCellsTo(e.target);
+                }
+            }
+        }
+
+        function wsTouchStart(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const target = document.elementFromPoint(touch.clientX, touch.clientY);
+            if (target && target.classList.contains('word-search-cell')) {
+                wsIsSelecting = true;
+                wsSelectedCells = [target];
+                target.classList.add('selected');
+            }
+        }
+
+        function wsTouchMove(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const target = document.elementFromPoint(touch.clientX, touch.clientY);
+            if (wsIsSelecting && target && target.classList.contains('word-search-cell')) {
+                if (!wsSelectedCells.includes(target)) {
+                    selectCellsTo(target);
+                }
+            }
+        }
+
+        function selectCellsTo(targetCell) {
+            const first = wsSelectedCells[0];
+            const targetRow = parseInt(targetCell.dataset.row);
+            const targetCol = parseInt(targetCell.dataset.col);
+            const firstRow = parseInt(first.dataset.row);
+            const firstCol = parseInt(first.dataset.col);
+
+            // Calculate direction from first cell to target
+            const deltaR = targetRow - firstRow;
+            const deltaC = targetCol - firstCol;
+
+            // Check if it's a valid line (horizontal, vertical, or diagonal)
+            const absDeltaR = Math.abs(deltaR);
+            const absDeltaC = Math.abs(deltaC);
+
+            // Must be in a straight line
+            if (absDeltaR !== 0 && absDeltaC !== 0 && absDeltaR !== absDeltaC) {
+                return; // Not a valid straight line
+            }
+
+            // Determine direction
+            const dirR = deltaR === 0 ? 0 : deltaR / absDeltaR;
+            const dirC = deltaC === 0 ? 0 : deltaC / absDeltaC;
+
+            // If we already have a direction established, make sure it matches
+            if (wsSelectedCells.length >= 2) {
+                const second = wsSelectedCells[1];
+                const existingDirR = parseInt(second.dataset.row) - firstRow;
+                const existingDirC = parseInt(second.dataset.col) - firstCol;
+                if (dirR !== existingDirR || dirC !== existingDirC) {
+                    return; // Direction doesn't match
+                }
+            }
+
+            // Clear current selection and rebuild from first to target
+            wsSelectedCells.forEach(cell => cell.classList.remove('selected'));
+            wsSelectedCells = [];
+
+            // Select all cells from first to target
+            let currentRow = firstRow;
+            let currentCol = firstCol;
+            const steps = Math.max(absDeltaR, absDeltaC);
+
+            for (let i = 0; i <= steps; i++) {
+                const cell = document.querySelector(`.word-search-cell[data-row="${currentRow}"][data-col="${currentCol}"]`);
+                if (cell) {
+                    wsSelectedCells.push(cell);
+                    cell.classList.add('selected');
+                }
+                currentRow += dirR;
+                currentCol += dirC;
+            }
+        }
+
+        function wsEndSelect() {
+            if (!wsIsSelecting) return;
+            wsIsSelecting = false;
+
+            const selectedWord = wsSelectedCells.map(cell => cell.textContent).join('');
+            const reversedWord = selectedWord.split('').reverse().join('');
+
+            let foundWord = null;
+            if (wsWords.includes(selectedWord) && !wsFoundWords.includes(selectedWord)) {
+                foundWord = selectedWord;
+            } else if (wsWords.includes(reversedWord) && !wsFoundWords.includes(reversedWord)) {
+                foundWord = reversedWord;
+            }
+
+            if (foundWord) {
+                wsFoundWords.push(foundWord);
+                wsSelectedCells.forEach(cell => {
+                    cell.classList.remove('selected');
+                    cell.classList.add('found');
+                    // Track found cells for saving
+                    wsFoundCells.push({
+                        row: parseInt(cell.dataset.row),
+                        col: parseInt(cell.dataset.col)
+                    });
+                });
+                renderWordList();
+
+                // Auto-save progress
+                savePuzzleProgress({
+                    foundWords: wsFoundWords,
+                    foundCells: wsFoundCells
+                });
+
+                if (wsFoundWords.length === wsWords.length) {
+                    clearSavedPuzzle(); // Clear save on completion
+                    showSuccess('Congratulations! You found all the words!');
+                    markCompleted();
+                    celebrate();
+                }
+            } else {
+                wsSelectedCells.forEach(cell => cell.classList.remove('selected'));
+            }
+
+            wsSelectedCells = [];
+        }
+
+        // ============ WORD LADDER ============
+        function loadWordLadder() {
+            const pairIdx = Math.floor(random() * WORD_LADDER_PAIRS.length);
+            const pair = WORD_LADDER_PAIRS[pairIdx];
+            const solution = WORD_LADDER_SOLUTIONS[`${pair.start}-${pair.end}`];
+
+            // Initialize check hints (4 checks for word ladder)
+            ladderChecksRemaining = 4;
+
+            const area = document.getElementById('puzzleArea');
+            let html = '<div class="word-ladder-container">';
+
+            for (let i = 0; i < solution.length; i++) {
+                const word = solution[i];
+                const isEdge = i === 0 || i === solution.length - 1;
+
+                html += '<div class="ladder-word">';
+                for (let j = 0; j < word.length; j++) {
+                    if (isEdge) {
+                        html += `<input type="text" class="ladder-letter fixed" value="${word[j]}" readonly maxlength="1">`;
+                    } else {
+                        html += `<input type="text" class="ladder-letter" data-step="${i}" data-pos="${j}" data-answer="${word[j]}" maxlength="1">`;
+                    }
+                }
+                html += '</div>';
+
+                if (i < solution.length - 1) {
+                    html += '<div class="ladder-arrow">↓</div>';
+                }
+            }
+
+            html += `<div class="checks-remaining" id="ladderChecksRemaining">Hint checks: ${ladderChecksRemaining} remaining</div>`;
+            html += '</div>';
+            area.innerHTML = html;
+
+            document.getElementById('btnContainer').innerHTML = `
+                <button class="btn btn-secondary check-hint-btn" id="checkLadderHint">Check Letters (${ladderChecksRemaining})</button>
+                <button class="btn btn-primary" id="checkLadder">Check Answer</button>
+            `;
+            document.getElementById('checkLadder').addEventListener('click', checkWordLadder);
+            document.getElementById('checkLadderHint').addEventListener('click', checkLadderHint);
+
+            // Auto-advance, auto-save, and keyboard navigation
+            const inputs = area.querySelectorAll('.ladder-letter:not(.fixed)');
+            inputs.forEach((input, idx) => {
+                input.addEventListener('input', (e) => {
+                    e.target.value = e.target.value.toUpperCase();
+                    if (e.target.value && idx < inputs.length - 1) {
+                        inputs[idx + 1].focus();
+                    }
+                    // Auto-save
+                    saveWordLadderProgress();
+                });
+
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'ArrowLeft') {
+                        e.preventDefault();
+                        if (idx > 0) {
+                            inputs[idx - 1].focus();
+                        }
+                    } else if (e.key === 'ArrowRight') {
+                        e.preventDefault();
+                        if (idx < inputs.length - 1) {
+                            inputs[idx + 1].focus();
+                        }
+                    } else if (e.key === 'Backspace') {
+                        if (input.value === '' && idx > 0) {
+                            e.preventDefault();
+                            inputs[idx - 1].value = '';
+                            inputs[idx - 1].focus();
+                            saveWordLadderProgress();
+                        }
+                    }
+                });
+            });
+        }
+
+        function saveWordLadderProgress() {
+            const inputs = document.querySelectorAll('.ladder-letter:not(.fixed)');
+            const values = Array.from(inputs).map(input => input.value);
+            savePuzzleProgress({ inputs: values });
+        }
+
+        function checkWordLadder() {
+            const inputs = document.querySelectorAll('.ladder-letter:not(.fixed)');
+            let allCorrect = true;
+
+            inputs.forEach(input => {
+                const isCorrect = input.value.toUpperCase() === input.dataset.answer;
+                input.classList.toggle('correct', isCorrect);
+                if (!isCorrect) allCorrect = false;
+            });
+
+            if (allCorrect) {
+                clearSavedPuzzle();
+                showSuccess('Perfect! You completed the word ladder!');
+                markCompleted();
+                celebrate();
+            } else {
+                showError('Not quite right. Keep trying!');
+            }
+        }
+
+        function checkLadderHint() {
+            if (ladderChecksRemaining <= 0) {
+                showError('No hint checks remaining!');
+                return;
+            }
+
+            ladderChecksRemaining--;
+
+            const inputs = document.querySelectorAll('.ladder-letter:not(.fixed)');
+            inputs.forEach(input => {
+                input.classList.remove('correct', 'incorrect');
+
+                if (input.value) {
+                    const isCorrect = input.value.toUpperCase() === input.dataset.answer;
+                    if (isCorrect) {
+                        input.classList.add('correct');
+                    } else {
+                        input.classList.add('incorrect');
+                    }
+                }
+            });
+
+            const checkBtn = document.getElementById('checkLadderHint');
+            const checksDisplay = document.getElementById('ladderChecksRemaining');
+
+            if (ladderChecksRemaining > 0) {
+                checkBtn.textContent = `Check Letters (${ladderChecksRemaining})`;
+                checksDisplay.textContent = `Hint checks: ${ladderChecksRemaining} remaining`;
+            } else {
+                checkBtn.textContent = 'No Checks Left';
+                checkBtn.disabled = true;
+                checksDisplay.textContent = 'No hint checks remaining';
+            }
+
+            // Clear the highlighting after 3 seconds
+            setTimeout(() => {
+                inputs.forEach(input => {
+                    input.classList.remove('correct', 'incorrect');
+                });
+            }, 3000);
+        }
+
+        // ============ ANAGRAM ============
+        function loadAnagram() {
+            // Select word list based on practice mode
+            let wordList;
+            if (isPracticeMode) {
+                switch (practicePuzzleIndex) {
+                    case 0: wordList = ANAGRAM_WORDS.short; break;   // 5-Letter Scramble
+                    case 1: wordList = ANAGRAM_WORDS.medium; break;  // 6-Letter Mix
+                    case 2: wordList = ANAGRAM_WORDS.medium; break;  // Word Jumble
+                    case 3: wordList = ANAGRAM_WORDS.tricky; break;  // Tricky Letters
+                    case 4: wordList = ANAGRAM_WORDS.long; break;    // Long Word Challenge
+                    case 5: wordList = ANAGRAM_WORDS.long; break;    // INSANE - longest words, no hint
+                    default: wordList = ANAGRAM_WORDS.medium; break;
+                }
+            } else {
+                // Daily puzzle - pick from all lists randomly
+                const allLists = ['short', 'medium', 'tricky', 'long'];
+                const listName = allLists[Math.floor(random() * allLists.length)];
+                wordList = ANAGRAM_WORDS[listName];
+            }
+
+            const idx = Math.floor(random() * wordList.length);
+            const puzzle = wordList[idx];
+            const scrambled = scrambleWord(puzzle.word);
+
+            // Initialize check hints (fewer for insane mode)
+            anagramChecksRemaining = (practicePuzzleIndex === 5) ? 1 : 3;
+            const hideHint = (practicePuzzleIndex === 5);
+
+            const area = document.getElementById('puzzleArea');
+            area.innerHTML = `
+                <div class="anagram-container">
+                    <div class="scrambled-word">${scrambled}</div>
+                    ${hideHint ? '' : `<div class="anagram-hint">Hint: ${puzzle.hint}</div>`}
+                    <input type="text" class="anagram-input" id="anagramInput" maxlength="${puzzle.word.length}" placeholder="Your answer" data-answer="${puzzle.word}">
+                    <div class="anagram-feedback" id="anagramFeedback"></div>
+                    <div class="checks-remaining" id="anagramChecksRemaining">Hint checks: ${anagramChecksRemaining} remaining</div>
+                </div>
+            `;
+
+            document.getElementById('btnContainer').innerHTML = `
+                <button class="btn btn-secondary check-hint-btn" id="checkAnagramHint">Check Letters (${anagramChecksRemaining})</button>
+                <button class="btn btn-primary" id="checkAnagram">Check Answer</button>
+            `;
+            document.getElementById('checkAnagram').addEventListener('click', checkAnagram);
+            document.getElementById('checkAnagramHint').addEventListener('click', checkAnagramHint);
+
+            const anagramInput = document.getElementById('anagramInput');
+            anagramInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') checkAnagram();
+            });
+            anagramInput.addEventListener('input', () => {
+                savePuzzleProgress({ input: anagramInput.value });
+            });
+        }
+
+        function scrambleWord(word) {
+            const arr = word.split('');
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            // Make sure it's actually scrambled
+            if (arr.join('') === word) {
+                [arr[0], arr[1]] = [arr[1], arr[0]];
+            }
+            return arr.join('');
+        }
+
+        function checkAnagram() {
+            const input = document.getElementById('anagramInput');
+            const userAnswer = input.value.toUpperCase().trim();
+            const correctAnswer = input.dataset.answer;
+
+            if (userAnswer === correctAnswer) {
+                clearSavedPuzzle();
+                showSuccess('Excellent! You solved the anagram!');
+                markCompleted();
+                celebrate();
+            } else {
+                showError('Not quite. Try again!');
+            }
+        }
+
+        function checkAnagramHint() {
+            if (anagramChecksRemaining <= 0) {
+                showError('No hint checks remaining!');
+                return;
+            }
+
+            anagramChecksRemaining--;
+
+            const input = document.getElementById('anagramInput');
+            const userAnswer = input.value.toUpperCase();
+            const correctAnswer = input.dataset.answer;
+            const feedbackDiv = document.getElementById('anagramFeedback');
+
+            // Build visual feedback for each letter
+            let feedbackHtml = '';
+            for (let i = 0; i < correctAnswer.length; i++) {
+                const userLetter = userAnswer[i] || '';
+                const isCorrect = userLetter === correctAnswer[i];
+                const cssClass = userLetter ? (isCorrect ? 'correct' : 'incorrect') : '';
+                feedbackHtml += `<div class="anagram-letter-box ${cssClass}">${userLetter || ''}</div>`;
+            }
+            feedbackDiv.innerHTML = feedbackHtml;
+
+            const checkBtn = document.getElementById('checkAnagramHint');
+            const checksDisplay = document.getElementById('anagramChecksRemaining');
+
+            if (anagramChecksRemaining > 0) {
+                checkBtn.textContent = `Check Letters (${anagramChecksRemaining})`;
+                checksDisplay.textContent = `Hint checks: ${anagramChecksRemaining} remaining`;
+            } else {
+                checkBtn.textContent = 'No Checks Left';
+                checkBtn.disabled = true;
+                checksDisplay.textContent = 'No hint checks remaining';
+            }
+
+            // Clear the feedback after 3 seconds
+            setTimeout(() => {
+                feedbackDiv.innerHTML = '';
+            }, 3000);
+        }
+
+        // ============ CRYPTOGRAM ============
+        function loadCryptogram() {
+            const idx = Math.floor(random() * CRYPTOGRAM_QUOTES.length);
+            const quote = CRYPTOGRAM_QUOTES[idx];
+            const cipher = generateCipher();
+
+            // Set checks based on difficulty
+            cryptoDifficulty = quote.difficulty || 'medium';
+            const checksMap = { easy: 4, medium: 8, hard: 12 };
+            cryptoChecksRemaining = checksMap[cryptoDifficulty];
+
+            const area = document.getElementById('puzzleArea');
+            let html = '<div class="cryptogram-container"><div class="cryptogram-text">';
+
+            // Split into words and wrap each word to prevent line breaks within words
+            const words = quote.text.split(' ');
+            words.forEach((word, wordIdx) => {
+                html += '<span class="crypto-word">';
+                for (const char of word) {
+                    if (char >= 'A' && char <= 'Z') {
+                        const encoded = cipher[char];
+                        html += `<span class="crypto-char">
+                            <input type="text" class="crypto-letter" maxlength="1" data-answer="${char}">
+                            <span class="crypto-hint">${encoded}</span>
+                        </span>`;
+                    } else {
+                        html += `<span class="crypto-punct">${char}</span>`;
+                    }
+                }
+                html += '</span>';
+                // Add space between words (except after last word)
+                if (wordIdx < words.length - 1) {
+                    html += '<span class="crypto-space"> </span>';
+                }
+            });
+
+            html += `</div><p style="margin-top: 20px; color: var(--text-secondary);">— ${quote.author}</p>`;
+            html += `<div class="checks-remaining" id="checksRemaining">Hint checks: ${cryptoChecksRemaining} remaining</div>`;
+            html += '</div>';
+            area.innerHTML = html;
+
+            document.getElementById('btnContainer').innerHTML = `
+                <button class="btn btn-secondary check-hint-btn" id="checkHint">Check Letters (${cryptoChecksRemaining})</button>
+                <button class="btn btn-primary" id="checkCrypto">Submit Answer</button>
+            `;
+            document.getElementById('checkCrypto').addEventListener('click', checkCryptogram);
+            document.getElementById('checkHint').addEventListener('click', checkCryptoHint);
+
+            // Auto-advance, sync same letters, and keyboard navigation
+            const inputs = area.querySelectorAll('.crypto-letter');
+            inputs.forEach((input, idx) => {
+                input.addEventListener('input', (e) => {
+                    const val = e.target.value.toUpperCase();
+                    e.target.value = val;
+
+                    // Sync all inputs with same answer
+                    const answer = e.target.dataset.answer;
+                    inputs.forEach(other => {
+                        if (other.dataset.answer === answer) {
+                            other.value = val;
+                        }
+                    });
+
+                    // Auto-advance
+                    if (val && idx < inputs.length - 1) {
+                        inputs[idx + 1].focus();
+                    }
+
+                    // Auto-save
+                    saveCryptogramProgress();
+                });
+
+                input.addEventListener('keydown', (e) => {
+                    // Arrow key navigation
+                    if (e.key === 'ArrowLeft') {
+                        e.preventDefault();
+                        if (idx > 0) {
+                            inputs[idx - 1].focus();
+                        }
+                    } else if (e.key === 'ArrowRight') {
+                        e.preventDefault();
+                        if (idx < inputs.length - 1) {
+                            inputs[idx + 1].focus();
+                        }
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        // Move up roughly one line (estimate ~15 chars per line)
+                        const targetIdx = Math.max(0, idx - 15);
+                        inputs[targetIdx].focus();
+                    } else if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        // Move down roughly one line
+                        const targetIdx = Math.min(inputs.length - 1, idx + 15);
+                        inputs[targetIdx].focus();
+                    } else if (e.key === 'Backspace') {
+                        if (input.value === '' && idx > 0) {
+                            e.preventDefault();
+                            // Clear previous input and move to it
+                            const prevInput = inputs[idx - 1];
+                            const prevAnswer = prevInput.dataset.answer;
+                            // Clear all inputs with same answer
+                            inputs.forEach(other => {
+                                if (other.dataset.answer === prevAnswer) {
+                                    other.value = '';
+                                }
+                            });
+                            prevInput.focus();
+                            saveCryptogramProgress();
+                        }
+                    }
+                });
+            });
+        }
+
+        function saveCryptogramProgress() {
+            const inputs = document.querySelectorAll('.crypto-letter');
+            const uniqueAnswers = {};
+            inputs.forEach(input => {
+                if (input.value) {
+                    uniqueAnswers[input.dataset.answer] = input.value;
+                }
+            });
+            const inputData = Object.entries(uniqueAnswers).map(([answer, value]) => ({answer, value}));
+            savePuzzleProgress({ inputs: inputData });
+        }
+
+        function generateCipher() {
+            const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+            const shuffled = [...letters];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+
+            const cipher = {};
+            for (let i = 0; i < 26; i++) {
+                // Ensure no letter maps to itself
+                if (shuffled[i] === letters[i]) {
+                    const swapIdx = (i + 1) % 26;
+                    [shuffled[i], shuffled[swapIdx]] = [shuffled[swapIdx], shuffled[i]];
+                }
+                cipher[letters[i]] = shuffled[i];
+            }
+            return cipher;
+        }
+
+        function checkCryptogram() {
+            const inputs = document.querySelectorAll('.crypto-letter');
+            let allCorrect = true;
+
+            inputs.forEach(input => {
+                const isCorrect = input.value.toUpperCase() === input.dataset.answer;
+                input.classList.toggle('correct', isCorrect);
+                if (!isCorrect && input.value) allCorrect = false;
+                if (!input.value) allCorrect = false;
+            });
+
+            if (allCorrect) {
+                clearSavedPuzzle();
+                showSuccess('Brilliant! You cracked the code!');
+                markCompleted();
+                celebrate();
+            } else {
+                showError('Not all letters are correct. Keep trying!');
+            }
+        }
+
+        function checkCryptoHint() {
+            if (cryptoChecksRemaining <= 0) {
+                showError('No hint checks remaining!');
+                return;
+            }
+
+            cryptoChecksRemaining--;
+
+            const inputs = document.querySelectorAll('.crypto-letter');
+            inputs.forEach(input => {
+                // Remove previous check styling
+                input.classList.remove('correct', 'incorrect', 'unchecked');
+
+                if (input.value) {
+                    const isCorrect = input.value.toUpperCase() === input.dataset.answer;
+                    if (isCorrect) {
+                        input.classList.add('correct');
+                    } else {
+                        input.classList.add('incorrect');
+                    }
+                }
+            });
+
+            // Update button and display
+            const checkBtn = document.getElementById('checkHint');
+            const checksDisplay = document.getElementById('checksRemaining');
+
+            if (cryptoChecksRemaining > 0) {
+                checkBtn.textContent = `Check Letters (${cryptoChecksRemaining})`;
+                checksDisplay.textContent = `Hint checks: ${cryptoChecksRemaining} remaining`;
+            } else {
+                checkBtn.textContent = 'No Checks Left';
+                checkBtn.disabled = true;
+                checksDisplay.textContent = 'No hint checks remaining';
+            }
+
+            // Clear the highlighting after 3 seconds
+            setTimeout(() => {
+                inputs.forEach(input => {
+                    input.classList.remove('correct', 'incorrect');
+                });
+            }, 3000);
+        }
+
+        // ============ NUMBER SEQUENCE ============
+        function loadSequence() {
+            const idx = Math.floor(random() * NUMBER_SEQUENCES.length);
+            const puzzle = NUMBER_SEQUENCES[idx];
+
+            const area = document.getElementById('puzzleArea');
+            let html = '<div class="sequence-container"><div class="sequence-numbers">';
+
+            puzzle.sequence.forEach(num => {
+                html += `<div class="sequence-num">${num}</div>`;
+            });
+
+            html += `<input type="number" class="sequence-input" id="sequenceInput" data-answer="${puzzle.answer}" step="any">`;
+            html += `</div></div>`;
+
+            area.innerHTML = html;
+
+            document.getElementById('btnContainer').innerHTML = '<button class="btn btn-primary" id="checkSequence">Check Answer</button>';
+            document.getElementById('checkSequence').addEventListener('click', checkSequence);
+
+            const seqInput = document.getElementById('sequenceInput');
+            seqInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') checkSequence();
+            });
+            seqInput.addEventListener('input', () => {
+                savePuzzleProgress({ input: seqInput.value });
+            });
+        }
+
+        function checkSequence() {
+            const input = document.getElementById('sequenceInput');
+            const userAnswer = parseFloat(input.value);
+            const correctAnswer = parseFloat(input.dataset.answer);
+
+            if (Math.abs(userAnswer - correctAnswer) < 0.01) {
+                clearSavedPuzzle();
+                showSuccess('Correct! You found the pattern!');
+                markCompleted();
+                celebrate();
+            } else {
+                showError('That\'s not right. Look at the pattern again.');
+            }
+        }
+
+        // ============ WORD GUESS ============
+        let wgWord = '';
+        let wgRevealed = [];
+        let wgAttempts = 6;
+        let wgGuessedLetters = [];
+
+        function loadWordGuess() {
+            const idx = Math.floor(random() * WORD_GUESS_WORDS.length);
+            const puzzle = WORD_GUESS_WORDS[idx];
+            wgWord = puzzle.word;
+            wgRevealed = Array(wgWord.length).fill(false);
+            // Fewer attempts for insane mode
+            wgAttempts = (practicePuzzleIndex === 5) ? 4 : 6;
+            wgGuessedLetters = [];
+
+            // Initialize check hints (0 reveals for insane mode)
+            wordGuessChecksRemaining = (practicePuzzleIndex === 5) ? 0 : 3;
+
+            // Hide hint for insane mode
+            const hintText = (practicePuzzleIndex === 5) ? null : puzzle.hint;
+            renderWordGuess(hintText);
+        }
+
+        function renderWordGuess(hint) {
+            const area = document.getElementById('puzzleArea');
+            let html = '<div class="word-guess-container">';
+            if (hint) {
+                html += `<div class="guess-hint">Hint: ${hint}</div>`;
+            }
+            html += '<div class="guess-word-display" id="guessWordDisplay">';
+            for (let i = 0; i < wgWord.length; i++) {
+                html += `<div class="guess-letter-box" data-index="${i}">_</div>`;
+            }
+            html += '</div>';
+            html += `<div class="guess-attempts" id="guessAttempts">Attempts remaining: ${wgAttempts}</div>`;
+            html += `<div class="checks-remaining" id="wordGuessChecksRemaining">Free reveals: ${wordGuessChecksRemaining} remaining</div>`;
+            html += '<div class="guess-keyboard" id="guessKeyboard">';
+            for (const letter of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') {
+                html += `<button class="guess-key" data-letter="${letter}">${letter}</button>`;
+            }
+            html += '</div></div>';
+
+            area.innerHTML = html;
+            document.getElementById('btnContainer').innerHTML = `
+                <button class="btn btn-secondary check-hint-btn" id="revealLetterBtn">Reveal Letter (${wordGuessChecksRemaining})</button>
+            `;
+            document.getElementById('revealLetterBtn').addEventListener('click', revealWordGuessLetter);
+
+            // Add keyboard listeners
+            document.querySelectorAll('.guess-key').forEach(key => {
+                key.addEventListener('click', () => guessLetter(key.dataset.letter));
+            });
+
+            // Physical keyboard support
+            document.addEventListener('keydown', handleWordGuessKeypress);
+        }
+
+        function handleWordGuessKeypress(e) {
+            if (puzzleType !== 'wordguess' || isCompleted) return;
+            const letter = e.key.toUpperCase();
+            if (letter >= 'A' && letter <= 'Z' && !wgGuessedLetters.includes(letter)) {
+                guessLetter(letter);
+            }
+        }
+
+        function guessLetter(letter) {
+            if (wgGuessedLetters.includes(letter) || isCompleted) return;
+            wgGuessedLetters.push(letter);
+
+            const keyBtn = document.querySelector(`.guess-key[data-letter="${letter}"]`);
+            if (!keyBtn) return;
+            keyBtn.disabled = true;
+
+            if (wgWord.includes(letter)) {
+                // Correct guess
+                keyBtn.classList.add('correct');
+                for (let i = 0; i < wgWord.length; i++) {
+                    if (wgWord[i] === letter) {
+                        wgRevealed[i] = true;
+                        const box = document.querySelector(`.guess-letter-box[data-index="${i}"]`);
+                        box.textContent = letter;
+                        box.classList.add('revealed');
+                    }
+                }
+
+                // Auto-save progress
+                saveWordGuessProgress();
+
+                // Check win
+                if (wgRevealed.every(r => r)) {
+                    document.removeEventListener('keydown', handleWordGuessKeypress);
+                    clearSavedPuzzle(); // Clear save on completion
+                    showSuccess('Congratulations! You guessed the word!');
+                    markCompleted();
+                    celebrate();
+                }
+            } else {
+                // Wrong guess
+                keyBtn.classList.add('wrong');
+                wgAttempts--;
+                document.getElementById('guessAttempts').textContent = `Attempts remaining: ${wgAttempts}`;
+
+                // Auto-save progress
+                saveWordGuessProgress();
+
+                if (wgAttempts <= 0) {
+                    // Game over - reveal word
+                    document.removeEventListener('keydown', handleWordGuessKeypress);
+                    for (let i = 0; i < wgWord.length; i++) {
+                        const box = document.querySelector(`.guess-letter-box[data-index="${i}"]`);
+                        box.textContent = wgWord[i];
+                    }
+                    showError(`Game over! The word was: ${wgWord}`);
+                    document.querySelectorAll('.guess-key').forEach(k => k.disabled = true);
+
+                    // In practice mode, move to next puzzle after delay
+                    if (isPracticeMode) {
+                        isCompleted = true;
+                        setTimeout(() => {
+                            onPracticeComplete();
+                        }, 2000);
+                    }
+                }
+            }
+        }
+
+        function saveWordGuessProgress() {
+            savePuzzleProgress({
+                guessedLetters: wgGuessedLetters,
+                revealed: wgRevealed,
+                attempts: wgAttempts
+            });
+        }
+
+        function revealWordGuessLetter() {
+            if (wordGuessChecksRemaining <= 0 || isCompleted) {
+                showError('No free reveals remaining!');
+                return;
+            }
+
+            // Find unrevealed letter positions
+            const unrevealedPositions = [];
+            for (let i = 0; i < wgWord.length; i++) {
+                if (!wgRevealed[i]) {
+                    unrevealedPositions.push(i);
+                }
+            }
+
+            if (unrevealedPositions.length === 0) {
+                return;
+            }
+
+            wordGuessChecksRemaining--;
+
+            // Pick a random unrevealed position
+            const randomIdx = Math.floor(Math.random() * unrevealedPositions.length);
+            const posToReveal = unrevealedPositions[randomIdx];
+            const letterToReveal = wgWord[posToReveal];
+
+            // Reveal this letter (similar to guessLetter but without wrong guess penalty)
+            if (!wgGuessedLetters.includes(letterToReveal)) {
+                wgGuessedLetters.push(letterToReveal);
+                const keyBtn = document.querySelector(`.guess-key[data-letter="${letterToReveal}"]`);
+                if (keyBtn) {
+                    keyBtn.disabled = true;
+                    keyBtn.classList.add('correct');
+                }
+            }
+
+            // Reveal all positions of this letter
+            for (let i = 0; i < wgWord.length; i++) {
+                if (wgWord[i] === letterToReveal) {
+                    wgRevealed[i] = true;
+                    const box = document.querySelector(`.guess-letter-box[data-index="${i}"]`);
+                    box.textContent = letterToReveal;
+                    box.classList.add('revealed');
+                }
+            }
+
+            // Update button and display
+            const revealBtn = document.getElementById('revealLetterBtn');
+            const checksDisplay = document.getElementById('wordGuessChecksRemaining');
+
+            if (wordGuessChecksRemaining > 0) {
+                revealBtn.textContent = `Reveal Letter (${wordGuessChecksRemaining})`;
+                checksDisplay.textContent = `Free reveals: ${wordGuessChecksRemaining} remaining`;
+            } else {
+                revealBtn.textContent = 'No Reveals Left';
+                revealBtn.disabled = true;
+                checksDisplay.textContent = 'No free reveals remaining';
+            }
+
+            // Auto-save progress
+            saveWordGuessProgress();
+
+            // Check win
+            if (wgRevealed.every(r => r)) {
+                document.removeEventListener('keydown', handleWordGuessKeypress);
+                clearSavedPuzzle();
+                showSuccess('Congratulations! You guessed the word!');
+                markCompleted();
+                celebrate();
+            }
+        }
+
+        // ============ MATH PUZZLE ============
+        let mathMainAnswer = '';
+        let mathDigitsSolved = [];
+
+        function loadMathPuzzle() {
+            // Select a main problem
+            const mainIdx = Math.floor(random() * MAIN_PROBLEMS.length);
+            const mainProblem = MAIN_PROBLEMS[mainIdx];
+            mathMainAnswer = String(mainProblem.answer);
+            const numDigits = mathMainAnswer.length;
+            mathDigitsSolved = Array(numDigits).fill(false);
+
+            // Get sub-problems for each digit
+            const subProblems = [];
+            const usedProblems = new Set();
+
+            for (let i = 0; i < numDigits; i++) {
+                const targetDigit = parseInt(mathMainAnswer[i]);
+                // Find problems that have this digit as answer
+                const matching = DIGIT_PROBLEMS.filter((p, idx) =>
+                    p.answer === targetDigit && !usedProblems.has(idx)
+                );
+
+                if (matching.length > 0) {
+                    const selectedIdx = Math.floor(random() * matching.length);
+                    const originalIdx = DIGIT_PROBLEMS.findIndex(p => p === matching[selectedIdx]);
+                    usedProblems.add(originalIdx);
+                    subProblems.push({ ...matching[selectedIdx], digitIndex: i });
+                } else {
+                    // Fallback: create a simple problem
+                    subProblems.push({
+                        equation: `${targetDigit} + 0 = ?`,
+                        answer: targetDigit,
+                        digitIndex: i
+                    });
+                }
+            }
+
+            const area = document.getElementById('puzzleArea');
+            let html = '<div class="math-puzzle-container">';
+
+            // Sub-problems
+            html += '<div class="math-sub-problems">';
+            subProblems.forEach((prob, idx) => {
+                html += `
+                    <div class="math-sub-problem" id="subProblem${idx}">
+                        <div class="sub-problem-label">Digit ${idx + 1}</div>
+                        <div class="sub-problem-equation">${prob.equation}</div>
+                        <input type="number" class="sub-problem-input" id="subInput${idx}"
+                               data-answer="${prob.answer}" data-digit-index="${prob.digitIndex}"
+                               min="0" max="9" placeholder="?">
+                    </div>
+                `;
+            });
+            html += '</div>';
+
+            // Divider
+            html += '<div class="math-divider"></div>';
+
+            // Main problem
+            html += `
+                <div class="math-main-problem">
+                    <div class="main-problem-label">FINAL ANSWER</div>
+                    <div class="main-problem-equation">${mainProblem.equation}</div>
+                    <div class="main-problem-answer">
+                        ${mathMainAnswer.split('').map((_, i) =>
+                            `<div class="main-digit-box" id="mainDigit${i}">?</div>`
+                        ).join('')}
+                    </div>
+                </div>
+            `;
+
+            html += '</div>';
+            area.innerHTML = html;
+
+            document.getElementById('btnContainer').innerHTML = '';
+
+            // Add event listeners to sub-problem inputs
+            subProblems.forEach((prob, idx) => {
+                const input = document.getElementById(`subInput${idx}`);
+                input.addEventListener('input', (e) => checkSubProblem(idx, e.target));
+                input.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        checkSubProblem(idx, e.target);
+                    }
+                });
+            });
+        }
+
+        function checkSubProblem(idx, input) {
+            const userAnswer = parseInt(input.value);
+            const correctAnswer = parseInt(input.dataset.answer);
+            const digitIndex = parseInt(input.dataset.digitIndex);
+            const subProblemDiv = document.getElementById(`subProblem${idx}`);
+            const mainDigitBox = document.getElementById(`mainDigit${digitIndex}`);
+
+            if (userAnswer === correctAnswer) {
+                input.classList.remove('incorrect');
+                input.classList.add('correct');
+                subProblemDiv.classList.add('solved');
+                input.disabled = true;
+
+                // Fill in the main answer digit
+                mainDigitBox.textContent = correctAnswer;
+                mainDigitBox.classList.add('filled');
+                mathDigitsSolved[digitIndex] = true;
+
+                // Auto-save progress
+                saveMathPuzzleProgress();
+
+                // Check if all digits are solved
+                if (mathDigitsSolved.every(s => s)) {
+                    clearSavedPuzzle(); // Clear save on completion
+                    setTimeout(() => {
+                        showSuccess('Brilliant! You solved all the equations!');
+                        markCompleted();
+                        celebrate();
+                    }, 300);
+                } else {
+                    // Focus next unsolved input
+                    const inputs = document.querySelectorAll('.sub-problem-input:not(:disabled)');
+                    if (inputs.length > 0) {
+                        inputs[0].focus();
+                    }
+                }
+            } else if (input.value !== '') {
+                input.classList.remove('correct');
+                input.classList.add('incorrect');
+            }
+        }
+
+        function saveMathPuzzleProgress() {
+            const solvedDigits = [];
+            const inputs = document.querySelectorAll('.sub-problem-input');
+            inputs.forEach((input, idx) => {
+                if (input.disabled && input.classList.contains('correct')) {
+                    solvedDigits.push({
+                        idx: idx,
+                        answer: parseInt(input.value),
+                        digitIndex: parseInt(input.dataset.digitIndex)
+                    });
+                }
+            });
+            savePuzzleProgress({ solvedDigits });
+        }
+
+        // ============ UI HELPERS ============
+        function showSuccess(msg) {
+            const el = document.getElementById('message');
+            el.className = 'message success';
+            el.textContent = msg;
+        }
+
+        function showError(msg) {
+            const el = document.getElementById('message');
+            el.className = 'message error';
+            el.textContent = msg;
+            setTimeout(() => {
+                el.className = 'message';
+            }, 3000);
+        }
+
+        function showCompletedState() {
+            document.getElementById('puzzleTitle').textContent = 'Completed!';
+            document.getElementById('instructions').style.display = 'none';
+            document.getElementById('puzzleArea').innerHTML = `
+                <div class="completed-message">
+                    <h2>Well done!</h2>
+                    <p>You've already completed today's puzzle.</p>
+                    <p>Come back tomorrow for a new challenge!</p>
+                </div>
+            `;
+            document.getElementById('btnContainer').innerHTML = '';
+        }
+
+        function celebrate() {
+            const container = document.getElementById('celebration');
+            const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeaa7', '#dfe6e9', '#fd79a8'];
+
+            for (let i = 0; i < 50; i++) {
+                const confetti = document.createElement('div');
+                confetti.className = 'confetti';
+                confetti.style.left = Math.random() * 100 + '%';
+                confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                confetti.style.animationDelay = Math.random() * 0.5 + 's';
+                confetti.style.borderRadius = Math.random() > 0.5 ? '50%' : '0';
+                container.appendChild(confetti);
+            }
+
+            setTimeout(() => {
+                container.innerHTML = '';
+            }, 4000);
+        }
+
+        // Start the game
+        init();
+    </script>
+</body>
+</html>

@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Platformer Adventure</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(180deg, #87CEEB 0%, #E0F6FF 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #gameContainer { display: flex; flex-direction: column; align-items: center; gap: 15px; }
+        #gameCanvas {
+            border: 4px solid #5D9E3C;
+            border-radius: 10px;
+            box-shadow: 0 0 30px rgba(93, 158, 60, 0.4);
+        }
+        #ui { display: flex; gap: 30px; color: #2d5016; font-size: 18px; }
+        #ui span { background: rgba(255,255,255,0.7); padding: 8px 16px; border-radius: 20px; border: 2px solid #5D9E3C; }
+        #instructions { color: #4a7030; font-size: 14px; text-align: center; }
+        #message { position: absolute; color: #2d5016; font-size: 32px; font-weight: bold; text-shadow: 2px 2px 4px rgba(255,255,255,0.8); display: none; }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="ui">
+            <span>Score: <b id="score">0</b></span>
+            <span>Level: <b id="level">1</b></span>
+            <span>Lives: <b id="lives">3</b></span>
+        </div>
+        <canvas id="gameCanvas" width="800" height="500"></canvas>
+        <div id="instructions">Arrow Keys/WASD to move | SPACE to jump | Collect coins, use springs, avoid lava!</div>
+        <div id="message"></div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const levelEl = document.getElementById('level');
+        const livesEl = document.getElementById('lives');
+        const messageEl = document.getElementById('message');
+
+        let score = 0, level = 1, lives = 10, gameRunning = true, invincible = 0, levelComplete = false, deathsThisLevel = 0;
+
+        const player = {
+            x: 50, y: 400, width: 30, height: 36,
+            vx: 0, vy: 0, speed: 5, jumpPower: -13,
+            onGround: false, facing: 1, animFrame: 0
+        };
+
+        const gravity = 0.6, friction = 0.85;
+        const keys = {};
+
+        let platforms = [], coins = [], spikes = [], springs = [], lava = [], portals = [];
+        let movingPlatforms = [], flag = null, particles = [], clouds = [];
+        let drones = [], lasers = [];
+
+        const colors = {
+            player: '#E85D04', playerDark: '#BC4B03',
+            platform: '#5D9E3C', platformTop: '#7EC850', platformDirt: '#8B5A2B',
+            coin: '#FFD700', coinShine: '#FFF8DC',
+            spike: '#4B5563', flag: '#22C55E', flagPole: '#92400E',
+            sky1: '#87CEEB', sky2: '#E0F6FF', cloud: '#FFFFFF', sun: '#FCD34D',
+            spring: '#FFD700', springBase: '#B8860B',
+            lava: '#FF4500', lavaGlow: '#FF6347',
+            portal: '#9B59B6', portalGlow: '#8E44AD',
+            drone: '#374151', droneLight: '#EF4444',
+            laser: '#EF4444', laserGlow: '#FCA5A5'
+        };
+
+        function initClouds() {
+            clouds = [];
+            for (let i = 0; i < 5; i++) {
+                clouds.push({ x: Math.random() * 800, y: 40 + Math.random() * 80, size: 30 + Math.random() * 30, speed: 0.2 + Math.random() * 0.2 });
+            }
+        }
+
+        function generateLevel(lvl) {
+            platforms = []; coins = []; spikes = []; springs = []; lava = []; portals = [];
+            movingPlatforms = []; particles = []; levelComplete = false;
+            drones = []; lasers = [];
+
+            // Ground
+            platforms.push({ x: 0, y: 460, width: 800, height: 40, isGround: true });
+
+            const layouts = [
+                // Level 1 - intro
+                () => {
+                    platforms.push({ x: 100, y: 380, width: 90, height: 20 });
+                    platforms.push({ x: 280, y: 320, width: 85, height: 20 });
+                    platforms.push({ x: 450, y: 260, width: 85, height: 20 });
+                    platforms.push({ x: 620, y: 200, width: 90, height: 20 });
+                    platforms.push({ x: 700, y: 140, width: 70, height: 20 });
+                    spikes.push({ x: 200, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 380, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 560, y: 445, width: 36, height: 15 });
+                },
+                // Level 2 - springs
+                () => {
+                    platforms.push({ x: 80, y: 390, width: 75, height: 20 });
+                    platforms.push({ x: 220, y: 340, width: 70, height: 20 });
+                    platforms.push({ x: 380, y: 290, width: 70, height: 20 });
+                    platforms.push({ x: 540, y: 240, width: 70, height: 20 });
+                    platforms.push({ x: 680, y: 180, width: 75, height: 20 });
+                    platforms.push({ x: 700, y: 120, width: 70, height: 20 });
+                    springs.push({ x: 150, y: 440, width: 30, height: 20, compressed: false });
+                    springs.push({ x: 450, y: 440, width: 30, height: 20, compressed: false });
+                    spikes.push({ x: 200, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 300, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 500, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 600, y: 445, width: 36, height: 15 });
+                    lava.push({ x: 350, y: 475, width: 60, height: 25 });
+                },
+                // Level 3 - jumps
+                () => {
+                    platforms.push({ x: 60, y: 400, width: 65, height: 20 });
+                    platforms.push({ x: 170, y: 350, width: 60, height: 20 });
+                    platforms.push({ x: 280, y: 300, width: 60, height: 20 });
+                    platforms.push({ x: 390, y: 350, width: 60, height: 20 });
+                    platforms.push({ x: 500, y: 290, width: 60, height: 20 });
+                    platforms.push({ x: 610, y: 240, width: 60, height: 20 });
+                    platforms.push({ x: 700, y: 180, width: 65, height: 20 });
+                    platforms.push({ x: 720, y: 120, width: 55, height: 20 });
+                    springs.push({ x: 130, y: 440, width: 30, height: 20, compressed: false });
+                    springs.push({ x: 450, y: 440, width: 30, height: 20, compressed: false });
+                    spikes.push({ x: 200, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 340, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 550, y: 445, width: 36, height: 15 });
+                    lava.push({ x: 240, y: 475, width: 70, height: 25 });
+                    lava.push({ x: 580, y: 475, width: 70, height: 25 });
+                },
+                // Level 4 - moving platforms
+                () => {
+                    platforms.push({ x: 40, y: 410, width: 55, height: 20 });
+                    platforms.push({ x: 150, y: 360, width: 50, height: 20 });
+                    platforms.push({ x: 290, y: 310, width: 50, height: 20 });
+                    platforms.push({ x: 430, y: 360, width: 50, height: 20 });
+                    platforms.push({ x: 570, y: 300, width: 50, height: 20 });
+                    platforms.push({ x: 430, y: 220, width: 55, height: 20 });
+                    platforms.push({ x: 590, y: 160, width: 55, height: 20 });
+                    platforms.push({ x: 700, y: 110, width: 65, height: 20 });
+                    movingPlatforms.push({ x: 200, y: 280, width: 55, height: 15, minX: 160, maxX: 270, vx: 2 });
+                    movingPlatforms.push({ x: 360, y: 250, width: 55, height: 15, minY: 200, maxY: 300, vy: 2 });
+                    movingPlatforms.push({ x: 500, y: 220, width: 55, height: 15, minX: 460, maxX: 570, vx: 2.5 });
+                    springs.push({ x: 100, y: 440, width: 30, height: 20, compressed: false });
+                    springs.push({ x: 500, y: 440, width: 30, height: 20, compressed: false });
+                    spikes.push({ x: 160, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 260, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 400, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 600, y: 445, width: 36, height: 15 });
+                    lava.push({ x: 200, y: 475, width: 50, height: 25 });
+                    lava.push({ x: 440, y: 475, width: 50, height: 25 });
+                },
+                // Level 5 - portals
+                () => {
+                    platforms.push({ x: 30, y: 420, width: 50, height: 20 });
+                    platforms.push({ x: 120, y: 370, width: 50, height: 20 });
+                    platforms.push({ x: 30, y: 310, width: 50, height: 20 });
+                    platforms.push({ x: 120, y: 250, width: 50, height: 20 });
+                    platforms.push({ x: 230, y: 310, width: 50, height: 20 });
+                    platforms.push({ x: 340, y: 260, width: 50, height: 20 });
+                    platforms.push({ x: 460, y: 320, width: 50, height: 20 });
+                    platforms.push({ x: 570, y: 260, width: 50, height: 20 });
+                    platforms.push({ x: 460, y: 180, width: 55, height: 20 });
+                    platforms.push({ x: 610, y: 140, width: 55, height: 20 });
+                    platforms.push({ x: 720, y: 100, width: 55, height: 20 });
+                    movingPlatforms.push({ x: 170, y: 200, width: 50, height: 15, minX: 130, maxX: 230, vx: 2.5 });
+                    movingPlatforms.push({ x: 390, y: 200, width: 50, height: 15, minY: 160, maxY: 260, vy: 2.5 });
+                    movingPlatforms.push({ x: 540, y: 180, width: 50, height: 15, minX: 500, maxX: 600, vx: 3 });
+                    movingPlatforms.push({ x: 680, y: 120, width: 45, height: 15, minY: 80, maxY: 160, vy: 2 });
+                    movingPlatforms.push({ x: 300, y: 280, width: 45, height: 15, minX: 260, maxX: 360, vx: 3 });
+                    springs.push({ x: 85, y: 440, width: 30, height: 20, compressed: false });
+                    springs.push({ x: 200, y: 440, width: 30, height: 20, compressed: false });
+                    springs.push({ x: 300, y: 440, width: 30, height: 20, compressed: false });
+                    springs.push({ x: 450, y: 440, width: 30, height: 20, compressed: false });
+                    springs.push({ x: 530, y: 440, width: 30, height: 20, compressed: false });
+                    springs.push({ x: 680, y: 440, width: 30, height: 20, compressed: false });
+                    portals.push({ x: 50, y: 270, width: 30, height: 40, targetX: 250, targetY: 270, color: '#9B59B6' });
+                    portals.push({ x: 360, y: 220, width: 30, height: 40, targetX: 480, targetY: 280, color: '#E74C3C' });
+                    portals.push({ x: 590, y: 220, width: 30, height: 40, targetX: 630, targetY: 100, color: '#3498DB' });
+                    portals.push({ x: 480, y: 140, width: 30, height: 40, targetX: 140, targetY: 210, color: '#1ABC9C' });
+                    portals.push({ x: 250, y: 270, width: 30, height: 40, targetX: 590, targetY: 220, color: '#F39C12' });
+                    spikes.push({ x: 100, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 160, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 250, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 340, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 400, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 500, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 600, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 720, y: 445, width: 36, height: 15 });
+                    lava.push({ x: 120, y: 475, width: 45, height: 25 });
+                    lava.push({ x: 180, y: 475, width: 50, height: 25 });
+                    lava.push({ x: 280, y: 475, width: 50, height: 25 });
+                    lava.push({ x: 430, y: 475, width: 50, height: 25 });
+                    lava.push({ x: 560, y: 475, width: 50, height: 25 });
+                    lava.push({ x: 650, y: 475, width: 50, height: 25 });
+                },
+                // Level 6 - lava
+                () => {
+                    platforms.push({ x: 25, y: 420, width: 48, height: 20 });
+                    platforms.push({ x: 110, y: 370, width: 45, height: 20 });
+                    platforms.push({ x: 195, y: 320, width: 45, height: 20 });
+                    platforms.push({ x: 110, y: 260, width: 45, height: 20 });
+                    platforms.push({ x: 280, y: 280, width: 45, height: 20 });
+                    platforms.push({ x: 370, y: 330, width: 45, height: 20 });
+                    platforms.push({ x: 460, y: 270, width: 45, height: 20 });
+                    platforms.push({ x: 550, y: 220, width: 45, height: 20 });
+                    platforms.push({ x: 370, y: 180, width: 50, height: 20 });
+                    platforms.push({ x: 480, y: 140, width: 50, height: 20 });
+                    platforms.push({ x: 600, y: 180, width: 50, height: 20 });
+                    platforms.push({ x: 700, y: 130, width: 55, height: 20 });
+                    movingPlatforms.push({ x: 210, y: 200, width: 48, height: 15, minX: 160, maxX: 270, vx: 3 });
+                    movingPlatforms.push({ x: 420, y: 220, width: 48, height: 15, minY: 180, maxY: 280, vy: 2.5 });
+                    movingPlatforms.push({ x: 620, y: 140, width: 48, height: 15, minX: 570, maxX: 680, vx: 3.5 });
+                    movingPlatforms.push({ x: 150, y: 180, width: 45, height: 15, minY: 140, maxY: 220, vy: 3 });
+                    movingPlatforms.push({ x: 330, y: 240, width: 45, height: 15, minX: 280, maxX: 380, vx: 3 });
+                    movingPlatforms.push({ x: 560, y: 100, width: 45, height: 15, minX: 510, maxX: 610, vx: 3.5 });
+                    springs.push({ x: 70, y: 440, width: 30, height: 20, compressed: false });
+                    springs.push({ x: 180, y: 440, width: 30, height: 20, compressed: false });
+                    springs.push({ x: 320, y: 440, width: 30, height: 20, compressed: false });
+                    springs.push({ x: 450, y: 440, width: 30, height: 20, compressed: false });
+                    springs.push({ x: 600, y: 440, width: 30, height: 20, compressed: false });
+                    springs.push({ x: 720, y: 440, width: 30, height: 20, compressed: false });
+                    springs.push({ x: 570, y: 205, width: 25, height: 15, compressed: false });
+                    springs.push({ x: 390, y: 165, width: 25, height: 15, compressed: false });
+                    portals.push({ x: 130, y: 220, width: 30, height: 40, targetX: 300, targetY: 240, color: '#9B59B6' });
+                    portals.push({ x: 480, y: 230, width: 30, height: 40, targetX: 390, targetY: 140, color: '#E74C3C' });
+                    portals.push({ x: 390, y: 140, width: 30, height: 40, targetX: 570, targetY: 180, color: '#3498DB' });
+                    portals.push({ x: 620, y: 140, width: 30, height: 40, targetX: 720, targetY: 90, color: '#1ABC9C' });
+                    portals.push({ x: 215, y: 280, width: 30, height: 40, targetX: 480, targetY: 230, color: '#F39C12' });
+                    spikes.push({ x: 100, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 140, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 200, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 240, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 300, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 360, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 400, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 500, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 560, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 640, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 700, y: 445, width: 36, height: 15 });
+                    lava.push({ x: 60, y: 475, width: 40, height: 25 });
+                    lava.push({ x: 100, y: 475, width: 40, height: 25 });
+                    lava.push({ x: 160, y: 475, width: 40, height: 25 });
+                    lava.push({ x: 220, y: 475, width: 50, height: 25 });
+                    lava.push({ x: 280, y: 475, width: 40, height: 25 });
+                    lava.push({ x: 350, y: 475, width: 50, height: 25 });
+                    lava.push({ x: 430, y: 475, width: 50, height: 25 });
+                    lava.push({ x: 530, y: 475, width: 50, height: 25 });
+                    lava.push({ x: 620, y: 475, width: 40, height: 25 });
+                    lava.push({ x: 680, y: 475, width: 40, height: 25 });
+                },
+                // Level 7 - maze
+                () => {
+                    platforms.push({ x: 20, y: 420, width: 45, height: 20 });
+                    platforms.push({ x: 100, y: 370, width: 42, height: 20 });
+                    platforms.push({ x: 180, y: 420, width: 42, height: 20 });
+                    platforms.push({ x: 260, y: 360, width: 42, height: 20 });
+                    platforms.push({ x: 100, y: 300, width: 42, height: 20 });
+                    platforms.push({ x: 190, y: 250, width: 42, height: 20 });
+                    platforms.push({ x: 320, y: 300, width: 42, height: 20 });
+                    platforms.push({ x: 410, y: 250, width: 42, height: 20 });
+                    platforms.push({ x: 500, y: 310, width: 42, height: 20 });
+                    platforms.push({ x: 590, y: 260, width: 42, height: 20 });
+                    platforms.push({ x: 410, y: 180, width: 45, height: 20 });
+                    platforms.push({ x: 510, y: 140, width: 45, height: 20 });
+                    platforms.push({ x: 620, y: 180, width: 45, height: 20 });
+                    platforms.push({ x: 710, y: 120, width: 55, height: 20 });
+                    movingPlatforms.push({ x: 140, y: 200, width: 45, height: 15, minY: 160, maxY: 260, vy: 3 });
+                    movingPlatforms.push({ x: 280, y: 200, width: 45, height: 15, minX: 240, maxX: 340, vx: 3.5 });
+                    movingPlatforms.push({ x: 460, y: 200, width: 45, height: 15, minY: 160, maxY: 250, vy: 3.5 });
+                    movingPlatforms.push({ x: 580, y: 150, width: 45, height: 15, minX: 530, maxX: 630, vx: 3.5 });
+                    movingPlatforms.push({ x: 670, y: 160, width: 45, height: 15, minY: 120, maxY: 200, vy: 3 });
+                    movingPlatforms.push({ x: 50, y: 350, width: 42, height: 15, minX: 20, maxX: 100, vx: 2.5 });
+                    movingPlatforms.push({ x: 350, y: 220, width: 42, height: 15, minY: 180, maxY: 270, vy: 3.5 });
+                    movingPlatforms.push({ x: 720, y: 80, width: 45, height: 15, minX: 680, maxX: 760, vx: 4 });
+                    springs.push({ x: 65, y: 440, width: 28, height: 20, compressed: false });
+                    springs.push({ x: 140, y: 440, width: 28, height: 20, compressed: false });
+                    springs.push({ x: 230, y: 440, width: 28, height: 20, compressed: false });
+                    springs.push({ x: 340, y: 440, width: 28, height: 20, compressed: false });
+                    springs.push({ x: 440, y: 440, width: 28, height: 20, compressed: false });
+                    springs.push({ x: 540, y: 440, width: 28, height: 20, compressed: false });
+                    springs.push({ x: 640, y: 440, width: 28, height: 20, compressed: false });
+                    springs.push({ x: 730, y: 440, width: 28, height: 20, compressed: false });
+                    springs.push({ x: 610, y: 165, width: 22, height: 15, compressed: false });
+                    springs.push({ x: 210, y: 235, width: 22, height: 15, compressed: false });
+                    springs.push({ x: 430, y: 165, width: 22, height: 15, compressed: false });
+                    portals.push({ x: 120, y: 260, width: 30, height: 40, targetX: 340, targetY: 260, color: '#9B59B6' });
+                    portals.push({ x: 430, y: 210, width: 30, height: 40, targetX: 530, targetY: 270, color: '#E74C3C' });
+                    portals.push({ x: 610, y: 220, width: 30, height: 40, targetX: 530, targetY: 100, color: '#3498DB' });
+                    portals.push({ x: 640, y: 140, width: 30, height: 40, targetX: 430, targetY: 140, color: '#1ABC9C' });
+                    portals.push({ x: 210, y: 210, width: 30, height: 40, targetX: 520, targetY: 270, color: '#F39C12' });
+                    portals.push({ x: 340, y: 260, width: 30, height: 40, targetX: 610, targetY: 140, color: '#E91E63' });
+                    portals.push({ x: 520, y: 100, width: 30, height: 40, targetX: 730, targetY: 80, color: '#00BCD4' });
+                    spikes.push({ x: 80, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 120, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 180, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 240, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 300, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 360, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 420, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 480, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 540, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 600, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 660, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 720, y: 445, width: 36, height: 15 });
+                    lava.push({ x: 50, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 90, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 150, y: 475, width: 40, height: 25 });
+                    lava.push({ x: 210, y: 475, width: 40, height: 25 });
+                    lava.push({ x: 260, y: 475, width: 40, height: 25 });
+                    lava.push({ x: 320, y: 475, width: 40, height: 25 });
+                    lava.push({ x: 380, y: 475, width: 40, height: 25 });
+                    lava.push({ x: 450, y: 475, width: 40, height: 25 });
+                    lava.push({ x: 510, y: 475, width: 40, height: 25 });
+                    lava.push({ x: 570, y: 475, width: 40, height: 25 });
+                    lava.push({ x: 630, y: 475, width: 40, height: 25 });
+                    lava.push({ x: 700, y: 475, width: 40, height: 25 });
+                },
+                // Level 8 - precision
+                () => {
+                    platforms.push({ x: 15, y: 420, width: 40, height: 20 });
+                    platforms.push({ x: 90, y: 380, width: 38, height: 20 });
+                    platforms.push({ x: 165, y: 340, width: 38, height: 20 });
+                    platforms.push({ x: 90, y: 290, width: 38, height: 20 });
+                    platforms.push({ x: 165, y: 240, width: 38, height: 20 });
+                    platforms.push({ x: 250, y: 290, width: 38, height: 20 });
+                    platforms.push({ x: 335, y: 340, width: 38, height: 20 });
+                    platforms.push({ x: 420, y: 290, width: 38, height: 20 });
+                    platforms.push({ x: 505, y: 240, width: 38, height: 20 });
+                    platforms.push({ x: 420, y: 180, width: 38, height: 20 });
+                    platforms.push({ x: 335, y: 130, width: 38, height: 20 });
+                    platforms.push({ x: 505, y: 130, width: 38, height: 20 });
+                    platforms.push({ x: 590, y: 180, width: 38, height: 20 });
+                    platforms.push({ x: 670, y: 130, width: 42, height: 20 });
+                    platforms.push({ x: 730, y: 90, width: 50, height: 20 });
+                    movingPlatforms.push({ x: 220, y: 180, width: 42, height: 15, minX: 180, maxX: 280, vx: 4 });
+                    movingPlatforms.push({ x: 360, y: 200, width: 42, height: 15, minY: 160, maxY: 260, vy: 3.5 });
+                    movingPlatforms.push({ x: 570, y: 120, width: 42, height: 15, minX: 520, maxX: 620, vx: 4 });
+                    movingPlatforms.push({ x: 640, y: 160, width: 42, height: 15, minY: 120, maxY: 200, vy: 4 });
+                    movingPlatforms.push({ x: 700, y: 120, width: 42, height: 15, minX: 650, maxX: 740, vx: 4.5 });
+                    movingPlatforms.push({ x: 50, y: 350, width: 40, height: 15, minX: 20, maxX: 100, vx: 3 });
+                    movingPlatforms.push({ x: 280, y: 220, width: 40, height: 15, minY: 180, maxY: 270, vy: 4 });
+                    movingPlatforms.push({ x: 460, y: 100, width: 40, height: 15, minX: 420, maxX: 520, vx: 4.5 });
+                    movingPlatforms.push({ x: 750, y: 50, width: 40, height: 15, minY: 40, maxY: 90, vy: 3 });
+                    springs.push({ x: 55, y: 440, width: 26, height: 20, compressed: false });
+                    springs.push({ x: 130, y: 440, width: 26, height: 20, compressed: false });
+                    springs.push({ x: 200, y: 440, width: 26, height: 20, compressed: false });
+                    springs.push({ x: 280, y: 440, width: 26, height: 20, compressed: false });
+                    springs.push({ x: 380, y: 440, width: 26, height: 20, compressed: false });
+                    springs.push({ x: 470, y: 440, width: 26, height: 20, compressed: false });
+                    springs.push({ x: 550, y: 440, width: 26, height: 20, compressed: false });
+                    springs.push({ x: 630, y: 440, width: 26, height: 20, compressed: false });
+                    springs.push({ x: 700, y: 440, width: 26, height: 20, compressed: false });
+                    springs.push({ x: 610, y: 165, width: 20, height: 15, compressed: false });
+                    springs.push({ x: 440, y: 165, width: 20, height: 15, compressed: false });
+                    springs.push({ x: 185, y: 225, width: 20, height: 15, compressed: false });
+                    portals.push({ x: 110, y: 250, width: 30, height: 40, targetX: 270, targetY: 250, color: '#9B59B6' });
+                    portals.push({ x: 355, y: 90, width: 30, height: 40, targetX: 525, targetY: 200, color: '#E74C3C' });
+                    portals.push({ x: 440, y: 140, width: 30, height: 40, targetX: 610, targetY: 140, color: '#3498DB' });
+                    portals.push({ x: 690, y: 90, width: 30, height: 40, targetX: 525, targetY: 90, color: '#1ABC9C' });
+                    portals.push({ x: 185, y: 200, width: 30, height: 40, targetX: 440, targetY: 250, color: '#F39C12' });
+                    portals.push({ x: 270, y: 250, width: 30, height: 40, targetX: 355, targetY: 300, color: '#E91E63' });
+                    portals.push({ x: 525, y: 90, width: 30, height: 40, targetX: 690, targetY: 90, color: '#00BCD4' });
+                    portals.push({ x: 610, y: 140, width: 30, height: 40, targetX: 750, targetY: 50, color: '#9C27B0' });
+                    spikes.push({ x: 70, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 110, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 160, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 220, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 260, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 320, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 360, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 420, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 480, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 540, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 600, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 660, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 720, y: 445, width: 36, height: 15 });
+                    lava.push({ x: 40, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 80, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 140, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 190, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 240, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 290, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 350, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 400, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 450, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 510, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 560, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 620, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 680, y: 475, width: 35, height: 25 });
+                },
+                // Level 9 - hard mode
+                () => {
+                    platforms.push({ x: 10, y: 430, width: 38, height: 20 });
+                    platforms.push({ x: 85, y: 390, width: 35, height: 20 });
+                    platforms.push({ x: 160, y: 350, width: 35, height: 20 });
+                    platforms.push({ x: 85, y: 300, width: 35, height: 20 });
+                    platforms.push({ x: 160, y: 250, width: 35, height: 20 });
+                    platforms.push({ x: 240, y: 300, width: 35, height: 20 });
+                    platforms.push({ x: 320, y: 250, width: 35, height: 20 });
+                    platforms.push({ x: 400, y: 300, width: 35, height: 20 });
+                    platforms.push({ x: 480, y: 250, width: 35, height: 20 });
+                    platforms.push({ x: 560, y: 200, width: 35, height: 20 });
+                    platforms.push({ x: 400, y: 170, width: 35, height: 20 });
+                    platforms.push({ x: 320, y: 120, width: 35, height: 20 });
+                    platforms.push({ x: 480, y: 120, width: 35, height: 20 });
+                    platforms.push({ x: 640, y: 150, width: 35, height: 20 });
+                    platforms.push({ x: 720, y: 200, width: 35, height: 20 });
+                    platforms.push({ x: 640, y: 100, width: 38, height: 20 });
+                    platforms.push({ x: 750, y: 70, width: 45, height: 20 });
+                    movingPlatforms.push({ x: 200, y: 190, width: 38, height: 15, minX: 150, maxX: 260, vx: 4.5 });
+                    movingPlatforms.push({ x: 280, y: 180, width: 38, height: 15, minY: 140, maxY: 220, vy: 4.5 });
+                    movingPlatforms.push({ x: 420, y: 80, width: 38, height: 15, minX: 360, maxX: 500, vx: 5 });
+                    movingPlatforms.push({ x: 560, y: 130, width: 38, height: 15, minY: 90, maxY: 170, vy: 4.5 });
+                    movingPlatforms.push({ x: 700, y: 100, width: 38, height: 15, minX: 650, maxX: 760, vx: 5 });
+                    movingPlatforms.push({ x: 50, y: 340, width: 35, height: 15, minX: 20, maxX: 100, vx: 4 });
+                    movingPlatforms.push({ x: 350, y: 200, width: 35, height: 15, minY: 150, maxY: 250, vy: 5 });
+                    movingPlatforms.push({ x: 600, y: 50, width: 35, height: 15, minX: 550, maxX: 660, vx: 5.5 });
+                    springs.push({ x: 50, y: 440, width: 24, height: 20, compressed: false });
+                    springs.push({ x: 120, y: 440, width: 24, height: 20, compressed: false });
+                    springs.push({ x: 200, y: 440, width: 24, height: 20, compressed: false });
+                    springs.push({ x: 280, y: 440, width: 24, height: 20, compressed: false });
+                    springs.push({ x: 360, y: 440, width: 24, height: 20, compressed: false });
+                    springs.push({ x: 440, y: 440, width: 24, height: 20, compressed: false });
+                    springs.push({ x: 520, y: 440, width: 24, height: 20, compressed: false });
+                    springs.push({ x: 600, y: 440, width: 24, height: 20, compressed: false });
+                    springs.push({ x: 660, y: 440, width: 24, height: 20, compressed: false });
+                    springs.push({ x: 740, y: 440, width: 24, height: 20, compressed: false });
+                    springs.push({ x: 580, y: 185, width: 18, height: 15, compressed: false });
+                    springs.push({ x: 740, y: 185, width: 18, height: 15, compressed: false });
+                    springs.push({ x: 420, y: 155, width: 18, height: 15, compressed: false });
+                    springs.push({ x: 180, y: 235, width: 18, height: 15, compressed: false });
+                    portals.push({ x: 105, y: 260, width: 30, height: 40, targetX: 260, targetY: 260, color: '#9B59B6' });
+                    portals.push({ x: 180, y: 210, width: 30, height: 40, targetX: 420, targetY: 260, color: '#E74C3C' });
+                    portals.push({ x: 340, y: 80, width: 30, height: 40, targetX: 580, targetY: 160, color: '#3498DB' });
+                    portals.push({ x: 500, y: 80, width: 30, height: 40, targetX: 660, targetY: 160, color: '#1ABC9C' });
+                    portals.push({ x: 660, y: 60, width: 30, height: 40, targetX: 770, targetY: 30, color: '#F39C12' });
+                    portals.push({ x: 260, y: 260, width: 30, height: 40, targetX: 340, targetY: 210, color: '#E91E63' });
+                    portals.push({ x: 420, y: 260, width: 30, height: 40, targetX: 500, targetY: 210, color: '#00BCD4' });
+                    portals.push({ x: 660, y: 110, width: 30, height: 40, targetX: 770, targetY: 30, color: '#9C27B0' });
+                    spikes.push({ x: 60, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 100, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 160, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 220, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 260, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 320, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 380, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 420, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 480, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 540, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 580, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 640, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 700, y: 445, width: 36, height: 15 });
+                    spikes.push({ x: 760, y: 445, width: 36, height: 15 });
+                    lava.push({ x: 40, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 80, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 130, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 180, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 240, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 290, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 350, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 410, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 460, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 510, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 570, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 620, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 680, y: 475, width: 35, height: 25 });
+                    lava.push({ x: 730, y: 475, width: 35, height: 25 });
+                }
+            ];
+
+            // Use preset layouts for levels 1-9, procedural for 10+
+            if (lvl <= layouts.length) {
+                layouts[lvl - 1]();
+            } else {
+                // Procedural generation for levels 10-50
+                generateProceduralLevel(lvl);
+            }
+
+            // Add drones for levels 20+
+            if (lvl >= 20) {
+                const droneCount = Math.min(Math.floor((lvl - 19) / 3) + 1, 5);
+                for (let i = 0; i < droneCount; i++) {
+                    const dx = 150 + Math.random() * 500;
+                    const dy = 80 + Math.random() * 200;
+                    drones.push({
+                        x: dx, y: dy, width: 40, height: 25,
+                        startX: dx, patrolRange: 100 + Math.random() * 100,
+                        direction: 1, speed: 1.5 + lvl * 0.05,
+                        fireTimer: 60 + Math.floor(Math.random() * 60),
+                        fireRate: Math.max(90 - lvl, 40)
+                    });
+                }
+            }
+
+            // Add coins
+            platforms.forEach((p, i) => {
+                if (!p.isGround && Math.random() > 0.4) {
+                    coins.push({ x: p.x + p.width / 2 - 10, y: p.y - 30, width: 20, height: 20, collected: false, bobOffset: Math.random() * Math.PI * 2 });
+                }
+            });
+
+            // Flag position - on the highest/hardest platform
+            const flagPositions = [
+                { x: 720, y: 80 },   // L1
+                { x: 720, y: 60 },   // L2
+                { x: 740, y: 60 },   // L3
+                { x: 720, y: 50 },   // L4
+                { x: 740, y: 40 },   // L5
+                { x: 700, y: 70 },   // L6
+                { x: 710, y: 60 },   // L7
+                { x: 730, y: 30 },   // L8
+                { x: 755, y: 10 }    // L9
+            ];
+            let flagPos;
+            if (lvl <= 9) {
+                flagPos = flagPositions[lvl - 1];
+            } else if (lvl >= 20) {
+                // Drone levels - flag on the simple final platform
+                flagPos = { x: 735, y: 60 };
+            } else {
+                // Levels 10-19
+                flagPos = { x: 735, y: 40 };
+            }
+            flag = { x: flagPos.x, y: flagPos.y, width: 20, height: 60 };
+
+            // Reset player
+            player.x = 50; player.y = 410; player.vx = 0; player.vy = 0;
+            player.onGround = false; invincible = 0;
+        }
+
+        function generateProceduralLevel(lvl) {
+            const seed = lvl * 12345;
+            let randCounter = 0;
+            const seededRandom = () => {
+                randCounter++;
+                const x = Math.sin(seed + randCounter) * 10000;
+                return x - Math.floor(x);
+            };
+
+            // For drone levels (20+), make terrain very simple
+            if (lvl >= 20) {
+                // Simple terrain - just 3 platforms to reach the flag
+                platforms.push({ x: 50, y: 350, width: 150, height: 20 });
+                platforms.push({ x: 400, y: 250, width: 150, height: 20 });
+                platforms.push({ x: 700, y: 150, width: 90, height: 20 });
+
+                // One portal to help navigate while dodging drones
+                portals.push({ x: 100, y: 310, width: 30, height: 40, targetX: 420, targetY: 210, color: '#9B59B6' });
+
+                // One spring to help
+                springs.push({ x: 300, y: 440, width: 30, height: 20, compressed: false });
+
+                return;
+            }
+
+            // Levels 10-19: moderate complexity
+            const difficulty = Math.min((lvl - 9) / 10, 1);
+            const platformSize = 55 - difficulty * 10;
+            const numPlatforms = 6 + Math.floor(difficulty * 4);
+
+            // Generate platforms in a path to the flag
+            for (let i = 0; i < numPlatforms; i++) {
+                const progress = i / numPlatforms;
+                const baseY = 400 - progress * 320;
+                const newY = Math.max(80, Math.min(400, baseY + (seededRandom() - 0.5) * 60));
+                const newX = 50 + (progress * 650) + (seededRandom() - 0.5) * 60;
+                const width = platformSize + seededRandom() * 20;
+
+                if (seededRandom() > 0.4) {
+                    platforms.push({ x: Math.max(10, Math.min(720 - width, newX)), y: newY, width: width, height: 20 });
+                } else {
+                    // Moving platform
+                    const isHorizontal = seededRandom() > 0.5;
+                    if (isHorizontal) {
+                        movingPlatforms.push({
+                            x: newX, y: newY, width: width - 5, height: 15,
+                            minX: Math.max(10, newX - 50), maxX: Math.min(750, newX + 50),
+                            vx: 2 * (seededRandom() > 0.5 ? 1 : -1)
+                        });
+                    } else {
+                        movingPlatforms.push({
+                            x: newX, y: newY, width: width - 5, height: 15,
+                            minY: Math.max(60, newY - 40), maxY: Math.min(400, newY + 40),
+                            vy: 2 * (seededRandom() > 0.5 ? 1 : -1)
+                        });
+                    }
+                }
+            }
+
+            // Add final platform for flag
+            platforms.push({ x: 720, y: 100, width: 60, height: 20 });
+
+            // Spikes
+            const numSpikes = 4 + Math.floor(difficulty * 4);
+            for (let i = 0; i < numSpikes; i++) {
+                const sx = 100 + (i * (600 / numSpikes)) + seededRandom() * 40;
+                spikes.push({ x: sx, y: 445, width: 36, height: 15 });
+            }
+
+            // Lava
+            const numLava = 3 + Math.floor(difficulty * 4);
+            for (let i = 0; i < numLava; i++) {
+                const lx = 80 + (i * (620 / numLava)) + seededRandom() * 30;
+                lava.push({ x: lx, y: 475, width: 40, height: 25 });
+            }
+
+            // Springs
+            const numSprings = 3 + Math.floor(difficulty * 3);
+            for (let i = 0; i < numSprings; i++) {
+                const springX = 80 + seededRandom() * 640;
+                springs.push({ x: springX, y: 440, width: 28, height: 20, compressed: false });
+            }
+
+            // Portals
+            const numPortals = 2 + Math.floor(difficulty * 2);
+            const portalColors = ['#9B59B6', '#E74C3C', '#3498DB', '#1ABC9C'];
+            for (let i = 0; i < numPortals; i++) {
+                const px = 100 + seededRandom() * 550;
+                const py = 120 + seededRandom() * 220;
+                const tx = 100 + seededRandom() * 550;
+                const ty = 100 + seededRandom() * 240;
+                portals.push({
+                    x: px, y: py, width: 30, height: 40,
+                    targetX: tx, targetY: ty,
+                    color: portalColors[i % portalColors.length]
+                });
+            }
+        }
+
+        function createParticles(x, y, color, count) {
+            for (let i = 0; i < count; i++) {
+                particles.push({ x, y, vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6, life: 1, color, size: 2 + Math.random() * 3 });
+            }
+        }
+
+        function rectCollision(a, b) {
+            return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+        }
+
+        function update() {
+            if (!gameRunning) return;
+            if (invincible > 0) invincible--;
+
+            // Input
+            if (keys['ArrowLeft'] || keys['KeyA']) { player.vx = -player.speed; player.facing = -1; }
+            else if (keys['ArrowRight'] || keys['KeyD']) { player.vx = player.speed; player.facing = 1; }
+            else { player.vx *= friction; }
+
+            if ((keys['Space'] || keys['ArrowUp'] || keys['KeyW']) && player.onGround) {
+                player.vy = player.jumpPower;
+                player.onGround = false;
+            }
+
+            player.vy += gravity;
+            if (player.vy > 15) player.vy = 15;
+
+            // Horizontal movement & collision
+            player.x += player.vx;
+            const allPlatforms = [...platforms, ...movingPlatforms];
+            for (const p of allPlatforms) {
+                if (rectCollision(player, p)) {
+                    if (player.vx > 0) player.x = p.x - player.width;
+                    else if (player.vx < 0) player.x = p.x + p.width;
+                    player.vx = 0;
+                }
+            }
+
+            // Vertical movement & collision
+            player.y += player.vy;
+            player.onGround = false;
+            for (const p of allPlatforms) {
+                if (rectCollision(player, p)) {
+                    if (player.vy > 0) {
+                        player.y = p.y - player.height;
+                        player.vy = 0;
+                        player.onGround = true;
+                        if (p.vx) player.x += p.vx;
+                    } else if (player.vy < 0) {
+                        player.y = p.y + p.height;
+                        player.vy = 0;
+                    }
+                }
+            }
+
+            // Update moving platforms
+            movingPlatforms.forEach(mp => {
+                if (mp.vx !== undefined) { mp.x += mp.vx; if (mp.x <= mp.minX || mp.x >= mp.maxX) mp.vx *= -1; }
+                if (mp.vy !== undefined) { mp.y += mp.vy; if (mp.y <= mp.minY || mp.y >= mp.maxY) mp.vy *= -1; }
+            });
+
+            // Screen bounds
+            if (player.x < 0) player.x = 0;
+            if (player.x > canvas.width - player.width) player.x = canvas.width - player.width;
+
+            // Fall death
+            if (player.y > canvas.height && invincible === 0) { loseLife(); return; }
+
+            // Spike collision
+            if (invincible === 0) {
+                for (const spike of spikes) {
+                    if (rectCollision(player, spike)) { loseLife(); return; }
+                }
+            }
+
+            // Lava collision
+            if (invincible === 0) {
+                for (const l of lava) {
+                    if (rectCollision(player, l)) { loseLife(); return; }
+                }
+            }
+
+            // Spring collision
+            springs.forEach(spring => {
+                if (rectCollision(player, spring) && player.vy > 0) {
+                    player.vy = -18; // Super jump!
+                    spring.compressed = true;
+                    setTimeout(() => spring.compressed = false, 200);
+                    createParticles(spring.x + 15, spring.y, colors.spring, 5);
+                }
+            });
+
+            // Portal collision
+            portals.forEach(portal => {
+                if (rectCollision(player, portal)) {
+                    player.x = portal.targetX;
+                    player.y = portal.targetY;
+                    createParticles(portal.x + 15, portal.y + 20, portal.color, 10);
+                    createParticles(portal.targetX + 15, portal.targetY + 20, portal.color, 10);
+                }
+            });
+
+            // Coin collection
+            coins.forEach(coin => {
+                if (!coin.collected && rectCollision(player, coin)) {
+                    coin.collected = true;
+                    score += 10;
+                    scoreEl.textContent = score;
+                    createParticles(coin.x + 10, coin.y + 10, colors.coin, 8);
+                }
+            });
+
+            // Flag collision - instant next level
+            if (!levelComplete && rectCollision(player, flag)) {
+                levelComplete = true;
+                if (level >= 50) {
+                    // Victory!
+                    score += 500;
+                    scoreEl.textContent = score;
+                    gameRunning = false;
+                    showMessage('YOU WIN! Final Score: ' + score + ' - Press R', '#FFD700');
+                } else {
+                    // Lives bonus after level 8
+                    let bonusLives = 0;
+                    if (level >= 8) {
+                        bonusLives = Math.max(0, 4 - deathsThisLevel);
+                        lives += bonusLives;
+                        livesEl.textContent = lives;
+                    }
+                    level++;
+                    levelEl.textContent = level;
+                    score += 50;
+                    scoreEl.textContent = score;
+                    deathsThisLevel = 0;
+                    generateLevel(level);
+                    let msg = 'Level ' + level;
+                    if (level >= 20) msg += ' - DRONES!';
+                    if (bonusLives > 0) msg += ' (+' + bonusLives + ' lives)';
+                    showMessage(msg, '#22C55E');
+                    setTimeout(() => hideMessage(), 1500);
+                }
+            }
+
+            // Update drones
+            drones.forEach(drone => {
+                // Patrol movement
+                drone.x += drone.speed * drone.direction;
+                if (drone.x <= drone.startX - drone.patrolRange || drone.x >= drone.startX + drone.patrolRange) {
+                    drone.direction *= -1;
+                }
+
+                // Fire lasers
+                drone.fireTimer--;
+                if (drone.fireTimer <= 0) {
+                    drone.fireTimer = drone.fireRate;
+                    // Shoot laser downward toward player
+                    const angle = Math.atan2(player.y - drone.y, player.x - drone.x);
+                    lasers.push({
+                        x: drone.x + drone.width / 2,
+                        y: drone.y + drone.height,
+                        vx: Math.cos(angle) * 6,
+                        vy: Math.sin(angle) * 6,
+                        life: 120
+                    });
+                    createParticles(drone.x + drone.width / 2, drone.y + drone.height, colors.laser, 3);
+                }
+            });
+
+            // Update lasers
+            lasers = lasers.filter(laser => {
+                laser.x += laser.vx;
+                laser.y += laser.vy;
+                laser.life--;
+
+                // Laser collision with player
+                if (invincible === 0) {
+                    const laserRect = { x: laser.x - 5, y: laser.y - 5, width: 10, height: 10 };
+                    if (rectCollision(player, laserRect)) {
+                        loseLife();
+                        return false;
+                    }
+                }
+
+                return laser.life > 0 && laser.x > 0 && laser.x < 800 && laser.y > 0 && laser.y < 500;
+            });
+
+            // Animation
+            if (Math.abs(player.vx) > 0.5) player.animFrame += 0.15;
+
+            // Clouds
+            clouds.forEach(c => { c.x += c.speed; if (c.x > 850) c.x = -80; });
+
+            // Particles
+            particles = particles.filter(p => {
+                p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.life -= 0.025;
+                return p.life > 0;
+            });
+        }
+
+        function loseLife() {
+            if (invincible > 0) return;
+            lives--;
+            deathsThisLevel++;
+            livesEl.textContent = lives;
+            createParticles(player.x + 15, player.y + 18, colors.player, 15);
+            if (lives <= 0) {
+                gameRunning = false;
+                showMessage('Game Over! Press R to restart', '#DC2626');
+            } else {
+                player.x = 50; player.y = 410; player.vx = 0; player.vy = 0;
+                invincible = 90;
+            }
+        }
+
+        function showMessage(text, color) { messageEl.textContent = text; messageEl.style.color = color; messageEl.style.display = 'block'; }
+        function hideMessage() { messageEl.style.display = 'none'; }
+
+        function restart() {
+            score = 0; level = 1; lives = 10; deathsThisLevel = 0;
+            scoreEl.textContent = score; levelEl.textContent = level; livesEl.textContent = lives;
+            gameRunning = true; invincible = 0; hideMessage(); generateLevel(1);
+        }
+
+        function draw() {
+            // Sky
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, colors.sky1);
+            gradient.addColorStop(1, colors.sky2);
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Sun
+            ctx.fillStyle = colors.sun;
+            ctx.beginPath();
+            ctx.arc(700, 60, 35, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Clouds
+            ctx.fillStyle = colors.cloud;
+            clouds.forEach(c => {
+                ctx.beginPath();
+                ctx.arc(c.x, c.y, c.size * 0.5, 0, Math.PI * 2);
+                ctx.arc(c.x + c.size * 0.4, c.y - c.size * 0.1, c.size * 0.4, 0, Math.PI * 2);
+                ctx.arc(c.x + c.size * 0.8, c.y, c.size * 0.45, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Hills
+            ctx.fillStyle = '#90BE6D';
+            ctx.beginPath();
+            ctx.moveTo(0, 430);
+            ctx.quadraticCurveTo(200, 380, 400, 420);
+            ctx.quadraticCurveTo(600, 460, 800, 400);
+            ctx.lineTo(800, 500);
+            ctx.lineTo(0, 500);
+            ctx.fill();
+
+            // Lava (draw before platforms)
+            const time = Date.now() / 100;
+            lava.forEach(l => {
+                // Glow
+                ctx.fillStyle = 'rgba(255, 69, 0, 0.3)';
+                ctx.fillRect(l.x - 5, l.y - 5, l.width + 10, l.height + 10);
+                // Main lava
+                ctx.fillStyle = colors.lava;
+                ctx.fillRect(l.x, l.y, l.width, l.height);
+                // Bubbles
+                ctx.fillStyle = colors.lavaGlow;
+                for (let i = 0; i < 3; i++) {
+                    const bx = l.x + 10 + i * 20 + Math.sin(time + i) * 5;
+                    const by = l.y + 5 + Math.abs(Math.sin(time * 0.5 + i * 2)) * 10;
+                    ctx.beginPath();
+                    ctx.arc(bx, by, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+
+            // Platforms
+            [...platforms, ...movingPlatforms].forEach(p => {
+                ctx.fillStyle = colors.platformDirt;
+                ctx.fillRect(p.x, p.y + 5, p.width, p.height - 5);
+                ctx.fillStyle = colors.platform;
+                ctx.fillRect(p.x, p.y, p.width, 8);
+                ctx.fillStyle = colors.platformTop;
+                ctx.fillRect(p.x, p.y, p.width, 3);
+            });
+
+            // Spikes
+            ctx.fillStyle = colors.spike;
+            spikes.forEach(spike => {
+                const count = Math.floor(spike.width / 12);
+                for (let i = 0; i < count; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(spike.x + i * 12, spike.y + spike.height);
+                    ctx.lineTo(spike.x + i * 12 + 6, spike.y);
+                    ctx.lineTo(spike.x + i * 12 + 12, spike.y + spike.height);
+                    ctx.fill();
+                }
+            });
+
+            // Springs
+            springs.forEach(spring => {
+                const h = spring.compressed ? 10 : 20;
+                // Base
+                ctx.fillStyle = colors.springBase;
+                ctx.fillRect(spring.x, spring.y + h - 5, spring.width, 5);
+                // Coil
+                ctx.fillStyle = colors.spring;
+                ctx.fillRect(spring.x + 5, spring.y, spring.width - 10, h - 5);
+                // Top
+                ctx.fillStyle = '#FFEC8B';
+                ctx.fillRect(spring.x + 2, spring.y, spring.width - 4, 5);
+            });
+
+            // Portals
+            portals.forEach(portal => {
+                // Glow
+                ctx.fillStyle = portal.color + '40';
+                ctx.beginPath();
+                ctx.ellipse(portal.x + 15, portal.y + 20, 25, 30, 0, 0, Math.PI * 2);
+                ctx.fill();
+                // Main portal
+                ctx.fillStyle = portal.color;
+                ctx.beginPath();
+                ctx.ellipse(portal.x + 15, portal.y + 20, 15, 20, 0, 0, Math.PI * 2);
+                ctx.fill();
+                // Inner glow
+                ctx.fillStyle = 'white';
+                ctx.globalAlpha = 0.5 + Math.sin(time * 0.1) * 0.3;
+                ctx.beginPath();
+                ctx.ellipse(portal.x + 15, portal.y + 20, 8, 12, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            });
+
+            // Flag
+            if (flag) {
+                ctx.fillStyle = colors.flagPole;
+                ctx.fillRect(flag.x + 8, flag.y, 4, flag.height);
+                ctx.fillStyle = colors.flag;
+                ctx.beginPath();
+                ctx.moveTo(flag.x + 12, flag.y);
+                ctx.lineTo(flag.x + 38, flag.y + 15);
+                ctx.lineTo(flag.x + 12, flag.y + 30);
+                ctx.fill();
+            }
+
+            // Coins
+            coins.forEach(coin => {
+                if (!coin.collected) {
+                    const bob = Math.sin(time * 0.02 + coin.bobOffset) * 2;
+                    ctx.fillStyle = colors.coin;
+                    ctx.beginPath();
+                    ctx.arc(coin.x + 10, coin.y + 10 + bob, 9, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = colors.coinShine;
+                    ctx.beginPath();
+                    ctx.arc(coin.x + 7, coin.y + 7 + bob, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+
+            // Drones
+            drones.forEach(drone => {
+                // Body
+                ctx.fillStyle = colors.drone;
+                ctx.fillRect(drone.x, drone.y, drone.width, drone.height);
+                // Cockpit
+                ctx.fillStyle = '#1F2937';
+                ctx.fillRect(drone.x + 10, drone.y + 5, 20, 10);
+                // Propellers
+                ctx.fillStyle = '#6B7280';
+                const propAngle = time * 0.5;
+                ctx.save();
+                ctx.translate(drone.x + 5, drone.y);
+                ctx.rotate(propAngle);
+                ctx.fillRect(-8, -2, 16, 4);
+                ctx.restore();
+                ctx.save();
+                ctx.translate(drone.x + drone.width - 5, drone.y);
+                ctx.rotate(-propAngle);
+                ctx.fillRect(-8, -2, 16, 4);
+                ctx.restore();
+                // Warning light
+                ctx.fillStyle = drone.fireTimer < 20 ? '#EF4444' : (Math.sin(time * 0.1) > 0 ? colors.droneLight : '#991B1B');
+                ctx.beginPath();
+                ctx.arc(drone.x + drone.width / 2, drone.y + drone.height - 3, 4, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Lasers
+            ctx.strokeStyle = colors.laser;
+            ctx.lineWidth = 3;
+            lasers.forEach(laser => {
+                // Glow
+                ctx.strokeStyle = colors.laserGlow;
+                ctx.lineWidth = 6;
+                ctx.globalAlpha = 0.3;
+                ctx.beginPath();
+                ctx.moveTo(laser.x, laser.y);
+                ctx.lineTo(laser.x - laser.vx * 2, laser.y - laser.vy * 2);
+                ctx.stroke();
+                // Core
+                ctx.strokeStyle = colors.laser;
+                ctx.lineWidth = 2;
+                ctx.globalAlpha = 1;
+                ctx.beginPath();
+                ctx.moveTo(laser.x, laser.y);
+                ctx.lineTo(laser.x - laser.vx * 2, laser.y - laser.vy * 2);
+                ctx.stroke();
+            });
+            ctx.lineWidth = 1;
+
+            // Player
+            if (invincible === 0 || Math.floor(invincible / 5) % 2 === 0) {
+                ctx.save();
+                ctx.translate(player.x + player.width / 2, player.y);
+                ctx.scale(player.facing, 1);
+                ctx.translate(-player.width / 2, 0);
+
+                ctx.fillStyle = colors.player;
+                ctx.fillRect(5, 10, 20, 22);
+                ctx.beginPath();
+                ctx.arc(15, 10, 9, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                ctx.arc(18, 8, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = 'black';
+                ctx.beginPath();
+                ctx.arc(19, 8, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = colors.playerDark;
+                const leg = Math.sin(player.animFrame) * 3;
+                ctx.fillRect(7, 30, 5, 6 + (player.onGround ? leg : 0));
+                ctx.fillRect(18, 30, 5, 6 + (player.onGround ? -leg : 0));
+
+                ctx.restore();
+            }
+
+            // Particles
+            particles.forEach(p => {
+                ctx.globalAlpha = p.life;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1;
+        }
+
+        function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
+
+        document.addEventListener('keydown', e => {
+            keys[e.code] = true;
+            if (e.code === 'KeyR') restart();
+            if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+        });
+        document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+        initClouds();
+        generateLevel(1);
+        gameLoop();
+    </script>
+</body>
+</html>
