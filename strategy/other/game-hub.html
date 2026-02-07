@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Niv's Game Hub</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0f0f23;
+            color: #e0e0e0;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        /* === MENU SCREEN === */
+        #menu-screen {
+            min-height: 100vh;
+            overflow-y: auto;
+            padding: 40px 20px 60px;
+            background: radial-gradient(ellipse at top, #1a1a3e 0%, #0f0f23 70%);
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 3em;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #00d2ff, #7b2ff7, #ff0099);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 40px;
+            font-size: 1.1em;
+        }
+
+        .games-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 24px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .game-card {
+            background: linear-gradient(145deg, #1e1e3a, #16162e);
+            border: 1px solid #2a2a50;
+            border-radius: 16px;
+            padding: 28px 24px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .game-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: var(--accent);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .game-card:hover {
+            transform: translateY(-6px);
+            border-color: var(--accent);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 20px color-mix(in srgb, var(--accent) 20%, transparent);
+        }
+
+        .game-card:hover::before { opacity: 1; }
+
+        .game-icon {
+            font-size: 2.8em;
+            margin-bottom: 16px;
+        }
+
+        .game-card h3 {
+            font-size: 1.25em;
+            margin-bottom: 8px;
+            color: #fff;
+        }
+
+        .game-card p {
+            font-size: 0.9em;
+            color: #999;
+            line-height: 1.4;
+        }
+
+        .game-tag {
+            display: inline-block;
+            margin-top: 12px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: color-mix(in srgb, var(--accent) 15%, transparent);
+            color: var(--accent);
+            border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+        }
+
+        /* === GAME SCREEN === */
+        #game-screen {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: #000;
+            z-index: 100;
+        }
+
+        #game-topbar {
+            height: 48px;
+            background: #111;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            gap: 16px;
+            border-bottom: 1px solid #333;
+        }
+
+        #back-btn {
+            background: none;
+            border: 1px solid #555;
+            color: #ddd;
+            padding: 6px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.2s;
+        }
+
+        #back-btn:hover {
+            background: #333;
+            border-color: #888;
+        }
+
+        #game-title {
+            font-size: 1em;
+            color: #aaa;
+        }
+
+        #fullscreen-btn {
+            margin-left: auto;
+            background: none;
+            border: 1px solid #555;
+            color: #ddd;
+            padding: 6px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.2s;
+        }
+
+        #fullscreen-btn:hover {
+            background: #333;
+            border-color: #888;
+        }
+
+        #game-frame {
+            width: 100%;
+            height: calc(100% - 48px);
+            border: none;
+        }
+
+        /* Stars background animation */
+        .stars {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .star {
+            position: absolute;
+            width: 2px; height: 2px;
+            background: #fff;
+            border-radius: 50%;
+            animation: twinkle var(--dur) ease-in-out infinite alternate;
+        }
+
+        @keyframes twinkle {
+            from { opacity: 0.1; }
+            to { opacity: 0.8; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- MENU -->
+<div id="menu-screen">
+    <div class="stars" id="stars"></div>
+    <h1>Niv's Game Hub</h1>
+    <p class="subtitle">Pick a game and start playing!</p>
+    <div class="games-grid" id="games-grid"></div>
+</div>
+
+<!-- GAME PLAYER -->
+<div id="game-screen">
+    <div id="game-topbar">
+        <button id="back-btn" onclick="goBack()">Back</button>
+        <span id="game-title"></span>
+        <button id="fullscreen-btn" onclick="goFullscreen()">Fullscreen</button>
+    </div>
+    <iframe id="game-frame" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
+</div>
+
+<script>
+    const games = [
+        {
+            name: "Stunt Car Battle Royale",
+            icon: "🚗",
+            desc: "Smash, flip, and outlast in a wild car arena!",
+            tag: "Action",
+            color: "#ff4444",
+            url: "../../car_battle_game.html"
+        },
+        {
+            name: "Creature Creator",
+            icon: "🧬",
+            desc: "Design unique creatures and populate the world.",
+            tag: "Creative",
+            color: "#44cc88",
+            url: "../../creature-creator.html"
+        },
+        {
+            name: "Daily Puzzle",
+            icon: "🧩",
+            desc: "A fresh brain-teaser every day.",
+            tag: "Puzzle",
+            color: "#ffaa00",
+            url: "../../daily-puzzle.html"
+        },
+        {
+            name: "Jump Game",
+            icon: "🦘",
+            desc: "Time your jumps and reach the top!",
+            tag: "Arcade",
+            color: "#00ccff",
+            url: "../../jump_game.html"
+        },
+        {
+            name: "Math Jeopardy",
+            icon: "🧠",
+            desc: "Test your math skills game-show style.",
+            tag: "Education",
+            color: "#cc66ff",
+            url: "../../math-jeopardy.html"
+        },
+        {
+            name: "Platformer Adventure",
+            icon: "🏃",
+            desc: "Run, jump, and explore side-scrolling levels.",
+            tag: "Platformer",
+            color: "#ff6644",
+            url: "../../platformer.html"
+        },
+        {
+            name: "Oishii Sushi",
+            icon: "🍣",
+            desc: "Serve sushi to hungry customers fast!",
+            tag: "Casual",
+            color: "#ff7799",
+            url: "../../sushi-game.html"
+        },
+        {
+            name: "Sushi Stack Math",
+            icon: "🍱",
+            desc: "Stack sushi by solving math problems.",
+            tag: "Education",
+            color: "#66bbff",
+            url: "../../sushi-math.html"
+        },
+        {
+            name: "Tower Defense",
+            icon: "🏰",
+            desc: "Build towers and defend against waves of enemies.",
+            tag: "Strategy",
+            color: "#44ddaa",
+            url: "../../tower-defense.html"
+        },
+        {
+            name: "Top-View Shooter",
+            icon: "🔫",
+            desc: "Survive waves of enemies in top-down combat.",
+            tag: "Action",
+            color: "#ff5555",
+            url: "top-shooter.html"
+        }
+    ];
+
+    // Render game cards
+    const grid = document.getElementById('games-grid');
+    games.forEach((game, i) => {
+        const card = document.createElement('div');
+        card.className = 'game-card';
+        card.style.setProperty('--accent', game.color);
+        card.onclick = () => launchGame(game);
+        card.innerHTML = `
+            <div class="game-icon">${game.icon}</div>
+            <h3>${game.name}</h3>
+            <p>${game.desc}</p>
+            <span class="game-tag">${game.tag}</span>
+        `;
+        grid.appendChild(card);
+    });
+
+    // Generate stars
+    const starsContainer = document.getElementById('stars');
+    for (let i = 0; i < 80; i++) {
+        const star = document.createElement('div');
+        star.className = 'star';
+        star.style.left = Math.random() * 100 + '%';
+        star.style.top = Math.random() * 100 + '%';
+        star.style.setProperty('--dur', (1.5 + Math.random() * 3) + 's');
+        star.style.animationDelay = Math.random() * 3 + 's';
+        starsContainer.appendChild(star);
+    }
+
+    function launchGame(game) {
+        document.getElementById('menu-screen').style.display = 'none';
+        document.getElementById('game-screen').style.display = 'block';
+        document.getElementById('game-title').textContent = game.name;
+        document.getElementById('game-frame').src = game.url;
+    }
+
+    function goBack() {
+        document.getElementById('game-frame').src = '';
+        document.getElementById('game-screen').style.display = 'none';
+        document.getElementById('menu-screen').style.display = '';
+    }
+
+    function goFullscreen() {
+        const frame = document.getElementById('game-frame');
+        if (frame.requestFullscreen) frame.requestFullscreen();
+        else if (frame.webkitRequestFullscreen) frame.webkitRequestFullscreen();
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && document.getElementById('game-screen').style.display === 'block') {
+            goBack();
+        }
+    });
+</script>
+</body>
+</html>
