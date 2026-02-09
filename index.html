@@ -19,20 +19,64 @@
             background: #0f0f23;
             color: #e0e0e0;
             min-height: 100vh;
-            overflow: hidden;
+        }
+
+        /* === NAV BAR === */
+        .navbar {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            background: rgba(15, 15, 35, 0.95);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid #2a2a50;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            overflow-x: auto;
+            max-width: 1240px;
+            margin: 0 auto;
+        }
+
+        .navbar::-webkit-scrollbar { height: 0; }
+
+        .nav-btn {
+            padding: 8px 18px;
+            border: 1px solid #3a3a60;
+            border-radius: 20px;
+            background: transparent;
+            color: #aaa;
+            font-size: 0.85em;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.25s;
+        }
+
+        .nav-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #ddd;
+            border-color: #555;
+        }
+
+        .nav-btn.active {
+            background: linear-gradient(135deg, #7b2ff7, #00d2ff);
+            color: #fff;
+            border-color: transparent;
         }
 
         /* === MENU SCREEN === */
         #menu-screen {
             min-height: 100vh;
             overflow-y: auto;
-            padding: 40px 20px 60px;
+            padding: 0 20px 60px;
             background: radial-gradient(ellipse at top, #1a1a3e 0%, #0f0f23 70%);
         }
 
         h1 {
             text-align: center;
             font-size: 3em;
+            margin-top: 30px;
             margin-bottom: 10px;
             background: linear-gradient(135deg, #00d2ff, #7b2ff7, #ff0099);
             -webkit-background-clip: text;
@@ -206,6 +250,7 @@
 <!-- MENU -->
 <div id="menu-screen">
     <div class="stars" id="stars"></div>
+    <nav class="navbar" id="navbar"></nav>
     <h1>Niv's Game Hub</h1>
     <p class="subtitle">Pick a game and start playing!</p>
     <div class="games-grid" id="games-grid"></div>
@@ -218,7 +263,7 @@
         <span id="game-title"></span>
         <button id="fullscreen-btn" onclick="goFullscreen()">Fullscreen</button>
     </div>
-    <iframe id="game-frame" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
+    <iframe id="game-frame"></iframe>
 </div>
 
 <script>
@@ -227,7 +272,7 @@
             name: "Stunt Car Battle Royale",
             icon: "\u{1F697}",
             desc: "Smash, flip, and outlast in a wild car arena!",
-            tag: "Action",
+            tags: ["Strategy"],
             color: "#ff4444",
             url: "car_battle_game.html"
         },
@@ -235,7 +280,7 @@
             name: "Creature Creator",
             icon: "\u{1F9EC}",
             desc: "Design unique creatures and populate the world.",
-            tag: "Creative",
+            tags: ["Other"],
             color: "#44cc88",
             url: "creature-creator.html"
         },
@@ -243,7 +288,7 @@
             name: "Daily Puzzle",
             icon: "\u{1F9E9}",
             desc: "A fresh brain-teaser every day.",
-            tag: "Puzzle",
+            tags: ["Other"],
             color: "#ffaa00",
             url: "daily-puzzle.html"
         },
@@ -251,7 +296,7 @@
             name: "Jump Game",
             icon: "\u{1F998}",
             desc: "Time your jumps and reach the top!",
-            tag: "Arcade",
+            tags: ["Other"],
             color: "#00ccff",
             url: "jump_game.html"
         },
@@ -259,7 +304,7 @@
             name: "Math Jeopardy",
             icon: "\u{1F9E0}",
             desc: "Test your math skills game-show style.",
-            tag: "Education",
+            tags: ["Math"],
             color: "#cc66ff",
             url: "math-jeopardy.html"
         },
@@ -267,7 +312,7 @@
             name: "Platformer Adventure",
             icon: "\u{1F3C3}",
             desc: "Run, jump, and explore side-scrolling levels.",
-            tag: "Platformer",
+            tags: ["Strategy"],
             color: "#ff6644",
             url: "platformer.html"
         },
@@ -275,7 +320,7 @@
             name: "Oishii Sushi",
             icon: "\u{1F363}",
             desc: "Serve sushi to hungry customers fast!",
-            tag: "Casual",
+            tags: ["Sushi Games"],
             color: "#ff7799",
             url: "sushi-game.html"
         },
@@ -283,7 +328,7 @@
             name: "Sushi Stack Math",
             icon: "\u{1F371}",
             desc: "Stack sushi by solving math problems.",
-            tag: "Education",
+            tags: ["Math", "Sushi Games"],
             color: "#66bbff",
             url: "sushi-math.html"
         },
@@ -291,7 +336,7 @@
             name: "Tower Defense",
             icon: "\u{1F3F0}",
             desc: "Build towers and defend against waves of enemies.",
-            tag: "Strategy",
+            tags: ["Strategy"],
             color: "#44ddaa",
             url: "tower-defense.html"
         },
@@ -299,27 +344,64 @@
             name: "Top-View Shooter",
             icon: "\u{1F52B}",
             desc: "Survive waves of enemies in top-down combat.",
-            tag: "Action",
+            tags: ["Strategy"],
             color: "#ff5555",
             url: "strategy/other/top-shooter.html"
         }
     ];
 
+    // Build navbar
+    const categoryOrder = ["Strategy", "Math", "Sushi Games", "Other"];
+    const navbar = document.getElementById('navbar');
+    const homeBtn = document.createElement('button');
+    homeBtn.className = 'nav-btn active';
+    homeBtn.textContent = 'Home';
+    homeBtn.onclick = () => filterGames('All');
+    navbar.appendChild(homeBtn);
+
+    categoryOrder.forEach(cat => {
+        const btn = document.createElement('button');
+        btn.className = 'nav-btn';
+        btn.textContent = cat;
+        btn.onclick = () => filterGames(cat);
+        navbar.appendChild(btn);
+    });
+
+    let activeFilter = 'All';
+
+    function filterGames(category) {
+        activeFilter = category;
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            btn.classList.toggle('active',
+                (category === 'All' && btn.textContent === 'Home') ||
+                btn.textContent === category
+            );
+        });
+        renderGames();
+    }
+
     // Render game cards
     const grid = document.getElementById('games-grid');
-    games.forEach((game, i) => {
-        const card = document.createElement('div');
-        card.className = 'game-card';
-        card.style.setProperty('--accent', game.color);
-        card.onclick = () => launchGame(game);
-        card.innerHTML = `
-            <div class="game-icon">${game.icon}</div>
-            <h3>${game.name}</h3>
-            <p>${game.desc}</p>
-            <span class="game-tag">${game.tag}</span>
-        `;
-        grid.appendChild(card);
-    });
+
+    function renderGames() {
+        grid.innerHTML = '';
+        const filtered = activeFilter === 'All' ? games : games.filter(g => g.tags.includes(activeFilter));
+        filtered.forEach((game, i) => {
+            const card = document.createElement('div');
+            card.className = 'game-card';
+            card.style.setProperty('--accent', game.color);
+            card.onclick = () => launchGame(game);
+            card.innerHTML = `
+                <div class="game-icon">${game.icon}</div>
+                <h3>${game.name}</h3>
+                <p>${game.desc}</p>
+                ${game.tags.map(t => `<span class="game-tag">${t}</span>`).join(' ')}
+            `;
+            grid.appendChild(card);
+        });
+    }
+
+    renderGames();
 
     // Generate stars
     const starsContainer = document.getElementById('stars');
@@ -337,7 +419,9 @@
         document.getElementById('menu-screen').style.display = 'none';
         document.getElementById('game-screen').style.display = 'block';
         document.getElementById('game-title').textContent = game.name;
-        document.getElementById('game-frame').src = game.url;
+        const frame = document.getElementById('game-frame');
+        frame.src = game.url;
+        frame.onload = () => frame.focus();
     }
 
     function goBack() {

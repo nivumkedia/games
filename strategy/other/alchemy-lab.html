@@ -1,0 +1,2189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alchemy Lab</title>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'IBM Plex Sans', sans-serif;
+            min-height: 100vh;
+            background:
+                repeating-linear-gradient(0deg, transparent, transparent 59px, rgba(60,80,80,0.08) 59px, rgba(60,80,80,0.08) 60px),
+                repeating-linear-gradient(90deg, transparent, transparent 59px, rgba(60,80,80,0.08) 59px, rgba(60,80,80,0.08) 60px),
+                linear-gradient(180deg, #0c1014 0%, #111a1e 50%, #0a0f12 100%);
+            color: #c0ccd0;
+            overflow-x: hidden;
+        }
+        body::after {
+            content: ''; position: fixed; bottom: 0; left: 0; right: 0; height: 120px;
+            background: radial-gradient(ellipse at 50% 100%, rgba(40,180,80,0.06) 0%, transparent 70%);
+            pointer-events: none; z-index: 0;
+        }
+
+        /* ===== HEADER — Brass Nameplate ===== */
+        header {
+            text-align: center; padding: 18px 20px 8px; position: relative;
+        }
+        h1 {
+            font-size: 2em; font-weight: 800; letter-spacing: 2px;
+            display: inline-block; position: relative;
+            padding: 10px 36px 8px;
+            background: linear-gradient(170deg, #c8a84a, #a88530, #d4b050, #9a7828);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            text-shadow: none;
+            filter: drop-shadow(0 1px 0 rgba(0,0,0,0.5));
+        }
+        h1::before, h1::after {
+            content: ''; position: absolute; width: 8px; height: 8px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #d4b860, #7a6020);
+            box-shadow: inset 0 1px 1px rgba(255,255,255,0.3), 0 1px 2px rgba(0,0,0,0.5);
+            top: 50%; transform: translateY(-50%);
+        }
+        h1::before { left: 8px; }
+        h1::after { right: 8px; }
+        .progress { font-size: 0.85em; color: #708080; margin-top: 3px; font-family: 'Share Tech Mono', monospace; }
+        .progress span { color: #40dd40; font-weight: 700; }
+
+        /* ===== ZONE TABS ===== */
+        .zone-tabs {
+            display: flex; justify-content: center; gap: 6px;
+            margin: 10px auto 0; max-width: 500px; padding: 0 16px;
+        }
+        .zone-tab {
+            flex: 1; padding: 10px 8px; border: 2px solid #2a3a3a;
+            border-radius: 4px 4px 0 0; background: rgba(15, 22, 25, 0.8);
+            color: #607070; font-family: 'Share Tech Mono', monospace;
+            font-size: 0.8em; font-weight: 700; cursor: pointer;
+            transition: all 0.2s; text-align: center; border-bottom: none;
+            text-transform: uppercase; letter-spacing: 1px;
+        }
+        .zone-tab:hover { background: rgba(25, 38, 38, 0.8); color: #90aaa0; }
+        .zone-tab.active { background: rgba(20, 45, 35, 0.8); color: #40dd40; border-color: #30805a; }
+
+        /* ===== ZONE PANELS ===== */
+        .zone-panel {
+            display: none; max-width: 650px; margin: 0 auto;
+            padding: 16px 20px 8px;
+            border: 2px solid #2a3a3a; border-top: none;
+            border-radius: 0 0 6px 6px;
+            background: rgba(12, 18, 20, 0.7);
+        }
+        .zone-panel.active { display: block; }
+
+        /* ===== WORKBENCH — Lab Bench with Beakers ===== */
+        .craft-area {
+            display: flex; align-items: flex-end; justify-content: center;
+            gap: 14px; padding: 14px 0 10px;
+            background: linear-gradient(180deg, transparent 0%, rgba(25,30,28,0.5) 40%, rgba(35,40,38,0.8) 100%);
+            border-radius: 4px;
+            position: relative;
+        }
+        .craft-area::after {
+            content: ''; position: absolute; bottom: 0; left: 5%; right: 5%; height: 3px;
+            background: linear-gradient(90deg, #2a3530, #4a5a50, #2a3530);
+            border-radius: 2px;
+        }
+        .slot {
+            width: 100px; height: 110px;
+            border: 2px dashed #3a5050; border-radius: 6px 6px 22px 22px;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            background: linear-gradient(180deg, rgba(180,210,210,0.04), rgba(140,200,200,0.08));
+            cursor: pointer; transition: all 0.2s; position: relative;
+            overflow: hidden;
+        }
+        .slot::before {
+            content: ''; position: absolute; top: 8px; left: 15%; width: 3px; height: 50%;
+            background: linear-gradient(180deg, rgba(255,255,255,0.12), transparent);
+            border-radius: 2px; pointer-events: none;
+        }
+        .slot:hover { border-color: #50807a; background: linear-gradient(180deg, rgba(180,210,210,0.06), rgba(140,200,200,0.12)); }
+        .slot.filled {
+            border-style: solid; border-color: #50807a;
+            background: linear-gradient(180deg, rgba(180,210,210,0.06), rgba(80,180,140,0.15));
+        }
+        .slot.targeted { border-color: #40dd40; box-shadow: 0 0 14px rgba(64, 221, 64, 0.2); animation: pulse 1.5s infinite; }
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 8px rgba(64, 221, 64, 0.15); }
+            50% { box-shadow: 0 0 18px rgba(64, 221, 64, 0.35); }
+        }
+        .slot .emoji {
+            font-size: 2.2em; line-height: 1;
+            width: 52px; height: 52px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 50%;
+            background: radial-gradient(circle at 40% 35%, rgba(255,255,255,0.1), rgba(0,0,0,0.12));
+            box-shadow: inset 0 2px 6px rgba(0,0,0,0.2), inset 0 -1px 3px rgba(255,255,255,0.05);
+        }
+        .slot .sname { font-size: 0.65em; margin-top: 3px; color: #90b0a8; text-align: center; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'Share Tech Mono', monospace; }
+        .slot .clear-btn { position: absolute; top: 3px; right: 5px; background: none; border: none; color: #607070; cursor: pointer; font-size: 0.9em; padding: 2px; }
+        .slot .clear-btn:hover { color: #cc2020; }
+        .plus { font-size: 1.4em; color: #506a60; font-weight: 700; user-select: none; font-family: 'Share Tech Mono', monospace; margin-bottom: 40px; }
+
+        /* ===== COMBINE BUTTON — Industrial Red ===== */
+        .action-btn {
+            border: none; color: white; padding: 12px 30px;
+            border-radius: 50px; font-family: 'IBM Plex Sans', sans-serif;
+            font-size: 0.95em; font-weight: 700; cursor: pointer;
+            transition: all 0.2s; margin: 10px auto; display: block;
+            text-transform: uppercase; letter-spacing: 1px;
+        }
+        .action-btn:hover { transform: translateY(-1px); }
+        .action-btn:active { transform: translateY(1px); }
+        .action-btn:disabled { opacity: 0.3; cursor: not-allowed; transform: none; box-shadow: none; }
+        .action-btn.combine {
+            background: radial-gradient(circle at 50% 40%, #dd3030, #aa1818);
+            box-shadow: 0 3px 0 #661010, 0 0 10px rgba(200,30,30,0.15), inset 0 1px 1px rgba(255,255,255,0.2);
+        }
+        .action-btn.combine:hover:not(:disabled) { box-shadow: 0 3px 0 #661010, 0 0 20px rgba(200,30,30,0.35), inset 0 1px 1px rgba(255,255,255,0.2); }
+        .action-btn.combine:active:not(:disabled) { box-shadow: 0 1px 0 #661010, 0 0 10px rgba(200,30,30,0.2); }
+        .action-btn.process { background: radial-gradient(circle at 50% 40%, #30aa60, #1a7a40); box-shadow: 0 3px 0 #0a4a20, inset 0 1px 1px rgba(255,255,255,0.15); }
+        .action-btn.process:hover:not(:disabled) { box-shadow: 0 3px 0 #0a4a20, 0 0 18px rgba(40, 180, 100, 0.3); }
+        .action-btn.mix { background: radial-gradient(circle at 50% 40%, #3080c0, #1a5a90); box-shadow: 0 3px 0 #0a3a60, inset 0 1px 1px rgba(255,255,255,0.15); }
+        .action-btn.mix:hover:not(:disabled) { box-shadow: 0 3px 0 #0a3a60, 0 0 18px rgba(40, 130, 200, 0.3); }
+
+        .fail-msg { text-align: center; color: #607060; font-size: 0.8em; min-height: 20px; margin-top: 4px; font-family: 'Share Tech Mono', monospace; }
+
+        /* ===== MACHINES ===== */
+        .machine-row {
+            display: flex; gap: 6px; justify-content: center;
+            flex-wrap: wrap; margin-bottom: 12px;
+        }
+        .machine-btn {
+            display: flex; flex-direction: column; align-items: center;
+            gap: 2px; padding: 8px 12px; border-radius: 6px;
+            border: 2px solid #2a3a3a; background: rgba(15, 22, 25, 0.8);
+            cursor: pointer; transition: all 0.2s; min-width: 80px;
+            font-family: 'Share Tech Mono', monospace;
+        }
+        .machine-btn .m-icon { font-size: 1.6em; }
+        .machine-btn .m-name { font-size: 0.6em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+        .machine-btn:hover { border-color: #4a6a5a; background: rgba(20, 35, 30, 0.8); }
+        .machine-btn.sel { border-color: #40dd40; background: rgba(20, 50, 35, 0.8); box-shadow: 0 0 12px rgba(64, 221, 64, 0.15); }
+
+        .machine-btn[data-m="Centrifuge"] { color: #70b8d8; }
+        .machine-btn[data-m="Centrifuge"].sel { border-color: #50a0d0; }
+        .machine-btn[data-m="Distiller"] { color: #c8a050; }
+        .machine-btn[data-m="Distiller"].sel { border-color: #b89040; }
+        .machine-btn[data-m="Crusher"] { color: #909aa8; }
+        .machine-btn[data-m="Crusher"].sel { border-color: #8088a0; }
+        .machine-btn[data-m="Smelter"] { color: #d87040; }
+        .machine-btn[data-m="Smelter"].sel { border-color: #c06020; }
+        .machine-btn[data-m="Cryochamber"] { color: #70c8e8; }
+        .machine-btn[data-m="Cryochamber"].sel { border-color: #50b0d8; }
+
+        .machine-input {
+            display: flex; align-items: center; justify-content: center; gap: 12px;
+        }
+        .machine-arrow { font-size: 1.4em; color: #40a070; }
+
+        /* Machine processing anim */
+        @keyframes machSpin { 0% { transform: rotate(0); } 100% { transform: rotate(360deg); } }
+        @keyframes machShake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+        @keyframes machGlow { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.6); } }
+        .slot.processing .emoji { animation: machSpin 0.6s ease-in-out; }
+
+        /* ===== TEST TUBES ===== */
+        .tube-area {
+            display: flex; align-items: flex-end; justify-content: center;
+            gap: 10px; padding: 10px 0;
+        }
+        .tube-slot {
+            width: 70px; height: 110px;
+            border: 2px dashed #2a4a5a; border-radius: 6px 6px 20px 20px;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            background: linear-gradient(180deg, rgba(20, 35, 40, 0.4), rgba(25, 45, 55, 0.6));
+            cursor: pointer; transition: all 0.2s; position: relative;
+        }
+        .tube-slot::after {
+            content: ''; position: absolute; bottom: 0; left: 10%; right: 10%;
+            height: 30%; border-radius: 0 0 14px 14px;
+            background: linear-gradient(180deg, transparent, rgba(40, 120, 180, 0.12));
+            pointer-events: none;
+        }
+        .tube-slot:hover { border-color: #4a7a8a; }
+        .tube-slot.filled { border-style: solid; border-color: #4a7a8a; background: linear-gradient(180deg, rgba(20, 40, 50, 0.5), rgba(30, 55, 70, 0.7)); }
+        .tube-slot.targeted { border-color: #40dd40; box-shadow: 0 0 14px rgba(64, 221, 64, 0.2); animation: pulse 1.5s infinite; }
+        .tube-slot .emoji {
+            font-size: 1.8em; line-height: 1;
+            width: 42px; height: 42px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 50%;
+            background: radial-gradient(circle at 40% 35%, rgba(255,255,255,0.08), rgba(0,0,0,0.1));
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.2), inset 0 -1px 2px rgba(255,255,255,0.04);
+        }
+        .tube-slot .sname { font-size: 0.55em; margin-top: 2px; color: #80a0b0; text-align: center; max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'Share Tech Mono', monospace; }
+        .tube-slot .clear-btn { position: absolute; top: 2px; right: 4px; background: none; border: none; color: #506a78; cursor: pointer; font-size: 0.8em; padding: 2px; }
+        .tube-slot .clear-btn:hover { color: #cc2020; }
+
+        /* Bubbling animation for mixing */
+        @keyframes bubble {
+            0% { transform: translateY(0) scale(1); opacity: 0.8; }
+            100% { transform: translateY(-40px) scale(0.3); opacity: 0; }
+        }
+        .bubble {
+            position: absolute; border-radius: 50%;
+            background: rgba(80, 160, 200, 0.4);
+            pointer-events: none; animation: bubble 0.8s ease-out forwards;
+        }
+
+        /* ===== SCIENCE MACHINE (Test Tube Zone) ===== */
+        .sci-machine {
+            position: relative; height: 280px; margin: 10px auto;
+            max-width: 600px; display: flex; align-items: center;
+        }
+        .sci-body {
+            position: absolute; top: 20px; left: 70px; right: 70px; bottom: 10px;
+            background: linear-gradient(180deg, #2e3640 0%, #222a30 30%, #1a2026 70%, #252c34 100%);
+            border: 2px solid #4a5058; border-radius: 10px;
+            box-shadow: inset 0 2px 0 rgba(255,255,255,0.1), inset 0 -2px 0 rgba(0,0,0,0.4),
+                        0 6px 20px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .sci-body::after {
+            content: ''; position: absolute; inset: 0;
+            background: repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(255,255,255,0.01) 2px, rgba(255,255,255,0.01) 3px);
+            pointer-events: none;
+        }
+        .sci-nameplate {
+            position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 2;
+            font-family: 'Share Tech Mono', monospace; font-size: 0.45em;
+            color: #808a90; letter-spacing: 3px; text-transform: uppercase;
+            background: linear-gradient(180deg, #1a1e24, #242a30);
+            padding: 3px 16px; border: 1px solid #3a4248; border-radius: 3px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 4px rgba(0,0,0,0.3);
+            white-space: nowrap;
+        }
+        .sci-rivets { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+        .sci-rivet {
+            position: absolute; width: 10px; height: 10px; border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #808890, #3a4248);
+            box-shadow: inset 0 1px 2px rgba(255,255,255,0.25), 0 1px 3px rgba(0,0,0,0.5);
+        }
+        .sci-rivet:nth-child(1) { top: 10px; left: 10px; }
+        .sci-rivet:nth-child(2) { top: 10px; right: 10px; }
+        .sci-rivet:nth-child(3) { bottom: 10px; left: 10px; }
+        .sci-rivet:nth-child(4) { bottom: 10px; right: 10px; }
+        .sci-rivet:nth-child(5) { top: 50%; left: 10px; transform: translateY(-50%); }
+        .sci-rivet:nth-child(6) { top: 50%; right: 10px; transform: translateY(-50%); }
+
+        .sci-lights { position: absolute; top: 10px; right: 34px; z-index: 2; display: flex; gap: 6px; }
+        .sci-light {
+            width: 8px; height: 8px; border-radius: 50%;
+            border: 1px solid rgba(0,0,0,0.3); box-shadow: inset 0 1px 2px rgba(0,0,0,0.4); transition: all 0.3s;
+        }
+        .sci-light.red { background: #401010; }
+        .sci-light.yellow { background: #403010; }
+        .sci-light.green { background: #103020; }
+        .sci-machine.on .sci-light.red { background: #ff3030; box-shadow: 0 0 8px #ff3030, 0 0 16px rgba(255,48,48,0.3); }
+        .sci-machine.on .sci-light.yellow { background: #ffbb30; box-shadow: 0 0 8px #ffbb30; animation: lightBlink 0.8s infinite; }
+        .sci-machine.on .sci-light.green { background: #30ff60; box-shadow: 0 0 8px #30ff60; }
+        @keyframes lightBlink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        .sci-vents { position: absolute; top: -8px; left: 50%; transform: translateX(-50%); display: flex; gap: 30px; z-index: 3; pointer-events: none; }
+        .sci-vent { width: 18px; height: 6px; background: linear-gradient(180deg, #3a4248, #2a3038); border-radius: 3px 3px 0 0; border: 1px solid #4a5058; border-bottom: none; position: relative; }
+        .sci-vent-steam { position: absolute; bottom: 100%; left: 50%; width: 4px; height: 0; background: linear-gradient(180deg, transparent, rgba(180,200,210,0.15)); border-radius: 2px; transform: translateX(-50%); opacity: 0; filter: blur(2px); }
+        .sci-machine.on .sci-vent-steam { animation: steamRise 2s ease-out infinite; }
+        .sci-machine.on .sci-vent:nth-child(2) .sci-vent-steam { animation-delay: 0.7s; }
+        .sci-machine.on .sci-vent:nth-child(3) .sci-vent-steam { animation-delay: 1.4s; }
+        @keyframes steamRise { 0% { height: 0; opacity: 0; } 20% { height: 20px; opacity: 0.6; } 60% { height: 35px; opacity: 0.3; } 100% { height: 50px; opacity: 0; transform: translateX(calc(-50% + 8px)); } }
+
+        .sci-gauge {
+            position: absolute; bottom: 12px; left: 20px; z-index: 2;
+            width: 36px; height: 36px; border-radius: 50%;
+            background: radial-gradient(circle at 45% 40%, #1a2020, #0e1214);
+            border: 2px solid #4a5058; box-shadow: inset 0 0 6px rgba(0,0,0,0.5), 0 1px 3px rgba(0,0,0,0.3);
+        }
+        .sci-gauge::before { content: ''; position: absolute; top: 50%; left: 50%; width: 2px; height: 12px; background: #cc3030; transform-origin: bottom center; transform: translate(-50%, -100%) rotate(-40deg); border-radius: 1px; transition: transform 0.5s; }
+        .sci-machine.on .sci-gauge::before { transform: translate(-50%, -100%) rotate(40deg); }
+        .sci-machine.processing .sci-gauge::before { animation: gaugeWiggle 0.4s infinite; }
+        @keyframes gaugeWiggle { 0%,100% { transform: translate(-50%, -100%) rotate(35deg); } 50% { transform: translate(-50%, -100%) rotate(55deg); } }
+        .sci-gauge::after { content: 'PSI'; position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); font-family: 'Share Tech Mono', monospace; font-size: 0.28em; color: #506060; letter-spacing: 1px; }
+
+        .sci-readout {
+            position: absolute; bottom: 14px; right: 20px; z-index: 2;
+            font-family: 'Share Tech Mono', monospace; font-size: 0.5em; color: #204030;
+            letter-spacing: 1px; background: #0a100c; padding: 4px 10px; border-radius: 3px;
+            border: 1px solid #2a3a30; box-shadow: inset 0 0 8px rgba(0,0,0,0.5); min-width: 70px; text-align: center;
+        }
+        .sci-machine.on .sci-readout { color: #40dd40; text-shadow: 0 0 6px rgba(64,221,64,0.4); }
+        .sci-machine.processing .sci-readout { animation: readoutFlicker 0.15s infinite; }
+        @keyframes readoutFlicker { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+        .sci-pipe-main {
+            position: absolute; top: 50%; left: 90px; right: 90px; height: 32px; transform: translateY(-50%); z-index: 1;
+            background: linear-gradient(180deg, rgba(120,200,220,0.1), rgba(80,160,200,0.06), rgba(60,140,180,0.08), rgba(120,200,220,0.1));
+            border: 2px solid rgba(100,170,200,0.25); border-radius: 16px;
+            box-shadow: inset 0 3px 6px rgba(0,0,0,0.25), inset 0 -2px 4px rgba(255,255,255,0.04), 0 0 12px rgba(60,160,200,0.06);
+            overflow: hidden;
+        }
+        .sci-pipe-main::before { content: ''; position: absolute; top: 3px; left: 15px; right: 15px; height: 5px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1) 30%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.1) 70%, transparent); border-radius: 3px; }
+        .sci-pipe-main::after { content: ''; position: absolute; bottom: 3px; left: 0; right: 0; height: 10px; background: repeating-linear-gradient(90deg, rgba(60,180,220,0.0), rgba(60,180,220,0.08) 40px, rgba(80,220,180,0.06) 80px, rgba(60,180,220,0.0) 120px); animation: liquidFlow 4s linear infinite; border-radius: 5px; opacity: 0.5; }
+        .sci-machine.on .sci-pipe-main::after { opacity: 1; animation-duration: 1.5s; }
+        @keyframes liquidFlow { 0% { transform: translateX(-120px); } 100% { transform: translateX(0); } }
+        .sci-machine.on .sci-pipe-main { border-color: rgba(100,220,255,0.4); box-shadow: inset 0 3px 6px rgba(0,0,0,0.2), inset 0 -2px 4px rgba(100,220,255,0.08), 0 0 20px rgba(60,200,255,0.12), 0 0 40px rgba(60,200,255,0.05); }
+
+        .sci-connector { position: absolute; z-index: 0; pointer-events: none; }
+        .sci-connector-top { top: 60px; left: 52px; width: 42px; height: 3px; background: linear-gradient(90deg, rgba(80,140,170,0.2), rgba(80,140,170,0.35)); border-radius: 2px; transform: rotate(-15deg); transform-origin: right center; }
+        .sci-connector-bot { bottom: 58px; left: 52px; width: 42px; height: 3px; background: linear-gradient(90deg, rgba(80,140,170,0.2), rgba(80,140,170,0.35)); border-radius: 2px; transform: rotate(15deg); transform-origin: right center; }
+        .sci-connector-out { top: 50%; right: 56px; width: 18px; height: 3px; transform: translateY(-50%); background: linear-gradient(90deg, rgba(80,140,170,0.35), rgba(80,140,170,0.2)); border-radius: 2px; }
+        .sci-machine.on .sci-connector-top, .sci-machine.on .sci-connector-bot, .sci-machine.on .sci-connector-out { background: linear-gradient(90deg, rgba(80,200,255,0.3), rgba(80,200,255,0.5)); box-shadow: 0 0 6px rgba(80,200,255,0.2); }
+
+        .sci-inputs { position: absolute; left: 0; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 10px; align-items: center; z-index: 2; }
+        .sci-input-slot {
+            width: 66px; height: 66px; border: 2px dashed #3a5a6a; border-radius: 10px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: linear-gradient(135deg, rgba(20,35,50,0.9), rgba(15,28,38,0.95));
+            cursor: pointer; transition: all 0.25s; position: relative;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+        .sci-input-slot::before { content: ''; position: absolute; inset: 3px; border-radius: 7px; border: 1px solid rgba(100,160,200,0.08); pointer-events: none; }
+        .sci-input-slot:hover { border-color: #5a9aaa; transform: scale(1.05); }
+        .sci-input-slot.filled { border-style: solid; border-color: #4a9aaa; background: linear-gradient(135deg, rgba(25,50,70,0.95), rgba(20,40,55,0.95)); box-shadow: 0 2px 8px rgba(0,0,0,0.3), inset 0 0 12px rgba(60,180,220,0.06); }
+        .sci-input-slot.targeted { border-color: #40dd40; box-shadow: 0 0 16px rgba(64,221,64,0.25), inset 0 0 10px rgba(64,221,64,0.06); animation: pulse 1.5s infinite; }
+        .sci-input-slot .emoji { font-size: 1.7em; transition: all 0.3s; }
+        .sci-input-slot .sname { font-size: 0.42em; color: #80a0b8; font-family: 'Share Tech Mono', monospace; max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
+        .sci-input-slot .clear-btn { position: absolute; top: 2px; right: 4px; background: none; border: none; color: #506a78; cursor: pointer; font-size: 0.7em; }
+        .sci-input-slot .clear-btn:hover { color: #ff4040; }
+        .sci-input-slot.sucking .emoji { animation: suckIn 0.5s ease-in forwards; }
+        @keyframes suckIn { 0% { transform: scale(1); opacity: 1; } 70% { transform: scale(0.3) translateX(20px); opacity: 0.5; } 100% { transform: scale(0) translateX(40px); opacity: 0; } }
+
+        .sci-output {
+            position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 66px; height: 90px; z-index: 2;
+            border: 2px solid #3a5a50; border-radius: 10px 10px 22px 22px;
+            background: linear-gradient(180deg, rgba(15,35,30,0.7), rgba(20,50,40,0.85));
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
+            overflow: hidden; transition: all 0.4s;
+        }
+        .sci-output::before { content: ''; position: absolute; top: 6px; left: 8px; width: 4px; height: 40%; background: linear-gradient(180deg, rgba(255,255,255,0.12), transparent); border-radius: 2px; pointer-events: none; z-index: 2; }
+        .sci-liquid-fill { position: absolute; bottom: 0; left: 0; right: 0; height: 0; background: linear-gradient(180deg, rgba(64,221,100,0.15), rgba(64,221,100,0.3)); transition: height 0.8s ease-in-out; border-radius: 0 0 20px 20px; }
+        .sci-machine.filling .sci-liquid-fill { height: 80%; background: linear-gradient(180deg, rgba(64,221,100,0.2), rgba(64,221,100,0.45)); box-shadow: 0 0 16px rgba(64,221,100,0.15); }
+        .sci-output .emoji { font-size: 1.9em; position: relative; z-index: 1; transition: all 0.3s; }
+        .sci-output .sname { font-size: 0.42em; color: #60a080; font-family: 'Share Tech Mono', monospace; position: relative; z-index: 1; }
+        .sci-output.glow { border-color: #40dd40; box-shadow: 0 0 20px rgba(64,221,64,0.3), 0 0 40px rgba(64,221,64,0.1); }
+
+        .sci-stations {
+            position: absolute; top: 50%; left: 120px; right: 120px; height: 70px; transform: translateY(-50%);
+            display: flex; justify-content: space-around; align-items: center; pointer-events: none; z-index: 2;
+        }
+        .sci-station {
+            width: 56px; height: 56px; border-radius: 50%; border: 2px solid rgba(100,160,190,0.25);
+            background: radial-gradient(circle at 40% 35%, rgba(80,150,180,0.12), rgba(15,30,40,0.5));
+            display: flex; align-items: center; justify-content: center; font-size: 1.4em; position: relative;
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.35), 0 0 10px rgba(60,140,180,0.06); transition: all 0.3s;
+        }
+        .sci-station .station-label { position: absolute; bottom: -16px; font-size: 0.32em; font-family: 'Share Tech Mono', monospace; color: #506870; text-transform: uppercase; letter-spacing: 1px; white-space: nowrap; }
+
+        .sci-station.heater { box-shadow: inset 0 2px 8px rgba(0,0,0,0.35), 0 4px 12px rgba(255,80,20,0.08); }
+        .sci-flame-wrap { position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 30px; height: 14px; pointer-events: none; }
+        .sci-flame { position: absolute; bottom: 0; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; }
+        .sci-flame:nth-child(1) { left: 5px; width: 8px; height: 10px; background: radial-gradient(ellipse at bottom, rgba(255,180,40,0.6), rgba(255,60,10,0.3), transparent); animation: flame1 0.5s infinite alternate; }
+        .sci-flame:nth-child(2) { left: 11px; width: 10px; height: 14px; background: radial-gradient(ellipse at bottom, rgba(255,200,60,0.7), rgba(255,80,20,0.4), transparent); animation: flame2 0.4s infinite alternate; }
+        .sci-flame:nth-child(3) { left: 18px; width: 7px; height: 9px; background: radial-gradient(ellipse at bottom, rgba(255,160,30,0.5), rgba(255,50,10,0.2), transparent); animation: flame3 0.6s infinite alternate; }
+        @keyframes flame1 { 0% { height: 8px; opacity: 0.7; } 100% { height: 12px; opacity: 1; } }
+        @keyframes flame2 { 0% { height: 11px; opacity: 0.8; } 100% { height: 15px; opacity: 1; } }
+        @keyframes flame3 { 0% { height: 7px; opacity: 0.6; } 100% { height: 11px; opacity: 0.9; } }
+
+        .sci-station.condenser { box-shadow: inset 0 2px 8px rgba(0,0,0,0.35), 0 0 12px rgba(60,180,255,0.06); }
+        .sci-coil-ring { position: absolute; border-radius: 50%; border: 2px solid transparent; }
+        .sci-coil-ring:nth-child(1) { width: 36px; height: 36px; border-top-color: rgba(60,180,255,0.35); border-right-color: rgba(60,180,255,0.15); animation: coilSpin 2.5s linear infinite; }
+        .sci-coil-ring:nth-child(2) { width: 46px; height: 46px; border-bottom-color: rgba(100,200,255,0.2); border-left-color: rgba(100,200,255,0.1); animation: coilSpin 4s linear infinite reverse; }
+        @keyframes coilSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .sci-station.reactor { box-shadow: inset 0 2px 8px rgba(0,0,0,0.35), 0 0 12px rgba(60,255,120,0.06); }
+        .sci-bubble-wrap { position: absolute; inset: 6px; border-radius: 50%; overflow: hidden; pointer-events: none; }
+        .sci-bubble { position: absolute; border-radius: 50%; background: rgba(80,255,140,0.35); box-shadow: inset 0 1px 2px rgba(255,255,255,0.2); }
+        .sci-bubble:nth-child(1) { width: 5px; height: 5px; left: 30%; bottom: 10%; animation: bubbleRise 1.8s ease-out infinite; }
+        .sci-bubble:nth-child(2) { width: 4px; height: 4px; left: 55%; bottom: 5%; animation: bubbleRise 2.2s ease-out 0.5s infinite; }
+        .sci-bubble:nth-child(3) { width: 3px; height: 3px; left: 40%; bottom: 15%; animation: bubbleRise 1.5s ease-out 1s infinite; }
+        .sci-bubble:nth-child(4) { width: 6px; height: 6px; left: 20%; bottom: 0%; animation: bubbleRise 2.5s ease-out 0.3s infinite; }
+        @keyframes bubbleRise { 0% { transform: translateY(0) scale(1); opacity: 0.7; } 50% { opacity: 0.5; } 100% { transform: translateY(-28px) scale(0.2); opacity: 0; } }
+
+        .sci-flow-particle { position: absolute; width: 10px; height: 10px; border-radius: 50%; top: 50%; transform: translateY(-50%); opacity: 0; pointer-events: none; z-index: 3; }
+        .sci-flow-particle.p1 { background: radial-gradient(circle, rgba(255,200,80,0.9), rgba(255,140,40,0.4)); box-shadow: 0 0 8px rgba(255,180,60,0.5), 0 0 16px rgba(255,140,40,0.2); }
+        .sci-flow-particle.p2 { background: radial-gradient(circle, rgba(80,200,255,0.9), rgba(40,140,220,0.4)); box-shadow: 0 0 8px rgba(80,200,255,0.5), 0 0 16px rgba(40,140,220,0.2); }
+        .sci-flow-particle.p3 { background: radial-gradient(circle, rgba(80,255,150,0.9), rgba(40,200,100,0.4)); box-shadow: 0 0 8px rgba(80,255,150,0.5); width: 8px; height: 8px; }
+        .sci-flow-particle.p4 { background: radial-gradient(circle, rgba(200,100,255,0.9), rgba(140,60,220,0.4)); box-shadow: 0 0 8px rgba(200,100,255,0.5); width: 7px; height: 7px; }
+        .sci-machine.processing .sci-flow-particle.p1 { animation: flowAcross 2.2s ease-in-out forwards; }
+        .sci-machine.processing .sci-flow-particle.p2 { animation: flowAcross 2.2s ease-in-out 0.25s forwards; }
+        .sci-machine.processing .sci-flow-particle.p3 { animation: flowAcross 2.2s ease-in-out 0.5s forwards; }
+        .sci-machine.processing .sci-flow-particle.p4 { animation: flowAcross 2.2s ease-in-out 0.75s forwards; }
+        @keyframes flowAcross {
+            0% { left: 90px; opacity: 0; transform: translateY(-50%) scale(0.5); }
+            8% { opacity: 1; transform: translateY(-50%) scale(1); }
+            25% { transform: translateY(calc(-50% - 4px)) scale(1.1); }
+            50% { transform: translateY(calc(-50% + 4px)) scale(0.9); }
+            75% { transform: translateY(calc(-50% - 2px)) scale(1.05); }
+            92% { opacity: 1; }
+            100% { left: calc(100% - 90px); opacity: 0; transform: translateY(-50%) scale(0.3); }
+        }
+
+        .sci-machine.processing .sci-station { transition: none; }
+        .sci-machine.processing .sci-station.heater { animation: stationFlashHeat 2.2s ease-in-out forwards; }
+        .sci-machine.processing .sci-station.condenser { animation: stationFlashCool 2.2s ease-in-out 0.5s forwards; }
+        .sci-machine.processing .sci-station.reactor { animation: stationFlashReact 2.2s ease-in-out 1s forwards; }
+        @keyframes stationFlashHeat {
+            0%,15% { box-shadow: inset 0 2px 8px rgba(0,0,0,0.35), 0 4px 12px rgba(255,80,20,0.08); }
+            25%,40% { box-shadow: inset 0 0 12px rgba(255,120,40,0.3), 0 0 30px rgba(255,100,30,0.5), 0 0 60px rgba(255,80,20,0.2); border-color: rgba(255,140,50,0.6); }
+            60% { box-shadow: inset 0 2px 8px rgba(0,0,0,0.35), 0 4px 12px rgba(255,80,20,0.08); }
+        }
+        @keyframes stationFlashCool {
+            0%,15% { box-shadow: inset 0 2px 8px rgba(0,0,0,0.35), 0 0 12px rgba(60,180,255,0.06); }
+            25%,40% { box-shadow: inset 0 0 12px rgba(60,180,255,0.3), 0 0 30px rgba(60,180,255,0.5), 0 0 60px rgba(60,180,255,0.2); border-color: rgba(80,200,255,0.6); }
+            60% { box-shadow: inset 0 2px 8px rgba(0,0,0,0.35), 0 0 12px rgba(60,180,255,0.06); }
+        }
+        @keyframes stationFlashReact {
+            0%,15% { box-shadow: inset 0 2px 8px rgba(0,0,0,0.35), 0 0 12px rgba(60,255,120,0.06); }
+            25%,40% { box-shadow: inset 0 0 12px rgba(60,255,120,0.3), 0 0 30px rgba(60,255,120,0.5), 0 0 60px rgba(60,255,120,0.2); border-color: rgba(80,255,140,0.6); }
+            60% { box-shadow: inset 0 2px 8px rgba(0,0,0,0.35), 0 0 12px rgba(60,255,120,0.06); }
+        }
+
+        .sci-arc { position: absolute; top: 50%; height: 2px; z-index: 2; transform: translateY(-50%); pointer-events: none; opacity: 0; }
+        .sci-arc-inner { width: 100%; height: 100%; background: linear-gradient(90deg, rgba(120,200,255,0.8), rgba(180,220,255,0.4), rgba(120,200,255,0.8)); border-radius: 1px; box-shadow: 0 0 6px rgba(120,200,255,0.5), 0 0 12px rgba(120,200,255,0.2); }
+        .sci-machine.processing .sci-arc { animation: arcFlash 2.2s ease-in-out forwards; }
+        .sci-machine.processing .sci-arc:nth-child(2) { animation-delay: 0.6s; }
+        @keyframes arcFlash { 0%,20% { opacity: 0; } 30% { opacity: 1; } 35% { opacity: 0.3; } 40% { opacity: 1; } 55% { opacity: 0.5; } 60% { opacity: 1; } 65% { opacity: 0; } }
+
+        .sci-machine.on .sci-body { box-shadow: inset 0 2px 0 rgba(255,255,255,0.1), inset 0 -2px 0 rgba(0,0,0,0.4), 0 6px 24px rgba(0,0,0,0.6), 0 0 30px rgba(40,160,200,0.08); }
+        .sci-machine.processing { animation: machineShake 0.15s infinite; }
+        @keyframes machineShake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-2px) translateY(1px); } 75% { transform: translateX(2px) translateY(-1px); } }
+
+        .sci-spark { position: absolute; pointer-events: none; z-index: 10; width: 3px; height: 3px; border-radius: 50%; background: #ffffff; }
+        .sci-spark.orange { background: #ffaa40; box-shadow: 0 0 4px #ff8020; }
+        .sci-spark.cyan { background: #40ddff; box-shadow: 0 0 4px #20aadd; }
+        .sci-spark.green { background: #40ff80; box-shadow: 0 0 4px #20dd60; }
+        @keyframes sparkFly { 0% { opacity: 1; transform: translate(0,0) scale(1); } 100% { opacity: 0; transform: translate(var(--sx), var(--sy)) scale(0); } }
+
+        .sci-exhaust { position: absolute; right: 68px; top: 28px; z-index: 1; pointer-events: none; }
+        .sci-exhaust-puff { position: absolute; width: 14px; height: 14px; border-radius: 50%; background: rgba(180,200,210,0.08); filter: blur(4px); opacity: 0; }
+        .sci-machine.exhaust .sci-exhaust-puff:nth-child(1) { animation: exhaustPuff 1s ease-out forwards; }
+        .sci-machine.exhaust .sci-exhaust-puff:nth-child(2) { animation: exhaustPuff 1s ease-out 0.15s forwards; }
+        .sci-machine.exhaust .sci-exhaust-puff:nth-child(3) { animation: exhaustPuff 1s ease-out 0.3s forwards; }
+        @keyframes exhaustPuff { 0% { opacity: 0; transform: translate(0,0) scale(0.5); } 30% { opacity: 0.7; } 100% { opacity: 0; transform: translate(20px, -30px) scale(2.5); } }
+
+        .sci-machine.fail-shake { animation: failShake 0.4s ease-out; }
+        .sci-machine.fail-shake .sci-body { box-shadow: inset 0 0 20px rgba(255,40,40,0.1), 0 6px 20px rgba(0,0,0,0.5); }
+        .sci-machine.fail-shake .sci-light.red { background: #ff3030; box-shadow: 0 0 12px #ff3030; }
+        @keyframes failShake { 0%,100% { transform: translateX(0); } 15% { transform: translateX(-4px); } 30% { transform: translateX(4px); } 45% { transform: translateX(-3px); } 60% { transform: translateX(3px); } 75% { transform: translateX(-1px); } }
+
+        /* ===== SEARCH — CRT Terminal Input ===== */
+        .search-bar { max-width: 500px; margin: 14px auto 12px; padding: 0 20px; position: relative; }
+        .search-bar input {
+            width: 100%; padding: 9px 14px; border-radius: 3px;
+            border: 2px solid #2a3a30; background: rgba(5, 12, 8, 0.95);
+            color: #40dd40; font-family: 'Share Tech Mono', monospace;
+            font-size: 0.9em; outline: none; transition: border-color 0.2s;
+            text-shadow: 0 0 4px rgba(64,221,64,0.3);
+        }
+        .search-bar input::placeholder { color: #1a5a30; }
+        .search-bar input:focus { border-color: #40dd40; box-shadow: 0 0 8px rgba(64,221,64,0.15); }
+        .search-bar::after {
+            content: ''; position: absolute; top: 0; left: 20px; right: 20px; bottom: 0;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.05) 2px, rgba(0,0,0,0.05) 4px);
+            pointer-events: none; border-radius: 3px;
+        }
+
+        /* ===== STORAGE ===== */
+        .storage-area {
+            display: flex; flex-direction: row;
+            gap: 40px;
+            padding: 30px 40px;
+            overflow-x: auto; overflow-y: hidden;
+            background:
+                linear-gradient(180deg,
+                    rgba(18,24,26,0.3) 0%,
+                    rgba(22,28,30,0.5) 85%,
+                    rgba(45,38,28,0.25) 96%,
+                    rgba(55,45,30,0.35) 100%);
+            border-radius: 10px;
+            position: relative;
+            scroll-snap-type: x proximity;
+            -webkit-overflow-scrolling: touch;
+        }
+        .storage-area::after {
+            content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 6px;
+            background: linear-gradient(90deg, #2a2218, #3a3020, #4a3a28, #3a3020, #2a2218);
+            border-radius: 0 0 10px 10px;
+            pointer-events: none;
+        }
+        .storage {
+            border-radius: 8px; transition: all 0.3s; position: relative;
+            box-shadow:
+                0 6px 20px rgba(0,0,0,0.5),
+                0 2px 6px rgba(0,0,0,0.3),
+                0 0 0 1px rgba(255,255,255,0.03);
+            overflow: visible;
+            min-width: 280px; max-width: 280px;
+            flex-shrink: 0;
+            scroll-snap-align: start;
+        }
+        .storage:hover {
+            box-shadow:
+                0 8px 28px rgba(0,0,0,0.6),
+                0 3px 8px rgba(0,0,0,0.35),
+                0 0 0 1px rgba(255,255,255,0.05);
+            transform: translateY(-1px);
+        }
+        .storage.hidden { display: none; }
+        .storage-header {
+            display: none;
+        }
+        .storage-header .icon { font-size: 1.2em; }
+        .storage-items {
+            padding: 16px; display: flex; flex-direction: column;
+            gap: 8px; min-height: 120px;
+        }
+
+        /* ===== INGREDIENT TILES — Specimen Cards ===== */
+        .ingredient {
+            display: flex; align-items: center; gap: 7px;
+            padding: 8px 14px 8px 8px; border-radius: 5px;
+            cursor: pointer; transition: all 0.15s; user-select: none;
+            position: relative;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06);
+            width: 100%;
+        }
+        .ingredient .emoji {
+            font-size: 1.2em; line-height: 1;
+            width: 30px; height: 30px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 50%;
+            background: radial-gradient(circle at 40% 35%, rgba(255,255,255,0.12), rgba(0,0,0,0.15));
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.25), inset 0 -1px 2px rgba(255,255,255,0.06);
+            flex-shrink: 0;
+        }
+        .ingredient .name { font-size: 0.72em; font-weight: 600; font-family: 'Share Tech Mono', monospace; }
+        .ingredient:hover { transform: translateY(-2px); box-shadow: 0 5px 12px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06); }
+        .ingredient.selected { outline: 2px solid #40dd40 !important; box-shadow: 0 2px 8px rgba(64,221,64,0.35), inset 0 1px 0 rgba(255,255,255,0.06); }
+
+        /* ===== STORAGE THEMES — Realistic Furniture ===== */
+
+        /* 1. WALL-MOUNTED SHELF — Element Shelf with L-Brackets */
+        .storage-elements {
+            background:
+                radial-gradient(ellipse at 50% 0%, rgba(40,30,18,0.4) 0%, transparent 60%),
+                linear-gradient(180deg, #1e1810, #161208, #1a1510, #14110c);
+            border: none;
+            box-shadow:
+                inset 0 0 40px rgba(0,0,0,0.6),
+                0 6px 20px rgba(0,0,0,0.5),
+                0 0 0 1px rgba(60,48,30,0.4);
+            border-radius: 2px;
+        }
+        .storage-elements::before, .storage-elements::after {
+            content: ''; position: absolute; pointer-events: none; z-index: 2;
+            width: 18px; height: 36px;
+            top: 50%; transform: translateY(-50%);
+        }
+        .storage-elements::before {
+            left: -6px;
+            border-bottom: 5px solid #9a8a68; border-left: 5px solid #9a8a68;
+            border-right: none; border-top: none;
+            background: linear-gradient(135deg, transparent 60%, rgba(120,100,70,0.15) 100%);
+            box-shadow: 1px -1px 3px rgba(0,0,0,0.3);
+        }
+        .storage-elements::after {
+            right: -6px;
+            border-bottom: 5px solid #9a8a68; border-right: 5px solid #9a8a68;
+            border-left: none; border-top: none;
+            background: linear-gradient(-135deg, transparent 60%, rgba(120,100,70,0.15) 100%);
+            box-shadow: -1px -1px 3px rgba(0,0,0,0.3);
+        }
+        .storage-elements .storage-items {
+            background:
+                repeating-linear-gradient(180deg, transparent 0px, transparent 40px, rgba(110,90,55,0.3) 40px, rgba(110,90,55,0.3) 44px),
+                linear-gradient(180deg, #1a1510, #14110c);
+            border-top: 5px solid;
+            border-image: linear-gradient(90deg, #5a4828, #8a7248, #6a5838, #8a7248, #5a4828) 1;
+            border-bottom: 7px solid;
+            border-bottom-color: #7a6848;
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.4);
+            padding-bottom: 18px;
+        }
+        .storage-elements .ingredient {
+            background: linear-gradient(180deg, rgba(70,52,28,0.6), rgba(55,40,22,0.7));
+            border: 1px solid #5a4828; color: #d8c490;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        .storage-elements .ingredient:hover { background: linear-gradient(180deg, rgba(90,68,35,0.7), rgba(70,52,28,0.8)); }
+
+        /* 2. WINDOW WITH SILL — Weather */
+        .storage-weather {
+            background: #060e1e;
+            border: 10px solid transparent;
+            border-image: linear-gradient(180deg, #7a6042, #5a4228, #6a5238, #4a3520, #6a5238, #5a4228) 1;
+            border-radius: 0;
+            box-shadow:
+                inset 0 0 0 2px rgba(90,70,45,0.3),
+                0 8px 24px rgba(0,0,0,0.6);
+            margin-bottom: 16px;
+        }
+        .storage-weather::before {
+            content: ''; position: absolute; top: 0; bottom: 0; left: 50%;
+            width: 6px; transform: translateX(-50%);
+            background: linear-gradient(180deg, #6a5238, #5a4228, #6a5238);
+            box-shadow: 1px 0 2px rgba(0,0,0,0.3), -1px 0 2px rgba(0,0,0,0.3);
+            pointer-events: none; z-index: 3;
+        }
+        .storage-weather::after {
+            content: ''; position: absolute; bottom: -18px; left: -20px; right: -20px;
+            height: 18px;
+            background: linear-gradient(180deg, #7a6042, #5a4228, #4a3218);
+            border-radius: 0 0 4px 4px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08);
+            pointer-events: none; z-index: 4;
+        }
+        .storage-weather .storage-items {
+            background:
+                radial-gradient(1px 1px at 12% 18%, rgba(200,220,255,0.6), transparent),
+                radial-gradient(1px 1px at 25% 45%, rgba(200,220,255,0.4), transparent),
+                radial-gradient(1.5px 1.5px at 50% 12%, rgba(220,230,255,0.7), transparent),
+                radial-gradient(1px 1px at 78% 22%, rgba(200,220,255,0.5), transparent),
+                radial-gradient(1px 1px at 88% 55%, rgba(200,220,255,0.3), transparent),
+                radial-gradient(1px 1px at 35% 72%, rgba(200,220,255,0.35), transparent),
+                radial-gradient(1px 1px at 65% 85%, rgba(200,220,255,0.3), transparent),
+                radial-gradient(1px 1px at 18% 65%, rgba(200,220,255,0.25), transparent),
+                radial-gradient(1px 1px at 92% 38%, rgba(200,220,255,0.2), transparent),
+                radial-gradient(1.5px 1.5px at 42% 35%, rgba(220,230,255,0.5), transparent),
+                radial-gradient(1px 1px at 68% 50%, rgba(200,220,255,0.3), transparent),
+                radial-gradient(ellipse at 70% 20%, rgba(40,50,80,0.3) 0%, transparent 50%),
+                linear-gradient(180deg, #04081a 0%, #081020 30%, #0a1828 60%, #0c1e34 100%);
+            position: relative;
+            min-height: 100px;
+        }
+        .storage-weather .storage-items::before {
+            content: ''; position: absolute; top: 50%; left: 0; right: 0;
+            height: 6px; transform: translateY(-50%);
+            background: linear-gradient(180deg, #6a5238, #5a4228, #6a5238);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+            pointer-events: none; z-index: 3;
+        }
+        .storage-weather .ingredient {
+            background: rgba(25, 50, 85, 0.75); border: 1px solid rgba(60,100,160,0.4); color: #a0c8e8;
+            position: relative; z-index: 2;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+        }
+        .storage-weather .ingredient:hover { background: rgba(35, 65, 110, 0.85); }
+
+        /* 3. GLASS TERRARIUM — Garden */
+        .storage-garden {
+            background: linear-gradient(180deg, rgba(12,25,16,0.95), rgba(8,18,10,0.98));
+            border: 2px solid rgba(130,210,150,0.3);
+            box-shadow:
+                0 6px 20px rgba(0,0,0,0.5),
+                inset 0 0 2px rgba(130,210,150,0.15),
+                0 0 0 1px rgba(130,210,150,0.08);
+        }
+        .storage-garden::before {
+            content: ''; position: absolute; top: 6px; left: 6px;
+            width: 55%; height: 65%;
+            background: linear-gradient(30deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02) 40%, transparent 60%);
+            pointer-events: none; z-index: 2; border-radius: 6px;
+        }
+        .storage-garden::after {
+            content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 14px;
+            background:
+                radial-gradient(ellipse at 30% 50%, rgba(100,70,35,0.4) 0%, transparent 50%),
+                radial-gradient(ellipse at 70% 50%, rgba(90,65,30,0.3) 0%, transparent 50%),
+                linear-gradient(180deg, rgba(70,50,25,0.5), rgba(65,45,22,0.7), rgba(55,38,18,0.9));
+            pointer-events: none; z-index: 2;
+            border-radius: 0 0 6px 6px;
+        }
+        .storage-garden .storage-items {
+            box-shadow: inset 0 0 25px rgba(80,180,100,0.05), inset 0 -10px 20px rgba(60,40,20,0.15);
+            background: linear-gradient(180deg, rgba(10,20,12,0.4), rgba(15,30,20,0.2));
+            min-height: 90px; padding-bottom: 20px;
+        }
+        .storage-garden .ingredient {
+            background: rgba(28, 55, 32, 0.6); border: 1px solid rgba(130,210,150,0.2); color: #a0d880;
+            position: relative; z-index: 3;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        .storage-garden .ingredient:hover { background: rgba(38, 75, 42, 0.7); }
+
+        /* 4. MUSEUM DISPLAY CASE — Animals */
+        .storage-animals {
+            background: linear-gradient(180deg, #201a14, #181410, #1c1612);
+            border: 4px solid;
+            border-image: linear-gradient(180deg, #6a5038, #5a4228, #4a3820, #5a4228) 1;
+            box-shadow:
+                inset 0 0 0 1px rgba(160,130,80,0.12),
+                inset 0 0 20px rgba(0,0,0,0.4),
+                0 6px 20px rgba(0,0,0,0.5);
+        }
+        .storage-animals::before, .storage-animals::after {
+            content: ''; position: absolute; width: 16px; height: 16px;
+            border: 2.5px solid #c8a868; pointer-events: none; z-index: 2;
+        }
+        .storage-animals::before { top: 6px; left: 6px; border-right: none; border-bottom: none; }
+        .storage-animals::after { bottom: 6px; right: 6px; border-left: none; border-top: none; }
+        .storage-animals .storage-items {
+            background:
+                radial-gradient(ellipse at 50% 50%, rgba(30,22,16,0.5) 0%, rgba(20,16,12,0.8) 100%),
+                linear-gradient(180deg, #181410, #1c1814);
+            box-shadow: inset 0 4px 16px rgba(0,0,0,0.6);
+            position: relative;
+        }
+        .storage-animals .storage-items::before, .storage-animals .storage-items::after {
+            content: ''; position: absolute; width: 16px; height: 16px;
+            border: 2.5px solid #c8a868; pointer-events: none; z-index: 2;
+        }
+        .storage-animals .storage-items::before { top: -6px; right: 6px; border-left: none; border-bottom: none; }
+        .storage-animals .storage-items::after { bottom: 6px; left: 6px; border-right: none; border-top: none; }
+        .storage-animals .ingredient {
+            background: rgba(45, 36, 26, 0.7); border: 1px solid rgba(100,80,50,0.4); color: #d0b890;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+        }
+        .storage-animals .ingredient:hover { background: rgba(65, 52, 38, 0.8); }
+
+        /* 5. METAL FILING CABINET — Materials */
+        .storage-materials {
+            background:
+                repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 4px),
+                linear-gradient(180deg, #303640, #242a32, #1e2228, #242a32, #303640);
+            border: 2px solid #555e6a;
+            box-shadow:
+                inset 0 1px 0 rgba(255,255,255,0.08),
+                inset 0 -1px 0 rgba(0,0,0,0.3),
+                0 6px 20px rgba(0,0,0,0.5);
+        }
+        .storage-materials::before {
+            content: ''; position: absolute; top: 50%; right: 12px;
+            width: 10px; height: 36px;
+            background: linear-gradient(180deg, #808a9a, #606878, #505868, #606878, #808a9a);
+            border-radius: 4px; transform: translateY(-50%);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 2px 4px rgba(0,0,0,0.4), inset 0 -1px 0 rgba(0,0,0,0.2);
+            pointer-events: none; z-index: 2;
+        }
+        .storage-materials::after {
+            content: ''; position: absolute; bottom: 8px; left: 22px;
+            width: 8px; height: 8px; border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #909aaa, #5a6474);
+            box-shadow:
+                34px 0 0 0 rgba(90,100,116,0.8),
+                68px 0 0 0 rgba(90,100,116,0.8),
+                102px 0 0 0 rgba(90,100,116,0.8),
+                inset 0 1px 1px rgba(255,255,255,0.3);
+            pointer-events: none; z-index: 2;
+        }
+        .storage-materials .storage-items {
+            background:
+                linear-gradient(180deg, #141820, #181c24, #141820);
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.4);
+        }
+        .storage-materials .ingredient {
+            background: linear-gradient(180deg, rgba(50,55,65,0.7), rgba(40,45,55,0.8));
+            border: 1px solid #444c58; color: #b0b8d0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        .storage-materials .ingredient:hover { background: linear-gradient(180deg, rgba(62,68,80,0.8), rgba(52,58,70,0.9)); }
+
+        /* 6. LAB WORKBENCH — Pegboard + Epoxy Cutting Mat */
+        .storage-workbench {
+            background: linear-gradient(180deg, #161a18, #0e1210);
+            border: 2px solid #2a3a30;
+        }
+        .storage-workbench::after {
+            content: ''; position: absolute; bottom: -6px; left: -2px; right: -2px;
+            height: 10px;
+            background: linear-gradient(180deg, #343e36, #2a3830, #1e2a24);
+            border-radius: 0 0 6px 6px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05);
+            pointer-events: none; z-index: 2;
+        }
+        .storage-workbench .storage-items {
+            background:
+                repeating-linear-gradient(0deg, transparent, transparent 29px, rgba(40,200,80,0.12) 29px, rgba(40,200,80,0.12) 30px),
+                repeating-linear-gradient(90deg, transparent, transparent 29px, rgba(40,200,80,0.12) 29px, rgba(40,200,80,0.12) 30px),
+                linear-gradient(180deg, #080c0a, #0a0e0c, #080c0a);
+            min-height: 90px;
+            box-shadow: inset 0 2px 6px rgba(0,0,0,0.4);
+        }
+        .storage-workbench .ingredient {
+            background: rgba(28, 42, 32, 0.7); border: 1px solid #2e4238; color: #a0c8a8;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        .storage-workbench .ingredient:hover { background: rgba(38, 58, 42, 0.8); }
+
+        /* 7. OPENABLE REFRIGERATOR — Fridge */
+        .storage-fridge {
+            background: linear-gradient(180deg, #eaecf0, #dce0e6, #d2d8e0, #dce0e6, #eaecf0);
+            border: 2px solid #bcc4d0;
+            border-radius: 10px;
+            box-shadow:
+                0 8px 24px rgba(0,0,0,0.4),
+                inset 0 1px 0 rgba(255,255,255,0.6),
+                inset 0 -1px 0 rgba(0,0,0,0.08),
+                0 0 0 1px rgba(255,255,255,0.15);
+        }
+        .storage-fridge::before {
+            content: ''; position: absolute; top: 34px; left: -34px;
+            width: 36px; height: calc(100% - 38px);
+            background: linear-gradient(90deg, #b8c0ca, #ccd2da, #dce2e8, #e8ecf0);
+            border: 2px solid #a8b0bc; border-right: none;
+            border-radius: 6px 0 0 6px;
+            transform: perspective(250px) rotateY(32deg);
+            transform-origin: right center;
+            box-shadow: -4px 3px 12px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.3);
+            pointer-events: none; z-index: 2;
+        }
+        .storage-fridge::after {
+            content: ''; position: absolute; top: 50%; right: 10px;
+            width: 7px; height: 38px;
+            background: linear-gradient(180deg, #d0d8e2, #b0b8c4, #a0a8b4, #b0b8c4, #d0d8e2);
+            border-radius: 4px; transform: translateY(-50%);
+            box-shadow: 2px 0 4px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.5), -1px 0 2px rgba(0,0,0,0.08);
+            pointer-events: none; z-index: 2;
+        }
+        .storage-fridge .storage-header {
+            display: flex; align-items: center; gap: 7px;
+            padding: 10px 14px; font-size: 0.7em; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 2px;
+            font-family: 'Share Tech Mono', monospace;
+            background: linear-gradient(180deg, #d0d8e2, #c4ccd6);
+            color: #4a5a6a; border-bottom: 2px solid #b0b8c4;
+            position: relative; cursor: pointer;
+            border-radius: 8px 8px 0 0;
+        }
+        .storage-fridge .storage-header::after {
+            content: '2\00B0C'; position: absolute; right: 28px; top: 50%; transform: translateY(-50%);
+            font-family: 'Share Tech Mono', monospace; font-size: 0.9em; color: #20aa50;
+            text-shadow: 0 0 8px rgba(32,170,80,0.6); letter-spacing: 0;
+            background: rgba(0,0,0,0.2); padding: 2px 8px; border-radius: 4px;
+        }
+        .storage-fridge .storage-header::before {
+            content: ''; position: absolute; right: 90px; top: 50%; transform: translateY(-50%);
+            width: 6px; height: 6px; border-radius: 50%;
+            background: #30ee50; box-shadow: 0 0 6px #30ee50, 0 0 12px rgba(48,238,80,0.3);
+            pointer-events: none;
+        }
+        .storage-fridge .storage-items {
+            background: linear-gradient(180deg, rgba(185,215,245,0.4), rgba(165,205,245,0.3), rgba(180,215,245,0.35));
+            border: 5px solid rgba(60,65,75,0.15); border-top: none;
+            box-shadow: inset 0 0 30px rgba(100,170,240,0.12);
+            background-image:
+                repeating-linear-gradient(180deg, transparent 0px, transparent 38px, rgba(160,190,210,0.18) 38px, rgba(160,190,210,0.18) 40px),
+                linear-gradient(180deg, rgba(185,215,245,0.4), rgba(165,205,245,0.3));
+            position: relative; transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease;
+            min-height: 90px;
+            border-radius: 0 0 8px 8px;
+        }
+        .storage-fridge .storage-items::after {
+            content: ''; position: absolute; top: 0; left: 15%; right: 15%;
+            height: 40px;
+            background: radial-gradient(ellipse at 50% 0%, rgba(210,235,255,0.2), transparent);
+            pointer-events: none;
+        }
+        .storage-fridge .ingredient {
+            background: rgba(255,255,255,0.8); border: 1px solid #b8c8d8; color: #3a4a5a;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+        }
+        .storage-fridge .ingredient:hover { background: rgba(255,255,255,0.95); }
+        .storage-fridge .ingredient .name { color: #3a4a5a; }
+
+        /* Fridge closed state */
+        .storage-fridge.fridge-closed .storage-items {
+            max-height: 0; padding-top: 0; padding-bottom: 0; overflow: hidden; opacity: 0; min-height: 0;
+        }
+        .storage-fridge.fridge-closed::before {
+            transform: perspective(250px) rotateY(0deg);
+            width: calc(100% + 4px); left: -2px; top: 32px;
+            border: 2px solid #a8b0bc; border-radius: 0 0 8px 8px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.25);
+        }
+        .storage-fridge.fridge-closed .storage-header { cursor: pointer; }
+        .storage-fridge.fridge-closed .storage-header::before {
+            background: #ff5020; box-shadow: 0 0 6px #ff5020, 0 0 12px rgba(255,80,32,0.3);
+        }
+
+        /* 8. WOODEN BOOKSHELF — Bookshelf */
+        .storage-bookshelf {
+            background: linear-gradient(180deg, #201410, #18100c, #1c120e);
+            border: none;
+            border-left: 7px solid; border-right: 7px solid;
+            border-image: linear-gradient(180deg, #4a2e1c, #3a2014, #4a2e1c) 1;
+            box-shadow:
+                0 6px 20px rgba(0,0,0,0.5),
+                inset 0 0 0 1px rgba(80,50,30,0.2);
+        }
+        .storage-bookshelf::before, .storage-bookshelf::after {
+            content: ''; position: absolute; top: 0; bottom: 0; width: 8px;
+            background: linear-gradient(90deg, #3e2418, #321c10, #3e2418);
+            box-shadow: inset 0 0 4px rgba(0,0,0,0.3);
+            pointer-events: none; z-index: 2;
+        }
+        .storage-bookshelf::before { left: 0; }
+        .storage-bookshelf::after { right: 0; }
+        .storage-bookshelf .storage-items {
+            background:
+                repeating-linear-gradient(180deg, transparent 0px, transparent 40px, rgba(90,55,32,0.4) 40px, rgba(90,55,32,0.4) 44px),
+                linear-gradient(180deg, #18100c, #1c1410, #18100c);
+            padding-left: 12px; padding-right: 12px;
+        }
+        .storage-bookshelf .ingredient {
+            background: linear-gradient(180deg, rgba(65,38,25,0.6), rgba(50,30,20,0.7));
+            border: 1px solid #4a2a20; border-left: 4px solid; color: #d8b898;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        .storage-bookshelf .ingredient:nth-child(7n+1) { border-left-color: #9a4030; }
+        .storage-bookshelf .ingredient:nth-child(7n+2) { border-left-color: #2a7a58; }
+        .storage-bookshelf .ingredient:nth-child(7n+3) { border-left-color: #3a4a9a; }
+        .storage-bookshelf .ingredient:nth-child(7n+4) { border-left-color: #8a7a20; }
+        .storage-bookshelf .ingredient:nth-child(7n+5) { border-left-color: #7a3068; }
+        .storage-bookshelf .ingredient:nth-child(7n+6) { border-left-color: #2a6a80; }
+        .storage-bookshelf .ingredient:nth-child(7n+7) { border-left-color: #6a4a20; }
+        .storage-bookshelf .ingredient:hover { background: linear-gradient(180deg, rgba(85,52,35,0.7), rgba(65,40,28,0.8)); }
+
+        /* 9. DRAFTING LIGHT TABLE — Terrain */
+        .storage-terrain {
+            background: linear-gradient(180deg, #222830, #1c2028, #222830);
+            border: 3px solid #555e6a;
+            box-shadow:
+                0 6px 20px rgba(0,0,0,0.5),
+                inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+        .storage-terrain::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 6px;
+            background:
+                repeating-linear-gradient(90deg,
+                    transparent 0px, transparent 9px,
+                    rgba(200,220,240,0.25) 9px, rgba(200,220,240,0.25) 10px,
+                    transparent 10px, transparent 49px,
+                    rgba(200,220,240,0.4) 49px, rgba(200,220,240,0.4) 50px);
+            pointer-events: none; z-index: 2;
+        }
+        .storage-terrain::after {
+            content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 6px;
+            background:
+                repeating-linear-gradient(180deg,
+                    transparent 0px, transparent 9px,
+                    rgba(200,220,240,0.25) 9px, rgba(200,220,240,0.25) 10px,
+                    transparent 10px, transparent 49px,
+                    rgba(200,220,240,0.4) 49px, rgba(200,220,240,0.4) 50px);
+            pointer-events: none; z-index: 2;
+        }
+        .storage-terrain .storage-items {
+            background:
+                radial-gradient(ellipse at 50% 50%, rgba(190,225,245,0.14) 0%, transparent 50%),
+                repeating-linear-gradient(0deg, transparent, transparent 19px, rgba(130,160,180,0.1) 19px, rgba(130,160,180,0.1) 20px),
+                repeating-linear-gradient(90deg, transparent, transparent 19px, rgba(130,160,180,0.1) 19px, rgba(130,160,180,0.1) 20px),
+                linear-gradient(180deg, #141820, #181c24, #141820);
+            min-height: 90px;
+        }
+        .storage-terrain .ingredient {
+            background: rgba(38, 48, 58, 0.6); border: 1px solid #444e5a; color: #c0d0e0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        .storage-terrain .ingredient:hover { background: rgba(50, 62, 76, 0.7); }
+
+        /* 10. CORK BULLETIN BOARD — People */
+        .storage-people {
+            background:
+                radial-gradient(circle at 20% 30%, rgba(190,160,100,0.1) 0%, transparent 30%),
+                radial-gradient(circle at 80% 50%, rgba(190,160,100,0.08) 0%, transparent 30%),
+                radial-gradient(circle at 40% 75%, rgba(190,160,100,0.06) 0%, transparent 25%),
+                radial-gradient(circle at 65% 20%, rgba(190,160,100,0.05) 0%, transparent 25%),
+                linear-gradient(180deg, #302820, #28201a, #2c2418, #28201a);
+            border: 5px solid;
+            border-image: linear-gradient(180deg, #6a5838, #5a4828, #4a3a20, #5a4828) 1;
+            box-shadow:
+                inset 0 0 0 2px rgba(90,75,50,0.25),
+                inset 0 0 20px rgba(0,0,0,0.3),
+                0 6px 20px rgba(0,0,0,0.5);
+        }
+        .storage-people::before {
+            content: ''; position: absolute; top: 8px; left: 12px; right: 12px;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(180,155,120,0.35) 8%, rgba(180,155,120,0.35) 92%, transparent);
+            pointer-events: none; z-index: 2;
+        }
+        .storage-people .ingredient {
+            background: rgba(250, 245, 235, 0.12); border: 1px solid rgba(200,175,130,0.2); color: #d4c4a0;
+            border-top: 3px solid #dd2525; position: relative;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.25);
+        }
+        .storage-people .ingredient:hover { background: rgba(250, 245, 235, 0.18); }
+
+        /* 11. STEEL VAULT / SAFE — Special */
+        .storage-special {
+            background:
+                repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 4px),
+                linear-gradient(180deg, #282e38, #1e2430, #1a2028, #1e2430, #282e38);
+            border: 4px solid #5e6470;
+            box-shadow:
+                inset 0 0 0 2px #3e4450,
+                inset 0 0 0 4px rgba(80,86,96,0.2),
+                0 8px 24px rgba(0,0,0,0.6);
+        }
+        .storage-special::before {
+            content: ''; position: absolute; top: 10px; left: 10px;
+            width: 8px; height: 8px; border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #9aa0b0, #5a6474);
+            box-shadow:
+                calc(100% - 28px) 0 0 0 rgba(90,100,116,0.9),
+                0 calc(100% - 28px) 0 0 rgba(90,100,116,0.9),
+                calc(100% - 28px) calc(100% - 28px) 0 0 rgba(90,100,116,0.9),
+                inset 0 1px 1px rgba(255,255,255,0.3);
+            pointer-events: none; z-index: 2;
+        }
+        .storage-special::after {
+            content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 10px;
+            background: repeating-linear-gradient(
+                -45deg, #d4b020, #d4b020 8px, #1a1c20 8px, #1a1c20 16px
+            );
+            pointer-events: none; z-index: 2;
+            border-radius: 0 0 4px 4px;
+        }
+        .storage-special .storage-items {
+            background:
+                radial-gradient(ellipse at 50% 50%, rgba(20,28,40,0.5) 0%, rgba(14,20,30,0.8) 100%),
+                linear-gradient(180deg, #141820, #181c24, #141820);
+            box-shadow: inset 0 4px 16px rgba(0,0,0,0.5);
+            position: relative;
+        }
+        .storage-special .storage-items::before {
+            content: 'UNLOCKED'; position: absolute; right: 10px; top: 8px;
+            font-family: 'Share Tech Mono', monospace; font-size: 0.55em; color: #30ee50;
+            text-shadow: 0 0 6px rgba(48,238,80,0.4); letter-spacing: 1px;
+            pointer-events: none; z-index: 2;
+        }
+        .storage-special .ingredient {
+            background: linear-gradient(180deg, rgba(50,55,65,0.7), rgba(40,45,55,0.8));
+            border: 1px solid #4e5562; color: #c8d0e0; position: relative; z-index: 3;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        .storage-special .ingredient:hover { background: linear-gradient(180deg, rgba(62,68,80,0.8), rgba(52,58,70,0.9)); }
+
+        /* 12. CLEAN LAB SHELF — Lab (green science, minimal) */
+        .storage-lab {
+            background: linear-gradient(180deg, #101e18, #0c1810, #101e18);
+            border: 2px solid #2e6048;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+        }
+        .storage-lab .storage-items {
+            background:
+                repeating-linear-gradient(180deg, transparent 0px, transparent 38px, rgba(40,150,80,0.15) 38px, rgba(40,150,80,0.15) 40px),
+                linear-gradient(180deg, #0c1810, #0a1610, #0c1810);
+            box-shadow: inset 0 2px 6px rgba(0,0,0,0.3);
+        }
+        .storage-lab .ingredient {
+            background: rgba(22, 55, 42, 0.6); border: 1px solid #2e6048; color: #90d8b0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        .storage-lab .ingredient:hover { background: rgba(32, 75, 58, 0.7); }
+
+        /* 13. GLOWING DISPLAY CABINET — Potions */
+        .storage-potions {
+            background: linear-gradient(180deg, #1c1630, #140e22, #1c1630);
+            border: 2px solid rgba(150,90,230,0.35);
+            box-shadow:
+                inset 0 0 35px rgba(110, 55, 190, 0.12),
+                0 0 16px rgba(110,55,190,0.1),
+                0 6px 20px rgba(0,0,0,0.5),
+                0 0 0 1px rgba(150,90,230,0.1);
+        }
+        .storage-potions .storage-items {
+            background:
+                radial-gradient(ellipse at 50% 50%, rgba(80,30,140,0.08) 0%, transparent 60%),
+                linear-gradient(180deg, rgba(30,18,50,0.8), rgba(20,12,35,0.9));
+            box-shadow: inset 0 0 25px rgba(130,65,210,0.08);
+        }
+        .storage-potions .ingredient {
+            background: rgba(55, 30, 95, 0.5); border: 1px solid rgba(150,90,230,0.3); color: #d4bcf4;
+            box-shadow: 0 0 8px rgba(130,65,210,0.18), 0 2px 4px rgba(0,0,0,0.3);
+        }
+        .storage-potions .ingredient:hover {
+            background: rgba(75, 42, 125, 0.6);
+            box-shadow: 0 0 14px rgba(130,65,210,0.3), 0 2px 6px rgba(0,0,0,0.35);
+        }
+
+        /* ===== RESULT OVERLAY — Microscope / Discovery Log ===== */
+        .result-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(5,8,10,0.9); z-index: 100; align-items: center; justify-content: center; }
+        .result-overlay.show { display: flex; }
+        .result-card {
+            background: linear-gradient(135deg, #0e1e20, #122a28);
+            border: 2px solid #2a5a50; border-radius: 6px;
+            padding: 36px 44px; text-align: center;
+            animation: popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            max-width: 320px; position: relative; overflow: hidden;
+        }
+        .result-card::before {
+            content: ''; position: absolute; top: 50%; left: 50%;
+            width: 200%; height: 200%; transform: translate(-50%,-50%);
+            background:
+                linear-gradient(0deg, transparent 49%, rgba(64,221,64,0.06) 49%, rgba(64,221,64,0.06) 51%, transparent 51%),
+                linear-gradient(90deg, transparent 49%, rgba(64,221,64,0.06) 49%, rgba(64,221,64,0.06) 51%, transparent 51%),
+                radial-gradient(circle at 50% 50%, transparent 30%, rgba(0,0,0,0.3) 100%);
+            pointer-events: none;
+        }
+        @keyframes popIn { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        .result-card .label { font-size: 0.75em; color: #608080; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; font-family: 'Share Tech Mono', monospace; }
+        .result-card .new-label { color: #40dd40; text-shadow: 0 0 8px rgba(64,221,64,0.3); }
+        .result-card .result-emoji {
+            font-size: 3.5em; margin: 6px auto; position: relative; z-index: 1;
+            width: 80px; height: 80px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 50%;
+            background: radial-gradient(circle at 40% 35%, rgba(255,255,255,0.1), rgba(0,0,0,0.15));
+            box-shadow: inset 0 3px 8px rgba(0,0,0,0.3), inset 0 -2px 4px rgba(255,255,255,0.05), 0 0 20px rgba(64,221,64,0.08);
+        }
+        .result-card .result-name { font-size: 1.3em; font-weight: 700; color: #d0e0e0; margin-bottom: 16px; position: relative; z-index: 1; }
+        .result-card button {
+            background: linear-gradient(135deg, #2a8a50, #1a6a38);
+            border: none; color: white; padding: 9px 26px; border-radius: 4px;
+            font-family: 'IBM Plex Sans', sans-serif; font-size: 0.9em; font-weight: 700;
+            cursor: pointer; transition: all 0.2s; text-transform: uppercase; letter-spacing: 1px;
+            position: relative; z-index: 1;
+        }
+        .result-card button:hover { background: linear-gradient(135deg, #30a060, #1e7a42); box-shadow: 0 0 12px rgba(64,221,64,0.2); }
+
+        /* ===== WIN OVERLAY ===== */
+        .win-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(5,8,10,0.95); z-index: 150; align-items: center; justify-content: center; }
+        .win-overlay.show { display: flex; }
+        .win-card {
+            background: linear-gradient(135deg, #0e1e20, #122a28);
+            border: 2px solid #c8a84a; border-radius: 8px;
+            padding: 40px 50px; text-align: center;
+            animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            max-width: 380px; position: relative; overflow: hidden;
+        }
+        .win-card::before {
+            content: ''; position: absolute; top: 50%; left: 50%;
+            width: 200%; height: 200%; transform: translate(-50%,-50%);
+            background: radial-gradient(circle at 50% 50%, rgba(200,168,74,0.08) 0%, transparent 60%);
+            pointer-events: none;
+        }
+        .win-title {
+            font-size: 2em; font-weight: 800; letter-spacing: 2px;
+            background: linear-gradient(170deg, #c8a84a, #d4b050, #e8c860);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+        .win-subtitle { font-size: 0.85em; color: #708080; font-family: 'Share Tech Mono', monospace; margin-bottom: 20px; }
+        .win-stat { font-family: 'Share Tech Mono', monospace; font-size: 0.9em; color: #90aaa0; margin: 8px 0; }
+        .win-stat span { color: #40dd40; font-weight: 700; }
+        .win-score { font-size: 2.5em; font-weight: 800; color: #c8a84a; margin: 16px 0; text-shadow: 0 0 20px rgba(200,168,74,0.3); }
+        .win-score-label { font-size: 0.75em; color: #608080; text-transform: uppercase; letter-spacing: 2px; font-family: 'Share Tech Mono', monospace; margin-bottom: 4px; }
+        .win-card button {
+            background: linear-gradient(135deg, #a88530, #c8a84a);
+            border: none; color: #0e1e20; padding: 10px 28px; border-radius: 4px;
+            font-family: 'IBM Plex Sans', sans-serif; font-size: 0.9em; font-weight: 700;
+            cursor: pointer; transition: all 0.2s; text-transform: uppercase; letter-spacing: 1px;
+            margin-top: 16px;
+        }
+        .win-card button:hover { background: linear-gradient(135deg, #c8a84a, #e8c860); box-shadow: 0 0 16px rgba(200,168,74,0.3); }
+
+        .particle { position: fixed; pointer-events: none; z-index: 200; font-size: 1.2em; animation: particleFly 1s ease-out forwards; }
+        @keyframes particleFly { 0% { opacity: 1; transform: translate(0,0) scale(1); } 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.3); } }
+
+        /* ===== HINT AREA — Lab Notebook ===== */
+        .hint-area { text-align: center; padding: 8px; }
+        .hint-btn {
+            background: none; border: 1px solid #2a3a30; color: #508060; padding: 5px 14px; border-radius: 3px;
+            font-family: 'Share Tech Mono', monospace; font-size: 0.75em; cursor: pointer; transition: all 0.2s;
+            text-transform: uppercase; letter-spacing: 1px;
+        }
+        .hint-btn:hover { border-color: #40dd40; color: #40dd40; }
+        .hint-text { color: #608870; font-size: 0.75em; margin-top: 5px; min-height: 18px; font-family: 'Share Tech Mono', monospace; }
+
+        /* ===== BOTTOM BUTTONS — Save / Reset ===== */
+        .bottom-buttons {
+            position: fixed; bottom: 14px; right: 14px;
+            display: flex; gap: 8px; z-index: 50;
+        }
+        .save-btn, .reset-btn {
+            background: rgba(15, 18, 20, 0.9); border: 1px solid #2a3030;
+            color: #607070; padding: 5px 12px; border-radius: 3px;
+            font-family: 'Share Tech Mono', monospace; font-size: 0.65em;
+            cursor: pointer; transition: all 0.2s;
+            text-transform: uppercase; letter-spacing: 1px;
+        }
+        .save-btn:hover { border-color: #40aa40; color: #40aa40; }
+        .reset-btn:hover { border-color: #cc2020; color: #cc2020; }
+
+        /* ===== MOBILE RESPONSIVE ===== */
+        @media (max-width: 600px) {
+            h1 { font-size: 1.5em; padding: 8px 28px 6px; }
+            h1::before, h1::after { width: 6px; height: 6px; }
+            h1::before { left: 6px; }
+            h1::after { right: 6px; }
+            .slot { width: 80px; height: 90px; }
+            .slot .emoji { font-size: 1.8em; width: 42px; height: 42px; }
+            .slot::before { display: none; }
+            .tube-slot { width: 58px; height: 90px; }
+            .craft-area, .tube-area { gap: 8px; }
+            .plus { margin-bottom: 30px; }
+            .storage-area { gap: 24px; padding: 16px 12px; }
+            .storage { min-width: 240px; max-width: 240px; }
+            .result-card { padding: 28px; margin: 0 16px; }
+            .machine-btn { min-width: 60px; padding: 6px 8px; }
+            .machine-btn .m-icon { font-size: 1.3em; }
+            /* Scale down furniture decorations */
+            .storage-elements::before, .storage-elements::after { width: 10px; height: 20px; border-width: 3px; }
+            .storage-animals::before, .storage-animals::after { width: 10px; height: 10px; }
+            .storage-animals .storage-items::before, .storage-animals .storage-items::after { width: 10px; height: 10px; }
+            .storage-weather::after { left: -8px; right: -8px; bottom: -8px; height: 10px; }
+            .storage-weather { border-width: 5px; }
+            .storage-fridge::before { width: 20px; left: -20px; transform: perspective(150px) rotateY(25deg); }
+            .storage-fridge::after { right: 5px; height: 22px; width: 5px; }
+            .storage-fridge.fridge-closed::before { width: calc(100% + 4px); left: -2px; }
+            .storage-materials::before { right: 6px; height: 22px; }
+            .storage-materials::after { left: 14px; }
+            .storage-bookshelf { border-left-width: 3px; border-right-width: 3px; }
+            .storage-bookshelf::before, .storage-bookshelf::after { width: 4px; }
+            .storage-terrain::before, .storage-terrain::after { display: none; }
+            .storage-people { border-width: 3px; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Alchemy Lab</h1>
+        <div class="progress">Discovered: <span id="count">4</span> / <span id="total">0</span></div>
+    </header>
+
+    <!-- Zone Tabs -->
+    <div class="zone-tabs">
+        <button class="zone-tab active" onclick="switchZone('workbench')">Workbench</button>
+        <button class="zone-tab" onclick="switchZone('machine')">Machines</button>
+        <button class="zone-tab" onclick="switchZone('testtubes')">Test Tubes</button>
+    </div>
+
+    <!-- Workbench Zone -->
+    <div class="zone-panel active" id="zone-workbench">
+        <div class="craft-area">
+            <div class="slot targeted" id="wSlot0" onclick="targetSlot('workbench',0)">
+                <span class="emoji"></span><span class="sname">Select ingredient</span>
+            </div>
+            <div class="plus">+</div>
+            <div class="slot" id="wSlot1" onclick="targetSlot('workbench',1)">
+                <span class="emoji"></span><span class="sname">Select ingredient</span>
+            </div>
+        </div>
+        <button class="action-btn combine" id="combineBtn" onclick="combine()" disabled>Combine</button>
+        <div class="fail-msg" id="wFail"></div>
+    </div>
+
+    <!-- Machine Zone -->
+    <div class="zone-panel" id="zone-machine">
+        <div class="machine-row" id="machineRow"></div>
+        <div class="machine-input">
+            <div class="slot" id="mSlot" onclick="targetSlot('machine',0)">
+                <span class="emoji"></span><span class="sname">Add ingredient</span>
+            </div>
+            <div class="machine-arrow">&#10132;</div>
+            <div class="slot" id="mResult" style="border-style:solid;border-color:#2a5a40;background:rgba(20,50,35,0.5);cursor:default;">
+                <span class="emoji"></span><span class="sname">Result</span>
+            </div>
+        </div>
+        <button class="action-btn process" id="processBtn" onclick="processMachine()" disabled>Process</button>
+        <div class="fail-msg" id="mFail"></div>
+    </div>
+
+    <!-- Test Tube Zone — Science Machine -->
+    <div class="zone-panel" id="zone-testtubes">
+        <div class="sci-machine" id="sciMachine">
+            <div class="sci-body">
+                <div class="sci-rivets">
+                    <div class="sci-rivet"></div><div class="sci-rivet"></div>
+                    <div class="sci-rivet"></div><div class="sci-rivet"></div>
+                    <div class="sci-rivet"></div><div class="sci-rivet"></div>
+                </div>
+                <div class="sci-nameplate">SYNTHESIS ENGINE MK-IV</div>
+                <div class="sci-lights">
+                    <div class="sci-light red"></div>
+                    <div class="sci-light yellow"></div>
+                    <div class="sci-light green"></div>
+                </div>
+                <div class="sci-gauge"></div>
+                <div class="sci-readout" id="sciReadout">STANDBY</div>
+            </div>
+
+            <div class="sci-vents">
+                <div class="sci-vent"><div class="sci-vent-steam"></div></div>
+                <div class="sci-vent"><div class="sci-vent-steam"></div></div>
+                <div class="sci-vent"><div class="sci-vent-steam"></div></div>
+            </div>
+
+            <div class="sci-inputs">
+                <div class="sci-input-slot" id="tSlot0" onclick="targetSlot('testtubes',0)">
+                    <span class="emoji"></span><span class="sname">Extract 1</span>
+                </div>
+                <div class="sci-input-slot" id="tSlot1" onclick="targetSlot('testtubes',1)">
+                    <span class="emoji"></span><span class="sname">Extract 2</span>
+                </div>
+            </div>
+
+            <div class="sci-connector sci-connector-top"></div>
+            <div class="sci-connector sci-connector-bot"></div>
+            <div class="sci-connector sci-connector-out"></div>
+
+            <div class="sci-pipe-main"></div>
+
+            <div class="sci-stations">
+                <div class="sci-station heater">🔥
+                    <div class="sci-flame-wrap"><div class="sci-flame"></div><div class="sci-flame"></div><div class="sci-flame"></div></div>
+                    <span class="station-label">Heat</span>
+                </div>
+                <div class="sci-station condenser">🌀
+                    <div class="sci-coil-ring"></div><div class="sci-coil-ring"></div>
+                    <span class="station-label">Condense</span>
+                </div>
+                <div class="sci-station reactor">⚗️
+                    <div class="sci-bubble-wrap"><div class="sci-bubble"></div><div class="sci-bubble"></div><div class="sci-bubble"></div><div class="sci-bubble"></div></div>
+                    <span class="station-label">React</span>
+                </div>
+            </div>
+
+            <div id="sciArcs"></div>
+
+            <div class="sci-flow-particle p1"></div>
+            <div class="sci-flow-particle p2"></div>
+            <div class="sci-flow-particle p3"></div>
+            <div class="sci-flow-particle p4"></div>
+
+            <div class="sci-output" id="sciOutput">
+                <div class="sci-liquid-fill"></div>
+                <span class="emoji"></span><span class="sname">Result</span>
+            </div>
+
+            <div class="sci-exhaust">
+                <div class="sci-exhaust-puff"></div>
+                <div class="sci-exhaust-puff"></div>
+                <div class="sci-exhaust-puff"></div>
+            </div>
+        </div>
+
+        <button class="action-btn mix" id="mixBtn" onclick="mixTubes()" disabled>Synthesize</button>
+        <div class="fail-msg" id="tFail"></div>
+    </div>
+
+    <div class="search-bar">
+        <input type="text" id="searchInput" placeholder="Search ingredients..." oninput="renderIngredients()">
+    </div>
+
+    <div class="storage-area" id="storageArea"></div>
+
+    <div class="hint-area">
+        <button class="hint-btn" onclick="showHint()">Show Hint</button>
+        <div class="hint-text" id="hintText"></div>
+    </div>
+
+    <div class="bottom-buttons">
+        <button class="save-btn" onclick="manualSave()">Save Game</button>
+        <button class="reset-btn" onclick="resetGame()">Reset Progress</button>
+    </div>
+
+    <div class="result-overlay" id="resultOverlay" onclick="closeResult(event)">
+        <div class="result-card">
+            <div class="label" id="resultLabel">You discovered</div>
+            <div class="result-emoji" id="resultEmoji"></div>
+            <div class="result-name" id="resultName"></div>
+            <button onclick="closeResult()">Continue</button>
+        </div>
+    </div>
+
+    <div class="win-overlay" id="winOverlay" onclick="closeWin(event)">
+        <div class="win-card">
+            <div class="win-title">YOU WIN!</div>
+            <div class="win-subtitle">All elements discovered!</div>
+            <div class="win-stat">Hints used: <span id="winHints">0</span></div>
+            <div class="win-score-label">Final Score</div>
+            <div class="win-score" id="winScore">1890</div>
+            <button onclick="closeWin()">Continue</button>
+        </div>
+    </div>
+
+<script>
+// ============ DATA ============
+const allIngredients = {
+    // Base
+    "Fire":"🔥","Water":"💧","Earth":"🌍","Air":"💨",
+    // Nature basics
+    "Steam":"♨️","Lava":"🌋","Smoke":"🌫️","Mud":"🟤","Cloud":"☁️","Dust":"🌬️",
+    "Stone":"🪨","Obsidian":"◼️","Brick":"🧱","Rain":"🌧️","Storm":"⛈️","Fog":"🌁",
+    "Clay":"🏺","Ash":"🔘","Energy":"💥","Wind":"🌪️","Pressure":"🔽","Lake":"🏞️",
+    "Metal":"⚙️","Sand":"🏖️","Glass":"🪟","Lightning":"⚡","Life":"✨",
+    // Plants
+    "Plant":"🌱","Tree":"🌳","Flower":"🌸","Forest":"🌲","Garden":"🌻",
+    "Mushroom":"🍄","Algae":"🟢","Seed":"🫘",
+    // Animals
+    "Animal":"🐾","Fish":"🐟","Bird":"🐦","Frog":"🐸","Egg":"🥚","Butterfly":"🦋",
+    "Worm":"🪱","Bee":"🐝","Spider":"🕷️","Snake":"🐍","Wolf":"🐺","Horse":"🐴","Dragon":"🐉",
+    // Terrain
+    "Mountain":"🏔️","Volcano":"🌋","Swamp":"🫧","Desert":"🏜️","Island":"🏝️",
+    "Sea":"🌊","Ocean":"🐳","Beach":"⛱️","Cave":"🕳️","Glacier":"🧊","Oasis":"🌴",
+    // Sky
+    "Sun":"☀️","Moon":"🌙","Star":"⭐","Snow":"❄️","Ice":"🧊","Rainbow":"🌈",
+    "Tornado":"🌪️","Thunder":"🔊","Aurora":"💜",
+    // Materials
+    "Wood":"🪵","Charcoal":"⚫","Diamond":"💎","Crystal":"🔮","Marble":"⬜",
+    "Steel":"🔩","Blade":"🗡️","Wire":"🪝","Pottery":"🫖","Paper":"📄",
+    "Fabric":"🧵","Rope":"🪢","Gunpowder":"💣","Lens":"🔍","Mirror":"🪞","Pearl":"🤍",
+    // Built
+    "Wall":"🏗️","House":"🏠","Castle":"🏰","Village":"🏘️","City":"🌆","Bridge":"🌉",
+    "Wheel":"☸️","Boat":"⛵","Ship":"🚢","Lamp":"🪔","Candle":"🕯️","Oven":"🫕",
+    "Clock":"🕐","Compass":"🧭","Telescope":"🔭",
+    // Concepts
+    "Time":"⏳","Music":"🎵","Art":"🎨","Love":"❤️","Story":"📖",
+    "Knowledge":"📚","Magic":"🪄","Potion":"🧪","Philosophy":"🤔",
+    // Food
+    "Wheat":"🌾","Dough":"🫓","Bread":"🍞","Sugar":"🍬","Chocolate":"🍫",
+    "Cheese":"🧀","Honey":"🍯","Wine":"🍷","Tea":"🍵","Coffee":"☕","Pie":"🥧","Soup":"🍲",
+    // People
+    "Human":"🧑","Farmer":"👨‍🌾","Blacksmith":"⚒️","Wizard":"🧙",
+    "Knight":"🛡️","Scientist":"🔬","Artist":"🖌️","Explorer":"🧭",
+    // Special
+    "Electricity":"⚡","Light":"💡","Shadow":"👤","Ghost":"👻","Phoenix":"🦅",
+    "Unicorn":"🦄","Treasure":"💰","Crown":"👑","Fireworks":"🎆",
+
+    // ===== LAB RESULTS (machine outputs) =====
+    // Centrifuge
+    "Fire Essence":"🔴","Water Essence":"🔵","Earth Essence":"🟤","Air Essence":"⚪",
+    "Life Essence":"💗","Plant Extract":"🟩","Crystal Dust":"💠","Spore Extract":"🟣","Plasma Charge":"🟡",
+    // Distiller
+    "Pure Water":"💎","Concentrated Elixir":"🧫","Golden Nectar":"🥇","Bio Serum":"🧬",
+    "Mineral Extract":"🛢️","Herbal Essence":"🍃","Spirit Essence":"🥃","Mycelium Extract":"🍄",
+    // Crusher
+    "Stone Powder":"ite","Diamond Dust":"💠","Metal Shavings":"🔧","Obsidian Shards":"🖤",
+    "Carbon Powder":"⬛","Marble Dust":"🤍","Crystal Shards":"🔮",
+    // Smelter
+    "Molten Metal":"🟠","Molten Glass":"🟡","Magma Core":"🔶","Superheated Steel":"🟧",
+    "Purified Water":"💧","Terracotta Core":"🧡",
+    // Cryochamber
+    "Frost Crystal":"🩵","Ice Shard":"🩶","Frozen Energy":"💙","Volcanic Glass":"🪨","Stasis Cell":"🔷","Frozen Elixir":"🧊",
+
+    // ===== POTIONS (test tube results) =====
+    "Equilibrium Potion":"⚖️","Nature's Balance":"🍀","Elixir of Vitality":"💖",
+    "Growth Serum":"🌿","Mutation Serum":"🧟","Ambrosia":"👼",
+    "Philosopher's Stone":"🪙","Duality Elixir":"☯️","Quantum Flux":"⚛️",
+    "Shadow Draught":"🌑","Iron Tonic":"🦾","Time Elixir":"⏰",
+    "Prismatic Potion":"🌈","Phoenix Tears":"🥀","Starlight Serum":"💫",
+    "Volcanic Elixir":"🌋","Clarity Potion":"👁️","Immortality Serum":"♾️",
+    "Lightning Bottle":"🫙","Earth's Blood":"🫀",
+    // Additional potions
+    "Chaos Elixir":"🌀","Gravity Potion":"🕳️","Invisibility Serum":"👁️‍🗨️",
+    "Berserk Tonic":"💢","Wisdom Draught":"🧠","Luck Potion":"🍀",
+    "Teleport Elixir":"🌌","Healing Salve":"💚","Mana Potion":"🔮",
+    "Speed Serum":"⚡",
+};
+
+// Fix broken emoji
+allIngredients["Stone Powder"] = "ite";
+// Actually just use a circle
+allIngredients["Stone Powder"] = "🪨";
+
+// Workbench recipes
+const recipes = {
+    "Fire+Water":"Steam","Earth+Fire":"Lava","Air+Fire":"Smoke","Earth+Water":"Mud",
+    "Air+Water":"Cloud","Air+Earth":"Dust","Fire+Fire":"Energy","Air+Air":"Wind",
+    "Earth+Earth":"Pressure","Water+Water":"Lake",
+    "Lava+Water":"Stone","Air+Lava":"Obsidian","Fire+Mud":"Brick","Cloud+Water":"Rain",
+    "Cloud+Cloud":"Storm","Air+Steam":"Fog","Dust+Water":"Clay","Dust+Fire":"Ash",
+    "Air+Stone":"Sand","Fire+Stone":"Metal","Fire+Sand":"Glass","Energy+Storm":"Lightning",
+    "Energy+Water":"Life","Earth+Rain":"Plant","Earth+Plant":"Tree","Plant+Water":"Algae",
+    "Plant+Plant":"Garden","Tree+Tree":"Forest","Plant+Sun":"Flower","Mud+Plant":"Mushroom",
+    "Flower+Flower":"Seed","Earth+Life":"Animal","Life+Water":"Fish","Air+Life":"Bird",
+    "Life+Swamp":"Frog","Bird+Bird":"Egg","Flower+Worm":"Butterfly","Animal+Earth":"Worm",
+    "Flower+Life":"Bee","Dust+Worm":"Spider","Animal+Swamp":"Snake","Animal+Forest":"Wolf",
+    "Animal+Wind":"Horse","Fire+Egg":"Dragon",
+    "Earth+Stone":"Mountain","Fire+Mountain":"Volcano","Lake+Mud":"Swamp","Sand+Sun":"Desert",
+    "Lake+Lake":"Sea","Sea+Sea":"Ocean","Sea+Earth":"Island","Island+Sand":"Beach",
+    "Mountain+Water":"Cave","Ice+Mountain":"Glacier","Desert+Water":"Oasis",
+    "Energy+Fire":"Sun","Energy+Sun":"Star","Cloud+Ice":"Snow","Rain+Sun":"Rainbow",
+    "Storm+Wind":"Tornado","Lightning+Storm":"Thunder","Snow+Wind":"Aurora",
+    "Fire+Tree":"Wood","Fire+Wood":"Charcoal","Pressure+Stone":"Diamond",
+    "Pressure+Sand":"Crystal","Pressure+Clay":"Marble","Fire+Metal":"Steel",
+    "Metal+Stone":"Blade","Metal+Metal":"Wire","Clay+Fire":"Pottery","Water+Wood":"Paper",
+    "Plant+Rope":"Fabric","Charcoal+Fire":"Gunpowder","Glass+Sun":"Lens",
+    "Glass+Metal":"Mirror","Sand+Sea":"Pearl","Plant+Wood":"Rope",
+    "Brick+Brick":"Wall","Wall+Wood":"House","House+Stone":"Castle","House+House":"Village",
+    "Village+Village":"City","Stone+Wood":"Bridge","Stone+Metal":"Wheel",
+    "Water+Wood":"Boat","Boat+Boat":"Ship","Fire+Glass":"Lamp","Fire+Rope":"Candle",
+    "Brick+Fire":"Oven","Metal+Time":"Clock","Metal+Star":"Compass","Glass+Star":"Telescope",
+    "Glass+Sand":"Time","Air+Wood":"Music","Human+Rainbow":"Art","Human+Flower":"Love",
+    "Human+Paper":"Story","Story+Story":"Knowledge","Knowledge+Knowledge":"Philosophy",
+    "Mushroom+Water":"Potion","Energy+Potion":"Magic",
+    "Earth+Seed":"Wheat","Water+Wheat":"Dough","Dough+Fire":"Bread","Bee+Flower":"Honey",
+    "Flower+Sugar":"Chocolate","Plant+Sugar":"Sugar","Animal+Wheat":"Cheese",
+    "Seed+Fire":"Coffee","Dough+Flower":"Pie",
+    "Clay+Life":"Human","Human+Plant":"Farmer","Human+Metal":"Blacksmith",
+    "Human+Magic":"Wizard","Human+Blade":"Knight","Human+Knowledge":"Scientist",
+    "Art+Human":"Artist","Compass+Human":"Explorer",
+    "Lightning+Metal":"Electricity","Electricity+Glass":"Light","Light+Moon":"Shadow",
+    "Human+Shadow":"Ghost","Bird+Fire":"Phoenix","Horse+Rainbow":"Unicorn",
+    "Diamond+Metal":"Treasure","Castle+Human":"Crown","Fire+Gunpowder":"Fireworks",
+    // Alt paths
+    "Ash+Water":"Clay","Cloud+Mountain":"Rain","Lake+Sun":"Steam","Obsidian+Pressure":"Diamond",
+    "Forest+Rain":"Swamp","Honey+Water":"Tea","Oven+Wheat":"Bread","Fire+Algae":"Ash",
+    "Metal+Wood":"Blade","Paper+Paper":"Story","Life+Mud":"Frog","Plant+Wind":"Seed",
+    "Bee+Plant":"Honey","Glass+Glass":"Lens","Charcoal+Stone":"Metal","Rain+Rain":"Lake",
+    "Steam+Water":"Cloud","Cloud+Sun":"Rainbow","Earth+Lava":"Volcano","Stone+Water":"Sand",
+    "Sand+Wind":"Dust","Animal+Air":"Bird","Animal+Water":"Fish","Life+Forest":"Animal",
+    "Mud+Rain":"Swamp","Crystal+Energy":"Magic","Energy+Life":"Human","Wheat+Fire":"Bread",
+    "Flower+Water":"Tea","Sugar+Water":"Chocolate","Mud+Sand":"Clay","Tree+Wind":"Wood",
+    "Charcoal+Dust":"Gunpowder","Mountain+Snow":"Glacier","Water+Wind":"Ice","Moon+Sun":"Star",
+};
+
+// Normalize workbench recipes
+const normalizedRecipes = {};
+for (const [k,v] of Object.entries(recipes)) {
+    const nk = k.split("+").sort().join("+");
+    if (!normalizedRecipes[nk]) normalizedRecipes[nk] = v;
+}
+
+// Machine recipes: machine -> { input -> output }
+const machineRecipes = {
+    "Centrifuge": {
+        "Fire":"Fire Essence","Water":"Water Essence","Earth":"Earth Essence","Air":"Air Essence",
+        "Life":"Life Essence","Plant":"Plant Extract","Crystal":"Crystal Dust",
+        "Mushroom":"Spore Extract","Energy":"Plasma Charge",
+    },
+    "Distiller": {
+        "Potion":"Concentrated Elixir","Honey":"Golden Nectar","Algae":"Bio Serum",
+        "Mud":"Mineral Extract","Tea":"Herbal Essence","Wine":"Spirit Essence",
+        "Mushroom":"Mycelium Extract","Water":"Pure Water",
+    },
+    "Crusher": {
+        "Stone":"Stone Powder","Diamond":"Diamond Dust","Metal":"Metal Shavings",
+        "Obsidian":"Obsidian Shards","Charcoal":"Carbon Powder","Marble":"Marble Dust",
+        "Crystal":"Crystal Shards",
+    },
+    "Smelter": {
+        "Metal":"Molten Metal","Sand":"Molten Glass","Stone":"Magma Core",
+        "Steel":"Superheated Steel","Ice":"Purified Water","Clay":"Terracotta Core",
+    },
+    "Cryochamber": {
+        "Water":"Frost Crystal","Steam":"Ice Shard","Energy":"Frozen Energy",
+        "Lava":"Volcanic Glass","Life":"Stasis Cell","Potion":"Frozen Elixir",
+    },
+};
+
+const machineInfo = [
+    { name: "Centrifuge", icon: "🔬", desc: "Spins to extract essences" },
+    { name: "Distiller", icon: "⚗️", desc: "Refines liquids & organics" },
+    { name: "Crusher", icon: "🔨", desc: "Pulverizes solid materials" },
+    { name: "Smelter", icon: "🔥", desc: "Superheats materials" },
+    { name: "Cryochamber", icon: "❄️", desc: "Freezes & crystallizes" },
+];
+
+// Test tube recipes (combine lab results into potions)
+const tubeRecipes = {
+    "Fire Essence+Water Essence":"Equilibrium Potion",
+    "Air Essence+Earth Essence":"Nature's Balance",
+    "Crystal Dust+Life Essence":"Elixir of Vitality",
+    "Bio Serum+Mycelium Extract":"Mutation Serum",
+    "Golden Nectar+Life Essence":"Ambrosia",
+    "Diamond Dust+Molten Metal":"Philosopher's Stone",
+    "Fire Essence+Frost Crystal":"Duality Elixir",
+    "Carbon Powder+Spirit Essence":"Shadow Draught",
+    "Frozen Energy+Metal Shavings":"Lightning Bottle",
+    "Herbal Essence+Stasis Cell":"Time Elixir",
+    "Magma Core+Obsidian Shards":"Volcanic Elixir",
+    "Diamond Dust+Molten Glass":"Starlight Serum",
+    "Crystal Dust+Frost Crystal":"Prismatic Potion",
+    "Fire Essence+Plant Extract":"Phoenix Tears",
+    "Marble Dust+Pure Water":"Clarity Potion",
+    "Bio Serum+Stasis Cell":"Immortality Serum",
+    "Mineral Extract+Stone Powder":"Earth's Blood",
+    "Plant Extract+Pure Water":"Growth Serum",
+    "Concentrated Elixir+Metal Shavings":"Iron Tonic",
+    "Frozen Energy+Plasma Charge":"Quantum Flux",
+    // Additional recipes
+    "Air Essence+Life Essence":"Growth Serum",
+    "Crystal Shards+Pure Water":"Prismatic Potion",
+    "Earth Essence+Water Essence":"Nature's Balance",
+    "Concentrated Elixir+Golden Nectar":"Ambrosia",
+    "Fire Essence+Magma Core":"Volcanic Elixir",
+    "Ice Shard+Volcanic Glass":"Duality Elixir",
+    "Crystal Dust+Spore Extract":"Mutation Serum",
+    "Herbal Essence+Pure Water":"Elixir of Vitality",
+    "Carbon Powder+Obsidian Shards":"Shadow Draught",
+    "Metal Shavings+Superheated Steel":"Iron Tonic",
+    "Frozen Elixir+Plasma Charge":"Lightning Bottle",
+    "Bio Serum+Plant Extract":"Growth Serum",
+    "Marble Dust+Mineral Extract":"Earth's Blood",
+    "Crystal Shards+Frozen Energy":"Quantum Flux",
+    "Fire Essence+Terracotta Core":"Phoenix Tears",
+    "Molten Metal+Stone Powder":"Philosopher's Stone",
+    "Golden Nectar+Herbal Essence":"Clarity Potion",
+    "Ice Shard+Stasis Cell":"Immortality Serum",
+    "Diamond Dust+Superheated Steel":"Starlight Serum",
+    "Air Essence+Spore Extract":"Elixir of Vitality",
+    "Air Essence+Plasma Charge":"Speed Serum",
+    "Concentrated Elixir+Spore Extract":"Chaos Elixir",
+    "Earth Essence+Magma Core":"Gravity Potion",
+    "Crystal Dust+Ice Shard":"Invisibility Serum",
+    "Fire Essence+Metal Shavings":"Berserk Tonic",
+    "Mycelium Extract+Pure Water":"Wisdom Draught",
+    "Golden Nectar+Stasis Cell":"Luck Potion",
+    "Frozen Energy+Volcanic Glass":"Teleport Elixir",
+    "Herbal Essence+Life Essence":"Healing Salve",
+    "Crystal Shards+Mineral Extract":"Mana Potion",
+};
+
+const normalizedTubeRecipes = {};
+for (const [k,v] of Object.entries(tubeRecipes)) {
+    const nk = k.split("+").sort().join("+");
+    if (!normalizedTubeRecipes[nk]) normalizedTubeRecipes[nk] = v;
+}
+
+// All lab result names (machine outputs)
+const labResultNames = new Set();
+for (const machine of Object.values(machineRecipes)) {
+    for (const output of Object.values(machine)) labResultNames.add(output);
+}
+
+// All potion names
+const potionNames = new Set();
+for (const p of Object.values(tubeRecipes)) potionNames.add(p);
+
+// Categories
+const categories = [
+    { id:"elements", label:"Element Shelf", icon:"🧪", css:"storage-elements",
+      items:["Fire","Water","Earth","Air","Steam","Lava","Smoke","Mud","Dust","Ash","Energy","Pressure","Life","Lightning"] },
+    { id:"weather", label:"Weather Window", icon:"🪟", css:"storage-weather",
+      items:["Cloud","Rain","Storm","Fog","Wind","Sun","Moon","Star","Snow","Ice","Rainbow","Tornado","Thunder","Aurora"] },
+    { id:"garden", label:"Garden Terrarium", icon:"🌿", css:"storage-garden",
+      items:["Plant","Tree","Flower","Forest","Garden","Mushroom","Algae","Seed"] },
+    { id:"animals", label:"Animal Pen", icon:"🐾", css:"storage-animals",
+      items:["Animal","Fish","Bird","Frog","Egg","Butterfly","Worm","Bee","Spider","Snake","Wolf","Horse"] },
+    { id:"materials", label:"Material Cabinet", icon:"🗄️", css:"storage-materials",
+      items:["Stone","Obsidian","Clay","Sand","Glass","Metal","Steel","Wood","Charcoal","Diamond","Crystal","Marble","Brick","Pearl","Wire","Rope","Fabric","Paper"] },
+    { id:"workbench", label:"Workbench", icon:"🔨", css:"storage-workbench",
+      items:["Blade","Pottery","Gunpowder","Lens","Mirror","Wall","House","Castle","Village","City","Bridge","Wheel","Boat","Ship","Lamp","Candle","Oven","Clock","Compass","Telescope"] },
+    { id:"fridge", label:"Fridge", icon:"🧊", css:"storage-fridge",
+      items:["Wheat","Dough","Bread","Sugar","Chocolate","Cheese","Honey","Wine","Tea","Coffee","Pie","Soup"] },
+    { id:"bookshelf", label:"Bookshelf", icon:"📚", css:"storage-bookshelf",
+      items:["Time","Music","Art","Love","Story","Knowledge","Magic","Potion","Philosophy"] },
+    { id:"terrain", label:"Map Table", icon:"🗺️", css:"storage-terrain",
+      items:["Lake","Mountain","Volcano","Swamp","Desert","Island","Sea","Ocean","Beach","Cave","Glacier","Oasis"] },
+    { id:"people", label:"Town Hall", icon:"🏛️", css:"storage-people",
+      items:["Human","Farmer","Blacksmith","Wizard","Knight","Scientist","Artist","Explorer"] },
+    { id:"special", label:"Treasure Chest", icon:"💎", css:"storage-special",
+      items:["Dragon","Electricity","Light","Shadow","Ghost","Phoenix","Unicorn","Treasure","Crown","Fireworks"] },
+    { id:"lab", label:"Lab Shelf", icon:"🔬", css:"storage-lab",
+      items:[...labResultNames] },
+    { id:"potions", label:"Potion Cabinet", icon:"🧪", css:"storage-potions",
+      items:[...potionNames] },
+];
+
+// ============ STATE ============
+const BASE = ["Fire","Water","Earth","Air"];
+let discovered = new Set(BASE);
+let activeZone = "workbench"; // "workbench" | "machine" | "testtubes"
+let wSlots = [null, null];
+let mSlot = null;
+let selectedMachine = "Centrifuge";
+let tSlots = [null, null];
+let target = { zone: "workbench", idx: 0 };
+let hintsUsed = 0;
+
+// ============ SAVE/LOAD ============
+function loadProgress() {
+    try {
+        const s = localStorage.getItem("alchemy-discovered-v2");
+        if (s) { discovered = new Set(JSON.parse(s)); BASE.forEach(b => discovered.add(b)); }
+        const h = localStorage.getItem("alchemy-hints-used");
+        if (h) hintsUsed = parseInt(h, 10) || 0;
+    } catch(e) {}
+}
+function saveProgress() {
+    localStorage.setItem("alchemy-discovered-v2", JSON.stringify([...discovered]));
+    localStorage.setItem("alchemy-hints-used", hintsUsed);
+}
+function manualSave() {
+    saveProgress();
+    const btn = document.querySelector('.save-btn');
+    btn.textContent = 'Saved!';
+    btn.style.borderColor = '#40aa40';
+    btn.style.color = '#40aa40';
+    setTimeout(() => { btn.textContent = 'Save Game'; btn.style.borderColor = ''; btn.style.color = ''; }, 1500);
+}
+
+function getTotalDiscoverable() {
+    const reach = new Set(BASE);
+    let changed = true;
+    while (changed) {
+        changed = false;
+        // Workbench recipes
+        for (const [k,r] of Object.entries(normalizedRecipes)) {
+            if (reach.has(r)) continue;
+            const [a,b] = k.split("+");
+            if (reach.has(a) && reach.has(b)) { reach.add(r); changed = true; }
+        }
+        // Machine recipes
+        for (const machine of Object.values(machineRecipes)) {
+            for (const [inp, out] of Object.entries(machine)) {
+                if (reach.has(out)) continue;
+                if (reach.has(inp)) { reach.add(out); changed = true; }
+            }
+        }
+        // Test tube recipes
+        for (const [k,r] of Object.entries(normalizedTubeRecipes)) {
+            if (reach.has(r)) continue;
+            const [a,b] = k.split("+");
+            if (reach.has(a) && reach.has(b)) { reach.add(r); changed = true; }
+        }
+    }
+    return reach.size;
+}
+
+function updateCount() {
+    document.getElementById("count").textContent = discovered.size;
+    document.getElementById("total").textContent = getTotalDiscoverable();
+}
+
+// ============ ZONE SWITCHING ============
+function switchZone(zone) {
+    activeZone = zone;
+    document.querySelectorAll(".zone-tab").forEach((t,i) => {
+        t.classList.toggle("active", ["workbench","machine","testtubes"][i] === zone);
+    });
+    document.querySelectorAll(".zone-panel").forEach((p,i) => {
+        p.classList.toggle("active", ["workbench","machine","testtubes"][i] === zone);
+    });
+    // Set target to first empty slot of new zone
+    if (zone === "workbench") target = { zone:"workbench", idx: wSlots[0]?1:0 };
+    else if (zone === "machine") target = { zone:"machine", idx:0 };
+    else target = { zone:"testtubes", idx: tSlots[0]?1:0 };
+    updateAllUI();
+}
+
+// ============ SLOT TARGETING ============
+function targetSlot(zone, idx) {
+    if (zone !== activeZone) switchZone(zone);
+    target = { zone, idx };
+    updateAllUI();
+}
+
+// ============ INGREDIENT SELECTION ============
+function selectIngredient(name) {
+    const z = target.zone;
+    const i = target.idx;
+    if (z === "workbench") {
+        wSlots[i] = name;
+        // Advance target
+        if (i === 0 && !wSlots[1]) target.idx = 1;
+    } else if (z === "machine") {
+        mSlot = name;
+    } else if (z === "testtubes") {
+        tSlots[i] = name;
+        if (i === 0 && !tSlots[1]) target.idx = 1;
+    }
+    updateAllUI();
+}
+
+// ============ WORKBENCH ============
+function combine() {
+    if (!wSlots[0] || !wSlots[1]) return;
+    const pair = [wSlots[0], wSlots[1]].sort().join("+");
+    const result = normalizedRecipes[pair];
+    if (result && allIngredients[result]) {
+        showResult(result);
+        wSlots = [null, null];
+        target = { zone:"workbench", idx:0 };
+    } else {
+        showFail("wFail");
+    }
+    updateAllUI();
+}
+
+// ============ MACHINES ============
+function selectMachine(name) {
+    selectedMachine = name;
+    document.querySelectorAll(".machine-btn").forEach(b => {
+        b.classList.toggle("sel", b.dataset.m === name);
+    });
+}
+
+function processMachine() {
+    if (!mSlot || !selectedMachine) return;
+    const machRecipes = machineRecipes[selectedMachine];
+    const result = machRecipes ? machRecipes[mSlot] : null;
+    if (result && allIngredients[result]) {
+        // Show processing animation
+        const slotEl = document.getElementById("mSlot");
+        slotEl.classList.add("processing");
+        setTimeout(() => {
+            slotEl.classList.remove("processing");
+            // Show result in the result slot briefly
+            const rEl = document.getElementById("mResult");
+            rEl.querySelector(".emoji").textContent = allIngredients[result];
+            rEl.querySelector(".sname").textContent = result;
+            showResult(result);
+            mSlot = null;
+            target = { zone:"machine", idx:0 };
+            updateAllUI();
+            // Clear result slot after a bit
+            setTimeout(() => {
+                rEl.querySelector(".emoji").textContent = "";
+                rEl.querySelector(".sname").textContent = "Result";
+            }, 2000);
+        }, 500);
+    } else {
+        showFail("mFail", "This machine can't process that ingredient!");
+    }
+}
+
+function buildMachineRow() {
+    const row = document.getElementById("machineRow");
+    row.innerHTML = "";
+    for (const m of machineInfo) {
+        const btn = document.createElement("button");
+        btn.className = "machine-btn" + (m.name === selectedMachine ? " sel" : "");
+        btn.dataset.m = m.name;
+        btn.title = m.desc;
+        btn.innerHTML = `<span class="m-icon">${m.icon}</span><span class="m-name">${m.name}</span>`;
+        btn.onclick = () => selectMachine(m.name);
+        row.appendChild(btn);
+    }
+}
+
+// ============ TEST TUBES (SCIENCE MACHINE) ============
+function spawnSparks(machine, color, count) {
+    for (let i = 0; i < count; i++) {
+        const spark = document.createElement('div');
+        spark.className = 'sci-spark ' + color;
+        const x = 100 + Math.random() * (machine.offsetWidth - 200);
+        const y = 40 + Math.random() * (machine.offsetHeight - 80);
+        spark.style.left = x + 'px';
+        spark.style.top = y + 'px';
+        spark.style.setProperty('--sx', (Math.random()-0.5)*60 + 'px');
+        spark.style.setProperty('--sy', (Math.random()-0.5)*60 + 'px');
+        spark.style.animation = 'sparkFly 0.6s ease-out forwards';
+        machine.appendChild(spark);
+        setTimeout(() => spark.remove(), 600);
+    }
+}
+
+function mixTubes() {
+    if (!tSlots[0] || !tSlots[1]) return;
+    const pair = [tSlots[0], tSlots[1]].sort().join("+");
+    const result = normalizedTubeRecipes[pair];
+    const machine = document.getElementById("sciMachine");
+    const btn = document.getElementById("mixBtn");
+    const readout = document.getElementById("sciReadout");
+
+    if (result && allIngredients[result]) {
+        btn.disabled = true;
+        readout.textContent = "LOADING...";
+
+        // Suck ingredients from input slots
+        document.getElementById("tSlot0").classList.add("sucking");
+        document.getElementById("tSlot1").classList.add("sucking");
+
+        setTimeout(() => {
+            readout.textContent = "PROCESSING";
+            machine.classList.add("on");
+        }, 400);
+
+        setTimeout(() => machine.classList.add("processing"), 600);
+
+        // Spawn sparks at each station as flow passes through
+        setTimeout(() => spawnSparks(machine, 'orange', 8), 1000);
+        setTimeout(() => spawnSparks(machine, 'cyan', 8), 1500);
+        setTimeout(() => spawnSparks(machine, 'green', 8), 2000);
+
+        // Fill output vial
+        setTimeout(() => {
+            readout.textContent = "COMPLETE";
+            machine.classList.add("filling");
+            const output = document.getElementById("sciOutput");
+            output.classList.add("glow");
+            output.querySelector(".emoji").textContent = allIngredients[result];
+            output.querySelector(".sname").textContent = result;
+        }, 2200);
+
+        // Exhaust steam burst
+        setTimeout(() => machine.classList.add("exhaust"), 2400);
+
+        // Clean up and show result
+        setTimeout(() => {
+            machine.classList.remove("on", "processing", "filling", "exhaust");
+            document.getElementById("tSlot0").classList.remove("sucking");
+            document.getElementById("tSlot1").classList.remove("sucking");
+            const output = document.getElementById("sciOutput");
+            output.classList.remove("glow");
+            readout.textContent = "STANDBY";
+            showResult(result);
+            tSlots = [null, null];
+            target = { zone:"testtubes", idx:0 };
+            updateAllUI();
+            setTimeout(() => {
+                output.querySelector(".emoji").textContent = "";
+                output.querySelector(".sname").textContent = "Result";
+            }, 2000);
+        }, 3000);
+    } else {
+        // Failure — aggressive red shake
+        machine.classList.add("fail-shake");
+        readout.textContent = "ERROR";
+        machine.querySelector(".sci-readout").style.color = "#ff4040";
+        machine.querySelector(".sci-readout").style.textShadow = "0 0 6px rgba(255,64,64,0.4)";
+        spawnSparks(machine, 'orange', 5);
+        setTimeout(() => {
+            machine.classList.remove("fail-shake");
+            readout.textContent = "STANDBY";
+            machine.querySelector(".sci-readout").style.color = "";
+            machine.querySelector(".sci-readout").style.textShadow = "";
+        }, 600);
+        showFail("tFail", "These extracts don\'t react together...");
+    }
+}
+// ============ RESULT / FAIL ============
+function showResult(name) {
+    const isNew = !discovered.has(name);
+    discovered.add(name);
+    saveProgress();
+    document.getElementById("resultLabel").textContent = isNew ? "New discovery!" : "You created";
+    document.getElementById("resultLabel").className = isNew ? "label new-label" : "label";
+    document.getElementById("resultEmoji").textContent = allIngredients[name];
+    document.getElementById("resultName").textContent = name;
+    document.getElementById("resultOverlay").classList.add("show");
+    if (isNew) {
+        spawnParticles();
+        updateCount();
+        renderIngredients();
+        if (discovered.size >= getTotalDiscoverable()) {
+            setTimeout(() => { closeResult(); showWin(); }, 1200);
+        }
+    } else {
+        updateCount();
+        renderIngredients();
+    }
+}
+
+function showFail(elId, msg) {
+    const el = document.getElementById(elId);
+    el.textContent = msg || "Nothing happened... try a different combination!";
+    setTimeout(() => { el.textContent = ""; }, 2500);
+}
+
+function closeResult(e) {
+    if (e && e.target !== document.getElementById("resultOverlay") && !e.target.matches("button")) return;
+    document.getElementById("resultOverlay").classList.remove("show");
+}
+
+function spawnParticles() {
+    const sp = ["✨","⭐","💫","🌟","✦"];
+    for (let i = 0; i < 12; i++) {
+        const p = document.createElement("div");
+        p.className = "particle";
+        p.textContent = sp[Math.floor(Math.random()*sp.length)];
+        p.style.left = (window.innerWidth/2 + (Math.random()-0.5)*60) + "px";
+        p.style.top = (window.innerHeight/2 + (Math.random()-0.5)*60) + "px";
+        const a = Math.random()*Math.PI*2, d = 80+Math.random()*120;
+        p.style.setProperty("--dx", Math.cos(a)*d+"px");
+        p.style.setProperty("--dy", Math.sin(a)*d+"px");
+        document.body.appendChild(p);
+        setTimeout(() => p.remove(), 1000);
+    }
+}
+
+// ============ UPDATE UI ============
+function updateAllUI() {
+    // Workbench slots
+    updateSlotEl("wSlot0", wSlots[0], "workbench", 0, "Select ingredient");
+    updateSlotEl("wSlot1", wSlots[1], "workbench", 1, "Select ingredient");
+    document.getElementById("combineBtn").disabled = !(wSlots[0] && wSlots[1]);
+
+    // Machine slot
+    updateSlotEl("mSlot", mSlot, "machine", 0, "Add ingredient");
+    document.getElementById("processBtn").disabled = !mSlot;
+
+    // Test tube slots
+    updateTubeEl("tSlot0", tSlots[0], "testtubes", 0);
+    updateTubeEl("tSlot1", tSlots[1], "testtubes", 1);
+    document.getElementById("mixBtn").disabled = !(tSlots[0] && tSlots[1]);
+
+    renderIngredients();
+}
+
+function updateSlotEl(id, value, zone, idx, placeholder) {
+    const el = document.getElementById(id);
+    const emo = el.querySelector(".emoji");
+    const nm = el.querySelector(".sname");
+    const old = el.querySelector(".clear-btn");
+    if (old) old.remove();
+
+    el.classList.toggle("filled", !!value);
+    el.classList.toggle("targeted", target.zone === zone && target.idx === idx && !value);
+
+    if (value) {
+        emo.textContent = allIngredients[value] || "?";
+        nm.textContent = value;
+        const cb = document.createElement("button");
+        cb.className = "clear-btn"; cb.textContent = "\u2715";
+        cb.onclick = (e) => {
+            e.stopPropagation();
+            if (zone === "workbench") wSlots[idx] = null;
+            else if (zone === "machine") mSlot = null;
+            target = { zone, idx };
+            updateAllUI();
+        };
+        el.appendChild(cb);
+    } else {
+        emo.textContent = "";
+        nm.textContent = placeholder || "";
+    }
+}
+
+function updateTubeEl(id, value, zone, idx) {
+    const el = document.getElementById(id);
+    const emo = el.querySelector(".emoji");
+    const nm = el.querySelector(".sname");
+    const old = el.querySelector(".clear-btn");
+    if (old) old.remove();
+
+    el.classList.toggle("filled", !!value);
+    el.classList.toggle("targeted", target.zone === zone && target.idx === idx && !value);
+
+    if (value) {
+        emo.textContent = allIngredients[value] || "?";
+        nm.textContent = value;
+        const cb = document.createElement("button");
+        cb.className = "clear-btn"; cb.textContent = "\u2715";
+        cb.onclick = (e) => {
+            e.stopPropagation();
+            tSlots[idx] = null;
+            target = { zone, idx };
+            updateAllUI();
+        };
+        el.appendChild(cb);
+    } else {
+        emo.textContent = "";
+        nm.textContent = idx === 0 ? "Extract 1" : "Extract 2";
+    }
+}
+
+// ============ RENDER STORAGE ============
+function renderIngredients() {
+    const area = document.getElementById("storageArea");
+    const search = document.getElementById("searchInput").value.toLowerCase();
+    area.innerHTML = "";
+
+    for (const cat of categories) {
+        const visible = cat.items.filter(n => discovered.has(n) && (!search || n.toLowerCase().includes(search)));
+        const container = document.createElement("div");
+        container.className = `storage ${cat.css}`;
+        if (visible.length === 0) { container.classList.add("hidden"); area.appendChild(container); continue; }
+
+        const header = document.createElement("div");
+        header.className = "storage-header";
+        header.innerHTML = `<span class="icon">${cat.icon}</span> ${cat.label}`;
+        container.appendChild(header);
+
+        const items = document.createElement("div");
+        items.className = "storage-items";
+        for (const name of visible) {
+            const div = document.createElement("div");
+            div.className = "ingredient";
+            const isSelected = wSlots.includes(name) || mSlot === name || tSlots.includes(name);
+            if (isSelected) div.classList.add("selected");
+            div.innerHTML = `<span class="emoji">${allIngredients[name]||"?"}</span><span class="name">${name}</span>`;
+            div.onclick = () => selectIngredient(name);
+            items.appendChild(div);
+        }
+        container.appendChild(items);
+        area.appendChild(container);
+    }
+}
+
+// ============ HINTS ============
+function showHint() {
+    const hintEl = document.getElementById("hintText");
+    const hints = [];
+    if (activeZone === "workbench") {
+        for (const [k,r] of Object.entries(normalizedRecipes)) {
+            if (discovered.has(r) || !allIngredients[r]) continue;
+            const [a,b] = k.split("+");
+            if (discovered.has(a) && discovered.has(b)) hints.push(`Try combining ${a} + ${b}`);
+        }
+    } else if (activeZone === "machine") {
+        for (const [mName, mRec] of Object.entries(machineRecipes)) {
+            for (const [inp, out] of Object.entries(mRec)) {
+                if (discovered.has(out) || !allIngredients[out]) continue;
+                if (discovered.has(inp)) hints.push(`${mName}: try processing ${inp}`);
+            }
+        }
+    } else if (activeZone === "testtubes") {
+        for (const [k,r] of Object.entries(normalizedTubeRecipes)) {
+            if (discovered.has(r) || !allIngredients[r]) continue;
+            const [a,b] = k.split("+");
+            if (discovered.has(a) && discovered.has(b)) hints.push(`Try mixing ${a} + ${b}`);
+        }
+    }
+    if (hints.length === 0) { hintEl.textContent = "You've discovered everything in this tab!"; return; }
+    hintsUsed++;
+    saveProgress();
+    hintEl.textContent = hints[Math.floor(Math.random()*hints.length)];
+    setTimeout(() => { hintEl.textContent = ""; }, 5000);
+}
+
+function showWin() {
+    document.getElementById("winHints").textContent = hintsUsed;
+    document.getElementById("winScore").textContent = Math.max(0, 1890 - hintsUsed);
+    document.getElementById("winOverlay").classList.add("show");
+}
+
+function closeWin(e) {
+    if (e && e.target !== document.getElementById("winOverlay") && !e.target.matches("button")) return;
+    document.getElementById("winOverlay").classList.remove("show");
+}
+
+function resetGame() {
+    if (confirm("Reset all progress? This cannot be undone.")) {
+        localStorage.removeItem("alchemy-discovered-v2");
+        localStorage.removeItem("alchemy-hints-used");
+        discovered = new Set(BASE);
+        hintsUsed = 0;
+        wSlots = [null,null]; mSlot = null; tSlots = [null,null];
+        target = { zone:"workbench", idx:0 };
+        switchZone("workbench");
+        updateCount(); updateAllUI();
+    }
+}
+
+// ============ KEYBOARD ============
+document.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+        if (activeZone === "workbench" && wSlots[0] && wSlots[1]) combine();
+        else if (activeZone === "machine" && mSlot) processMachine();
+        else if (activeZone === "testtubes" && tSlots[0] && tSlots[1]) mixTubes();
+    }
+    if (e.key === "Escape") { closeResult(); closeWin(); }
+});
+
+// ============ FRIDGE TOGGLE ============
+let fridgeIsOpen = true;
+function applyFridgeState() {
+    const fridge = document.querySelector('.storage-fridge');
+    if (!fridge) return;
+    if (fridgeIsOpen) fridge.classList.remove('fridge-closed');
+    else fridge.classList.add('fridge-closed');
+}
+new MutationObserver(applyFridgeState).observe(
+    document.getElementById('storageArea'), { childList: true, subtree: true }
+);
+document.getElementById('storageArea').addEventListener('click', (e) => {
+    const header = e.target.closest('.storage-fridge .storage-header');
+    if (!header) return;
+    fridgeIsOpen = !fridgeIsOpen;
+    applyFridgeState();
+});
+
+// ============ INIT ============
+loadProgress();
+buildMachineRow();
+updateCount();
+updateAllUI();
+</script>
+</body>
+</html>

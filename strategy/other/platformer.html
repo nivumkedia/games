@@ -24,18 +24,103 @@
         #ui span { background: rgba(255,255,255,0.7); padding: 8px 16px; border-radius: 20px; border: 2px solid #5D9E3C; }
         #instructions { color: #4a7030; font-size: 14px; text-align: center; }
         #message { position: absolute; color: #2d5016; font-size: 32px; font-weight: bold; text-shadow: 2px 2px 4px rgba(255,255,255,0.8); display: none; }
+        #wordPopup {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); display: none; justify-content: center;
+            align-items: center; z-index: 100;
+        }
+        #wordPopup .popup-card {
+            background: white; border-radius: 15px; padding: 30px 40px;
+            text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            border: 3px solid #5D9E3C;
+        }
+        #wordPopup .popup-word { font-size: 48px; font-weight: bold; color: #2d5016; margin: 10px 0 8px; }
+        #wordPopup .popup-question { font-size: 18px; color: #4a7030; margin-bottom: 20px; }
+        #wordPopup .popup-buttons { display: flex; gap: 20px; justify-content: center; }
+        #wordPopup .popup-buttons button {
+            padding: 12px 30px; font-size: 20px; font-weight: bold; border: none;
+            border-radius: 10px; cursor: pointer; transition: transform 0.1s;
+        }
+        #wordPopup .popup-buttons button:hover { transform: scale(1.05); }
+        #wordPopup .btn-correct { background: #22C55E; color: white; }
+        #wordPopup .btn-incorrect { background: #EF4444; color: white; }
+        #wordPopup .popup-result { font-size: 22px; font-weight: bold; margin-top: 15px; min-height: 30px; }
+        #startPopup {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); display: flex; justify-content: center;
+            align-items: center; z-index: 200;
+        }
+        #startPopup .popup-card {
+            background: white; border-radius: 15px; padding: 30px 40px;
+            text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            border: 3px solid #5D9E3C;
+        }
+        #startPopup h2 { color: #2d5016; margin-bottom: 10px; }
+        #startPopup p { color: #4a7030; margin-bottom: 20px; font-size: 16px; }
+        #startPopup .syl-buttons { display: flex; gap: 15px; justify-content: center; }
+        #startPopup .syl-buttons button {
+            padding: 15px 30px; font-size: 22px; font-weight: bold; border: none;
+            border-radius: 10px; cursor: pointer; background: #5D9E3C; color: white;
+            transition: transform 0.1s;
+        }
+        #startPopup .syl-buttons button:hover { transform: scale(1.05); background: #4a8030; }
+        #startPopup .pattern-buttons { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 15px; }
+        #startPopup .pattern-buttons button {
+            padding: 12px 20px; font-size: 16px; font-weight: bold; border: 3px solid #5D9E3C;
+            border-radius: 10px; cursor: pointer; background: white; color: #2d5016;
+            transition: all 0.2s;
+        }
+        #startPopup .pattern-buttons button:hover { background: #E8F5E0; }
+        #startPopup .pattern-buttons button.selected { background: #5D9E3C; color: white; border-color: #4a8030; }
+        #startPopup .syl-buttons button.disabled { opacity: 0.3; cursor: not-allowed; }
     </style>
 </head>
 <body>
     <div id="gameContainer">
         <div id="ui">
             <span>Score: <b id="score">0</b></span>
+            <span style="color:green;">Correct: <b id="correctCount">0</b></span>
+            <span style="color:red;">Incorrect: <b id="incorrectCount">0</b></span>
             <span>Level: <b id="level">1</b></span>
             <span>Lives: <b id="lives">3</b></span>
         </div>
         <canvas id="gameCanvas" width="800" height="500"></canvas>
         <div id="instructions">Arrow Keys/WASD to move | SPACE to jump | Collect coins, use springs, avoid lava!</div>
         <div id="message"></div>
+        <div id="startPopup">
+            <div class="popup-card">
+                <h2>Choose Word Pattern</h2>
+                <p>What type of words do you want to practice?</p>
+                <div class="pattern-buttons">
+                    <button onclick="choosePattern('shortVowels', this)">Short Vowels</button>
+                    <button onclick="choosePattern('vowelTeams', this)">Vowel Teams</button>
+                    <button onclick="choosePattern('magicE', this)">Magic E</button>
+                    <button onclick="choosePattern('prefixSuffix', this)">Prefixes &amp; Suffixes</button>
+                    <button onclick="choosePattern('fakeBase', this)">Fake Bases + Affixes</button>
+                    <button onclick="choosePattern('latinGreek', this)">Latin &amp; Greek Affixes</button>
+                </div>
+                <div id="sylSection" style="display:none;">
+                    <h2 style="margin-top:15px;">Choose Syllable Count</h2>
+                    <p>How many syllables should each word have?</p>
+                    <div class="syl-buttons">
+                        <button id="syl1Btn" onclick="startWithSettings(1)">1</button>
+                        <button onclick="startWithSettings(2)">2</button>
+                        <button onclick="startWithSettings(3)">3</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="wordPopup">
+            <div class="popup-card">
+                <div class="popup-question">Read this word</div>
+                <div class="popup-word" id="popupWord"></div>
+                <div class="popup-buttons">
+                    <button class="btn-correct" onclick="answerPopup(true)">Correct</button>
+                    <button class="btn-incorrect" onclick="answerPopup(false)">Incorrect</button>
+                </div>
+                <div class="popup-result" id="popupResult"></div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -56,6 +141,252 @@
 
         const gravity = 0.6, friction = 0.85;
         const keys = {};
+
+        // Seeded PRNG for consistent word generation
+        function mulberry32(a) {
+            return function() {
+                a |= 0; a = a + 0x6D2B79F5 | 0;
+                var t = Math.imul(a ^ a >>> 15, 1 | a);
+                t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+                return ((t ^ t >>> 14) >>> 0) / 4294967296;
+            }
+        }
+
+        function buildWordBank() {
+            var onsets = ['b','c','d','f','g','h','j','k','l','m','n','p','r','s','t','v','w','y','z'];
+            var blends = ['bl','br','cl','cr','dr','fl','fr','gl','gr','pl','pr','sk','sl','sm','sn','sp','st','sw','tr','tw','ch','sh','th'];
+            var simpleCodas = ['b','d','f','g','k','l','m','n','p','s','t','x'];
+            var endCodas = ['b','d','f','g','k','l','m','n','p','s','t','x','ft','ld','lf','lk','lp','lt','mp','nd','nk','nt','sk','sp','st'];
+            var shortV = ['a','e','i','o','u'];
+            var vTeams = ['ai','ay','ea','ee','oa','oi','oy','ou','oo','ue','ew','ow'];
+            var longV = ['a','i','o','u','e'];
+            var bank = {};
+
+            function genList(pattern, syls, seed) {
+                var rand = mulberry32(seed);
+                var pick = function(arr) { return arr[Math.floor(rand() * arr.length)]; };
+                var getOnset = function() { return rand() > 0.35 ? pick(onsets) : pick(blends); };
+                var words = [];
+                var seen = {};
+                var att = 0;
+                while (words.length < 200 && att < 3000) {
+                    att++;
+                    var word = '';
+                    for (var i = 0; i < syls; i++) {
+                        var isFirst = i === 0;
+                        var isLast = i === syls - 1;
+                        var onset = isFirst ? getOnset() : pick(onsets);
+                        var coda = isLast ? pick(endCodas) : pick(simpleCodas);
+                        if (pattern === 'shortVowels') {
+                            word += onset + pick(shortV) + coda;
+                        } else if (pattern === 'vowelTeams') {
+                            if (isFirst) {
+                                word += onset + pick(vTeams) + pick(simpleCodas);
+                            } else {
+                                word += onset + pick(shortV) + coda;
+                            }
+                        } else if (pattern === 'magicE') {
+                            if (isLast) {
+                                word += onset + pick(longV) + pick(simpleCodas) + 'e';
+                            } else {
+                                word += onset + pick(shortV) + pick(simpleCodas);
+                            }
+                        }
+                    }
+                    if (!seen[word]) { seen[word] = true; words.push(word); }
+                }
+                return words;
+            }
+
+            ['shortVowels','vowelTeams','magicE'].forEach(function(p, pi) {
+                bank[p] = {};
+                for (var s = 1; s <= 3; s++) {
+                    bank[p][s] = genList(p, s, (pi + 1) * 10000 + s * 1000);
+                }
+            });
+
+            bank.prefixSuffix = {
+                2: [
+                    'undo','unfair','unlike','unlock','unpack','untie','unseen','unsafe','unfit','unwrap',
+                    'unzip','unplug','unwind','undone','unload','uncap','unhook','unpin','unmask','untold',
+                    'redo','replay','refill','reheat','rewind','reset','retell','rename','reread','recount',
+                    'rethink','rewrite','repaint','restock','rejoin','remix','retie','resend','recheck','retest',
+                    'preview','preset','prepaid','precut','prewash','preplan','preheat','presoak','premix','pretest',
+                    'misread','mislead','misstep','misfire','misspell','miscount','misprint','misjudge','misplace','misquote',
+                    'dislike','dismiss','distrust','disgust','dismay','disband','disown','disprove','displace','disarm',
+                    'helping','jumping','running','sitting','reading','cooking','fishing','camping','painting','landing',
+                    'lifting','asking','packing','mixing','resting','drinking','sleeping','thinking','spelling','counting',
+                    'hopeful','careful','joyful','thankful','helpful','playful','mindful','harmful','painful','fearful',
+                    'endless','fearless','harmless','hopeless','useless','careless','restless','homeless','tireless','boneless',
+                    'kindness','sadness','illness','fitness','darkness','goodness','weakness','madness','boldness','fondness',
+                    'slower','faster','taller','smaller','stronger','longer','softer','harder','brighter','darker',
+                    'biggest','fastest','longest','tallest','smallest','hardest','softest','closest','deepest','widest'
+                ],
+                3: [
+                    'unhappy','unlucky','unlikely','unable','uncommon','uncover','unfriendly','unwilling','uncertain','unfinished',
+                    'untidy','unbroken','unkindly','unlocking','unpacking','unwinding','undoing','unloading','uncovered','unmasking',
+                    'returning','reviewing','replacing','removing','repeating','recording','rewinding','restarting','refreshing','recalling',
+                    'replaying','rewriting','rewarding','recounting','rejoining','reminding','reopening','refilling','reheating','resending',
+                    'discover','disappear','disagree','discolor','disorder','discomfort','disrupting','disproving','displacing','disarming',
+                    'wonderful','beautiful','powerful','colorful','delightful','bountiful','plentiful','forgetful','ungrateful','distasteful',
+                    'carefully','hopefully','thankfully','cheerfully','playfully','mindfully','joyfully','fearfully','painfully','helpfully',
+                    'happiness','loneliness','emptiness','eagerness','laziness','awareness','dizziness','fuzziness','craziness','readiness',
+                    'endlessly','carelessly','hopelessly','uselessly','fearlessly','restlessly','tirelessly','aimlessly','helplessly','mindlessly',
+                    'misreading','misleading','misspelling','misfiring','miscounting','misjudging','misplacing','misquoting','misprinting','misguided',
+                    'preparing','predicting','preventing','pretending','presenting','preserving','preceding','premature','precaution','prescribing',
+                    'recycle','recover','reminder','reporter','remember','receiver','remainder','retailer','recorder','reflector'
+                ]
+            };
+
+            // Fake bases with real prefixes and suffixes
+            var prefixes = ['un','re','pre','mis','dis'];
+            var suffixes = ['ing','ful','less','ness','er','est','ed','ly','ment'];
+            function genFakeBase(seed) {
+                var rand = mulberry32(seed);
+                var pick = function(arr) { return arr[Math.floor(rand() * arr.length)]; };
+                var getOnset = function() { return rand() > 0.35 ? pick(onsets) : pick(blends); };
+                var makeSyl = function() { return getOnset() + pick(shortV) + pick(simpleCodas); };
+                var words2 = [], words3 = [];
+                var seen2 = {}, seen3 = {};
+                var att = 0;
+                while ((words2.length < 200 || words3.length < 200) && att < 5000) {
+                    att++;
+                    var base = makeSyl();
+                    var usePrefix = rand() > 0.5;
+                    var w2, w3;
+                    if (usePrefix) {
+                        var pre = pick(prefixes);
+                        w2 = pre + base;
+                        w3 = pre + base + pick(suffixes);
+                    } else {
+                        var suf = pick(suffixes);
+                        w2 = base + suf;
+                        var pre2 = pick(prefixes);
+                        w3 = pre2 + base + suf;
+                    }
+                    if (words2.length < 200 && !seen2[w2]) { seen2[w2] = true; words2.push(w2); }
+                    if (words3.length < 200 && !seen3[w3]) { seen3[w3] = true; words3.push(w3); }
+                }
+                return { 2: words2, 3: words3 };
+            }
+            bank.fakeBase = genFakeBase(99999);
+
+            bank.latinGreek = {
+                2: [
+                    'action','faction','fiction','function','mention','motion','nation','notion','option','potion',
+                    'ration','section','station','version','caution','portion','lotion','auction','traction','suction',
+                    'moment','segment','cement','comment','fragment','garment','payment','ailment','judgment','treatment',
+                    'central','dental','final','mental','rental','signal','fatal','legal','metal','moral',
+                    'total','social','local','global','plural','formal','normal','vocal','royal','rural',
+                    'active','massive','passive','motive','native','festive','captive',
+                    'famous','nervous','joyous','porous','anxious','conscious','precious','spacious','gracious','curious',
+                    'subway','subset','transplant','transport','postcard','postmark','transfer','submerge'
+                ],
+                3: [
+                    'attention','admission','collision','conclusion','confusion','decision','direction','division','election','erosion',
+                    'explosion','extension','illusion','inclusion','invasion','location','nutrition','occasion','permission','pollution',
+                    'position','precision','protection','provision','reduction','revision','selection','solution','suspension','tradition',
+                    'vacation','promotion','devotion','formation','relation','vibration','creation','migration','rotation','equation',
+                    'agreement','apartment','arrangement','assignment','attachment','commitment','department','employment','enjoyment','equipment',
+                    'excitement','improvement','investment','management','punishment','replacement','retirement','settlement','amazement','achievement',
+                    'abundance','appearance','attendance','audience','confidence','consequence','difference','dominance','elegance','endurance',
+                    'evidence','existence','ignorance','importance','influence','innocence','insurance','patience','preference','presence',
+                    'reference','resistance','sequence','substance','tolerance','violence','alliance','fragrance','guidance','radiance',
+                    'autograph','paragraph','photograph','microscope','telescope','telephone','microphone','periscope','saxophone','telegraph',
+                    'horrible','possible','terrible','flexible','sensible','probable','suitable','adorable','enjoyable','washable',
+                    'dangerous','fabulous','glamorous','humorous','luminous','murderous','numerous','poisonous','previous','prosperous',
+                    'supervise','interview','interact','interval','intercept','multiply','monotone','internet','introduce','intersect',
+                    'cardinal','carnival','chemical','criminal','critical','cultural','fictional','funeral','general','liberal',
+                    'literal','logical','magical','mineral','minimal','musical','mythical','national','nautical','nominal',
+                    'optional','personal','physical','practical','principal','radical','regional','seasonal','surgical','tactical',
+                    'terminal','tropical','typical','vertical','virtual','visual','whimsical','comical','digital','clinical'
+                ]
+            };
+
+            return bank;
+        }
+
+        const wordBank = buildWordBank();
+        let selectedPatterns = [];
+        let selectedWords = [];
+        let gamePaused = true;
+        let usedWords = [];
+        let correctCount = 0, incorrectCount = 0;
+
+        function choosePattern(pattern, btn) {
+            var idx = selectedPatterns.indexOf(pattern);
+            if (idx === -1) {
+                selectedPatterns.push(pattern);
+                btn.classList.add('selected');
+            } else {
+                selectedPatterns.splice(idx, 1);
+                btn.classList.remove('selected');
+            }
+            if (selectedPatterns.length > 0) {
+                document.getElementById('sylSection').style.display = 'block';
+            } else {
+                document.getElementById('sylSection').style.display = 'none';
+            }
+            var syl1 = document.getElementById('syl1Btn');
+            var hasOneSyl = selectedPatterns.some(function(p) {
+                return wordBank[p] && wordBank[p][1];
+            });
+            if (hasOneSyl) {
+                syl1.classList.remove('disabled');
+                syl1.disabled = false;
+            } else {
+                syl1.classList.add('disabled');
+                syl1.disabled = true;
+            }
+        }
+
+        function startWithSettings(n) {
+            if (selectedPatterns.length === 0) return;
+            var combined = [];
+            selectedPatterns.forEach(function(p) {
+                var list = wordBank[p][n];
+                if (list) combined = combined.concat(list);
+            });
+            if (combined.length === 0) return;
+            selectedWords = combined;
+            usedWords = [];
+            document.getElementById('startPopup').style.display = 'none';
+            gamePaused = false;
+        }
+
+        function showWordPopup() {
+            gamePaused = true;
+            if (usedWords.length >= selectedWords.length) usedWords = [];
+            let word;
+            do {
+                word = selectedWords[Math.floor(Math.random() * selectedWords.length)];
+            } while (usedWords.includes(word));
+            usedWords.push(word);
+            document.getElementById('popupWord').textContent = word;
+            document.getElementById('popupResult').textContent = '';
+            document.getElementById('wordPopup').style.display = 'flex';
+        }
+
+        function answerPopup(saidCorrect) {
+            const resultEl = document.getElementById('popupResult');
+            if (saidCorrect) {
+                resultEl.textContent = 'Great job!';
+                resultEl.style.color = '#22C55E';
+                score += 5;
+                scoreEl.textContent = score;
+                correctCount++;
+                document.getElementById('correctCount').textContent = correctCount;
+            } else {
+                resultEl.textContent = 'Try again next time!';
+                resultEl.style.color = '#EF4444';
+                incorrectCount++;
+                document.getElementById('incorrectCount').textContent = incorrectCount;
+            }
+            setTimeout(() => {
+                document.getElementById('wordPopup').style.display = 'none';
+                gamePaused = false;
+            }, 1000);
+        }
 
         let platforms = [], coins = [], spikes = [], springs = [], lava = [], portals = [];
         let movingPlatforms = [], flag = null, particles = [], clouds = [];
@@ -659,7 +990,7 @@
         }
 
         function update() {
-            if (!gameRunning) return;
+            if (!gameRunning || gamePaused) return;
             if (invincible > 0) invincible--;
 
             // Input
@@ -687,20 +1018,29 @@
             }
 
             // Vertical movement & collision
+            const prevOnGround = player.onGround;
             player.y += player.vy;
             player.onGround = false;
+            let landedPlatform = null;
             for (const p of allPlatforms) {
                 if (rectCollision(player, p)) {
                     if (player.vy > 0) {
                         player.y = p.y - player.height;
                         player.vy = 0;
                         player.onGround = true;
+                        landedPlatform = p;
                         if (p.vx) player.x += p.vx;
                     } else if (player.vy < 0) {
                         player.y = p.y + p.height;
                         player.vy = 0;
                     }
                 }
+            }
+
+            // Show word popup when landing on a platform (not ground)
+            if (!prevOnGround && player.onGround && landedPlatform && !landedPlatform.isGround) {
+                showWordPopup();
+                return;
             }
 
             // Update moving platforms
@@ -867,8 +1207,15 @@
 
         function restart() {
             score = 0; level = 1; lives = 10; deathsThisLevel = 0;
+            correctCount = 0; incorrectCount = 0; usedWords = [];
             scoreEl.textContent = score; levelEl.textContent = level; livesEl.textContent = lives;
-            gameRunning = true; invincible = 0; hideMessage(); generateLevel(1);
+            document.getElementById('correctCount').textContent = 0;
+            document.getElementById('incorrectCount').textContent = 0;
+            gameRunning = true; invincible = 0; gamePaused = true; hideMessage(); generateLevel(1);
+            selectedPatterns = [];
+            document.getElementById('startPopup').style.display = 'flex';
+            document.getElementById('sylSection').style.display = 'none';
+            document.querySelectorAll('.pattern-buttons button').forEach(function(b) { b.classList.remove('selected'); });
         }
 
         function draw() {
