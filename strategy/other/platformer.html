@@ -20,8 +20,10 @@
             border-radius: 10px;
             box-shadow: 0 0 30px rgba(93, 158, 60, 0.4);
         }
-        #ui { display: flex; gap: 30px; color: #2d5016; font-size: 18px; }
+        #ui { display: flex; gap: 30px; color: #2d5016; font-size: 18px; align-items: center; flex-wrap: wrap; justify-content: center; }
         #ui span { background: rgba(255,255,255,0.7); padding: 8px 16px; border-radius: 20px; border: 2px solid #5D9E3C; }
+        #ui button { background: #5D9E3C; color: white; border: none; padding: 8px 16px; border-radius: 20px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+        #ui button:hover { background: #4a8030; }
         #instructions { color: #4a7030; font-size: 14px; text-align: center; }
         #message { position: absolute; color: #2d5016; font-size: 32px; font-weight: bold; text-shadow: 2px 2px 4px rgba(255,255,255,0.8); display: none; }
         #wordPopup {
@@ -45,6 +47,32 @@
         #wordPopup .btn-correct { background: #22C55E; color: white; }
         #wordPopup .btn-incorrect { background: #EF4444; color: white; }
         #wordPopup .popup-result { font-size: 22px; font-weight: bold; margin-top: 15px; min-height: 30px; }
+        #greetPopup {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); display: none; justify-content: center;
+            align-items: center; z-index: 250;
+        }
+        #greetPopup .greet-card {
+            background: linear-gradient(135deg, #ff6b35, #f7c948, #ff6b35);
+            border-radius: 24px; padding: 50px 70px; text-align: center;
+            animation: greetBounce 0.5s cubic-bezier(0.17, 0.67, 0.35, 1.5) forwards;
+            box-shadow: 0 0 80px rgba(255,107,53,0.6), 0 0 160px rgba(247,201,72,0.3);
+        }
+        @keyframes greetBounce {
+            0% { transform: scale(0) rotate(-10deg); opacity: 0; }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+        #greetPopup .greet-text {
+            font-size: 64px; font-weight: 900; color: #fff;
+            text-shadow: 3px 3px 0 #c0392b, 6px 6px 20px rgba(0,0,0,0.4);
+            letter-spacing: 3px;
+        }
+        #greetPopup .greet-btn {
+            margin-top: 25px; padding: 14px 50px; font-size: 22px; font-weight: bold;
+            border: none; border-radius: 12px; background: #fff; color: #ff6b35;
+            cursor: pointer; transition: transform 0.15s;
+        }
+        #greetPopup .greet-btn:hover { transform: scale(1.1); }
         #startPopup {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.6); display: flex; justify-content: center;
@@ -83,12 +111,16 @@
             <span style="color:red;">Incorrect: <b id="incorrectCount">0</b></span>
             <span>Level: <b id="level">1</b></span>
             <span>Lives: <b id="lives">3</b></span>
+            <button onclick="saveGame()">Save</button>
+            <button onclick="loadGame()">Load</button>
         </div>
         <canvas id="gameCanvas" width="800" height="500"></canvas>
         <div id="instructions">Arrow Keys/WASD to move | SPACE to jump | Collect coins, use springs, avoid lava!</div>
         <div id="message"></div>
         <div id="startPopup">
             <div class="popup-card">
+                <h2 style="margin-bottom:10px;">What's Your Name?</h2>
+                <input type="text" id="playerNameInput" placeholder="Type your name..." style="padding:10px 18px; font-size:18px; border:2px solid #4a7030; border-radius:10px; text-align:center; width:250px; outline:none; margin-bottom:15px;">
                 <h2>Choose Word Pattern</h2>
                 <p>What type of words do you want to practice?</p>
                 <div class="pattern-buttons">
@@ -108,6 +140,12 @@
                         <button onclick="startWithSettings(3)">3</button>
                     </div>
                 </div>
+            </div>
+        </div>
+        <div id="greetPopup">
+            <div class="greet-card">
+                <div class="greet-text" id="greetText">WHASSUP!</div>
+                <button class="greet-btn" onclick="dismissGreet()">LET'S GO!</button>
             </div>
         </div>
         <div id="wordPopup">
@@ -350,7 +388,15 @@
             if (combined.length === 0) return;
             selectedWords = combined;
             usedWords = [];
+            var name = document.getElementById('playerNameInput').value.trim();
+            var greetName = name ? name.toUpperCase() : 'BUDDY';
+            document.getElementById('greetText').textContent = 'WHASSUP ' + greetName + '!';
             document.getElementById('startPopup').style.display = 'none';
+            document.getElementById('greetPopup').style.display = 'flex';
+        }
+
+        function dismissGreet() {
+            document.getElementById('greetPopup').style.display = 'none';
             gamePaused = false;
         }
 
@@ -1083,12 +1129,19 @@
             // Portal collision
             portals.forEach(portal => {
                 if (rectCollision(player, portal)) {
-                    player.x = portal.targetX;
-                    player.y = portal.targetY;
-                    createParticles(portal.x + 15, portal.y + 20, portal.color, 10);
-                    createParticles(portal.targetX + 15, portal.targetY + 20, portal.color, 10);
+                    if (!player.portalCooldown) {
+                        player.x = portal.targetX;
+                        player.y = portal.targetY;
+                        player.portalCooldown = true;
+                        createParticles(portal.x + 15, portal.y + 20, portal.color, 10);
+                        createParticles(portal.targetX + 15, portal.targetY + 20, portal.color, 10);
+                    }
                 }
             });
+            // Clear portal cooldown once the player isn't touching any portal
+            if (!portals.some(p => rectCollision(player, p))) {
+                player.portalCooldown = false;
+            }
 
             // Coin collection
             coins.forEach(coin => {
@@ -1204,6 +1257,42 @@
 
         function showMessage(text, color) { messageEl.textContent = text; messageEl.style.color = color; messageEl.style.display = 'block'; }
         function hideMessage() { messageEl.style.display = 'none'; }
+
+        function saveGame() {
+            const save = {
+                score, level, lives, correctCount, incorrectCount,
+                selectedPatterns, selectedWords, deathsThisLevel
+            };
+            localStorage.setItem('platformerSave', JSON.stringify(save));
+            showMessage('Game Saved!', '#5D9E3C');
+            setTimeout(hideMessage, 1000);
+        }
+
+        function loadGame() {
+            const data = localStorage.getItem('platformerSave');
+            if (!data) {
+                showMessage('No save found!', '#DC2626');
+                setTimeout(hideMessage, 1500);
+                return;
+            }
+            const save = JSON.parse(data);
+            score = save.score; level = save.level; lives = save.lives;
+            correctCount = save.correctCount; incorrectCount = save.incorrectCount;
+            selectedPatterns = save.selectedPatterns; selectedWords = save.selectedWords;
+            deathsThisLevel = save.deathsThisLevel || 0;
+            usedWords = [];
+            scoreEl.textContent = score; levelEl.textContent = level; livesEl.textContent = lives;
+            document.getElementById('correctCount').textContent = correctCount;
+            document.getElementById('incorrectCount').textContent = incorrectCount;
+            gameRunning = true; gamePaused = false; invincible = 0;
+            document.getElementById('startPopup').style.display = 'none';
+            document.getElementById('greetPopup').style.display = 'none';
+            document.getElementById('wordPopup').style.display = 'none';
+            hideMessage();
+            generateLevel(level);
+            showMessage('Game Loaded! Level ' + level, '#5D9E3C');
+            setTimeout(hideMessage, 1500);
+        }
 
         function restart() {
             score = 0; level = 1; lives = 10; deathsThisLevel = 0;
@@ -1459,7 +1548,7 @@
         document.addEventListener('keyup', e => { keys[e.code] = false; });
 
         initClouds();
-        generateLevel(1);
+        generateLevel(level);
         gameLoop();
     </script>
 </body>
