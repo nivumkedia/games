@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Stunt Car Battle Royale!</title>
     <style>
         body {
@@ -22,6 +22,7 @@
             box-shadow: 0 10px 40px rgba(0,0,0,0.5);
             background: #87ceeb;
             display: none;
+            touch-action: none;
         }
         #startMenu {
             text-align: center;
@@ -78,6 +79,106 @@
             font-weight: bold;
             margin-bottom: 10px;
         }
+
+        /* Device mode tabs */
+        .device-tabs {
+            display: flex;
+            gap: 0;
+            margin: 20px 0;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid rgba(255,255,255,0.3);
+        }
+        .device-tab {
+            flex: 1;
+            padding: 14px 10px;
+            font-size: 18px;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+            background: rgba(255,255,255,0.1);
+            color: rgba(255,255,255,0.6);
+            text-align: center;
+        }
+        .device-tab.active {
+            background: #667eea;
+            color: #fff;
+        }
+        .device-tab:hover:not(.active) {
+            background: rgba(255,255,255,0.2);
+        }
+        .device-info {
+            font-size: 14px;
+            color: rgba(255,255,255,0.7);
+            margin-top: 8px;
+            min-height: 40px;
+        }
+
+        /* Touch restart button */
+        #touchRestart {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            font-size: 22px;
+            font-weight: bold;
+            background: rgba(100, 100, 200, 0.6);
+            border: 2px solid rgba(150, 150, 255, 0.6);
+            color: white;
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 101;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+
+        /* Mobile responsive */
+        @media (max-width: 900px) {
+            #startMenu {
+                padding: 30px 20px;
+                margin: 10px;
+                border-radius: 15px;
+                max-width: 90vw;
+            }
+            #startMenu h1 {
+                font-size: 24px;
+                margin-bottom: 20px;
+            }
+            #startMenu p {
+                font-size: 16px;
+                margin-bottom: 15px;
+            }
+            #storySelect {
+                font-size: 18px;
+                padding: 8px 16px;
+            }
+            #startButton {
+                font-size: 22px;
+                padding: 14px 40px;
+            }
+            label {
+                font-size: 16px !important;
+            }
+            #info {
+                font-size: 12px;
+                padding: 8px 12px;
+            }
+            #status {
+                font-size: 16px;
+            }
+            .controls {
+                font-size: 11px;
+            }
+            #gameCanvas {
+                border-width: 2px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -95,10 +196,18 @@
             <option value="9">9 Stories (9 Bots)</option>
             <option value="10">10 Stories (10 Bots) - INSANE!</option>
         </select>
-        <div style="margin-top: 30px; margin-bottom: 30px;">
+        <div style="margin-top: 30px; margin-bottom: 20px;">
             <input type="checkbox" id="challengeCheck" style="width: 20px; height: 20px; cursor: pointer;">
             <label for="challengeCheck" style="font-size: 20px; cursor: pointer;"> Challenge Mode (All Bots vs YOU!)</label>
         </div>
+
+        <p style="margin-bottom: 5px; font-size: 18px;">Controls:</p>
+        <div class="device-tabs">
+            <button class="device-tab active" id="tabDesktop" onclick="selectDevice('desktop')">Desktop</button>
+            <button class="device-tab" id="tabMobile" onclick="selectDevice('mobile')">Mobile</button>
+        </div>
+        <div class="device-info" id="deviceInfo">Arrow Keys to move, Up to jump, Space to brake</div>
+
         <button id="startButton">START BATTLE!</button>
     </div>
 
@@ -108,11 +217,28 @@
         <div id="status">BATTLE ROYALE - Last Car Standing Wins!</div>
         <div class="controls">
             Arrow Keys: Move | Arrow Up: Jump | Space: Brake | Press R to restart<br>
-            ⚠️ WARNING: 4 seconds idle = ELIMINATION!
+            WARNING: 4 seconds idle = ELIMINATION!
         </div>
     </div>
 
+    <div id="touchRestart">R</div>
+
     <script>
+        // Helper for rounded rectangles (works in all browsers)
+        function roundedRect(ctx, x, y, w, h, r) {
+            r = Math.min(r, w / 2, h / 2);
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + w - r, y);
+            ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+            ctx.lineTo(x + w, y + h - r);
+            ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            ctx.lineTo(x + r, y + h);
+            ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+            ctx.lineTo(x, y + r);
+            ctx.quadraticCurveTo(x, y, x + r, y);
+            ctx.closePath();
+        }
+
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const statusText = document.getElementById('status');
@@ -129,7 +255,7 @@
         let challengeMode = false;
         const GRAVITY = 0.6;
         const STORY_HEIGHT = 150;
-        const GROUND_Y = 850;
+        let GROUND_Y = 850;
 
         let track = {};
         let player = {};
@@ -143,6 +269,10 @@
         let cameraY = 0;
         let cameraShakeX = 0;
         let cameraShakeY = 0;
+        let arenaLeft = 0;
+        let arenaRight = 1400; // will be set to canvas.width on game start
+        const SHRINK_INTERVAL = 1200; // 20 seconds at 60fps
+        const SHRINK_AMOUNT = 80; // pixels from each side
 
         // Particle system for visual effects
         class Particle {
@@ -153,23 +283,48 @@
                 this.vx = vx;
                 this.vy = vy;
                 this.life = 1.0;
-                this.size = Math.random() * 4 + 2;
+                this.size = Math.random() * 5 + 2;
+                this.type = Math.random() < 0.3 ? 'spark' : 'debris';
+                this.rotation = Math.random() * Math.PI * 2;
+                this.rotSpeed = (Math.random() - 0.5) * 0.3;
             }
 
             update() {
                 this.x += this.vx;
                 this.y += this.vy;
                 this.vy += GRAVITY * 0.3;
-                this.life -= 0.02;
+                this.vx *= 0.99;
+                this.life -= 0.018;
+                this.rotation += this.rotSpeed;
             }
 
             draw() {
                 ctx.save();
                 ctx.globalAlpha = this.life;
-                ctx.fillStyle = this.color;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-                ctx.fill();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+
+                if (this.type === 'spark') {
+                    // Glowing spark
+                    void 0; //ctx.shadowColor = this.color;
+                    // glow effect (no shadow for performance)
+                    ctx.fillStyle = '#fff';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.size * 0.6, 0, Math.PI * 2);
+                    ctx.fill();
+                    void 0; //ctx.shadowBlur = 0;
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.size * 0.4, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    // Debris chunk
+                    ctx.fillStyle = this.color;
+                    ctx.fillRect(-this.size / 2, -this.size / 2, this.size, this.size * 0.7);
+                    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+                    ctx.fillRect(-this.size / 2, -this.size / 2, this.size, this.size * 0.2);
+                }
+
                 ctx.restore();
             }
         }
@@ -205,46 +360,67 @@
                 spikes: [],
                 boostPads: [],
                 obstacles: [],
-                walls: [
-                    { x: 0, y: 0, width: 20, height: canvas.height },
-                    { x: canvas.width - 20, y: 0, width: 20, height: canvas.height }
-                ]
+                walls: []
             };
 
-            // Generate ground - bigger platforms
-            for (let i = 0; i < 5; i++) {
+            // Generate ground with big holes
+            const groundSegments = 5;
+            const groundSegmentWidth = (canvas.width - 40) / groundSegments;
+            for (let i = 0; i < groundSegments; i++) {
+                // Skip 2 segments to create large holes
+                if (i === 1 || i === 3) continue;
+                const gapSize = 100;
                 track.platforms.push({
-                    x: i * 280,
+                    x: 20 + i * groundSegmentWidth + gapSize / 2,
                     y: GROUND_Y,
-                    width: 500,
+                    width: groundSegmentWidth - gapSize,
                     height: 100,
                     type: 'ground'
                 });
             }
 
-            // Generate platforms for each story
+            // Generate platforms for each story with big holes
             for (let story = 1; story <= numStories; story++) {
                 const y = GROUND_Y - story * STORY_HEIGHT;
-                const numPlatforms = 5 + Math.floor(Math.random() * 2);
+                const numPlatforms = 2 + Math.floor(Math.random() * 2); // fewer, smaller platforms
+                const sectionWidth = (canvas.width - 40) / numPlatforms;
 
                 for (let i = 0; i < numPlatforms; i++) {
-                    const x = 50 + i * (canvas.width - 100) / numPlatforms + (Math.random() - 0.5) * 50;
-                    const width = 250 + Math.random() * 200;
+                    // Big gaps between platforms - 150-250px holes
+                    const gapSize = 150 + Math.random() * 100;
+                    const platWidth = sectionWidth - gapSize;
+                    if (platWidth < 100) continue;
 
-                    track.platforms.push({
-                        x: x,
-                        y: y + (Math.random() - 0.5) * 30,
-                        width: width,
-                        height: 65,
-                        type: story === numStories ? 'penthouse' : 'platform'
-                    });
+                    const x = 20 + i * sectionWidth + (Math.random() < 0.5 ? 0 : gapSize);
+
+                    // Top level — decent gaps so bots can fall through
+                    if (story === numStories) {
+                        const topGap = 120 + Math.random() * 60; // 120-180px gaps
+                        const topPlatWidth = sectionWidth - topGap;
+                        if (topPlatWidth < 100) continue;
+                        track.platforms.push({
+                            x: 20 + i * sectionWidth + topGap / 2,
+                            y: y,
+                            width: topPlatWidth,
+                            height: 65,
+                            type: 'penthouse'
+                        });
+                    } else {
+                        track.platforms.push({
+                            x: x,
+                            y: y + (Math.random() - 0.5) * 20,
+                            width: platWidth,
+                            height: 65,
+                            type: 'platform'
+                        });
+                    }
                 }
             }
 
             // Generate ramps between stories
             for (let story = 0; story < numStories; story++) {
                 const y = GROUND_Y - story * STORY_HEIGHT;
-                const numRamps = 3 + Math.floor(Math.random() * 2);
+                const numRamps = 2 + Math.floor(Math.random() * 2);
 
                 for (let i = 0; i < numRamps; i++) {
                     const x = 100 + i * (canvas.width - 200) / numRamps;
@@ -261,7 +437,7 @@
             // Generate jump pads
             for (let story = 0; story <= numStories; story++) {
                 const y = GROUND_Y - story * STORY_HEIGHT - 5;
-                if (Math.random() < 0.4) {
+                if (Math.random() < 0.35) {
                     const x = 200 + Math.random() * (canvas.width - 400);
                     track.jumpPads.push({
                         x: x,
@@ -275,7 +451,7 @@
             }
 
             // Generate teleporters (pairs)
-            for (let i = 0; i < Math.min(1, Math.floor(numStories / 3)); i++) {
+            for (let i = 0; i < Math.min(2, Math.floor(numStories / 2)); i++) {
                 const story1 = Math.floor(Math.random() * numStories);
                 const story2 = Math.floor(Math.random() * numStories);
                 const x1 = 100 + Math.random() * (canvas.width - 300);
@@ -305,7 +481,7 @@
 
             // Generate moving platforms
             for (let story = 1; story <= numStories; story++) {
-                if (Math.random() < 0.6) {
+                if (Math.random() < 0.45) {
                     const y = GROUND_Y - story * STORY_HEIGHT;
                     track.movingPlatforms.push({
                         x: 200,
@@ -323,7 +499,7 @@
             // Generate ice patches
             for (let story = 0; story <= numStories; story++) {
                 const y = GROUND_Y - story * STORY_HEIGHT - 5;
-                if (Math.random() < 0.25) {
+                if (Math.random() < 0.2) {
                     track.icePatches.push({
                         x: 150 + Math.random() * (canvas.width - 400),
                         y: y,
@@ -336,7 +512,7 @@
             // Generate wind fans
             for (let story = 0; story <= numStories; story++) {
                 const y = GROUND_Y - story * STORY_HEIGHT - 40;
-                if (Math.random() < 0.2) {
+                if (Math.random() < 0.15) {
                     track.fans.push({
                         x: 100 + Math.random() * (canvas.width - 300),
                         y: y,
@@ -352,7 +528,7 @@
             // Generate spikes - reduced frequency
             for (let story = 0; story <= numStories; story++) {
                 const y = GROUND_Y - story * STORY_HEIGHT;
-                if (Math.random() < 0.1) {
+                if (Math.random() < 0.08) {
                     track.spikes.push({
                         x: 150 + Math.random() * (canvas.width - 400),
                         y: y - 40,
@@ -365,7 +541,7 @@
             // Generate boost pads
             for (let story = 0; story <= numStories; story++) {
                 const y = GROUND_Y - story * STORY_HEIGHT - 5;
-                const numBoosts = 1 + Math.floor(Math.random() * 2);
+                const numBoosts = 1 + Math.floor(Math.random() * 1);
 
                 for (let i = 0; i < numBoosts; i++) {
                     track.boostPads.push({
@@ -380,7 +556,7 @@
             // Generate bumpers - reduced frequency
             for (let story = 0; story <= numStories; story++) {
                 const y = GROUND_Y - story * STORY_HEIGHT - 40;
-                if (Math.random() < 0.15) {
+                if (Math.random() < 0.12) {
                     track.obstacles.push({
                         x: 150 + Math.random() * (canvas.width - 400),
                         y: y,
@@ -394,7 +570,7 @@
             // Generate walls
             for (let story = 0; story <= numStories; story++) {
                 const y = GROUND_Y - story * STORY_HEIGHT - 50;
-                if (Math.random() < 0.2) {
+                if (Math.random() < 0.15) {
                     track.obstacles.push({
                         x: 200 + Math.random() * (canvas.width - 500),
                         y: y,
@@ -408,8 +584,8 @@
 
         function initializeCars() {
             player = {
-                x: 700,
-                y: GROUND_Y - 50,
+                x: canvas.width / 2,
+                y: GROUND_Y - numStories * STORY_HEIGHT - 50,
                 vx: 0,
                 vy: 0,
                 width: 105,
@@ -427,23 +603,23 @@
             };
 
             aiCars = [];
-            const aiColors = ['#1a1a1a', '#1a1a1a', '#1a1a1a', '#1a1a1a', '#1a1a1a',
-                             '#1a1a1a', '#1a1a1a', '#1a1a1a', '#1a1a1a', '#1a1a1a'];
+            const aiColors = ['#2a2a2a', '#1a3a6a', '#5a1a5a', '#1a5a2a', '#6a4a1a',
+                             '#4a1a1a', '#1a4a5a', '#3a3a1a', '#5a2a3a', '#2a1a4a'];
 
             for (let i = 0; i < numBots; i++) {
-                const story = i % (numStories + 1);
-                const xPos = 150 + (i * 200) % (canvas.width - 300);
+                // All bots start on top level
+                const xPos = 100 + (i * 180) % (canvas.width - 200);
                 aiCars.push({
                     x: xPos,
-                    y: GROUND_Y - story * STORY_HEIGHT - 50,
+                    y: GROUND_Y - numStories * STORY_HEIGHT - 50,
                     vx: 0,
                     vy: 0,
                     width: 100,
                     height: 55,
                     onGround: false,
                     color: aiColors[i],
-                    maxSpeed: 6 + Math.random() * 2,
-                    acceleration: 0.35 + Math.random() * 0.15,
+                    maxSpeed: 10 + Math.random() * 4,
+                    acceleration: 0.55 + Math.random() * 0.25,
                     jumpPower: -12 - Math.random() * 2,
                     rotation: 0,
                     rotationVel: 0,
@@ -462,7 +638,15 @@
         function startGame() {
             startMenu.style.display = 'none';
             canvas.style.display = 'block';
-            infoDiv.style.display = 'block';
+            if (deviceMode === 'mobile') {
+                resizeCanvas();
+                infoDiv.style.display = 'none';
+                touchRestartBtn.style.display = 'flex';
+                window.addEventListener('resize', resizeCanvas);
+            } else {
+                infoDiv.style.display = 'block';
+            }
+            GROUND_Y = canvas.height - 50;
             gameStarted = true;
             generateTrack();
             initializeCars();
@@ -474,6 +658,8 @@
             cameraY = 0;
             cameraShakeX = 0;
             cameraShakeY = 0;
+            arenaLeft = 0;
+            arenaRight = canvas.width;
             gameLoop();
         }
 
@@ -494,6 +680,148 @@
             keys[e.key] = false;
             e.preventDefault();
         });
+
+        // Device mode selection
+        let deviceMode = 'desktop'; // 'desktop' or 'mobile'
+        let touchTarget = null; // {x, y} world position the player is dragging toward
+        let touchActive = false;
+        const touchRestartBtn = document.getElementById('touchRestart');
+
+        function selectDevice(mode) {
+            deviceMode = mode;
+            document.getElementById('tabDesktop').classList.toggle('active', mode === 'desktop');
+            document.getElementById('tabMobile').classList.toggle('active', mode === 'mobile');
+            const info = document.getElementById('deviceInfo');
+            if (mode === 'desktop') {
+                info.textContent = 'Arrow Keys to move, Up to jump, Space to brake';
+            } else {
+                info.textContent = 'Touch & drag to pull your car. Tap above car to jump. Car can still be knocked around!';
+            }
+        }
+        // Make selectDevice available globally for onclick
+        window.selectDevice = selectDevice;
+
+        function resizeCanvas() {
+            if (deviceMode === 'mobile') {
+                const w = window.innerWidth;
+                const h = window.innerHeight;
+                canvas.width = w;
+                canvas.height = h;
+                canvas.style.width = w + 'px';
+                canvas.style.height = h + 'px';
+            }
+        }
+
+        // Touch controls - finger follow system
+        function getTouchWorldPos(touch) {
+            const rect = canvas.getBoundingClientRect();
+            const screenX = touch.clientX - rect.left;
+            const screenY = touch.clientY - rect.top;
+            // Convert screen coords to world coords (account for camera)
+            const worldX = screenX + cameraX;
+            const worldY = screenY + cameraY;
+            return { x: worldX, y: worldY };
+        }
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (deviceMode !== 'mobile') return;
+            if (!gameStarted || gameOver) return;
+
+            if (!player.alive) {
+                keys['r'] = true;
+                setTimeout(() => { keys['r'] = false; }, 100);
+                return;
+            }
+
+            const pos = getTouchWorldPos(e.touches[0]);
+            touchTarget = pos;
+            touchActive = true;
+            lastKeyPressTime = gameTimer;
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (deviceMode !== 'mobile') return;
+            if (!gameStarted || !touchActive) return;
+
+            const pos = getTouchWorldPos(e.touches[0]);
+            touchTarget = pos;
+            lastKeyPressTime = gameTimer;
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            touchActive = false;
+            touchTarget = null;
+        }, { passive: false });
+
+        canvas.addEventListener('touchcancel', (e) => {
+            e.preventDefault();
+            touchActive = false;
+            touchTarget = null;
+        }, { passive: false });
+
+        // Mouse events (for mobile mode on desktop)
+        function getMouseWorldPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const screenX = e.clientX - rect.left;
+            const screenY = e.clientY - rect.top;
+            return { x: screenX + cameraX, y: screenY + cameraY };
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (deviceMode !== 'mobile') return;
+            if (!gameStarted || gameOver) return;
+
+            if (!player.alive) {
+                keys['r'] = true;
+                setTimeout(() => { keys['r'] = false; }, 100);
+                return;
+            }
+
+            touchTarget = getMouseWorldPos(e);
+            touchActive = true;
+            lastKeyPressTime = gameTimer;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (deviceMode !== 'mobile') return;
+            if (!gameStarted || !touchActive) return;
+
+            touchTarget = getMouseWorldPos(e);
+            lastKeyPressTime = gameTimer;
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            touchActive = false;
+            touchTarget = null;
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            touchActive = false;
+            touchTarget = null;
+        });
+
+        // Touch restart button
+        touchRestartBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (gameOver || !player.alive) {
+                keys['r'] = true;
+                setTimeout(() => { keys['r'] = false; }, 100);
+            }
+        });
+        touchRestartBtn.addEventListener('click', (e) => {
+            if (gameOver || !player.alive) {
+                keys['r'] = true;
+                setTimeout(() => { keys['r'] = false; }, 100);
+            }
+        });
+
+        // Prevent scrolling/zooming on mobile during gameplay
+        document.addEventListener('touchmove', (e) => {
+            if (gameStarted && deviceMode === 'mobile') e.preventDefault();
+        }, { passive: false });
 
         function updateCamera() {
             if (!player.alive) return;
@@ -525,33 +853,81 @@
         }
 
         function drawBackground() {
+            // Rich sky gradient
             const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            gradient.addColorStop(0, '#1a1a2e');
-            gradient.addColorStop(0.3, '#4a5568');
-            gradient.addColorStop(0.6, '#87ceeb');
-            gradient.addColorStop(1, '#b8d4f1');
+            gradient.addColorStop(0, '#0b0e2d');
+            gradient.addColorStop(0.15, '#1a1a4e');
+            gradient.addColorStop(0.35, '#2d3a6e');
+            gradient.addColorStop(0.55, '#4a6fa5');
+            gradient.addColorStop(0.75, '#7bb3d4');
+            gradient.addColorStop(1, '#c8e6f5');
             ctx.fillStyle = gradient;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Stars - fixed in screen space
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-            for (let i = 0; i < 40; i++) {
-                const x = (i * 73) % canvas.width;
-                const y = (i * 47) % 250;
+            // Twinkling stars
+            for (let i = 0; i < 30; i++) {
+                const x = (i * 73 + i * i * 3) % canvas.width;
+                const y = (i * 47 + i * 11) % 300;
+                const twinkle = Math.sin(gameTimer * 0.05 + i * 1.7) * 0.4 + 0.6;
+                const size = (i % 3 === 0) ? 2.5 : 1.5;
+                ctx.fillStyle = `rgba(255, 255, 255, ${twinkle})`;
                 ctx.beginPath();
-                ctx.arc(x, y, 2, 0, Math.PI * 2);
+                ctx.arc(x, y, size, 0, Math.PI * 2);
                 ctx.fill();
             }
 
-            // Clouds - fixed in screen space
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-            for (let i = 0; i < 8; i++) {
-                const x = 100 + i * 180;
-                const y = 200 + (i % 3) * 150;
+            // Moon
+            ctx.save();
+            void 0; //ctx.shadowColor = 'rgba(255, 255, 200, 0.6)';
+            //void 0; //ctx.shadowBlur = 40;
+            const moonGrad = ctx.createRadialGradient(1200, 80, 0, 1200, 80, 40);
+            moonGrad.addColorStop(0, '#fffff0');
+            moonGrad.addColorStop(0.7, '#fffde0');
+            moonGrad.addColorStop(1, 'rgba(255, 253, 200, 0)');
+            ctx.fillStyle = moonGrad;
+            ctx.beginPath();
+            ctx.arc(1200, 80, 40, 0, Math.PI * 2);
+            ctx.fill();
+            void 0; //ctx.shadowBlur = 0;
+            // Moon craters
+            ctx.fillStyle = 'rgba(200, 200, 180, 0.3)';
+            ctx.beginPath();
+            ctx.arc(1190, 70, 8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(1210, 85, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            // Parallax city skyline (far) - simple silhouettes
+            ctx.fillStyle = 'rgba(30, 30, 60, 0.6)';
+            const skylineY = 450 - cameraY * 0.05;
+            for (let i = 0; i < 20; i++) {
+                const bx = i * 75 - 10;
+                const bh = 40 + (i * 37 % 80);
+                ctx.fillRect(bx, skylineY - bh, 55, bh + 200);
+            }
+
+            // Parallax city skyline (near)
+            ctx.fillStyle = 'rgba(20, 20, 45, 0.7)';
+            const skyline2Y = 520 - cameraY * 0.1;
+            for (let i = 0; i < 14; i++) {
+                const bx = i * 110 - 30;
+                const bh = 60 + (i * 53 % 100);
+                ctx.fillRect(bx, skyline2Y - bh, 85, bh + 200);
+            }
+
+            // Clouds with depth
+            for (let i = 0; i < 5; i++) {
+                const cx = (100 + i * 160 + gameTimer * (0.1 + i * 0.02)) % (canvas.width + 200) - 100;
+                const cy = 180 + (i % 4) * 80;
+                const scale = 0.7 + (i % 3) * 0.3;
+                ctx.fillStyle = `rgba(255, 255, 255, ${0.15 + (i % 3) * 0.08})`;
                 ctx.beginPath();
-                ctx.arc(x, y, 20, 0, Math.PI * 2);
-                ctx.arc(x + 15, y, 25, 0, Math.PI * 2);
-                ctx.arc(x + 30, y, 20, 0, Math.PI * 2);
+                ctx.arc(cx, cy, 25 * scale, 0, Math.PI * 2);
+                ctx.arc(cx + 20 * scale, cy - 8 * scale, 20 * scale, 0, Math.PI * 2);
+                ctx.arc(cx + 40 * scale, cy, 28 * scale, 0, Math.PI * 2);
+                ctx.arc(cx + 18 * scale, cy + 5 * scale, 18 * scale, 0, Math.PI * 2);
                 ctx.fill();
             }
         }
@@ -570,40 +946,171 @@
             });
         }
 
+        function drawArenaWalls() {
+            const worldTop = -(numStories * STORY_HEIGHT + 500);
+            const worldBottom = GROUND_Y + 200;
+            const wallHeight = worldBottom - worldTop;
+            const pulse = Math.sin(gameTimer * 0.08) * 0.15 + 0.85;
+
+            // Left danger wall
+            if (arenaLeft > 0) {
+                // Outer glow
+                const glow = ctx.createLinearGradient(arenaLeft - 80, 0, arenaLeft, 0);
+                glow.addColorStop(0, 'rgba(255, 0, 0, 0)');
+                glow.addColorStop(1, `rgba(255, 50, 0, ${0.15 * pulse})`);
+                ctx.fillStyle = glow;
+                ctx.fillRect(arenaLeft - 80, worldTop, 80, wallHeight);
+
+                // Main wall
+                const gradient = ctx.createLinearGradient(arenaLeft - 8, 0, arenaLeft, 0);
+                gradient.addColorStop(0, `rgba(255, 30, 0, ${0.9 * pulse})`);
+                gradient.addColorStop(1, `rgba(255, 80, 0, ${0.4 * pulse})`);
+                ctx.fillStyle = gradient;
+                ctx.fillRect(arenaLeft - 8, worldTop, 8, wallHeight);
+
+                // Energy line
+                ctx.save();
+                void 0; //ctx.shadowColor = '#ff4400';
+                void 0; //ctx.shadowBlur = 15 * pulse;
+                ctx.strokeStyle = `rgba(255, 100, 0, ${pulse})`;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(arenaLeft, worldTop);
+                ctx.lineTo(arenaLeft, worldBottom);
+                ctx.stroke();
+                void 0; //ctx.shadowBlur = 0;
+                ctx.restore();
+
+                // Hazard chevrons
+                ctx.fillStyle = `rgba(255, 200, 0, ${0.6 * pulse})`;
+                for (let y = worldTop; y < worldBottom; y += 50) {
+                    ctx.beginPath();
+                    ctx.moveTo(arenaLeft - 8, y);
+                    ctx.lineTo(arenaLeft + 10, y + 25);
+                    ctx.lineTo(arenaLeft - 8, y + 50);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+            }
+
+            // Right danger wall
+            if (arenaRight < canvas.width) {
+                const glow = ctx.createLinearGradient(arenaRight, 0, arenaRight + 80, 0);
+                glow.addColorStop(0, `rgba(255, 50, 0, ${0.15 * pulse})`);
+                glow.addColorStop(1, 'rgba(255, 0, 0, 0)');
+                ctx.fillStyle = glow;
+                ctx.fillRect(arenaRight, worldTop, 80, wallHeight);
+
+                const gradient = ctx.createLinearGradient(arenaRight, 0, arenaRight + 8, 0);
+                gradient.addColorStop(0, `rgba(255, 80, 0, ${0.4 * pulse})`);
+                gradient.addColorStop(1, `rgba(255, 30, 0, ${0.9 * pulse})`);
+                ctx.fillStyle = gradient;
+                ctx.fillRect(arenaRight, worldTop, 8, wallHeight);
+
+                ctx.save();
+                void 0; //ctx.shadowColor = '#ff4400';
+                void 0; //ctx.shadowBlur = 15 * pulse;
+                ctx.strokeStyle = `rgba(255, 100, 0, ${pulse})`;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(arenaRight, worldTop);
+                ctx.lineTo(arenaRight, worldBottom);
+                ctx.stroke();
+                void 0; //ctx.shadowBlur = 0;
+                ctx.restore();
+
+                ctx.fillStyle = `rgba(255, 200, 0, ${0.6 * pulse})`;
+                for (let y = worldTop; y < worldBottom; y += 50) {
+                    ctx.beginPath();
+                    ctx.moveTo(arenaRight + 8, y);
+                    ctx.lineTo(arenaRight - 10, y + 25);
+                    ctx.lineTo(arenaRight + 8, y + 50);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+            }
+        }
+
         function drawPlatforms() {
             track.platforms.forEach(platform => {
                 ctx.save();
+                const px = platform.x, py = platform.y, pw = platform.width, ph = platform.height;
 
-                // Shadow
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-                ctx.fillRect(platform.x + 5, platform.y + 5, platform.width, platform.height);
+                // Drop shadow
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+                ctx.beginPath();
+                roundedRect(ctx,px + 4, py + 6, pw, ph, 4);
+                ctx.fill();
 
-                // Platform gradient
-                const gradient = ctx.createLinearGradient(0, platform.y, 0, platform.y + platform.height);
+                // 3D side face
+                const sideH = 12;
+                const sideGrad = ctx.createLinearGradient(0, py + ph, 0, py + ph + sideH);
                 if (platform.type === 'penthouse') {
-                    gradient.addColorStop(0, '#ffd700');
-                    gradient.addColorStop(1, '#ff8c00');
+                    sideGrad.addColorStop(0, '#cc9900');
+                    sideGrad.addColorStop(1, '#8a6600');
                 } else if (platform.type === 'ground') {
-                    gradient.addColorStop(0, '#8b6914');
-                    gradient.addColorStop(1, '#654321');
+                    sideGrad.addColorStop(0, '#4a3010');
+                    sideGrad.addColorStop(1, '#2a1a08');
                 } else {
-                    gradient.addColorStop(0, '#a0826d');
-                    gradient.addColorStop(1, '#6d5c4d');
+                    sideGrad.addColorStop(0, '#5a4535');
+                    sideGrad.addColorStop(1, '#3a2a1d');
+                }
+                ctx.fillStyle = sideGrad;
+                ctx.fillRect(px + 3, py + ph, pw - 3, sideH);
+
+                // Main platform face
+                const gradient = ctx.createLinearGradient(0, py, 0, py + ph);
+                if (platform.type === 'penthouse') {
+                    gradient.addColorStop(0, '#ffe44d');
+                    gradient.addColorStop(0.3, '#ffd700');
+                    gradient.addColorStop(1, '#e6a800');
+                } else if (platform.type === 'ground') {
+                    gradient.addColorStop(0, '#7a6030');
+                    gradient.addColorStop(0.2, '#6b5020');
+                    gradient.addColorStop(1, '#4a3518');
+                } else {
+                    gradient.addColorStop(0, '#b8967a');
+                    gradient.addColorStop(0.2, '#a0826d');
+                    gradient.addColorStop(1, '#7a6050');
                 }
                 ctx.fillStyle = gradient;
-                ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+                ctx.beginPath();
+                roundedRect(ctx,px, py, pw, ph, 4);
+                ctx.fill();
 
-                ctx.strokeStyle = '#000';
-                ctx.lineWidth = 3;
-                ctx.strokeRect(platform.x, platform.y, platform.width, platform.height);
+                // Top highlight
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+                ctx.fillRect(px + 4, py + 2, pw - 8, 4);
+
+                // Surface texture lines
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
+                ctx.lineWidth = 1;
+                for (let i = 0; i < pw; i += 30) {
+                    ctx.beginPath();
+                    ctx.moveTo(px + i, py);
+                    ctx.lineTo(px + i, py + ph);
+                    ctx.stroke();
+                }
+
+                // Edge outline
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                roundedRect(ctx,px, py, pw, ph, 4);
+                ctx.stroke();
 
                 if (platform.type === 'penthouse') {
+                    // Glowing crown label
+                    ctx.save();
+                    void 0; //ctx.shadowColor = '#ffd700';
+                    void 0; //ctx.shadowBlur = 10;
                     ctx.fillStyle = '#fff';
                     ctx.font = 'bold 14px Arial';
-                    ctx.shadowColor = 'rgba(0,0,0,0.8)';
-                    ctx.shadowBlur = 4;
-                    ctx.fillText('👑 TOP LEVEL 👑', platform.x + platform.width / 2 - 50, platform.y + 20);
-                    ctx.shadowBlur = 0;
+                    ctx.textAlign = 'center';
+                    ctx.fillText('TOP LEVEL', px + pw / 2, py + 22);
+                    ctx.textAlign = 'left';
+                    void 0; //ctx.shadowBlur = 0;
+                    ctx.restore();
                 }
 
                 ctx.restore();
@@ -612,31 +1119,63 @@
 
         function drawMovingPlatforms() {
             track.movingPlatforms.forEach(plat => {
-                // Update position
                 plat.x += plat.speed * plat.direction;
                 if (plat.x >= plat.endX || plat.x <= plat.startX) {
                     plat.direction *= -1;
                 }
 
-                // Draw shadow
+                // Shadow
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-                ctx.fillRect(plat.x + 5, plat.y + 5, plat.width, plat.height);
+                ctx.beginPath();
+                roundedRect(ctx,plat.x + 4, plat.y + 6, plat.width, plat.height, 6);
+                ctx.fill();
 
-                // Draw platform
+                // 3D side
+                ctx.fillStyle = '#3a4a9a';
+                ctx.fillRect(plat.x + 3, plat.y + plat.height, plat.width - 3, 8);
+
+                // Main platform
                 const gradient = ctx.createLinearGradient(0, plat.y, 0, plat.y + plat.height);
-                gradient.addColorStop(0, '#667eea');
-                gradient.addColorStop(1, '#4a5fb8');
+                gradient.addColorStop(0, '#8090ee');
+                gradient.addColorStop(0.3, '#667eea');
+                gradient.addColorStop(1, '#4a60c8');
                 ctx.fillStyle = gradient;
-                ctx.fillRect(plat.x, plat.y, plat.width, plat.height);
+                ctx.beginPath();
+                roundedRect(ctx,plat.x, plat.y, plat.width, plat.height, 6);
+                ctx.fill();
 
-                ctx.strokeStyle = '#000';
+                // Glow edge
+                ctx.save();
+                void 0; //ctx.shadowColor = '#667eea';
+                void 0; //ctx.shadowBlur = 8;
+                ctx.strokeStyle = '#8899ff';
                 ctx.lineWidth = 2;
-                ctx.strokeRect(plat.x, plat.y, plat.width, plat.height);
+                ctx.beginPath();
+                roundedRect(ctx,plat.x, plat.y, plat.width, plat.height, 6);
+                ctx.stroke();
+                void 0; //ctx.shadowBlur = 0;
+                ctx.restore();
 
-                // Arrow indicator
-                ctx.fillStyle = '#fff';
-                ctx.font = 'bold 16px Arial';
-                ctx.fillText(plat.direction > 0 ? '→' : '←', plat.x + plat.width / 2 - 8, plat.y + 18);
+                // Animated chevrons
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+                const chevDir = plat.direction;
+                const chevOffset = (gameTimer * 2 * chevDir) % 30;
+                ctx.save();
+                ctx.beginPath();
+                roundedRect(ctx,plat.x, plat.y, plat.width, plat.height, 6);
+                ctx.clip();
+                for (let i = -30 + chevOffset; i < plat.width + 30; i += 30) {
+                    ctx.beginPath();
+                    ctx.moveTo(plat.x + i, plat.y + plat.height);
+                    ctx.lineTo(plat.x + i + 15 * chevDir, plat.y + plat.height / 2);
+                    ctx.lineTo(plat.x + i, plat.y);
+                    ctx.lineTo(plat.x + i + 8 * chevDir, plat.y);
+                    ctx.lineTo(plat.x + i + 23 * chevDir, plat.y + plat.height / 2);
+                    ctx.lineTo(plat.x + i + 8 * chevDir, plat.y + plat.height);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+                ctx.restore();
             });
         }
 
@@ -647,16 +1186,27 @@
                 // Shadow
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
                 ctx.beginPath();
-                ctx.moveTo(ramp.x + 5, ramp.y + 5);
-                ctx.lineTo(ramp.x + ramp.width + 5, ramp.y + 5);
-                ctx.lineTo(ramp.x + ramp.width + 5, ramp.y - ramp.height + 5);
+                ctx.moveTo(ramp.x + 5, ramp.y + 6);
+                ctx.lineTo(ramp.x + ramp.width + 5, ramp.y + 6);
+                ctx.lineTo(ramp.x + ramp.width + 5, ramp.y - ramp.height + 6);
                 ctx.closePath();
                 ctx.fill();
 
-                // Ramp gradient
+                // 3D side face
+                ctx.fillStyle = '#5a4530';
+                ctx.beginPath();
+                ctx.moveTo(ramp.x, ramp.y);
+                ctx.lineTo(ramp.x + ramp.width, ramp.y);
+                ctx.lineTo(ramp.x + ramp.width + 5, ramp.y + 10);
+                ctx.lineTo(ramp.x + 5, ramp.y + 10);
+                ctx.closePath();
+                ctx.fill();
+
+                // Ramp surface gradient
                 const gradient = ctx.createLinearGradient(0, ramp.y, 0, ramp.y - ramp.height);
-                gradient.addColorStop(0, '#8b7355');
-                gradient.addColorStop(1, '#a0826d');
+                gradient.addColorStop(0, '#a08060');
+                gradient.addColorStop(0.5, '#c0a080');
+                gradient.addColorStop(1, '#d4b896');
                 ctx.fillStyle = gradient;
 
                 ctx.beginPath();
@@ -666,21 +1216,41 @@
                 ctx.closePath();
                 ctx.fill();
 
-                ctx.strokeStyle = '#654321';
-                ctx.lineWidth = 3;
+                // Surface highlight on slope
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                ctx.beginPath();
+                ctx.moveTo(ramp.x + ramp.width * 0.3, ramp.y);
+                ctx.lineTo(ramp.x + ramp.width * 0.7, ramp.y);
+                ctx.lineTo(ramp.x + ramp.width * 0.7, ramp.y - ramp.height * 0.7);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.strokeStyle = '#6a5040';
+                ctx.lineWidth = 2.5;
                 ctx.stroke();
 
-                // Speed lines
-                ctx.strokeStyle = '#ffff00';
-                ctx.lineWidth = 2;
-                const lines = Math.abs(ramp.height) > 80 ? 3 : 2;
-                for (let i = 1; i <= lines; i++) {
-                    const t = i / (lines + 1);
+                // Animated speed arrows on ramp surface
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(ramp.x, ramp.y);
+                ctx.lineTo(ramp.x + ramp.width, ramp.y);
+                ctx.lineTo(ramp.x + ramp.width, ramp.y - ramp.height);
+                ctx.closePath();
+                ctx.clip();
+
+                const arrowOffset = (gameTimer * 3) % 40;
+                ctx.strokeStyle = 'rgba(255, 230, 100, 0.4)';
+                ctx.lineWidth = 3;
+                for (let i = -40 + arrowOffset; i < ramp.width + 40; i += 40) {
+                    const t = i / ramp.width;
+                    const baseY = ramp.y - ramp.height * t;
                     ctx.beginPath();
-                    ctx.moveTo(ramp.x + ramp.width * t, ramp.y);
-                    ctx.lineTo(ramp.x + ramp.width * t, ramp.y - ramp.height * t);
+                    ctx.moveTo(ramp.x + i - 8, baseY + 10);
+                    ctx.lineTo(ramp.x + i, baseY - 5);
+                    ctx.lineTo(ramp.x + i + 8, baseY + 10);
                     ctx.stroke();
                 }
+                ctx.restore();
 
                 ctx.restore();
             });
@@ -724,8 +1294,8 @@
 
                 // Glow effect
                 ctx.save();
-                ctx.shadowColor = '#00ffff';
-                ctx.shadowBlur = 20 * pulse;
+                void 0; //ctx.shadowColor = '#00ffff';
+                void 0; //ctx.shadowBlur = 20 * pulse;
 
                 // Portal gradient
                 const gradient = ctx.createRadialGradient(
@@ -744,7 +1314,7 @@
                 ctx.lineWidth = 3;
                 ctx.stroke();
 
-                ctx.shadowBlur = 0;
+                void 0; //ctx.shadowBlur = 0;
                 ctx.restore();
 
                 // Teleport symbol
@@ -961,52 +1531,174 @@
             ctx.translate(car.x, car.y);
             ctx.rotate(car.rotation);
 
+            const w = car.width;
+            const h = car.height;
+            const isPlayer = car.id === 'player';
+
             // Hunter bot glow
             if (car.isHunter) {
-                ctx.shadowColor = '#ff0000';
-                ctx.shadowBlur = 20;
+                void 0; //ctx.shadowColor = '#ff0000';
+                void 0; //ctx.shadowBlur = 25;
                 ctx.strokeStyle = '#ff0000';
-                ctx.lineWidth = 4;
-                ctx.strokeRect(-car.width / 2 - 2, -car.height / 2 - 2, car.width + 4, car.height + 4);
-                ctx.shadowBlur = 0;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                roundedRect(ctx,-w / 2 - 4, -h / 2 - 4, w + 8, h + 8, 8);
+                ctx.stroke();
+                void 0; //ctx.shadowBlur = 0;
             }
 
-            // Shadow
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-            ctx.fillRect(-car.width / 2 + 3, -car.height / 2 + 3, car.width, car.height);
+            // Ground shadow
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+            ctx.beginPath();
+            ctx.ellipse(2, h / 2 + 8, w / 2.2, 6, 0, 0, Math.PI * 2);
+            ctx.fill();
 
-            // Car body gradient
-            const gradient = ctx.createLinearGradient(0, -car.height / 2, 0, car.height / 2);
-            gradient.addColorStop(0, car.color);
-            gradient.addColorStop(1, adjustBrightness(car.color, -30));
-            ctx.fillStyle = gradient;
-            ctx.fillRect(-car.width / 2, -car.height / 2, car.width, car.height);
+            const speed = Math.abs(car.vx);
 
-            // Outline
-            ctx.strokeStyle = '#000';
-            ctx.lineWidth = 3;
-            ctx.strokeRect(-car.width / 2, -car.height / 2, car.width, car.height);
+            // Car body - curved shape
+            const bodyGrad = ctx.createLinearGradient(0, -h / 2, 0, h / 2);
+            bodyGrad.addColorStop(0, adjustBrightness(car.color, 40));
+            bodyGrad.addColorStop(0.3, car.color);
+            bodyGrad.addColorStop(0.7, adjustBrightness(car.color, -20));
+            bodyGrad.addColorStop(1, adjustBrightness(car.color, -50));
+            ctx.fillStyle = bodyGrad;
+
+            // Lower body (wider)
+            ctx.beginPath();
+            roundedRect(ctx,-w / 2, -h / 6, w, h / 2 + h / 6, 5);
+            ctx.fill();
+            ctx.strokeStyle = adjustBrightness(car.color, -60);
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Upper cabin (narrower)
+            const cabinGrad = ctx.createLinearGradient(0, -h / 2, 0, -h / 6);
+            cabinGrad.addColorStop(0, adjustBrightness(car.color, 20));
+            cabinGrad.addColorStop(1, car.color);
+            ctx.fillStyle = cabinGrad;
+            ctx.beginPath();
+            ctx.moveTo(-w / 4, -h / 6);
+            ctx.lineTo(-w / 5, -h / 2 + 4);
+            ctx.quadraticCurveTo(0, -h / 2 - 2, w / 5, -h / 2 + 4);
+            ctx.lineTo(w / 3, -h / 6);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = adjustBrightness(car.color, -60);
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
 
             // Windows
-            ctx.fillStyle = 'rgba(100, 150, 200, 0.8)';
-            ctx.fillRect(-15, -car.height / 2 + 5, 24, 13);
-
-            // Spoiler
-            ctx.fillStyle = car.color;
-            ctx.fillRect(-car.width / 2 - 8, -car.height / 2, 8, 16);
-
-            // Wheels with shine
-            ctx.fillStyle = '#000';
+            const winGrad = ctx.createLinearGradient(0, -h / 2, 0, -h / 6);
+            winGrad.addColorStop(0, 'rgba(140, 200, 255, 0.9)');
+            winGrad.addColorStop(1, 'rgba(80, 140, 200, 0.8)');
+            ctx.fillStyle = winGrad;
+            // Front window
             ctx.beginPath();
-            ctx.arc(-car.width / 3, car.height / 2 + 3, 9, 0, Math.PI * 2);
-            ctx.arc(car.width / 3, car.height / 2 + 3, 9, 0, Math.PI * 2);
+            ctx.moveTo(w / 7, -h / 6 + 3);
+            ctx.lineTo(w / 6, -h / 2 + 8);
+            ctx.quadraticCurveTo(w / 8, -h / 2 + 5, w / 12, -h / 2 + 8);
+            ctx.lineTo(-w / 10, -h / 6 + 3);
+            ctx.closePath();
+            ctx.fill();
+            // Rear window
+            ctx.beginPath();
+            ctx.moveTo(-w / 8, -h / 6 + 3);
+            ctx.lineTo(-w / 7, -h / 2 + 8);
+            ctx.lineTo(-w / 5, -h / 2 + 8);
+            ctx.lineTo(-w / 4 + 4, -h / 6 + 3);
+            ctx.closePath();
             ctx.fill();
 
-            ctx.fillStyle = '#444';
+            // Window reflection
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
             ctx.beginPath();
-            ctx.arc(-car.width / 3, car.height / 2 + 3, 5, 0, Math.PI * 2);
-            ctx.arc(car.width / 3, car.height / 2 + 3, 5, 0, Math.PI * 2);
+            ctx.moveTo(w / 9, -h / 6 + 4);
+            ctx.lineTo(w / 8, -h / 2 + 10);
+            ctx.lineTo(w / 14, -h / 2 + 10);
+            ctx.lineTo(-w / 14, -h / 6 + 4);
+            ctx.closePath();
             ctx.fill();
+
+            // Headlights
+            ctx.save();
+            void 0; //ctx.shadowColor = isPlayer ? '#ffee88' : '#ffcc44';
+            void 0; //ctx.shadowBlur = speed > 2 ? 12 : 6;
+            ctx.fillStyle = isPlayer ? '#ffee88' : '#ffcc44';
+            ctx.beginPath();
+            roundedRect(ctx,w / 2 - 6, -h / 8, 6, 8, 2);
+            ctx.fill();
+            ctx.fillStyle = '#ffe0a0';
+            ctx.beginPath();
+            roundedRect(ctx,w / 2 - 6, h / 8 - 4, 6, 8, 2);
+            ctx.fill();
+            void 0; //ctx.shadowBlur = 0;
+            ctx.restore();
+
+            // Tail lights
+            ctx.save();
+            void 0; //ctx.shadowColor = '#ff2222';
+            void 0; //ctx.shadowBlur = 8;
+            ctx.fillStyle = '#ff3333';
+            ctx.beginPath();
+            roundedRect(ctx,-w / 2, -h / 8, 4, 7, 1);
+            ctx.fill();
+            ctx.beginPath();
+            roundedRect(ctx,-w / 2, h / 8 - 3, 4, 7, 1);
+            ctx.fill();
+            void 0; //ctx.shadowBlur = 0;
+            ctx.restore();
+
+            // Spoiler for player car
+            if (isPlayer) {
+                ctx.fillStyle = adjustBrightness(car.color, -30);
+                ctx.fillRect(-w / 2 - 6, -h / 4, 4, h / 2);
+                ctx.fillStyle = adjustBrightness(car.color, -10);
+                ctx.fillRect(-w / 2 - 10, -h / 4 - 2, 12, 3);
+            }
+
+            // Body highlight stripe
+            ctx.fillStyle = `rgba(255, 255, 255, 0.15)`;
+            ctx.fillRect(-w / 2 + 8, -h / 8, w - 16, 3);
+
+            // Wheels with tire detail
+            const wheelY = h / 2 - 2;
+            const wheelR = 11;
+            const hubR = 5;
+            [-w / 3, w / 3].forEach(wx => {
+                // Tire
+                ctx.fillStyle = '#1a1a1a';
+                ctx.beginPath();
+                ctx.arc(wx, wheelY, wheelR, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                // Rim
+                const rimGrad = ctx.createRadialGradient(wx - 1, wheelY - 1, 0, wx, wheelY, hubR);
+                rimGrad.addColorStop(0, '#ddd');
+                rimGrad.addColorStop(0.5, '#aaa');
+                rimGrad.addColorStop(1, '#777');
+                ctx.fillStyle = rimGrad;
+                ctx.beginPath();
+                ctx.arc(wx, wheelY, hubR, 0, Math.PI * 2);
+                ctx.fill();
+                // Wheel arch shadow
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.beginPath();
+                ctx.arc(wx, wheelY - 2, wheelR + 3, Math.PI, 0);
+                ctx.lineTo(wx + wheelR + 3, wheelY - 2);
+                ctx.lineTo(wx - wheelR - 3, wheelY - 2);
+                ctx.fill();
+            });
+
+            // Player indicator
+            if (isPlayer) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.font = 'bold 10px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('YOU', 0, -h / 2 - 8);
+                ctx.textAlign = 'left';
+            }
 
             ctx.restore();
         }
@@ -1118,8 +1810,14 @@
                     const dist = Math.sqrt(dx * dx + dy * dy);
 
                     if (dist < tp.width / 2 + car.width / 2 && tp.linkedTo && tp.cooldown <= 0) {
-                        car.x = tp.linkedTo.x + tp.linkedTo.width / 2;
-                        car.y = tp.linkedTo.y + tp.linkedTo.height / 2;
+                        let destX = tp.linkedTo.x + tp.linkedTo.width / 2;
+                        let destY = tp.linkedTo.y + tp.linkedTo.height / 2;
+                        // Clamp destination inside arena bounds so teleporter can't kill you
+                        destX = Math.max(arenaLeft + car.width, Math.min(arenaRight - car.width, destX));
+                        car.x = destX;
+                        car.y = destY;
+                        car.vx = 0;
+                        car.vy = 0;
                         car.teleportCooldown = 60;
                         tp.cooldown = 60;
                         tp.linkedTo.cooldown = 60;
@@ -1210,18 +1908,42 @@
             if (!car.alive) return;
 
             if (isPlayer && !gameOver) {
-                if (keys['ArrowRight']) {
-                    car.vx += car.acceleration;
-                }
-                if (keys['ArrowLeft']) {
-                    car.vx -= car.acceleration;
-                }
-                if (keys[' '] && car.onGround) {
-                    car.vx *= 0.85;
-                }
-                if (keys['ArrowUp'] && car.onGround) {
-                    car.vy = car.jumpPower;
-                    car.onGround = false;
+                if (deviceMode === 'mobile' && touchActive && touchTarget) {
+                    // Finger-follow: pull car toward touch position
+                    const dx = touchTarget.x - car.x;
+                    const dy = touchTarget.y - car.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    // Horizontal pull
+                    if (Math.abs(dx) > 20) {
+                        car.vx += Math.sign(dx) * car.acceleration * 1.2;
+                    }
+
+                    // Jump if touching above the car
+                    if (dy < -60 && car.onGround && dist > 50) {
+                        car.vy = car.jumpPower;
+                        car.onGround = false;
+                    }
+
+                    // Brake if touching very close
+                    if (dist < 30 && car.onGround) {
+                        car.vx *= 0.85;
+                    }
+                } else {
+                    // Desktop keyboard controls
+                    if (keys['ArrowRight']) {
+                        car.vx += car.acceleration;
+                    }
+                    if (keys['ArrowLeft']) {
+                        car.vx -= car.acceleration;
+                    }
+                    if (keys[' '] && car.onGround) {
+                        car.vx *= 0.85;
+                    }
+                    if (keys['ArrowUp'] && car.onGround) {
+                        car.vy = car.jumpPower;
+                        car.onGround = false;
+                    }
                 }
             }
 
@@ -1264,32 +1986,41 @@
                     const distToTarget = car.target.x - car.x;
                     const heightDiff = car.y - car.target.y;
 
-                    if (distToTarget > 80) {
-                        car.vx += car.acceleration;
-                    } else if (distToTarget < -80) {
-                        car.vx -= car.acceleration;
+                    // Bots charge aggressively toward target, no caution near edges
+                    if (distToTarget > 30) {
+                        car.vx += car.acceleration * 2.0;
+                    } else if (distToTarget < -30) {
+                        car.vx -= car.acceleration * 2.0;
                     } else {
-                        if (Math.abs(heightDiff) < 100) {
-                            if (distToTarget > 0) car.vx += car.acceleration * 1.3;
-                            else car.vx -= car.acceleration * 1.3;
-                        }
+                        // Ram at full speed when close
+                        if (distToTarget > 0) car.vx += car.acceleration * 2.5;
+                        else car.vx -= car.acceleration * 2.5;
                     }
 
-                    const canJump = car.onGround && car.aiTimer - car.lastJump > 40;
+                    // Bots jump recklessly — but only try to go UP if target is above
+                    // If they fell below their target, they mostly just charge sideways
+                    const canJump = car.onGround && car.aiTimer - car.lastJump > 15;
                     if (canJump) {
-                        if (heightDiff > 100 && Math.abs(distToTarget) < 200 && Math.random() < 0.2) {
+                        if (heightDiff > 80 && Math.abs(distToTarget) < 200 && Math.random() < 0.15) {
+                            // Rarely try to jump back up
                             car.vy = car.jumpPower;
                             car.onGround = false;
                             car.lastJump = car.aiTimer;
-                        } else if (Math.abs(distToTarget) < 100 && Math.abs(heightDiff) < 50 && Math.random() < 0.15) {
+                        } else if (heightDiff > -30 && heightDiff < 80 && Math.abs(distToTarget) < 200 && Math.random() < 0.3) {
+                            // Jump when on same level and close — this causes overshoots
+                            car.vy = car.jumpPower;
+                            car.onGround = false;
+                            car.lastJump = car.aiTimer;
+                        } else if (Math.random() < 0.06) {
                             car.vy = car.jumpPower;
                             car.onGround = false;
                             car.lastJump = car.aiTimer;
                         }
                     }
                 } else {
-                    car.vx += (Math.random() - 0.5) * car.acceleration;
-                    if (car.onGround && Math.random() < 0.01) {
+                    // Wander wildly when no target
+                    car.vx += (Math.random() - 0.5) * car.acceleration * 3;
+                    if (car.onGround && Math.random() < 0.07) {
                         car.vy = car.jumpPower;
                         car.onGround = false;
                     }
@@ -1303,7 +2034,8 @@
                 car.rotationVel = car.vx * 0.015;
                 car.rotation += car.rotationVel;
             } else {
-                car.vx *= 0.96;
+                // Bots have less friction — they slide more and overshoot platforms
+                car.vx *= (isPlayer ? 0.96 : 0.98);
             }
 
             car.x += car.vx;
@@ -1319,31 +2051,28 @@
 
             checkInteractives(car);
 
-            if (car.x - car.width / 2 < 20) {
-                car.x = 20 + car.width / 2;
-                car.vx = Math.abs(car.vx) * 0.5;
-            }
-            if (car.x + car.width / 2 > canvas.width - 20) {
-                car.x = canvas.width - 20 - car.width / 2;
-                car.vx = -Math.abs(car.vx) * 0.5;
+            // Fall off sides = elimination (bots die closer to edge)
+            const sideMargin = isPlayer ? car.width : car.width * 0.3;
+            if (car.x < arenaLeft - sideMargin || car.x > arenaRight + sideMargin) {
+                car.alive = false;
+                spawnParticles(car.x, car.y, 20, car.color);
             }
 
-            if (car.y > canvas.height + 50 || car.y < -100) {
-                // In challenge mode, bots can only die if player hit them recently
-                if (challengeMode && !isPlayer && car.lastHitByPlayer !== undefined) {
-                    const timeSinceHit = gameTimer - car.lastHitByPlayer;
-                    if (timeSinceHit > 180) { // 3 seconds grace period
-                        // Respawn bot instead of killing
-                        car.y = GROUND_Y - Math.floor(Math.random() * numStories) * STORY_HEIGHT - 50;
-                        car.x = 200 + Math.random() * (canvas.width - 400);
-                        car.vx = 0;
-                        car.vy = 0;
-                        car.rotation = 0;
-                        return;
-                    }
-                }
-                car.alive = false;
-                spawnParticles(car.x, canvas.height, 20, car.color);
+            // Bounce down if going too high instead of dying
+            const ceiling = GROUND_Y - numStories * STORY_HEIGHT - 200;
+            if (car.y < ceiling) {
+                car.y = ceiling;
+                car.vy = Math.abs(car.vy) * 0.7 + 5;
+                car.onGround = false;
+            }
+
+            // Bounce up if hitting the bottom instead of dying
+            const floor = GROUND_Y + 100;
+            if (car.y + car.height / 2 > floor) {
+                car.y = floor - car.height / 2;
+                car.vy = -Math.abs(car.vy) * 0.7 - 5;
+                car.onGround = false;
+                spawnParticles(car.x, floor, 8, car.color);
             }
         }
 
@@ -1387,9 +2116,9 @@
                             // Calculate restitution (bounciness) and mass ratio
                             const restitution = 0.8; // How bouncy the collision is
 
-                            // Give player a slight mass advantage for better ramming
-                            const mass1 = car1 === player ? 1.3 : 1.0;
-                            const mass2 = car2 === player ? 1.3 : 1.0;
+                            // Player is heavy, bots are light — bots get knocked much farther
+                            const mass1 = car1 === player ? 2.0 : 0.7;
+                            const mass2 = car2 === player ? 2.0 : 0.7;
 
                             // Calculate impulse scalar
                             const impulseScalar = -(1 + restitution) * velAlongNormal / (mass1 + mass2);
@@ -1591,10 +2320,10 @@
 
             ctx.fillStyle = '#fff';
             ctx.font = 'bold 14px Arial';
-            ctx.shadowColor = 'rgba(0,0,0,0.8)';
-            ctx.shadowBlur = 4;
+            void 0; //ctx.shadowColor = 'rgba(0,0,0,0.8)';
+            void 0; //ctx.shadowBlur = 4;
             ctx.fillText('SPEED', 85, 30);
-            ctx.shadowBlur = 0;
+            void 0; //ctx.shadowBlur = 0;
 
             // Cars remaining
             const aliveCars = [player, ...aiCars].filter(car => car.alive);
@@ -1602,21 +2331,56 @@
             ctx.fillRect(10, 55, 200, 35);
             ctx.fillStyle = '#ffdd00';
             ctx.font = 'bold 16px Arial';
-            ctx.shadowColor = 'rgba(0,0,0,0.8)';
-            ctx.shadowBlur = 4;
+            void 0; //ctx.shadowColor = 'rgba(0,0,0,0.8)';
+            void 0; //ctx.shadowBlur = 4;
             ctx.fillText(`CARS LEFT: ${aliveCars.length}`, 30, 78);
-            ctx.shadowBlur = 0;
+            void 0; //ctx.shadowBlur = 0;
 
-            // Challenge mode indicator
-            if (challengeMode) {
+            // Shrink timer
+            if (arenaRight - arenaLeft > 300) {
+                const framesUntilShrink = SHRINK_INTERVAL - (gameTimer % SHRINK_INTERVAL);
+                const secondsLeft = Math.ceil(framesUntilShrink / 60);
+                const shrinkPercent = 1 - (framesUntilShrink / SHRINK_INTERVAL);
+
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(10, 100, 200, 35);
+
+                // Progress bar
+                const barColor = secondsLeft <= 5 ? '#ff4444' : secondsLeft <= 10 ? '#ffaa00' : '#ff6600';
+                ctx.fillStyle = barColor;
+                ctx.fillRect(15, 105, shrinkPercent * 190, 20);
+
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(15, 105, 190, 20);
+
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 14px Arial';
+                void 0; //ctx.shadowColor = 'rgba(0,0,0,0.8)';
+                void 0; //ctx.shadowBlur = 4;
+                ctx.fillText(`SHRINK: ${secondsLeft}s`, 60, 120);
+                void 0; //ctx.shadowBlur = 0;
+            } else {
                 ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
                 ctx.fillRect(10, 100, 200, 35);
                 ctx.fillStyle = '#fff';
                 ctx.font = 'bold 14px Arial';
-                ctx.shadowColor = 'rgba(0,0,0,0.8)';
-                ctx.shadowBlur = 4;
-                ctx.fillText('⚔️ CHALLENGE MODE ⚔️', 30, 122);
-                ctx.shadowBlur = 0;
+                void 0; //ctx.shadowColor = 'rgba(0,0,0,0.8)';
+                void 0; //ctx.shadowBlur = 4;
+                ctx.fillText('MAX SHRINK!', 55, 122);
+                void 0; //ctx.shadowBlur = 0;
+            }
+
+            // Challenge mode indicator
+            if (challengeMode) {
+                ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+                ctx.fillRect(10, 145, 200, 35);
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 14px Arial';
+                void 0; //ctx.shadowColor = 'rgba(0,0,0,0.8)';
+                void 0; //ctx.shadowBlur = 4;
+                ctx.fillText('⚔️ CHALLENGE MODE ⚔️', 30, 167);
+                void 0; //ctx.shadowBlur = 0;
             }
 
             // Idle warning
@@ -1627,33 +2391,142 @@
                 if (timeLeft <= 120 && timeLeft > 0) { // Warning in last 2 seconds
                     const seconds = Math.ceil(timeLeft / 60);
                     const warningAlpha = (Math.sin(gameTimer * 0.3) + 1) / 2; // Pulsing effect
-                    const warningY = challengeMode ? 145 : 100;
+                    const warningY = challengeMode ? 190 : 145;
 
                     ctx.fillStyle = `rgba(255, 0, 0, ${0.5 + warningAlpha * 0.5})`;
                     ctx.fillRect(10, warningY, 200, 40);
 
                     ctx.fillStyle = '#fff';
                     ctx.font = 'bold 18px Arial';
-                    ctx.shadowColor = 'rgba(0,0,0,0.9)';
-                    ctx.shadowBlur = 6;
+                    void 0; //ctx.shadowColor = 'rgba(0,0,0,0.9)';
+                    void 0; //ctx.shadowBlur = 6;
                     ctx.fillText(`⏱️ MOVE IN ${seconds}s!`, 35, warningY + 25);
-                    ctx.shadowBlur = 0;
+                    void 0; //ctx.shadowBlur = 0;
                 }
             }
 
-            if (!player.alive) {
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+            if (gameOver && player.alive) {
+                // WIN screen
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = '#ff0000';
-                ctx.font = 'bold 64px Arial';
+
+                // Confetti
+                const confettiColors = ['#ff0000', '#00ff00', '#0088ff', '#ffdd00', '#ff00ff', '#00ffff'];
+                for (let i = 0; i < 80; i++) {
+                    const cx = (i * 137 + gameTimer * 2) % canvas.width;
+                    const cy = ((i * 89 + gameTimer * 1.5) % (canvas.height + 200)) - 100;
+                    const size = 4 + (i % 5) * 2;
+                    ctx.save();
+                    ctx.translate(cx, cy);
+                    ctx.rotate(gameTimer * 0.05 + i);
+                    ctx.fillStyle = confettiColors[i % confettiColors.length];
+                    ctx.fillRect(-size / 2, -size / 2, size, size * 0.4);
+                    ctx.restore();
+                }
+
+                // Popup box
+                const boxW = 500;
+                const boxH = 300;
+                const boxX = (canvas.width - boxW) / 2;
+                const boxY = (canvas.height - boxH) / 2;
+
+                // Box shadow
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(boxX + 8, boxY + 8, boxW, boxH);
+
+                // Box background
+                const boxGrad = ctx.createLinearGradient(boxX, boxY, boxX, boxY + boxH);
+                boxGrad.addColorStop(0, '#1a4d1a');
+                boxGrad.addColorStop(1, '#0a2a0a');
+                ctx.fillStyle = boxGrad;
+                ctx.fillRect(boxX, boxY, boxW, boxH);
+
+                // Gold border
+                ctx.strokeStyle = '#ffd700';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(boxX, boxY, boxW, boxH);
+                ctx.strokeStyle = '#ffaa00';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(boxX + 6, boxY + 6, boxW - 12, boxH - 12);
+
                 ctx.textAlign = 'center';
-                ctx.shadowColor = 'rgba(0,0,0,0.9)';
-                ctx.shadowBlur = 10;
-                ctx.fillText('💥 ELIMINATED! 💥', canvas.width / 2, canvas.height / 2);
-                ctx.font = 'bold 32px Arial';
-                ctx.fillStyle = '#fff';
-                ctx.fillText('Press R to restart', canvas.width / 2, canvas.height / 2 + 60);
-                ctx.shadowBlur = 0;
+                void 0; //ctx.shadowColor = 'rgba(0,0,0,0.9)';
+                void 0; //ctx.shadowBlur = 10;
+
+                // Trophy
+                ctx.font = '72px Arial';
+                ctx.fillText('🏆', canvas.width / 2, boxY + 80);
+
+                // Title
+                ctx.font = 'bold 48px Arial';
+                ctx.fillStyle = '#ffd700';
+                ctx.fillText('YOU WIN!', canvas.width / 2, boxY + 150);
+
+                // Subtitle
+                ctx.font = 'bold 24px Arial';
+                ctx.fillStyle = '#00ff88';
+                ctx.fillText('Last Car Standing!', canvas.width / 2, boxY + 195);
+
+                // Stats
+                ctx.font = '18px Arial';
+                ctx.fillStyle = '#ccc';
+                const survivedSecs = Math.floor(gameTimer / 60);
+                ctx.fillText(`Survived: ${survivedSecs}s  |  Stories: ${numStories}  |  Bots defeated: ${numBots}`, canvas.width / 2, boxY + 235);
+
+                // Restart prompt
+                const pulse = (Math.sin(gameTimer * 0.1) + 1) / 2;
+                ctx.font = 'bold 22px Arial';
+                ctx.fillStyle = `rgba(255, 255, 255, ${0.5 + pulse * 0.5})`;
+                ctx.fillText('Press R to play again', canvas.width / 2, boxY + 275);
+
+                void 0; //ctx.shadowBlur = 0;
+                ctx.textAlign = 'left';
+
+            } else if (!player.alive) {
+                // ELIMINATED screen
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                const boxW = 500;
+                const boxH = 250;
+                const boxX = (canvas.width - boxW) / 2;
+                const boxY = (canvas.height - boxH) / 2;
+
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(boxX + 8, boxY + 8, boxW, boxH);
+
+                const boxGrad = ctx.createLinearGradient(boxX, boxY, boxX, boxY + boxH);
+                boxGrad.addColorStop(0, '#4d1a1a');
+                boxGrad.addColorStop(1, '#2a0a0a');
+                ctx.fillStyle = boxGrad;
+                ctx.fillRect(boxX, boxY, boxW, boxH);
+
+                ctx.strokeStyle = '#ff4444';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+                ctx.textAlign = 'center';
+                void 0; //ctx.shadowColor = 'rgba(0,0,0,0.9)';
+                void 0; //ctx.shadowBlur = 10;
+
+                ctx.font = '56px Arial';
+                ctx.fillText('💥', canvas.width / 2, boxY + 70);
+
+                ctx.font = 'bold 48px Arial';
+                ctx.fillStyle = '#ff4444';
+                ctx.fillText('ELIMINATED!', canvas.width / 2, boxY + 135);
+
+                ctx.font = '18px Arial';
+                ctx.fillStyle = '#ccc';
+                const survivedSecs2 = Math.floor(gameTimer / 60);
+                ctx.fillText(`Survived: ${survivedSecs2}s`, canvas.width / 2, boxY + 175);
+
+                const pulse = (Math.sin(gameTimer * 0.1) + 1) / 2;
+                ctx.font = 'bold 22px Arial';
+                ctx.fillStyle = `rgba(255, 255, 255, ${0.5 + pulse * 0.5})`;
+                ctx.fillText('Press R to try again', canvas.width / 2, boxY + 225);
+
+                void 0; //ctx.shadowBlur = 0;
                 ctx.textAlign = 'left';
             }
         }
@@ -1671,6 +2544,9 @@
             startMenu.style.display = 'block';
             canvas.style.display = 'none';
             infoDiv.style.display = 'none';
+            touchRestartBtn.style.display = 'none';
+            touchActive = false;
+            touchTarget = null;
             gameStarted = false;
             challengeMode = false;
             keys['r'] = false;
@@ -1694,7 +2570,29 @@
 
             drawBackground();
 
-            // Save context and apply camera transform for world objects
+            // Darken areas outside arena bounds
+            if (arenaLeft > 0) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                ctx.fillRect(0, 0, arenaLeft, canvas.height);
+            }
+            if (arenaRight < canvas.width) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                ctx.fillRect(arenaRight, 0, canvas.width - arenaRight, canvas.height);
+            }
+
+            // Draw arena walls first (outside the clip)
+            ctx.save();
+            ctx.translate(-cameraX + cameraShakeX, -cameraY + cameraShakeY);
+            drawArenaWalls();
+            ctx.restore();
+
+            // Clip everything to arena bounds, then draw world objects
+            ctx.save();
+            if (arenaLeft > 0 || arenaRight < canvas.width) {
+                ctx.beginPath();
+                ctx.rect(arenaLeft, 0, arenaRight - arenaLeft, canvas.height);
+                ctx.clip();
+            }
             ctx.save();
             ctx.translate(-cameraX + cameraShakeX, -cameraY + cameraShakeY);
 
@@ -1719,20 +2617,65 @@
             if (player.alive && !player.onGround) {
                 ctx.fillStyle = 'rgba(255, 200, 0, 0.9)';
                 ctx.font = 'bold 28px Arial';
-                ctx.shadowColor = 'rgba(0,0,0,0.9)';
-                ctx.shadowBlur = 8;
+                void 0; //ctx.shadowColor = 'rgba(0,0,0,0.9)';
+                void 0; //ctx.shadowBlur = 8;
                 ctx.fillText('✈️ AIRBORNE!', player.x - 70, player.y - 50);
-                ctx.shadowBlur = 0;
+                void 0; //ctx.shadowBlur = 0;
             }
 
-            // Restore context for UI (drawn in screen space)
+            // Restore camera transform
+            ctx.restore();
+            // Restore clip region
             ctx.restore();
 
             drawUI();
 
+            // Draw touch indicator in mobile mode
+            if (deviceMode === 'mobile' && touchActive && touchTarget && player.alive) {
+                ctx.save();
+                const screenX = touchTarget.x - cameraX;
+                const screenY = touchTarget.y - cameraY;
+                const pulse = Math.sin(gameTimer * 0.15) * 0.2 + 0.6;
+
+                // Outer ring
+                ctx.strokeStyle = `rgba(255, 255, 255, ${pulse * 0.5})`;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, 25, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // Inner dot
+                ctx.fillStyle = `rgba(255, 255, 255, ${pulse})`;
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, 6, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Line from car to touch
+                const carScreenX = player.x - cameraX;
+                const carScreenY = player.y - cameraY;
+                ctx.strokeStyle = `rgba(255, 255, 255, 0.2)`;
+                ctx.lineWidth = 1;
+                ctx.setLineDash([8, 8]);
+                ctx.beginPath();
+                ctx.moveTo(carScreenX, carScreenY);
+                ctx.lineTo(screenX, screenY);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                ctx.restore();
+            }
+
             // Assign hunter bot after 2 seconds (120 frames) - not in challenge mode
             if (!gameOver) {
                 gameTimer++;
+
+                // Shrink arena every 20 seconds
+                if (gameTimer % SHRINK_INTERVAL === 0 && arenaRight - arenaLeft > 300) {
+                    arenaLeft += SHRINK_AMOUNT;
+                    arenaRight -= SHRINK_AMOUNT;
+                    addScreenShake(10);
+                }
+
                 if (!challengeMode && gameTimer === 120 && hunterBot === null) {
                     // Clear all hunter flags first
                     aiCars.forEach(car => car.isHunter = false);
