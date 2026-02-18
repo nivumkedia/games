@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Math Jeopardy</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap');
+
         * {
             margin: 0;
             padding: 0;
@@ -12,22 +14,55 @@
         }
 
         body {
-            font-family: 'Arial', sans-serif;
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            font-family: 'Poppins', 'Arial', sans-serif;
+            background: #0a0e27;
+            background-image:
+                radial-gradient(ellipse at 10% 20%, rgba(59, 130, 246, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 90% 80%, rgba(139, 92, 246, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(16, 185, 129, 0.05) 0%, transparent 70%);
             color: white;
             min-height: 100vh;
             padding: 20px;
+            overflow-x: hidden;
+        }
+
+        /* Animated starfield */
+        .stars-layer {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .stars-layer canvas {
+            width: 100%;
+            height: 100%;
         }
 
         .header {
             text-align: center;
             margin-bottom: 30px;
+            position: relative;
+            z-index: 1;
         }
 
         h1 {
-            font-size: 3em;
-            text-shadow: 3px 3px 6px rgba(0,0,0,0.5);
+            font-size: 3.5em;
+            font-weight: 900;
+            letter-spacing: 4px;
+            background: linear-gradient(135deg, #ffd700 0%, #ffaa00 30%, #fff 50%, #ffd700 70%, #ffaa00 100%);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 3s linear infinite;
             margin-bottom: 10px;
+            filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.4));
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% center; }
+            100% { background-position: 200% center; }
         }
 
         .score {
@@ -41,39 +76,56 @@
 
         input[type="text"] {
             width: 100%;
-            padding: 15px;
+            padding: 15px 20px;
             font-size: 1.2em;
-            border: 3px solid #ffd700;
-            background: #1e3799;
+            font-family: 'Poppins', sans-serif;
+            border: 2px solid rgba(255, 215, 0, 0.4);
+            background: rgba(30, 55, 153, 0.6);
             color: white;
-            border-radius: 5px;
+            border-radius: 12px;
             text-align: center;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
         }
 
         input[type="text"]:focus {
             outline: none;
-            background: #2c3e50;
+            border-color: #ffd700;
+            background: rgba(30, 55, 153, 0.8);
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.2);
+        }
+
+        input[type="text"]::placeholder {
+            color: rgba(255, 255, 255, 0.4);
         }
 
         .feedback {
             display: none;
             margin: 15px 0;
-            padding: 15px;
-            border-radius: 5px;
-            font-size: 1.2em;
-            font-weight: bold;
+            padding: 15px 20px;
+            border-radius: 12px;
+            font-size: 1.1em;
+            font-weight: 600;
+            animation: slideUp 0.4s ease;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         .feedback.correct {
-            background: rgba(76, 209, 55, 0.2);
-            border: 2px solid #4cd137;
-            color: #4cd137;
+            background: rgba(16, 185, 129, 0.15);
+            border: 2px solid rgba(16, 185, 129, 0.6);
+            color: #34d399;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.1);
         }
 
         .feedback.incorrect {
-            background: rgba(231, 76, 60, 0.2);
-            border: 2px solid #e74c3c;
-            color: #e74c3c;
+            background: rgba(239, 68, 68, 0.15);
+            border: 2px solid rgba(239, 68, 68, 0.6);
+            color: #f87171;
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.1);
         }
 
         .game-board {
@@ -81,41 +133,68 @@
             margin: 0 auto;
             display: grid;
             grid-template-columns: repeat(6, 1fr);
-            gap: 10px;
+            gap: 8px;
+            position: relative;
+            z-index: 1;
         }
 
         .category {
-            background: #0c2461;
-            padding: 15px 10px;
+            background: linear-gradient(180deg, rgba(30, 55, 153, 0.9) 0%, rgba(12, 36, 97, 0.9) 100%);
+            padding: 16px 10px;
             text-align: center;
-            font-weight: bold;
-            font-size: 0.95em;
-            border: 3px solid #ffd700;
+            font-weight: 700;
+            font-size: 0.85em;
+            letter-spacing: 1px;
+            border: 2px solid rgba(255, 215, 0, 0.5);
             text-transform: uppercase;
+            border-radius: 12px 12px 4px 4px;
+            backdrop-filter: blur(10px);
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
         }
 
         .question-card {
-            background: #0c2461;
-            padding: 40px 20px;
+            background: linear-gradient(145deg, rgba(12, 36, 97, 0.8) 0%, rgba(30, 55, 153, 0.6) 100%);
+            padding: 32px 20px;
             text-align: center;
-            font-size: 2em;
-            font-weight: bold;
+            font-size: 1.8em;
+            font-weight: 800;
             color: #ffd700;
-            border: 3px solid #ffd700;
+            border: 2px solid rgba(255, 215, 0, 0.3);
+            border-radius: 10px;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(10px);
+            position: relative;
+            overflow: hidden;
+            text-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
+        }
+
+        .question-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 215, 0, 0.08), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .question-card:hover:not(.used)::before {
+            left: 100%;
         }
 
         .question-card:hover:not(.used) {
-            background: #1e3799;
-            transform: scale(1.05);
+            background: linear-gradient(145deg, rgba(30, 55, 153, 0.9) 0%, rgba(59, 130, 246, 0.4) 100%);
+            border-color: #ffd700;
+            transform: translateY(-4px) scale(1.02);
+            box-shadow: 0 8px 30px rgba(255, 215, 0, 0.2), 0 0 15px rgba(255, 215, 0, 0.1);
         }
 
         .question-card.used {
-            background: #2c3e50;
-            color: #555;
+            background: rgba(30, 41, 59, 0.4);
+            color: rgba(255, 255, 255, 0.15);
             cursor: not-allowed;
-            border-color: #555;
+            border-color: rgba(100, 116, 139, 0.2);
+            text-shadow: none;
         }
 
         .modal {
@@ -125,7 +204,8 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.9);
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(8px);
             z-index: 1000;
         }
 
@@ -134,128 +214,164 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: #0c2461;
+            background: linear-gradient(145deg, #0f1b4d 0%, #0a1235 100%);
             padding: 40px;
-            border: 5px solid #ffd700;
+            border: 2px solid rgba(255, 215, 0, 0.4);
+            border-radius: 20px;
             max-width: 600px;
             width: 90%;
             text-align: center;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(255, 215, 0, 0.1);
+            animation: modalAppear 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes modalAppear {
+            from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+            to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
         }
 
         .question-text {
             font-size: 1.5em;
             margin-bottom: 30px;
-            line-height: 1.4;
+            line-height: 1.5;
+            font-weight: 600;
         }
 
         .answer {
             display: none;
             font-size: 1.3em;
-            color: #4cd137;
+            color: #34d399;
             margin: 20px 0;
             padding: 20px;
-            background: rgba(76, 209, 55, 0.1);
-            border: 2px solid #4cd137;
-            border-radius: 5px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 2px solid rgba(16, 185, 129, 0.4);
+            border-radius: 12px;
         }
 
         .buttons {
             display: flex;
             gap: 15px;
             justify-content: center;
-            margin-top: 20px;
+            margin-top: 25px;
         }
 
         button {
-            padding: 15px 30px;
-            font-size: 1.1em;
+            padding: 14px 30px;
+            font-size: 1em;
+            font-family: 'Poppins', sans-serif;
             border: none;
-            border-radius: 5px;
+            border-radius: 12px;
             cursor: pointer;
-            font-weight: bold;
-            transition: all 0.3s;
+            font-weight: 700;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            letter-spacing: 0.5px;
         }
 
         .show-answer {
-            background: #ffd700;
+            background: linear-gradient(135deg, #ffd700, #ffaa00);
             color: #0c2461;
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
         }
 
         .show-answer:hover {
-            background: #ffed4e;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(255, 215, 0, 0.4);
         }
 
         .correct {
-            background: #4cd137;
+            background: linear-gradient(135deg, #10b981, #059669);
             color: white;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
         }
 
         .correct:hover {
-            background: #44bd32;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(16, 185, 129, 0.4);
         }
 
         .incorrect {
-            background: #e74c3c;
+            background: linear-gradient(135deg, #ef4444, #dc2626);
             color: white;
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
         }
 
         .incorrect:hover {
-            background: #c0392b;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(239, 68, 68, 0.4);
         }
 
         .close {
-            background: #95a5a6;
-            color: white;
+            background: rgba(100, 116, 139, 0.3);
+            color: rgba(255, 255, 255, 0.8);
+            border: 2px solid rgba(100, 116, 139, 0.4);
         }
 
         .close:hover {
-            background: #7f8c8d;
+            background: rgba(100, 116, 139, 0.5);
+            transform: translateY(-2px);
         }
 
         .scoreboard {
             display: flex;
             justify-content: center;
-            gap: 20px;
+            gap: 16px;
             flex-wrap: wrap;
             margin-top: 15px;
         }
 
         .player-score {
-            padding: 15px 25px;
-            background: #0c2461;
-            border: 3px solid #7f8c8d;
-            border-radius: 5px;
-            transition: all 0.3s;
+            padding: 14px 24px;
+            background: rgba(12, 36, 97, 0.6);
+            border: 2px solid rgba(100, 116, 139, 0.3);
+            border-radius: 14px;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(10px);
         }
 
         .player-score.active {
             border-color: #ffd700;
-            background: #1e3799;
-            transform: scale(1.1);
-            box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+            background: linear-gradient(145deg, rgba(30, 55, 153, 0.8), rgba(59, 130, 246, 0.3));
+            transform: scale(1.08);
+            box-shadow: 0 0 30px rgba(255, 215, 0, 0.25), inset 0 0 20px rgba(255, 215, 0, 0.05);
         }
 
         .player-name {
-            font-size: 1.2em;
-            font-weight: bold;
-            margin-bottom: 5px;
+            font-size: 1.1em;
+            font-weight: 700;
+            margin-bottom: 4px;
+            letter-spacing: 0.5px;
         }
 
         .player-points {
-            font-size: 1.5em;
-            color: #ffd700;
+            font-size: 1.4em;
+            font-weight: 800;
+            background: linear-gradient(135deg, #ffd700, #ffaa00);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
         .current-turn {
             text-align: center;
-            font-size: 1.3em;
-            color: #ffd700;
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.7);
             margin: 15px 0;
-            font-weight: bold;
+            font-weight: 600;
+            letter-spacing: 1px;
         }
 
         .setup-modal .modal-content {
-            max-width: 500px;
+            max-width: 480px;
+        }
+
+        .setup-modal h2 {
+            font-size: 1.8em;
+            font-weight: 800;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #ffd700, #ffaa00);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
         .setup-input {
@@ -265,17 +381,29 @@
         .setup-input label {
             display: block;
             margin-bottom: 10px;
-            font-size: 1.2em;
+            font-size: 1.1em;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.8);
         }
 
         .setup-input select {
             width: 100%;
-            padding: 10px;
-            font-size: 1.1em;
-            background: #1e3799;
+            padding: 12px;
+            font-size: 1.05em;
+            font-family: 'Poppins', sans-serif;
+            background: rgba(30, 55, 153, 0.6);
             color: white;
-            border: 3px solid #ffd700;
-            border-radius: 5px;
+            border: 2px solid rgba(255, 215, 0, 0.4);
+            border-radius: 12px;
+            appearance: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .setup-input select:focus {
+            outline: none;
+            border-color: #ffd700;
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.15);
         }
 
         .setup-input input[type="text"] {
@@ -287,19 +415,24 @@
         }
 
         .start-game {
-            background: #4cd137;
+            background: linear-gradient(135deg, #10b981, #059669);
             color: white;
             padding: 15px 40px;
-            font-size: 1.2em;
+            font-size: 1.15em;
+            font-family: 'Poppins', sans-serif;
             border: none;
-            border-radius: 5px;
+            border-radius: 14px;
             cursor: pointer;
-            font-weight: bold;
+            font-weight: 700;
             margin-top: 20px;
+            letter-spacing: 0.5px;
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.3);
+            transition: all 0.3s ease;
         }
 
         .start-game:hover {
-            background: #44bd32;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(16, 185, 129, 0.4);
         }
 
         .winner-modal .modal-content {
@@ -308,9 +441,15 @@
 
         .winner-title {
             font-size: 2.5em;
-            color: #ffd700;
+            font-weight: 900;
+            background: linear-gradient(135deg, #ffd700, #ffaa00, #fff, #ffd700);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 2s linear infinite;
             margin-bottom: 30px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            filter: drop-shadow(0 0 15px rgba(255, 215, 0, 0.3));
         }
 
         .final-scores {
@@ -318,70 +457,90 @@
         }
 
         .final-score-item {
-            padding: 15px;
+            padding: 16px 20px;
             margin: 10px 0;
-            background: #1e3799;
-            border: 2px solid #ffd700;
-            border-radius: 5px;
-            font-size: 1.3em;
+            background: rgba(30, 55, 153, 0.5);
+            border: 2px solid rgba(255, 215, 0, 0.3);
+            border-radius: 14px;
+            font-size: 1.2em;
+            font-weight: 600;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
         }
 
         .final-score-item.winner {
-            background: #ffd700;
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.9), rgba(255, 170, 0, 0.9));
             color: #0c2461;
-            border-width: 4px;
-            font-size: 1.5em;
+            border-color: #ffd700;
+            font-size: 1.4em;
+            font-weight: 800;
+            box-shadow: 0 4px 25px rgba(255, 215, 0, 0.3);
         }
 
         .play-again {
-            background: #4cd137;
+            background: linear-gradient(135deg, #10b981, #059669);
             color: white;
             padding: 15px 40px;
-            font-size: 1.2em;
+            font-size: 1.15em;
+            font-family: 'Poppins', sans-serif;
             border: none;
-            border-radius: 5px;
+            border-radius: 14px;
             cursor: pointer;
-            font-weight: bold;
+            font-weight: 700;
             margin-top: 20px;
+            letter-spacing: 0.5px;
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.3);
+            transition: all 0.3s ease;
         }
 
         .play-again:hover {
-            background: #44bd32;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(16, 185, 129, 0.4);
         }
 
         .modal-header {
-            font-size: 1.1em;
+            font-size: 1.05em;
+            font-weight: 600;
             color: #ffd700;
             margin-bottom: 20px;
+            letter-spacing: 0.5px;
+            opacity: 0.9;
         }
 
         .bingo-container {
             display: flex;
             justify-content: center;
-            gap: 15px;
+            gap: 14px;
             flex-wrap: wrap;
-            margin: 10px 0;
+            margin: 10px 0 20px;
+            position: relative;
+            z-index: 1;
         }
 
         .bingo-card {
-            background: #0c2461;
-            border: 2px solid #ffd700;
-            border-radius: 8px;
-            padding: 8px;
+            background: rgba(12, 36, 97, 0.6);
+            border: 2px solid rgba(255, 215, 0, 0.25);
+            border-radius: 14px;
+            padding: 10px;
             min-width: 140px;
             max-width: 160px;
+            backdrop-filter: blur(10px);
+            transition: all 0.4s ease;
         }
 
         .bingo-card.active {
-            box-shadow: 0 0 15px rgba(255, 215, 0, 0.7);
+            border-color: #ffd700;
+            box-shadow: 0 0 25px rgba(255, 215, 0, 0.2), inset 0 0 15px rgba(255, 215, 0, 0.05);
         }
 
         .bingo-card-title {
             text-align: center;
-            font-weight: bold;
-            font-size: 0.75em;
-            margin-bottom: 6px;
+            font-weight: 700;
+            font-size: 0.7em;
+            margin-bottom: 8px;
             color: #ffd700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
         }
 
         .bingo-grid {
@@ -391,24 +550,27 @@
         }
 
         .bingo-cell {
-            background: #1e3799;
-            border: 1px solid #3498db;
+            background: rgba(30, 55, 153, 0.5);
+            border: 1px solid rgba(52, 152, 219, 0.3);
             padding: 4px 2px;
             text-align: center;
-            font-size: 0.65em;
-            border-radius: 3px;
+            font-size: 0.6em;
+            font-weight: 600;
+            border-radius: 5px;
             min-height: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
             word-break: break-all;
+            transition: all 0.3s ease;
         }
 
         .bingo-cell.marked {
-            background: #4cd137;
-            border-color: #2ecc71;
+            background: linear-gradient(135deg, #10b981, #059669);
+            border-color: #34d399;
             color: white;
-            font-weight: bold;
+            font-weight: 700;
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
         }
 
         .bingo-modal .modal-content {
@@ -417,6 +579,7 @@
 
         .bingo-celebration {
             font-size: 2em;
+            font-weight: 800;
             color: #ffd700;
             text-align: center;
             margin: 20px 0;
@@ -425,7 +588,7 @@
 
         @keyframes pulse {
             from { transform: scale(1); }
-            to { transform: scale(1.1); }
+            to { transform: scale(1.08); }
         }
 
         .bingo-mark-overlay {
@@ -436,6 +599,7 @@
             width: 100%;
             height: 100%;
             background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(12px);
             z-index: 2000;
             justify-content: center;
             align-items: center;
@@ -454,39 +618,273 @@
 
         .bingo-mark-player {
             font-size: 2em;
+            font-weight: 700;
             color: #ffd700;
             margin-bottom: 20px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
         }
 
         .bingo-mark-cell {
-            background: #4cd137;
-            border: 5px solid #2ecc71;
-            border-radius: 15px;
+            background: linear-gradient(135deg, #10b981, #059669);
+            border: 4px solid #34d399;
+            border-radius: 20px;
             padding: 40px 60px;
             font-size: 3em;
             color: white;
-            font-weight: bold;
+            font-weight: 800;
             text-align: center;
-            animation: popIn 0.5s ease;
-            box-shadow: 0 0 50px rgba(76, 209, 55, 0.8);
+            animation: popIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 60px rgba(16, 185, 129, 0.5), 0 0 120px rgba(16, 185, 129, 0.2);
         }
 
         @keyframes popIn {
-            0% { transform: scale(0); }
-            70% { transform: scale(1.2); }
-            100% { transform: scale(1); }
+            0% { transform: scale(0); opacity: 0; }
+            70% { transform: scale(1.15); }
+            100% { transform: scale(1); opacity: 1; }
         }
 
         .bingo-mark-text {
             font-size: 1.5em;
-            color: #4cd137;
+            font-weight: 800;
+            color: #34d399;
             margin-top: 20px;
-            font-weight: bold;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        /* Design Game styles */
+        .design-btn {
+            background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+            color: white;
+            padding: 12px 28px;
+            font-size: 1em;
+            font-family: 'Poppins', sans-serif;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 700;
+            margin-top: 12px;
+            letter-spacing: 0.5px;
+            box-shadow: 0 4px 20px rgba(139, 92, 246, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .design-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(139, 92, 246, 0.4);
+        }
+
+        .design-modal .modal-content {
+            max-width: 640px;
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+
+        .design-modal .modal-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .design-modal .modal-content::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .design-modal .modal-content::-webkit-scrollbar-thumb {
+            background: rgba(255, 215, 0, 0.3);
+            border-radius: 3px;
+        }
+
+        .design-title {
+            font-size: 1.6em;
+            font-weight: 800;
+            background: linear-gradient(135deg, #8b5cf6, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+        }
+
+        .design-subtitle {
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 20px;
+        }
+
+        .category-option {
+            background: rgba(30, 55, 153, 0.3);
+            border: 2px solid rgba(100, 116, 139, 0.2);
+            border-radius: 14px;
+            padding: 16px;
+            margin-bottom: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .category-option.selected {
+            border-color: rgba(139, 92, 246, 0.5);
+            background: rgba(139, 92, 246, 0.1);
+        }
+
+        .category-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .category-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            flex: 1;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            flex-shrink: 0;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(100, 116, 139, 0.4);
+            border-radius: 24px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .toggle-slider::before {
+            content: '';
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            left: 3px;
+            bottom: 3px;
+            background: white;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .toggle-switch input:checked + .toggle-slider {
+            background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+        }
+
+        .toggle-switch input:checked + .toggle-slider::before {
+            transform: translateX(20px);
+        }
+
+        .category-label {
+            font-weight: 600;
+            font-size: 1em;
+        }
+
+        .difficulty-select {
+            padding: 6px 12px;
+            font-size: 0.85em;
+            font-family: 'Poppins', sans-serif;
+            background: rgba(30, 55, 153, 0.6);
+            color: white;
+            border: 2px solid rgba(139, 92, 246, 0.3);
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            appearance: none;
+            min-width: 90px;
+            text-align: center;
+        }
+
+        .difficulty-select:focus {
+            outline: none;
+            border-color: #8b5cf6;
+        }
+
+        .difficulty-select option {
+            background: #0f1b4d;
+        }
+
+        .design-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .design-save {
+            background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+            color: white;
+            padding: 12px 32px;
+            font-size: 1em;
+            font-family: 'Poppins', sans-serif;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 700;
+            box-shadow: 0 4px 20px rgba(139, 92, 246, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .design-save:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(139, 92, 246, 0.4);
+        }
+
+        .design-back {
+            background: rgba(100, 116, 139, 0.3);
+            color: rgba(255, 255, 255, 0.8);
+            padding: 12px 28px;
+            font-size: 1em;
+            font-family: 'Poppins', sans-serif;
+            border: 2px solid rgba(100, 116, 139, 0.4);
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .design-back:hover {
+            background: rgba(100, 116, 139, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .design-warning {
+            color: #f87171;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .setup-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        .active-cats-badge {
+            display: inline-block;
+            background: rgba(139, 92, 246, 0.2);
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 0.8em;
+            font-weight: 600;
+            color: #a78bfa;
+            margin-top: 12px;
         }
     </style>
 </head>
 <body>
+    <div class="stars-layer"><canvas id="starsCanvas"></canvas></div>
     <div class="header">
         <h1>MATH JEOPARDY</h1>
         <div class="current-turn" id="currentTurn"></div>
@@ -510,7 +908,24 @@
                 </select>
             </div>
             <div class="player-inputs" id="playerInputs"></div>
-            <button class="start-game" id="startGameBtn">Start Game</button>
+            <div id="activeCatsBadge" class="active-cats-badge"></div>
+            <div class="setup-buttons">
+                <button class="start-game" id="startGameBtn">Start Game</button>
+                <button class="design-btn" id="designGameBtn">Design Game</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal design-modal" id="designModal">
+        <div class="modal-content">
+            <div class="design-title">Design Your Game</div>
+            <div class="design-subtitle">Toggle math types on/off and set difficulty for each (max 6)</div>
+            <div id="categoryOptions"></div>
+            <div class="design-warning" id="designWarning">Select 2-6 categories!</div>
+            <div class="design-actions">
+                <button class="design-back" id="designBackBtn">Back</button>
+                <button class="design-save" id="designSaveBtn">Save</button>
+            </div>
         </div>
     </div>
 
@@ -544,14 +959,138 @@
     </div>
 
     <script>
-        const categories = [
+        // Animated starfield background
+        (function() {
+            const canvas = document.getElementById('starsCanvas');
+            const ctx = canvas.getContext('2d');
+            let stars = [];
+            const STAR_COUNT = 200;
+            const SHOOTING_STAR_CHANCE = 0.002;
+            let shootingStars = [];
+
+            function resize() {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+            }
+            resize();
+            window.addEventListener('resize', resize);
+
+            for (let i = 0; i < STAR_COUNT; i++) {
+                stars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size: Math.random() * 2.5 + 0.5,
+                    speed: Math.random() * 0.3 + 0.05,
+                    opacity: Math.random(),
+                    twinkleSpeed: Math.random() * 0.02 + 0.005,
+                    twinkleDir: Math.random() > 0.5 ? 1 : -1
+                });
+            }
+
+            function drawStar(star) {
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255, 255, 255, ${star.opacity})`;
+                ctx.fill();
+                // Glow
+                if (star.size > 1.5) {
+                    ctx.beginPath();
+                    ctx.arc(star.x, star.y, star.size * 2.5, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(200, 220, 255, ${star.opacity * 0.15})`;
+                    ctx.fill();
+                }
+            }
+
+            function drawShootingStar(s) {
+                const grad = ctx.createLinearGradient(s.x, s.y, s.x - s.tailLen * Math.cos(s.angle), s.y - s.tailLen * Math.sin(s.angle));
+                grad.addColorStop(0, `rgba(255, 255, 255, ${s.opacity})`);
+                grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                ctx.strokeStyle = grad;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(s.x, s.y);
+                ctx.lineTo(s.x - s.tailLen * Math.cos(s.angle), s.y - s.tailLen * Math.sin(s.angle));
+                ctx.stroke();
+            }
+
+            function animate() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                stars.forEach(star => {
+                    star.opacity += star.twinkleSpeed * star.twinkleDir;
+                    if (star.opacity >= 1) { star.opacity = 1; star.twinkleDir = -1; }
+                    if (star.opacity <= 0.1) { star.opacity = 0.1; star.twinkleDir = 1; }
+                    star.y += star.speed;
+                    if (star.y > canvas.height) { star.y = 0; star.x = Math.random() * canvas.width; }
+                    drawStar(star);
+                });
+
+                // Shooting stars
+                if (Math.random() < SHOOTING_STAR_CHANCE) {
+                    shootingStars.push({
+                        x: Math.random() * canvas.width * 0.8,
+                        y: Math.random() * canvas.height * 0.4,
+                        speed: Math.random() * 8 + 6,
+                        angle: Math.PI / 6 + Math.random() * 0.3,
+                        tailLen: Math.random() * 60 + 40,
+                        opacity: 1,
+                        life: 0
+                    });
+                }
+
+                shootingStars = shootingStars.filter(s => {
+                    s.x += s.speed * Math.cos(s.angle);
+                    s.y += s.speed * Math.sin(s.angle);
+                    s.life++;
+                    s.opacity = Math.max(0, 1 - s.life / 40);
+                    drawShootingStar(s);
+                    return s.opacity > 0 && s.x < canvas.width + 100 && s.y < canvas.height + 100;
+                });
+
+                requestAnimationFrame(animate);
+            }
+            animate();
+        })();
+    </script>
+
+    <script>
+        const allCategories = [
+            { name: "Addition", color: "#22c55e" },
+            { name: "Subtraction", color: "#14b8a6" },
             { name: "Multiplication", color: "#e74c3c" },
             { name: "Division", color: "#3498db" },
-            { name: "Derivatives", color: "#2ecc71" },
+            { name: "Fractions", color: "#f97316" },
+            { name: "Percentages", color: "#ec4899" },
+            { name: "Order of Operations", color: "#06b6d4" },
+            { name: "Algebra", color: "#84cc16" },
+            { name: "Geometry", color: "#a855f7" },
             { name: "Roots & Exponents", color: "#f39c12" },
+            { name: "Sequences", color: "#6366f1" },
+            { name: "Statistics", color: "#0ea5e9" },
+            { name: "Probability", color: "#d946ef" },
+            { name: "Absolute Value", color: "#f43f5e" },
             { name: "Logarithms", color: "#9b59b6" },
+            { name: "Trigonometry", color: "#10b981" },
+            { name: "Derivatives", color: "#2ecc71" },
+            { name: "Integrals", color: "#8b5cf6" },
+            { name: "Factoring", color: "#eab308" },
             { name: "Word Problems", color: "#e67e22" }
         ];
+
+        const MAX_CATEGORIES = 6;
+
+        // Game config: first 6 enabled by default
+        let gameConfig = {};
+        allCategories.forEach((cat, idx) => {
+            gameConfig[cat.name] = { enabled: idx < 6, difficulty: 'medium' };
+        });
+
+        // Active categories (computed from config)
+        let categories = [...allCategories];
+
+        function getActiveCategories() {
+            return allCategories.filter(cat => gameConfig[cat.name].enabled);
+        }
 
         let questions = {};
 
@@ -565,175 +1104,482 @@
             return String(n).split('').map(c => supers[c] || c).join('');
         }
 
+        // Difficulty multipliers: easy=0.5, medium=1, hard=1.5
+        function diffScale(cat, base) {
+            const d = gameConfig[cat]?.difficulty || 'medium';
+            if (d === 'easy') return Math.max(2, Math.round(base * 0.5));
+            if (d === 'hard') return Math.round(base * 1.8);
+            return base;
+        }
+
+        function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
+        function simplify(n, d) { const g = gcd(Math.abs(n), Math.abs(d)); return [n/g, d/g]; }
+
         function generateQuestions() {
-            questions = {
-                "Multiplication": {},
-                "Division": {},
-                "Derivatives": {},
-                "Roots & Exponents": {},
-                "Logarithms": {},
-                "Word Problems": {}
-            };
+            questions = {};
+            categories.forEach(cat => { questions[cat.name] = {}; });
 
-            // Multiplication (easier)
-            const multRanges = [[5,12,5,12], [10,25,10,20], [15,40,15,30], [20,50,20,40], [30,80,30,50]];
-            for (let i = 1; i <= 5; i++) {
-                const [minA,maxA,minB,maxB] = multRanges[i-1];
-                const a = randInt(minA, maxA);
-                const b = randInt(minB, maxB);
-                questions["Multiplication"][i] = { q: `${a} × ${b} = ?`, a: String(a * b) };
-            }
-
-            // Division (clean answers)
-            const divRanges = [[5,12], [10,25], [15,45], [20,55], [25,65]];
-            for (let i = 1; i <= 5; i++) {
-                const [minAns, maxAns] = divRanges[i-1];
-                const answer = randInt(minAns, maxAns);
-                const divisor = randInt(6 + i*2, 10 + i*4);
-                const dividend = answer * divisor;
-                questions["Division"][i] = { q: `${dividend} ÷ ${divisor} = ?`, a: String(answer) };
-            }
-
-            // Derivatives (including f''(x) and f'''(x))
-            const derivProblems = [
-                // Level 1: simple f'(x) of ax²
-                () => {
-                    const a = randInt(2, 6);
-                    return { q: `If f(x) = ${a}x², what is f'(x)?`, a: `${a*2}x` };
-                },
-                // Level 2: f'(x) of ax² + bx
-                () => {
-                    const a = randInt(2, 5), b = randInt(2, 6);
-                    return { q: `If f(x) = ${a}x² + ${b}x, what is f'(x)?`, a: `${a*2}x+${b}|${a*2}x + ${b}` };
-                },
-                // Level 3: f''(x) of ax³ + bx
-                () => {
-                    const a = randInt(2, 4), b = randInt(2, 6);
-                    // f'(x) = 3ax² + b, f''(x) = 6ax
-                    return { q: `If f(x) = ${a}x³ + ${b}x, what is f''(x)?`, a: `${a*6}x` };
-                },
-                // Level 4: f''(x) of ax⁴ + bx²
-                () => {
-                    const a = randInt(2, 3), b = randInt(2, 5);
-                    // f'(x) = 4ax³ + 2bx, f''(x) = 12ax² + 2b
-                    return { q: `If f(x) = ${a}x⁴ + ${b}x², what is f''(x)?`, a: `${a*12}x²+${b*2}|${a*12}x^2+${b*2}|${a*12}x² + ${b*2}` };
-                },
-                // Level 5: f'''(x) of ax⁴ + bx³
-                () => {
-                    const a = randInt(2, 3), b = randInt(2, 4);
-                    // f'(x) = 4ax³ + 3bx², f''(x) = 12ax² + 6bx, f'''(x) = 24ax + 6b
-                    return { q: `If f(x) = ${a}x⁴ + ${b}x³, what is f'''(x)?`, a: `${a*24}x+${b*6}|${a*24}x + ${b*6}` };
+            // ===== ADDITION =====
+            if (gameConfig["Addition"]?.enabled) {
+                const d = gameConfig["Addition"].difficulty;
+                const ranges = {
+                    easy:   [[1,20,1,20],[5,50,5,50],[10,100,10,100],[20,200,20,200],[50,500,50,500]],
+                    medium: [[10,100,10,100],[50,500,50,500],[100,999,100,999],[200,2000,200,2000],[500,5000,500,5000]],
+                    hard:   [[100,999,100,999],[500,5000,500,5000],[1000,9999,1000,9999],[2000,20000,2000,20000],[5000,50000,5000,50000]]
+                }[d];
+                for (let i = 1; i <= 5; i++) {
+                    const [mA,xA,mB,xB] = ranges[i-1];
+                    const a = randInt(mA,xA), b = randInt(mB,xB);
+                    questions["Addition"][i] = { q: `${a} + ${b} = ?`, a: String(a+b) };
                 }
-            ];
-            for (let i = 1; i <= 5; i++) {
-                questions["Derivatives"][i] = derivProblems[i-1]();
             }
 
-            // Roots & Exponents (harder with combinations)
-            const perfectSquares = [4,9,16,25,36,49,64,81,100,121,144,169,196,225,256,289,324,361,400];
-            const sqrts = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20];
-
-            // Level 1: two square roots added
-            let idx1 = randInt(0, 8), idx2 = randInt(0, 8);
-            questions["Roots & Exponents"][1] = {
-                q: `√${perfectSquares[idx1]} + √${perfectSquares[idx2]} = ?`,
-                a: String(sqrts[idx1] + sqrts[idx2])
-            };
-
-            // Level 2: cube of small number
-            let base2 = randInt(4, 9);
-            questions["Roots & Exponents"][2] = {
-                q: `${base2}³ = ?`,
-                a: String(base2 ** 3)
-            };
-
-            // Level 3: harder square root
-            let idx3 = randInt(10, 18);
-            questions["Roots & Exponents"][3] = {
-                q: `√${perfectSquares[idx3]} = ?`,
-                a: String(sqrts[idx3])
-            };
-
-            // Level 4: power plus power
-            let base4a = randInt(2, 3), exp4a = randInt(6, 8);
-            let base4b = randInt(2, 4), exp4b = randInt(3, 4);
-            questions["Roots & Exponents"][4] = {
-                q: `${base4a}${toSuperscript(exp4a)} + ${base4b}${toSuperscript(exp4b)} = ?`,
-                a: String(base4a ** exp4a + base4b ** exp4b)
-            };
-
-            // Level 5: cube root times square root
-            const cubes = [[8,2],[27,3],[64,4],[125,5],[216,6],[512,8]];
-            let cubeIdx = randInt(0, 5);
-            let sqIdx = randInt(2, 8);
-            questions["Roots & Exponents"][5] = {
-                q: `∛${cubes[cubeIdx][0]} × √${perfectSquares[sqIdx]} = ?`,
-                a: String(cubes[cubeIdx][1] * sqrts[sqIdx])
-            };
-
-            // Logarithms (bases 2, 3, 4)
-            const logProblems = [
-                // Level 1: simple log base 2
-                () => { const exp = randInt(4, 6); return { q: `log₂(${2**exp}) = ?`, a: String(exp) }; },
-                // Level 2: log base 3
-                () => { const exp = randInt(3, 5); return { q: `log₃(${3**exp}) = ?`, a: String(exp) }; },
-                // Level 3: log base 4
-                () => { const exp = randInt(3, 4); return { q: `log₄(${4**exp}) = ?`, a: String(exp) }; },
-                // Level 4: sum of two logs
-                () => {
-                    const exp1 = randInt(5, 7), exp2 = randInt(3, 4);
-                    return { q: `log₂(${2**exp1}) + log₃(${3**exp2}) = ?`, a: String(exp1 + exp2) };
-                },
-                // Level 5: product of two logs
-                () => {
-                    const exp1 = randInt(3, 4), exp2 = randInt(4, 5);
-                    return { q: `log₄(${4**exp1}) × log₂(${2**exp2}) = ?`, a: String(exp1 * exp2) };
+            // ===== SUBTRACTION =====
+            if (gameConfig["Subtraction"]?.enabled) {
+                const d = gameConfig["Subtraction"].difficulty;
+                const ranges = {
+                    easy:   [[10,30],[20,60],[30,100],[50,200],[100,500]],
+                    medium: [[50,200],[100,500],[200,1000],[500,3000],[1000,9999]],
+                    hard:   [[200,1000],[500,5000],[1000,10000],[5000,50000],[10000,99999]]
+                }[d];
+                for (let i = 1; i <= 5; i++) {
+                    const [mn,mx] = ranges[i-1];
+                    const a = randInt(mn,mx), b = randInt(mn, a);
+                    questions["Subtraction"][i] = { q: `${a} - ${b} = ?`, a: String(a-b) };
                 }
-            ];
-            for (let i = 1; i <= 5; i++) {
-                questions["Logarithms"][i] = logProblems[i-1]();
             }
 
-            // Word Problems (mult, div, exp, log, deriv)
-            // Level 1: Multiplication
-            const boxes = randInt(8, 15), items = randInt(10, 20);
-            questions["Word Problems"][1] = {
-                q: `A store sells ${boxes} boxes with ${items} items each. How many total items?`,
-                a: String(boxes * items)
-            };
+            // ===== MULTIPLICATION =====
+            if (gameConfig["Multiplication"]?.enabled) {
+                const d = gameConfig["Multiplication"].difficulty;
+                const multRanges = {
+                    easy:   [[2,6,2,6],[3,9,3,9],[5,12,5,10],[6,12,6,12],[8,15,8,12]],
+                    medium: [[5,12,5,12],[10,25,10,20],[15,40,15,30],[20,50,20,40],[30,80,30,50]],
+                    hard:   [[20,50,20,50],[30,80,30,60],[50,120,40,80],[60,150,50,100],[80,200,60,150]]
+                }[d];
+                for (let i = 1; i <= 5; i++) {
+                    const [minA,maxA,minB,maxB] = multRanges[i-1];
+                    const a = randInt(minA,maxA), b = randInt(minB,maxB);
+                    questions["Multiplication"][i] = { q: `${a} × ${b} = ?`, a: String(a*b) };
+                }
+            }
 
-            // Level 2: Division
-            const totalCookies = randInt(10, 15) * randInt(8, 14);
-            const friends = randInt(8, 14);
-            const perFriend = Math.floor(totalCookies / friends) * friends === totalCookies ? totalCookies / friends : null;
-            const actualTotal = perFriend ? totalCookies : friends * randInt(10, 15);
-            const actualAnswer = actualTotal / friends;
-            questions["Word Problems"][2] = {
-                q: `You have ${actualTotal} cookies to share equally among ${friends} friends. How many does each get?`,
-                a: String(actualAnswer)
-            };
+            // ===== DIVISION =====
+            if (gameConfig["Division"]?.enabled) {
+                const d = gameConfig["Division"].difficulty;
+                const divRanges = {
+                    easy:   [[2,6],[3,10],[5,12],[6,15],[8,20]],
+                    medium: [[5,12],[10,25],[15,45],[20,55],[25,65]],
+                    hard:   [[15,40],[25,70],[40,100],[50,120],[60,150]]
+                }[d];
+                const divDivisors = { easy: i => randInt(2,5+i), medium: i => randInt(6+i*2,10+i*4), hard: i => randInt(10+i*3,20+i*5) }[d];
+                for (let i = 1; i <= 5; i++) {
+                    const [minAns,maxAns] = divRanges[i-1];
+                    const answer = randInt(minAns,maxAns);
+                    const divisor = divDivisors(i);
+                    questions["Division"][i] = { q: `${answer*divisor} ÷ ${divisor} = ?`, a: String(answer) };
+                }
+            }
 
-            // Level 3: Exponents (doubling)
-            const hours = randInt(5, 8);
-            questions["Word Problems"][3] = {
-                q: `A bacteria colony doubles every hour. Starting with 1, how many after ${hours} hours?`,
-                a: String(2 ** hours)
-            };
+            // ===== FRACTIONS =====
+            if (gameConfig["Fractions"]?.enabled) {
+                const d = gameConfig["Fractions"].difficulty;
+                if (d === 'easy') {
+                    let a=randInt(1,3),b=randInt(4,8); questions["Fractions"][1] = { q: `${a}/${b} + ${a}/${b} = ? (as a fraction)`, a: (() => { const [n,dd]=simplify(a*2,b); return dd===1?`${n}`:`${n}/${dd}`; })() };
+                    let c=randInt(1,4),e=randInt(5,10); questions["Fractions"][2] = { q: `${c}/${e} simplified = ?`, a: (() => { const [n,dd]=simplify(c,e); return dd===1?`${n}`:`${n}/${dd}`; })() };
+                    questions["Fractions"][3] = { q: `1/2 + 1/4 = ?`, a: `3/4` };
+                    questions["Fractions"][4] = { q: `3/4 - 1/4 = ?`, a: `1/2|2/4` };
+                    let f=randInt(2,5); questions["Fractions"][5] = { q: `${f} × 1/${f} = ?`, a: `1` };
+                } else if (d === 'medium') {
+                    let a=randInt(1,5),b=randInt(2,6),den=randInt(6,12); questions["Fractions"][1] = { q: `${a}/${den} + ${b}/${den} = ? (simplified)`, a: (() => { const [n,dd]=simplify(a+b,den); return dd===1?`${n}`:`${n}/${dd}`; })() };
+                    let c=randInt(2,8),e=randInt(2,8),f=randInt(3,9); questions["Fractions"][2] = { q: `${c}/${f} × ${e}/${f} = ? (simplified)`, a: (() => { const [n,dd]=simplify(c*e,f*f); return dd===1?`${n}`:`${n}/${dd}`; })() };
+                    let n1=randInt(1,4),d1=randInt(5,8),n2=randInt(1,3),d2=d1; questions["Fractions"][3] = { q: `${n1}/${d1} + ${n2}/${d2} = ? (simplified)`, a: (() => { const [n,dd]=simplify(n1+n2,d1); return dd===1?`${n}`:`${n}/${dd}`; })() };
+                    questions["Fractions"][4] = { q: `2/3 + 1/6 = ?`, a: `5/6` };
+                    questions["Fractions"][5] = { q: `3/4 × 2/3 = ?`, a: `1/2|2/4|6/12` };
+                } else {
+                    questions["Fractions"][1] = { q: `2/3 + 3/4 = ?`, a: `17/12` };
+                    questions["Fractions"][2] = { q: `5/6 - 1/4 = ?`, a: `7/12` };
+                    let a=randInt(2,5),b=randInt(3,7); questions["Fractions"][3] = { q: `${a}/7 ÷ ${b}/7 = ? (simplified)`, a: (() => { const [n,dd]=simplify(a,b); return dd===1?`${n}`:`${n}/${dd}`; })() };
+                    questions["Fractions"][4] = { q: `3/5 + 2/7 = ?`, a: `31/35` };
+                    let c=randInt(3,8),e=randInt(2,6); questions["Fractions"][5] = { q: `${c}/11 × ${e}/3 = ? (simplified)`, a: (() => { const [n,dd]=simplify(c*e,33); return dd===1?`${n}`:`${n}/${dd}`; })() };
+                }
+            }
 
-            // Level 4: Logarithm
-            const logExp = randInt(3, 5);
-            const logVal = 10 ** logExp;
-            questions["Word Problems"][4] = {
-                q: `An earthquake measured ${logVal.toLocaleString()} on a scale where each unit is 10x stronger. What is log₁₀(${logVal.toLocaleString()})?`,
-                a: String(logExp)
-            };
+            // ===== PERCENTAGES =====
+            if (gameConfig["Percentages"]?.enabled) {
+                const d = gameConfig["Percentages"].difficulty;
+                if (d === 'easy') {
+                    let a=randInt(2,10)*10; questions["Percentages"][1] = { q: `What is 50% of ${a}?`, a: String(a/2) };
+                    let b=randInt(2,20)*10; questions["Percentages"][2] = { q: `What is 10% of ${b}?`, a: String(b/10) };
+                    let c=randInt(1,5)*20; questions["Percentages"][3] = { q: `What is 25% of ${c}?`, a: String(c/4) };
+                    let e=randInt(10,50); questions["Percentages"][4] = { q: `${e} is what percent of ${e*2}?`, a: `50` };
+                    let f=randInt(2,10)*10; questions["Percentages"][5] = { q: `What is 100% of ${f}?`, a: String(f) };
+                } else if (d === 'medium') {
+                    let a=randInt(20,200); questions["Percentages"][1] = { q: `What is 15% of ${a*20}?`, a: String(a*3) };
+                    let b=randInt(5,25)*4; questions["Percentages"][2] = { q: `What is 75% of ${b}?`, a: String(b*3/4) };
+                    let c=randInt(10,50),e=randInt(50,200); questions["Percentages"][3] = { q: `${c} is what percent of ${e}?`, a: String(Math.round(c/e*100)) };
+                    let f=randInt(2,10)*10, pct=randInt(2,9)*10; questions["Percentages"][4] = { q: `What is ${pct}% of ${f}?`, a: String(f*pct/100) };
+                    let g=randInt(50,200), inc=randInt(10,50); questions["Percentages"][5] = { q: `${g} increased by ${inc}% = ?`, a: String(g + g*inc/100) };
+                } else {
+                    let a=randInt(100,500), pct=randInt(11,39); questions["Percentages"][1] = { q: `What is ${pct}% of ${a}?`, a: String(a*pct/100) };
+                    let b=randInt(50,300), c=randInt(200,800); questions["Percentages"][2] = { q: `${b} is what percent of ${c}?`, a: String(Math.round(b/c*100*100)/100) };
+                    let e=randInt(200,500), dec=randInt(10,40); questions["Percentages"][3] = { q: `${e} decreased by ${dec}% = ?`, a: String(e - e*dec/100) };
+                    let f=randInt(100,300); questions["Percentages"][4] = { q: `After a 20% discount then 10% tax, what is the final price of $${f}?`, a: String(f*0.8*1.1) };
+                    let g=randInt(50,200), h=randInt(60,250); questions["Percentages"][5] = { q: `What is the percent change from ${g} to ${h}?`, a: String(Math.round((h-g)/g*100*100)/100) };
+                }
+            }
 
-            // Level 5: Derivative
-            const dCoef = randInt(2, 5), dLin = randInt(2, 6);
-            questions["Word Problems"][5] = {
-                q: `A ball's height is h(t) = ${dCoef}t² + ${dLin}t meters. What is h'(t), its velocity?`,
-                a: `${dCoef*2}t+${dLin}|${dCoef*2}t + ${dLin}`
-            };
+            // ===== ORDER OF OPERATIONS =====
+            if (gameConfig["Order of Operations"]?.enabled) {
+                const d = gameConfig["Order of Operations"].difficulty;
+                if (d === 'easy') {
+                    let a=randInt(2,5),b=randInt(2,5),c=randInt(1,5); questions["Order of Operations"][1] = { q: `${a} + ${b} × ${c} = ?`, a: String(a+b*c) };
+                    let e=randInt(2,6),f=randInt(1,4),g=randInt(2,5); questions["Order of Operations"][2] = { q: `${e} × ${f} + ${g} = ?`, a: String(e*f+g) };
+                    let h=randInt(10,20),i=randInt(2,5),j=randInt(1,4); questions["Order of Operations"][3] = { q: `${h} - ${i} × ${j} = ?`, a: String(h-i*j) };
+                    let k=randInt(2,5),l=randInt(2,5),m=randInt(2,5); questions["Order of Operations"][4] = { q: `(${k} + ${l}) × ${m} = ?`, a: String((k+l)*m) };
+                    let n=randInt(3,8),o=randInt(2,4),p=randInt(1,5); questions["Order of Operations"][5] = { q: `${n} × ${o} - ${p} = ?`, a: String(n*o-p) };
+                } else if (d === 'medium') {
+                    let a=randInt(2,6),b=randInt(2,6),c=randInt(2,6),e=randInt(1,5); questions["Order of Operations"][1] = { q: `${a} + ${b} × ${c} - ${e} = ?`, a: String(a+b*c-e) };
+                    let f=randInt(2,5),g=randInt(3,8),h=randInt(2,4); questions["Order of Operations"][2] = { q: `(${f} + ${g}) × ${h} = ?`, a: String((f+g)*h) };
+                    let i=randInt(2,4),j=randInt(2,5),k=randInt(3,7); questions["Order of Operations"][3] = { q: `${i}² + ${j} × ${k} = ?`, a: String(i*i+j*k) };
+                    let l=randInt(10,30),m=randInt(2,5),n=randInt(2,6); questions["Order of Operations"][4] = { q: `${l} ÷ ${m} + ${n} × ${m} = ?`, a: String(l/m+n*m) };
+                    let o=randInt(2,5),p=randInt(2,5),q=randInt(2,5),r=randInt(1,5); questions["Order of Operations"][5] = { q: `(${o} + ${p}) × (${q} - ${r}) = ?`, a: String((o+p)*(q-r)) };
+                } else {
+                    let a=randInt(2,4),b=randInt(2,5),c=randInt(3,7),e=randInt(2,4); questions["Order of Operations"][1] = { q: `${a}² + ${b} × ${c} - ${e}² = ?`, a: String(a*a+b*c-e*e) };
+                    let f=randInt(2,4),g=randInt(3,6),h=randInt(2,5),i=randInt(2,4); questions["Order of Operations"][2] = { q: `(${f}² - ${g}) × ${h} + ${i} = ?`, a: String((f*f-g)*h+i) };
+                    let j=randInt(2,3),k=randInt(2,4),l=randInt(2,5); questions["Order of Operations"][3] = { q: `${j}³ + ${k} × ${l}² = ?`, a: String(j**3+k*l*l) };
+                    let m=randInt(2,5),n=randInt(3,6),o=randInt(2,4),p=randInt(2,6); questions["Order of Operations"][4] = { q: `${m} × (${n} + ${o}²) - ${p} = ?`, a: String(m*(n+o*o)-p) };
+                    let q=randInt(2,3),r=randInt(2,4),s=randInt(2,3),t=randInt(3,7); questions["Order of Operations"][5] = { q: `(${q}³ - ${r}²) × ${s} + ${t} = ?`, a: String((q**3-r*r)*s+t) };
+                }
+            }
+
+            // ===== ALGEBRA =====
+            if (gameConfig["Algebra"]?.enabled) {
+                const d = gameConfig["Algebra"].difficulty;
+                if (d === 'easy') {
+                    let a=randInt(2,10); questions["Algebra"][1] = { q: `x + ${a} = ${a+randInt(1,10)}. x = ?`, a: String(a+randInt(1,10)-a) };
+                    // Redo to be deterministic
+                    let b=randInt(1,10),c=randInt(2,15); questions["Algebra"][1] = { q: `x + ${b} = ${b+c}. x = ?`, a: String(c) };
+                    let e=randInt(2,6),f=randInt(2,12); questions["Algebra"][2] = { q: `${e}x = ${e*f}. x = ?`, a: String(f) };
+                    let g=randInt(1,8),h=randInt(2,10); questions["Algebra"][3] = { q: `x - ${g} = ${h}. x = ?`, a: String(g+h) };
+                    let i=randInt(2,5),j=randInt(1,6),k=i*randInt(2,8)+j; questions["Algebra"][4] = { q: `${i}x + ${j} = ${k}. x = ?`, a: String((k-j)/i) };
+                    let l=randInt(2,5),m=randInt(2,10); questions["Algebra"][5] = { q: `x/${l} = ${m}. x = ?`, a: String(l*m) };
+                } else if (d === 'medium') {
+                    let a=randInt(2,6),b=randInt(1,10),c=randInt(2,8); questions["Algebra"][1] = { q: `${a}x + ${b} = ${a*c+b}. x = ?`, a: String(c) };
+                    let e=randInt(2,5),f=randInt(2,8),g=randInt(1,5); questions["Algebra"][2] = { q: `${e}x - ${g} = ${e*f-g}. x = ?`, a: String(f) };
+                    let h=randInt(2,4),i=randInt(3,6),j=randInt(2,10); questions["Algebra"][3] = { q: `${h}x + ${i}x = ${(h+i)*j}. x = ?`, a: String(j) };
+                    let k=randInt(2,5),l=randInt(1,5),m=randInt(2,8); questions["Algebra"][4] = { q: `${k}(x + ${l}) = ${k*(m+l)}. x = ?`, a: String(m) };
+                    let n=randInt(2,4),o=randInt(3,7),p=randInt(1,5),q=randInt(2,10); questions["Algebra"][5] = { q: `${n}x + ${o} = ${p}x + ${p*q+o-n*q}. x = ?`, a: String(q) };
+                } else {
+                    let a=randInt(2,5),b=randInt(3,8),c=randInt(1,6),ans=randInt(2,10); questions["Algebra"][1] = { q: `${a}x + ${b} = ${c}x + ${c*ans+b-a*ans}. x = ?`, a: String(ans) };
+                    let e=randInt(2,4),f=randInt(2,6),g=randInt(1,5),ans2=randInt(2,8); questions["Algebra"][2] = { q: `${e}(x - ${f}) + ${g} = ${e*(ans2-f)+g}. x = ?`, a: String(ans2) };
+                    let h=randInt(2,4),i=randInt(2,4),j=randInt(1,3),ans3=randInt(2,6); questions["Algebra"][3] = { q: `${h}(${i}x + ${j}) = ${h*(i*ans3+j)}. x = ?`, a: String(ans3) };
+                    // Quadratic: x² = n
+                    let sq=randInt(2,12); questions["Algebra"][4] = { q: `x² = ${sq*sq}. x = ? (positive)`, a: String(sq) };
+                    let k=randInt(2,5),l=randInt(3,7),m=randInt(2,6),ans4=randInt(2,8); questions["Algebra"][5] = { q: `(${k}x)/${l} + ${m} = ${k*ans4/l+m}. x = ?`, a: String(ans4) };
+                }
+            }
+
+            // ===== GEOMETRY =====
+            if (gameConfig["Geometry"]?.enabled) {
+                const d = gameConfig["Geometry"].difficulty;
+                if (d === 'easy') {
+                    let s=randInt(2,10); questions["Geometry"][1] = { q: `Area of a square with side ${s}?`, a: String(s*s) };
+                    let l=randInt(3,12),w=randInt(2,8); questions["Geometry"][2] = { q: `Area of a rectangle: ${l} × ${w}?`, a: String(l*w) };
+                    let s2=randInt(2,10); questions["Geometry"][3] = { q: `Perimeter of a square with side ${s2}?`, a: String(s2*4) };
+                    let l2=randInt(3,10),w2=randInt(2,8); questions["Geometry"][4] = { q: `Perimeter of a rectangle: ${l2} × ${w2}?`, a: String(2*(l2+w2)) };
+                    let b=randInt(4,12),h=randInt(2,8); questions["Geometry"][5] = { q: `Area of a triangle: base=${b}, height=${h}?`, a: String(b*h/2) };
+                } else if (d === 'medium') {
+                    let r=randInt(2,8); questions["Geometry"][1] = { q: `Area of a circle with radius ${r}? (use 3.14)`, a: String(Math.round(3.14*r*r*100)/100) };
+                    let l=randInt(5,15),w=randInt(3,10),h=randInt(2,8); questions["Geometry"][2] = { q: `Volume of a box: ${l} × ${w} × ${h}?`, a: String(l*w*h) };
+                    let b=randInt(4,12),h2=randInt(3,10); questions["Geometry"][3] = { q: `Area of a triangle: base=${b}, height=${h2}?`, a: String(b*h2/2) };
+                    let r2=randInt(3,10); questions["Geometry"][4] = { q: `Circumference of a circle with radius ${r2}? (use 3.14)`, a: String(Math.round(2*3.14*r2*100)/100) };
+                    let a2=randInt(3,8),b2=randInt(4,10),h3=randInt(3,8); questions["Geometry"][5] = { q: `Area of a trapezoid: bases ${a2} & ${b2}, height ${h3}?`, a: String((a2+b2)*h3/2) };
+                } else {
+                    let r=randInt(3,10); questions["Geometry"][1] = { q: `Volume of a sphere with radius ${r}? (use 3.14, round to nearest integer)`, a: String(Math.round(4/3*3.14*r*r*r)) };
+                    let r2=randInt(2,8),h=randInt(4,12); questions["Geometry"][2] = { q: `Volume of a cylinder: radius=${r2}, height=${h}? (use 3.14, round)`, a: String(Math.round(3.14*r2*r2*h)) };
+                    let a=randInt(3,8),b=randInt(5,12); questions["Geometry"][3] = { q: `Hypotenuse of a right triangle: legs ${a} and ${b}? (round to 1 decimal)`, a: String(Math.round(Math.sqrt(a*a+b*b)*10)/10) };
+                    let s=randInt(4,12); questions["Geometry"][4] = { q: `Area of a regular hexagon with side ${s}? (round to nearest integer)`, a: String(Math.round(3*Math.sqrt(3)/2*s*s)) };
+                    let r3=randInt(2,6),h2=randInt(4,10); questions["Geometry"][5] = { q: `Volume of a cone: radius=${r3}, height=${h2}? (use 3.14, round)`, a: String(Math.round(1/3*3.14*r3*r3*h2)) };
+                }
+            }
+
+            // ===== ROOTS & EXPONENTS =====
+            if (gameConfig["Roots & Exponents"]?.enabled) {
+                const d = gameConfig["Roots & Exponents"].difficulty;
+                const perfectSquares = [4,9,16,25,36,49,64,81,100,121,144,169,196,225,256,289,324,361,400];
+                const sqrts = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20];
+                const cubes = [[8,2],[27,3],[64,4],[125,5],[216,6],[512,8]];
+                if (d === 'easy') {
+                    let i1=randInt(0,4); questions["Roots & Exponents"][1] = { q: `√${perfectSquares[i1]} = ?`, a: String(sqrts[i1]) };
+                    let i2=randInt(0,4),i3=randInt(0,4); questions["Roots & Exponents"][2] = { q: `√${perfectSquares[i2]} + √${perfectSquares[i3]} = ?`, a: String(sqrts[i2]+sqrts[i3]) };
+                    let b=randInt(2,5); questions["Roots & Exponents"][3] = { q: `${b}² = ?`, a: String(b*b) };
+                    let b2=randInt(2,4); questions["Roots & Exponents"][4] = { q: `${b2}³ = ?`, a: String(b2**3) };
+                    let i4=randInt(5,8); questions["Roots & Exponents"][5] = { q: `√${perfectSquares[i4]} = ?`, a: String(sqrts[i4]) };
+                } else if (d === 'medium') {
+                    let idx1=randInt(0,8),idx2=randInt(0,8); questions["Roots & Exponents"][1] = { q: `√${perfectSquares[idx1]} + √${perfectSquares[idx2]} = ?`, a: String(sqrts[idx1]+sqrts[idx2]) };
+                    let base2=randInt(4,9); questions["Roots & Exponents"][2] = { q: `${base2}³ = ?`, a: String(base2**3) };
+                    let idx3=randInt(10,18); questions["Roots & Exponents"][3] = { q: `√${perfectSquares[idx3]} = ?`, a: String(sqrts[idx3]) };
+                    let ba=randInt(2,3),ea=randInt(6,8),bb=randInt(2,4),eb=randInt(3,4); questions["Roots & Exponents"][4] = { q: `${ba}${toSuperscript(ea)} + ${bb}${toSuperscript(eb)} = ?`, a: String(ba**ea+bb**eb) };
+                    let ci=randInt(0,5),si=randInt(2,8); questions["Roots & Exponents"][5] = { q: `∛${cubes[ci][0]} × √${perfectSquares[si]} = ?`, a: String(cubes[ci][1]*sqrts[si]) };
+                } else {
+                    let i1=randInt(10,18),i2=randInt(10,18); questions["Roots & Exponents"][1] = { q: `√${perfectSquares[i1]} + √${perfectSquares[i2]} = ?`, a: String(sqrts[i1]+sqrts[i2]) };
+                    let b=randInt(6,12); questions["Roots & Exponents"][2] = { q: `${b}³ = ?`, a: String(b**3) };
+                    let ba=randInt(2,4),ea=randInt(7,9); questions["Roots & Exponents"][3] = { q: `${ba}${toSuperscript(ea)} = ?`, a: String(ba**ea) };
+                    let ci=randInt(0,5),si=randInt(8,16); questions["Roots & Exponents"][4] = { q: `∛${cubes[ci][0]} × √${perfectSquares[si]} = ?`, a: String(cubes[ci][1]*sqrts[si]) };
+                    let ba2=randInt(2,3),ea2=randInt(8,10),ba3=randInt(2,4),ea3=randInt(5,7); questions["Roots & Exponents"][5] = { q: `${ba2}${toSuperscript(ea2)} + ${ba3}${toSuperscript(ea3)} = ?`, a: String(ba2**ea2+ba3**ea3) };
+                }
+            }
+
+            // ===== SEQUENCES =====
+            if (gameConfig["Sequences"]?.enabled) {
+                const d = gameConfig["Sequences"].difficulty;
+                if (d === 'easy') {
+                    let start=randInt(1,5),step=randInt(2,5); questions["Sequences"][1] = { q: `${start}, ${start+step}, ${start+step*2}, ${start+step*3}, ? `, a: String(start+step*4) };
+                    let s2=randInt(1,3),st2=randInt(3,6); questions["Sequences"][2] = { q: `${s2}, ${s2+st2}, ${s2+st2*2}, ?, ${s2+st2*4}`, a: String(s2+st2*3) };
+                    let m=randInt(2,4); questions["Sequences"][3] = { q: `${m}, ${m*2}, ${m*4}, ${m*8}, ?`, a: String(m*16) };
+                    let s3=randInt(1,5),st3=randInt(2,4); questions["Sequences"][4] = { q: `Sum of first 5 terms: ${s3}, ${s3+st3}, ${s3+st3*2}, ...?`, a: String(5*s3+st3*10) };
+                    let s4=randInt(2,5); questions["Sequences"][5] = { q: `1, ${s4+1}, ${2*s4+1}, ${3*s4+1}, ?`, a: String(4*s4+1) };
+                } else if (d === 'medium') {
+                    let a=randInt(2,5),r=randInt(2,3); questions["Sequences"][1] = { q: `${a}, ${a*r}, ${a*r*r}, ${a*r**3}, ?`, a: String(a*r**4) };
+                    let s=randInt(1,3); questions["Sequences"][2] = { q: `${s}, ${s+1}, ${s+3}, ${s+6}, ${s+10}, ?`, a: String(s+15) };
+                    questions["Sequences"][3] = { q: `1, 1, 2, 3, 5, 8, ?`, a: `13` };
+                    let n=randInt(5,10),step=randInt(3,7); questions["Sequences"][4] = { q: `Sum of arithmetic series: first=${n}, diff=${step}, 6 terms?`, a: String(6*n+step*15) };
+                    let b=randInt(2,4); questions["Sequences"][5] = { q: `${b}², ${(b+1)}², ${(b+2)}², ${(b+3)}², ?`, a: String((b+4)**2) };
+                } else {
+                    let a=randInt(2,3),r=randInt(2,3); questions["Sequences"][1] = { q: `Geometric sum: ${a} + ${a*r} + ${a*r*r} + ${a*r**3} + ${a*r**4} = ?`, a: String(a*(r**5-1)/(r-1)) };
+                    questions["Sequences"][2] = { q: `1, 1, 2, 3, 5, 8, 13, 21, ?`, a: `34` };
+                    let n=randInt(3,6); questions["Sequences"][3] = { q: `Sum of 1² + 2² + 3² + ... + ${n}² = ?`, a: String(n*(n+1)*(2*n+1)/6) };
+                    let b=randInt(2,4); questions["Sequences"][4] = { q: `${b}³, ${(b+1)}³, ${(b+2)}³, ?`, a: String((b+3)**3) };
+                    let c=randInt(5,10),st=randInt(3,8); questions["Sequences"][5] = { q: `Arithmetic series: first=${c}, last=${c+st*9}, 10 terms. Sum?`, a: String(10*(2*c+st*9)/2) };
+                }
+            }
+
+            // ===== STATISTICS =====
+            if (gameConfig["Statistics"]?.enabled) {
+                const d = gameConfig["Statistics"].difficulty;
+                if (d === 'easy') {
+                    let nums=[randInt(2,8),randInt(2,8),randInt(2,8)]; let sum=nums.reduce((a,b)=>a+b,0); questions["Statistics"][1] = { q: `Mean of ${nums.join(', ')}?`, a: String(Math.round(sum/3*100)/100) };
+                    let sorted=[randInt(1,5),randInt(6,10),randInt(11,15)].sort((a,b)=>a-b); questions["Statistics"][2] = { q: `Median of ${sorted.join(', ')}?`, a: String(sorted[1]) };
+                    questions["Statistics"][3] = { q: `Mode of 2, 3, 3, 5, 7?`, a: `3` };
+                    let n=[randInt(1,10),randInt(1,10),randInt(1,10),randInt(1,10)]; let s=n.reduce((a,b)=>a+b,0); questions["Statistics"][4] = { q: `Mean of ${n.join(', ')}?`, a: String(s/4) };
+                    let r=[1,3,5,7,9]; questions["Statistics"][5] = { q: `Range of ${r.join(', ')}?`, a: `8` };
+                } else if (d === 'medium') {
+                    let n=[randInt(10,30),randInt(10,30),randInt(10,30),randInt(10,30),randInt(10,30)]; let s=n.reduce((a,b)=>a+b,0); questions["Statistics"][1] = { q: `Mean of ${n.join(', ')}?`, a: String(s/5) };
+                    let sorted=[randInt(5,15),randInt(16,25),randInt(26,35),randInt(36,45),randInt(46,55)].sort((a,b)=>a-b); questions["Statistics"][2] = { q: `Median of ${sorted.join(', ')}?`, a: String(sorted[2]) };
+                    let m=randInt(5,15); questions["Statistics"][3] = { q: `Mode of ${m}, ${m}, ${m+3}, ${m+5}, ${m+7}?`, a: String(m) };
+                    let d2=[randInt(2,10),randInt(2,10),randInt(2,10),randInt(2,10)]; let mn=d2.reduce((a,b)=>a+b,0)/4; let v=d2.reduce((a,b)=>a+(b-mn)**2,0)/4; questions["Statistics"][4] = { q: `Variance of ${d2.join(', ')}? (population)`, a: String(Math.round(v*100)/100) };
+                    let vals=[randInt(1,20),randInt(1,20),randInt(1,20),randInt(1,20),randInt(1,20)].sort((a,b)=>a-b); questions["Statistics"][5] = { q: `Range of ${vals.join(', ')}?`, a: String(vals[4]-vals[0]) };
+                } else {
+                    let n=[randInt(10,50),randInt(10,50),randInt(10,50),randInt(10,50),randInt(10,50),randInt(10,50)]; let s=n.reduce((a,b)=>a+b,0); questions["Statistics"][1] = { q: `Mean of ${n.join(', ')}? (round to 1 decimal)`, a: String(Math.round(s/6*10)/10) };
+                    let sorted=[randInt(1,20),randInt(21,40),randInt(41,60),randInt(61,80)].sort((a,b)=>a-b); questions["Statistics"][2] = { q: `Median of ${sorted.join(', ')}?`, a: String((sorted[1]+sorted[2])/2) };
+                    let d2=[randInt(5,20),randInt(5,20),randInt(5,20),randInt(5,20),randInt(5,20)]; let mn=d2.reduce((a,b)=>a+b,0)/5; let v=d2.reduce((a,b)=>a+(b-mn)**2,0)/5; questions["Statistics"][3] = { q: `Standard deviation of ${d2.join(', ')}? (pop, round to 1 decimal)`, a: String(Math.round(Math.sqrt(v)*10)/10) };
+                    let w=[randInt(60,100),randInt(60,100),randInt(60,100),randInt(60,100),randInt(60,100)]; let ws=w.reduce((a,b)=>a+b,0); let wt=[1,1,1,1,2]; let wsum=w.reduce((a,b,i)=>a+b*wt[i],0); questions["Statistics"][4] = { q: `Weighted mean of ${w.join(', ')} with weights ${wt.join(', ')}?`, a: String(Math.round(wsum/6*100)/100) };
+                    let vals=[randInt(10,30),randInt(10,30),randInt(10,30),randInt(10,30),randInt(10,30)].sort((a,b)=>a-b); questions["Statistics"][5] = { q: `IQR of ${vals.join(', ')}? (Q3 - Q1)`, a: String(vals[3]-vals[1]) };
+                }
+            }
+
+            // ===== PROBABILITY =====
+            if (gameConfig["Probability"]?.enabled) {
+                const d = gameConfig["Probability"].difficulty;
+                if (d === 'easy') {
+                    questions["Probability"][1] = { q: `Probability of heads on a fair coin? (as fraction)`, a: `1/2` };
+                    let n=randInt(1,6); questions["Probability"][2] = { q: `Probability of rolling a ${n} on a fair die? (as fraction)`, a: `1/6` };
+                    let r=randInt(2,5),t=randInt(6,12); questions["Probability"][3] = { q: `${r} red balls out of ${t} total. P(red)? (as fraction, simplified)`, a: (() => { const [nn,dd]=simplify(r,t); return dd===1?`${nn}`:`${nn}/${dd}`; })() };
+                    questions["Probability"][4] = { q: `P(rolling even) on a fair die? (as fraction)`, a: `1/2|3/6` };
+                    questions["Probability"][5] = { q: `Flip 2 coins. P(both heads)? (as fraction)`, a: `1/4` };
+                } else if (d === 'medium') {
+                    questions["Probability"][1] = { q: `P(rolling 5 or 6) on a fair die? (as fraction)`, a: `1/3|2/6` };
+                    let r=randInt(3,6),b=randInt(2,5); questions["Probability"][2] = { q: `${r} red, ${b} blue balls. P(red then blue) without replacement? (as fraction, simplified)`, a: (() => { const t=r+b; const [n,dd]=simplify(r*b,t*(t-1)); return dd===1?`${n}`:`${n}/${dd}`; })() };
+                    questions["Probability"][3] = { q: `Flip 3 coins. P(exactly 2 heads)? (as fraction)`, a: `3/8` };
+                    questions["Probability"][4] = { q: `Roll 2 dice. P(sum = 7)? (as fraction)`, a: `1/6|6/36` };
+                    questions["Probability"][5] = { q: `Deck of 52 cards. P(drawing a heart)? (as fraction)`, a: `1/4|13/52` };
+                } else {
+                    questions["Probability"][1] = { q: `Roll 2 dice. P(sum ≥ 10)? (as fraction)`, a: `1/6|6/36` };
+                    questions["Probability"][2] = { q: `P(at least one 6) in 2 dice rolls? (round to 2 decimals)`, a: String(Math.round((1-25/36)*100)/100) };
+                    questions["Probability"][3] = { q: `5 cards drawn from 52. How many combinations? (5! = 120)`, a: `2598960` };
+                    questions["Probability"][4] = { q: `Flip 4 coins. P(at least 3 heads)? (as fraction)`, a: `5/16` };
+                    questions["Probability"][5] = { q: `10 people, choose a committee of 3. How many ways?`, a: `120` };
+                }
+            }
+
+            // ===== ABSOLUTE VALUE =====
+            if (gameConfig["Absolute Value"]?.enabled) {
+                const d = gameConfig["Absolute Value"].difficulty;
+                if (d === 'easy') {
+                    let a=-randInt(1,10); questions["Absolute Value"][1] = { q: `|${a}| = ?`, a: String(Math.abs(a)) };
+                    let b=randInt(1,10); questions["Absolute Value"][2] = { q: `|${b}| = ?`, a: String(b) };
+                    let c=-randInt(1,10),e=-randInt(1,10); questions["Absolute Value"][3] = { q: `|${c}| + |${e}| = ?`, a: String(Math.abs(c)+Math.abs(e)) };
+                    let f=-randInt(5,15); questions["Absolute Value"][4] = { q: `|${f} + ${-f}| = ?`, a: `0` };
+                    let g=-randInt(3,12),h=randInt(1,8); questions["Absolute Value"][5] = { q: `|${g}| - ${h} = ?`, a: String(Math.abs(g)-h) };
+                } else if (d === 'medium') {
+                    let a=-randInt(5,20),b=randInt(3,15); questions["Absolute Value"][1] = { q: `|${a} + ${b}| = ?`, a: String(Math.abs(a+b)) };
+                    let c=-randInt(10,30),e=randInt(5,20); questions["Absolute Value"][2] = { q: `|${c}| × |${e}| ÷ ${Math.abs(c)} = ?`, a: String(e) };
+                    let f=randInt(5,15),g=randInt(20,40); questions["Absolute Value"][3] = { q: `|${f} - ${g}| = ?`, a: String(g-f) };
+                    let h=-randInt(3,10),i=-randInt(5,15); questions["Absolute Value"][4] = { q: `|${h}| + |${i}| - |${h+i}| = ?`, a: String(Math.abs(h)+Math.abs(i)-Math.abs(h+i)) };
+                    let j=-randInt(5,15),k=randInt(2,8); questions["Absolute Value"][5] = { q: `|${j} × ${k}| = ?`, a: String(Math.abs(j*k)) };
+                } else {
+                    let a=-randInt(10,50),b=randInt(5,30); questions["Absolute Value"][1] = { q: `|${a}| - |${b}| + |${a+b}| = ?`, a: String(Math.abs(a)-Math.abs(b)+Math.abs(a+b)) };
+                    let c=randInt(3,10),e=randInt(15,30); questions["Absolute Value"][2] = { q: `|${c} - ${e}| + |${e} - ${c}| = ?`, a: String(2*Math.abs(c-e)) };
+                    let f=-randInt(5,20),g=-randInt(5,20); questions["Absolute Value"][3] = { q: `|${f} × ${g}| - |${f}| × |${g}| = ?`, a: `0` };
+                    let h=-randInt(10,30),i=randInt(5,20),j=-randInt(3,15); questions["Absolute Value"][4] = { q: `|${h}| + |${i}| + |${j}| = ?`, a: String(Math.abs(h)+Math.abs(i)+Math.abs(j)) };
+                    let k=randInt(2,5),l=-randInt(5,15); questions["Absolute Value"][5] = { q: `|${k} × ${l}| + |${l}/${k}| = ? (round)`, a: String(Math.abs(k*l)+Math.round(Math.abs(l/k))) };
+                }
+            }
+
+            // ===== LOGARITHMS =====
+            if (gameConfig["Logarithms"]?.enabled) {
+                const d = gameConfig["Logarithms"].difficulty;
+                const logProblems = {
+                    easy: [
+                        () => { const exp=randInt(2,4); return { q: `log₂(${2**exp}) = ?`, a: String(exp) }; },
+                        () => { const exp=randInt(2,3); return { q: `log₃(${3**exp}) = ?`, a: String(exp) }; },
+                        () => { const exp=randInt(1,3); return { q: `log₁₀(${10**exp}) = ?`, a: String(exp) }; },
+                        () => { const exp=randInt(3,4); return { q: `log₂(${2**exp}) = ?`, a: String(exp) }; },
+                        () => { const e1=randInt(2,3),e2=randInt(1,2); return { q: `log₂(${2**e1}) + log₁₀(${10**e2}) = ?`, a: String(e1+e2) }; }
+                    ],
+                    medium: [
+                        () => { const exp=randInt(4,6); return { q: `log₂(${2**exp}) = ?`, a: String(exp) }; },
+                        () => { const exp=randInt(3,5); return { q: `log₃(${3**exp}) = ?`, a: String(exp) }; },
+                        () => { const exp=randInt(3,4); return { q: `log₄(${4**exp}) = ?`, a: String(exp) }; },
+                        () => { const e1=randInt(5,7),e2=randInt(3,4); return { q: `log₂(${2**e1}) + log₃(${3**e2}) = ?`, a: String(e1+e2) }; },
+                        () => { const e1=randInt(3,4),e2=randInt(4,5); return { q: `log₄(${4**e1}) × log₂(${2**e2}) = ?`, a: String(e1*e2) }; }
+                    ],
+                    hard: [
+                        () => { const exp=randInt(7,10); return { q: `log₂(${2**exp}) = ?`, a: String(exp) }; },
+                        () => { const exp=randInt(4,6); return { q: `log₃(${3**exp}) = ?`, a: String(exp) }; },
+                        () => { const e1=randInt(6,8),e2=randInt(4,5); return { q: `log₂(${2**e1}) + log₃(${3**e2}) = ?`, a: String(e1+e2) }; },
+                        () => { const e1=randInt(4,5),e2=randInt(5,7); return { q: `log₄(${4**e1}) × log₂(${2**e2}) = ?`, a: String(e1*e2) }; },
+                        () => { const e1=randInt(3,4),e2=randInt(3,5),e3=randInt(2,3); return { q: `log₂(${2**e1}) × log₃(${3**e2}) + log₄(${4**e3}) = ?`, a: String(e1*e2+e3) }; }
+                    ]
+                }[d];
+                for (let i=1; i<=5; i++) { questions["Logarithms"][i] = logProblems[i-1](); }
+            }
+
+            // ===== TRIGONOMETRY =====
+            if (gameConfig["Trigonometry"]?.enabled) {
+                const d = gameConfig["Trigonometry"].difficulty;
+                if (d === 'easy') {
+                    questions["Trigonometry"][1] = { q: `sin(0°) = ?`, a: `0` };
+                    questions["Trigonometry"][2] = { q: `cos(0°) = ?`, a: `1` };
+                    questions["Trigonometry"][3] = { q: `sin(90°) = ?`, a: `1` };
+                    questions["Trigonometry"][4] = { q: `cos(90°) = ?`, a: `0` };
+                    questions["Trigonometry"][5] = { q: `tan(45°) = ?`, a: `1` };
+                } else if (d === 'medium') {
+                    questions["Trigonometry"][1] = { q: `sin(30°) = ? (as fraction)`, a: `1/2` };
+                    questions["Trigonometry"][2] = { q: `cos(60°) = ? (as fraction)`, a: `1/2` };
+                    questions["Trigonometry"][3] = { q: `tan(0°) = ?`, a: `0` };
+                    questions["Trigonometry"][4] = { q: `sin(45°) = ? (round to 2 decimals)`, a: `0.71` };
+                    questions["Trigonometry"][5] = { q: `sin²(30°) + cos²(30°) = ?`, a: `1` };
+                } else {
+                    questions["Trigonometry"][1] = { q: `sin(60°) = ? (round to 2 decimals)`, a: `0.87` };
+                    questions["Trigonometry"][2] = { q: `cos(45°) × sin(45°) = ? (as fraction or decimal)`, a: `0.5|1/2` };
+                    questions["Trigonometry"][3] = { q: `tan(60°) = ? (round to 2 decimals)`, a: `1.73` };
+                    questions["Trigonometry"][4] = { q: `2sin(30°)cos(30°) = ? (round to 2 decimals)`, a: `0.87` };
+                    questions["Trigonometry"][5] = { q: `sin(150°) = ? (as fraction)`, a: `1/2|0.5` };
+                }
+            }
+
+            // ===== DERIVATIVES =====
+            if (gameConfig["Derivatives"]?.enabled) {
+                const d = gameConfig["Derivatives"].difficulty;
+                const derivProblems = {
+                    easy: [
+                        () => { const a=randInt(2,5); return { q: `If f(x) = ${a}x, what is f'(x)?`, a: `${a}` }; },
+                        () => { const a=randInt(2,6); return { q: `If f(x) = ${a}x², what is f'(x)?`, a: `${a*2}x` }; },
+                        () => { const a=randInt(2,4),b=randInt(1,5); return { q: `If f(x) = ${a}x² + ${b}, what is f'(x)?`, a: `${a*2}x` }; },
+                        () => { const a=randInt(2,5),b=randInt(2,6); return { q: `If f(x) = ${a}x² + ${b}x, what is f'(x)?`, a: `${a*2}x+${b}|${a*2}x + ${b}` }; },
+                        () => { const a=randInt(2,4); return { q: `If f(x) = ${a}x³, what is f'(x)?`, a: `${a*3}x²|${a*3}x^2` }; }
+                    ],
+                    medium: [
+                        () => { const a=randInt(2,6); return { q: `If f(x) = ${a}x², what is f'(x)?`, a: `${a*2}x` }; },
+                        () => { const a=randInt(2,5),b=randInt(2,6); return { q: `If f(x) = ${a}x² + ${b}x, what is f'(x)?`, a: `${a*2}x+${b}|${a*2}x + ${b}` }; },
+                        () => { const a=randInt(2,4),b=randInt(2,6); return { q: `If f(x) = ${a}x³ + ${b}x, what is f''(x)?`, a: `${a*6}x` }; },
+                        () => { const a=randInt(2,3),b=randInt(2,5); return { q: `If f(x) = ${a}x⁴ + ${b}x², what is f''(x)?`, a: `${a*12}x²+${b*2}|${a*12}x^2+${b*2}|${a*12}x² + ${b*2}` }; },
+                        () => { const a=randInt(2,3),b=randInt(2,4); return { q: `If f(x) = ${a}x⁴ + ${b}x³, what is f'''(x)?`, a: `${a*24}x+${b*6}|${a*24}x + ${b*6}` }; }
+                    ],
+                    hard: [
+                        () => { const a=randInt(2,5),b=randInt(2,6); return { q: `If f(x) = ${a}x³ + ${b}x², what is f'(x)?`, a: `${a*3}x²+${b*2}x|${a*3}x^2+${b*2}x|${a*3}x² + ${b*2}x` }; },
+                        () => { const a=randInt(2,4),b=randInt(2,5); return { q: `If f(x) = ${a}x⁴ + ${b}x³, what is f'(x)?`, a: `${a*4}x³+${b*3}x²|${a*4}x^3+${b*3}x^2|${a*4}x³ + ${b*3}x²` }; },
+                        () => { const a=randInt(2,3),b=randInt(2,4),c=randInt(2,5); return { q: `If f(x) = ${a}x⁴ + ${b}x³ + ${c}x², what is f''(x)?`, a: `${a*12}x²+${b*6}x+${c*2}|${a*12}x^2+${b*6}x+${c*2}|${a*12}x² + ${b*6}x + ${c*2}` }; },
+                        () => { const a=randInt(2,3),b=randInt(2,3); return { q: `If f(x) = ${a}x⁵ + ${b}x³, what is f'''(x)?`, a: `${a*60}x²+${b*6}|${a*60}x^2+${b*6}|${a*60}x² + ${b*6}` }; },
+                        () => { const a=randInt(2,3),b=randInt(2,3); return { q: `If f(x) = ${a}x⁵ + ${b}x⁴, what is f'''(x)?`, a: `${a*60}x²+${b*24}x|${a*60}x^2+${b*24}x|${a*60}x² + ${b*24}x` }; }
+                    ]
+                }[d];
+                for (let i=1; i<=5; i++) { questions["Derivatives"][i] = derivProblems[i-1](); }
+            }
+
+            // ===== INTEGRALS =====
+            if (gameConfig["Integrals"]?.enabled) {
+                const d = gameConfig["Integrals"].difficulty;
+                if (d === 'easy') {
+                    let a=randInt(2,6); questions["Integrals"][1] = { q: `∫${a} dx = ?`, a: `${a}x+C|${a}x + C` };
+                    let b=randInt(2,5); questions["Integrals"][2] = { q: `∫${b}x dx = ?`, a: `${b/2}x²+C|${b/2}x^2+C|${b}/2x²+C` };
+                    let c=randInt(2,4); questions["Integrals"][3] = { q: `∫${c}x² dx = ? (coefficient of x³)`, a: String(Math.round(c/3*100)/100) };
+                    questions["Integrals"][4] = { q: `∫(2x + 3) dx = ?`, a: `x²+3x+C|x^2+3x+C|x² + 3x + C` };
+                    let e=randInt(1,3),f=randInt(2,5); questions["Integrals"][5] = { q: `∫₀¹ ${f}x dx = ?`, a: String(f/2) };
+                } else if (d === 'medium') {
+                    let a=randInt(2,5); questions["Integrals"][1] = { q: `∫${a}x² dx = ?`, a: `${a}/3x³+C|${Math.round(a/3*100)/100}x³+C|${a}/3x^3+C` };
+                    let b=randInt(2,4),c=randInt(2,6); questions["Integrals"][2] = { q: `∫(${b}x + ${c}) dx = ?`, a: `${b/2}x²+${c}x+C|${b/2}x^2+${c}x+C` };
+                    let e=randInt(2,4); questions["Integrals"][3] = { q: `∫₀² ${e}x dx = ?`, a: String(e*2) };
+                    let f=randInt(2,3); questions["Integrals"][4] = { q: `∫₁³ ${f}x² dx = ?`, a: String(Math.round(f*(27-1)/3*100)/100) };
+                    let g=randInt(3,6),h=randInt(2,5); questions["Integrals"][5] = { q: `∫(${g}x² + ${h}) dx = ?`, a: `${g}/3x³+${h}x+C|${Math.round(g/3*100)/100}x³+${h}x+C` };
+                } else {
+                    let a=randInt(2,4); questions["Integrals"][1] = { q: `∫₀² (${a}x² + 1) dx = ?`, a: String(Math.round((a*8/3+2)*100)/100) };
+                    let b=randInt(2,3),c=randInt(2,4); questions["Integrals"][2] = { q: `∫(${b}x³ + ${c}x) dx = ?`, a: `${b}/4x⁴+${c}/2x²+C|${b/4}x⁴+${c/2}x²+C` };
+                    let e=randInt(2,5); questions["Integrals"][3] = { q: `∫₁⁴ ${e}√x dx = ? (round to 1 decimal)`, a: String(Math.round(e*2/3*(Math.pow(4,1.5)-1)*10)/10) };
+                    let f=randInt(2,4),g=randInt(2,3),h=randInt(1,3); questions["Integrals"][4] = { q: `∫(${f}x⁴ + ${g}x² + ${h}) dx = ?`, a: `${f}/5x⁵+${g}/3x³+${h}x+C` };
+                    let i=randInt(2,3); questions["Integrals"][5] = { q: `∫₀¹ ${i}x³ dx = ?`, a: String(i/4) };
+                }
+            }
+
+            // ===== FACTORING =====
+            if (gameConfig["Factoring"]?.enabled) {
+                const d = gameConfig["Factoring"].difficulty;
+                if (d === 'easy') {
+                    let a=randInt(2,6),b=randInt(2,8); questions["Factoring"][1] = { q: `Factor: ${a}x + ${a*b} = ?`, a: `${a}(x+${b})|${a}(x + ${b})` };
+                    let c=randInt(2,5); questions["Factoring"][2] = { q: `Factor: ${c}x² + ${c}x = ?`, a: `${c}x(x+1)|${c}x(x + 1)` };
+                    let e=randInt(2,4),f=randInt(2,6); questions["Factoring"][3] = { q: `Factor: ${e*f}x + ${e*f*2} = ?`, a: `${e*f}(x+2)|${e*f}(x + 2)` };
+                    let g=randInt(2,5); questions["Factoring"][4] = { q: `GCF of ${g*6} and ${g*10}?`, a: String(g*2) };
+                    let h=randInt(3,8); questions["Factoring"][5] = { q: `Factor: x² - ${h*h} = ?`, a: `(x+${h})(x-${h})|(x + ${h})(x - ${h})|(x-${h})(x+${h})` };
+                } else if (d === 'medium') {
+                    let a=randInt(1,6),b=randInt(1,6); questions["Factoring"][1] = { q: `Factor: x² + ${a+b}x + ${a*b} = ?`, a: `(x+${a})(x+${b})|(x + ${a})(x + ${b})` };
+                    let c=randInt(2,8); questions["Factoring"][2] = { q: `Factor: x² - ${c*c} = ?`, a: `(x+${c})(x-${c})|(x + ${c})(x - ${c})|(x-${c})(x+${c})` };
+                    let e=randInt(2,5),f=randInt(1,4); questions["Factoring"][3] = { q: `Factor: x² - ${e+f}x + ${e*f} = ?`, a: `(x-${e})(x-${f})|(x - ${e})(x - ${f})` };
+                    let g=randInt(2,6),h=randInt(2,8); questions["Factoring"][4] = { q: `Factor: ${g}x² + ${g*h}x = ?`, a: `${g}x(x+${h})|${g}x(x + ${h})` };
+                    let i=randInt(2,5),j=randInt(1,4); questions["Factoring"][5] = { q: `Factor: x² + ${i-j}x - ${i*j} = ?`, a: `(x+${i})(x-${j})|(x + ${i})(x - ${j})|(x-${j})(x+${i})` };
+                } else {
+                    let a=randInt(2,4),b=randInt(1,5),c=randInt(1,4); questions["Factoring"][1] = { q: `Factor: ${a}x² + ${a*(b+c)}x + ${a*b*c} = ?`, a: `${a}(x+${b})(x+${c})|${a}(x + ${b})(x + ${c})` };
+                    let e=randInt(2,6); questions["Factoring"][2] = { q: `Factor: x⁴ - ${e**4} = ? (hint: diff of squares twice)`, a: `(x²+${e*e})(x+${e})(x-${e})|(x² + ${e*e})(x + ${e})(x - ${e})` };
+                    let f=randInt(2,5); questions["Factoring"][3] = { q: `Factor: x³ + ${f**3} = ? (sum of cubes: a³+b³=(a+b)(a²-ab+b²))`, a: `(x+${f})(x²-${f}x+${f*f})|(x + ${f})(x² - ${f}x + ${f*f})` };
+                    let g=randInt(2,3),h=randInt(1,4),i=randInt(2,5); questions["Factoring"][4] = { q: `Factor: ${g}x² + ${g*(h+i)}x + ${g*h*i} = ?`, a: `${g}(x+${h})(x+${i})|${g}(x + ${h})(x + ${i})` };
+                    let j=randInt(2,4); questions["Factoring"][5] = { q: `Factor completely: ${j}x³ - ${j}x = ?`, a: `${j}x(x+1)(x-1)|${j}x(x + 1)(x - 1)|${j}x(x-1)(x+1)` };
+                }
+            }
+
+            // ===== WORD PROBLEMS =====
+            if (gameConfig["Word Problems"]?.enabled) {
+                const d = gameConfig["Word Problems"].difficulty;
+                if (d === 'easy') {
+                    const a=randInt(3,8),b=randInt(3,8); questions["Word Problems"][1] = { q: `A store sells ${a} boxes with ${b} items each. How many total items?`, a: String(a*b) };
+                    const div=randInt(2,5); const at=div*randInt(3,8); questions["Word Problems"][2] = { q: `You have ${at} cookies for ${div} friends. How many each?`, a: String(at/div) };
+                    const hrs=randInt(3,5); questions["Word Problems"][3] = { q: `Bacteria doubles each hour. Starting with 1, how many after ${hrs} hours?`, a: String(2**hrs) };
+                    const le=randInt(1,3); questions["Word Problems"][4] = { q: `What is log₁₀(${10**le})?`, a: String(le) };
+                    const c=randInt(2,4),l=randInt(2,4); questions["Word Problems"][5] = { q: `Height h(t) = ${c}t² + ${l}t. What is h'(t)?`, a: `${c*2}t+${l}|${c*2}t + ${l}` };
+                } else if (d === 'medium') {
+                    const boxes=randInt(8,15),items=randInt(10,20); questions["Word Problems"][1] = { q: `A store sells ${boxes} boxes with ${items} items each. How many total items?`, a: String(boxes*items) };
+                    const friends=randInt(8,14); const actualTotal=friends*randInt(10,15); questions["Word Problems"][2] = { q: `You have ${actualTotal} cookies to share equally among ${friends} friends. How many does each get?`, a: String(actualTotal/friends) };
+                    const hours=randInt(5,8); questions["Word Problems"][3] = { q: `A bacteria colony doubles every hour. Starting with 1, how many after ${hours} hours?`, a: String(2**hours) };
+                    const logExp=randInt(3,5); const logVal=10**logExp; questions["Word Problems"][4] = { q: `An earthquake measured ${logVal.toLocaleString()} on a scale where each unit is 10x stronger. What is log₁₀(${logVal.toLocaleString()})?`, a: String(logExp) };
+                    const dCoef=randInt(2,5),dLin=randInt(2,6); questions["Word Problems"][5] = { q: `A ball's height is h(t) = ${dCoef}t² + ${dLin}t meters. What is h'(t), its velocity?`, a: `${dCoef*2}t+${dLin}|${dCoef*2}t + ${dLin}` };
+                } else {
+                    const a1=randInt(15,30),b1=randInt(20,50); questions["Word Problems"][1] = { q: `A warehouse has ${a1} pallets with ${b1} items each. How many total items?`, a: String(a1*b1) };
+                    const div=randInt(12,25); const total=div*randInt(15,30); questions["Word Problems"][2] = { q: `Distribute ${total} supplies equally among ${div} teams. How many per team?`, a: String(total/div) };
+                    const hrs=randInt(8,12); questions["Word Problems"][3] = { q: `Bacteria doubles each hour. Starting with 1, how many after ${hrs} hours?`, a: String(2**hrs) };
+                    const le=randInt(4,6); const lv=10**le; questions["Word Problems"][4] = { q: `A signal is ${lv.toLocaleString()} times baseline. What is log₁₀(${lv.toLocaleString()})?`, a: String(le) };
+                    const c=randInt(3,6),l=randInt(3,8),k=randInt(2,5); questions["Word Problems"][5] = { q: `Position s(t) = ${c}t³ + ${l}t² + ${k}t. What is s'(t)?`, a: `${c*3}t²+${l*2}t+${k}|${c*3}t^2+${l*2}t+${k}|${c*3}t² + ${l*2}t + ${k}` };
+                }
+            }
         }
 
         let players = [];
@@ -747,9 +1593,16 @@
         let allAnswers = []; // all possible answers for bingo cards
         let gameEnded = false;
 
+        function updateCatsBadge() {
+            const active = getActiveCategories();
+            const badge = document.getElementById('activeCatsBadge');
+            badge.textContent = `${active.length} categories: ${active.map(c => c.name).join(', ')}`;
+        }
+
         function showSetupModal() {
             document.getElementById('setupModal').style.display = 'block';
             updatePlayerInputs();
+            updateCatsBadge();
         }
 
         function updatePlayerInputs() {
@@ -890,6 +1743,7 @@
             for (let i = 0; i < players.length; i++) {
                 usedByPlayer[i] = {};
             }
+            document.getElementById('gameBoard').style.gridTemplateColumns = `repeat(${categories.length}, 1fr)`;
             initializeBoard();
             updateCardStates();
         }
@@ -915,6 +1769,12 @@
         }
 
         function startGame() {
+            categories = getActiveCategories();
+            if (categories.length < 2 || categories.length > MAX_CATEGORIES) {
+                alert(`Please select 2-${MAX_CATEGORIES} categories in Design Game!`);
+                return;
+            }
+
             const count = parseInt(document.getElementById('playerCount').value);
             players = [];
             usedByPlayer = {};
@@ -930,6 +1790,9 @@
             generateQuestions(); // Generate new random questions
             collectAllAnswers(); // Collect all answers for bingo
             generateBingoCards(); // Generate bingo cards for each player
+
+            // Adjust grid columns based on active categories
+            document.getElementById('gameBoard').style.gridTemplateColumns = `repeat(${categories.length}, 1fr)`;
 
             document.getElementById('setupModal').style.display = 'none';
             initializeBoard();
@@ -1195,6 +2058,99 @@
 
         document.getElementById('playAgainBtn').addEventListener('click', () => {
             location.reload();
+        });
+
+        // Design Game modal
+        function renderDesignOptions() {
+            const container = document.getElementById('categoryOptions');
+            container.innerHTML = '';
+            allCategories.forEach(cat => {
+                const config = gameConfig[cat.name];
+                const option = document.createElement('div');
+                option.className = 'category-option' + (config.enabled ? ' selected' : '');
+
+                option.innerHTML = `
+                    <div class="category-row">
+                        <label class="category-toggle">
+                            <div class="toggle-switch">
+                                <input type="checkbox" data-cat="${cat.name}" ${config.enabled ? 'checked' : ''}>
+                                <span class="toggle-slider"></span>
+                            </div>
+                            <span class="category-label">${cat.name}</span>
+                        </label>
+                        <select class="difficulty-select" data-cat="${cat.name}">
+                            <option value="easy" ${config.difficulty === 'easy' ? 'selected' : ''}>Easy</option>
+                            <option value="medium" ${config.difficulty === 'medium' ? 'selected' : ''}>Medium</option>
+                            <option value="hard" ${config.difficulty === 'hard' ? 'selected' : ''}>Hard</option>
+                        </select>
+                    </div>
+                `;
+                container.appendChild(option);
+            });
+
+            function updateToggleStates() {
+                const enabled = allCategories.filter(c => gameConfig[c.name].enabled).length;
+                const warning = document.getElementById('designWarning');
+                if (enabled < 2 || enabled > MAX_CATEGORIES) {
+                    warning.style.display = 'block';
+                    warning.textContent = enabled < 2 ? 'Select at least 2 categories!' : `Maximum ${MAX_CATEGORIES} categories!`;
+                } else {
+                    warning.style.display = 'none';
+                }
+                // Disable unchecked toggles if at max
+                container.querySelectorAll('input[type="checkbox"]').forEach(cb2 => {
+                    if (!cb2.checked && enabled >= MAX_CATEGORIES) {
+                        cb2.disabled = true;
+                        cb2.closest('.category-option').style.opacity = '0.4';
+                    } else {
+                        cb2.disabled = false;
+                        cb2.closest('.category-option').style.opacity = '1';
+                    }
+                });
+            }
+
+            // Attach listeners
+            container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                cb.addEventListener('change', () => {
+                    const catName = cb.dataset.cat;
+                    gameConfig[catName].enabled = cb.checked;
+                    cb.closest('.category-option').classList.toggle('selected', cb.checked);
+                    updateToggleStates();
+                });
+            });
+
+            updateToggleStates();
+
+            container.querySelectorAll('.difficulty-select').forEach(sel => {
+                sel.addEventListener('change', () => {
+                    gameConfig[sel.dataset.cat].difficulty = sel.value;
+                });
+            });
+        }
+
+        document.getElementById('designGameBtn').addEventListener('click', () => {
+            document.getElementById('setupModal').style.display = 'none';
+            document.getElementById('designModal').style.display = 'block';
+            renderDesignOptions();
+        });
+
+        document.getElementById('designBackBtn').addEventListener('click', () => {
+            document.getElementById('designModal').style.display = 'none';
+            document.getElementById('setupModal').style.display = 'block';
+            updateCatsBadge();
+        });
+
+        document.getElementById('designSaveBtn').addEventListener('click', () => {
+            const enabled = allCategories.filter(c => gameConfig[c.name].enabled).length;
+            if (enabled < 2 || enabled > MAX_CATEGORIES) {
+                const warning = document.getElementById('designWarning');
+                warning.textContent = enabled < 2 ? 'Select at least 2 categories!' : `Maximum ${MAX_CATEGORIES} categories!`;
+                warning.style.display = 'block';
+                return;
+            }
+            document.getElementById('designModal').style.display = 'none';
+            document.getElementById('setupModal').style.display = 'block';
+            updateCatsBadge();
         });
 
         showSetupModal();
