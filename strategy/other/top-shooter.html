@@ -1008,6 +1008,24 @@ let gameLevel = 1;
 let totalDeaths = 0;
 let cumScore = 0, cumEnemiesDefeated = 0, cumShotsFired = 0, cumShotsHit = 0, cumBombsUsed = 0, cumDamageTaken = 0, cumTime = 0, cumCoinsEarned = 0;
 
+// -- Enhanced graphics state --
+let screenShakeX = 0, screenShakeY = 0, screenShakeTimer = 0, screenShakeIntensity = 0;
+let damageNumbers = [];
+let muzzleFlashes = [];
+let bulletTrails = []; // stores recent bullet positions for trail effect
+
+// Level thresholds: levels 1-10 need 50000 each, levels 11+ need 10000 each
+function scoreForLevel(lvl) {
+    if (lvl <= 1) return 0;
+    if (lvl <= 10) return (lvl - 1) * 50000;          // levels 1-10: 50000 each
+    return 450000 + (lvl - 10) * 10000;               // levels 11+: 10000 each
+}
+
+function levelFromScore(totalScore) {
+    if (totalScore < 450000) return Math.floor(totalScore / 50000) + 1;
+    return 10 + Math.floor((totalScore - 450000) / 10000) + 1;
+}
+
 function resetRun() {
     gameLevel = 1;
     totalDeaths = 0;
@@ -1086,8 +1104,7 @@ function initGame() {
     explosions = [];
     powerupTimer = 0;
     score = 0;
-    const lvlForEnemies = Math.min(gameLevel, 4);
-    totalEnemies = 12 + loadShopData().extraEnemies + (lvlForEnemies - 1) * 5;
+    totalEnemies = 12 + loadShopData().extraEnemies + (gameLevel - 1) * 3;
     enemiesDefeated = 0;
 
     camera = { x: 0, y: MAP_H - canvas.height };
@@ -1101,7 +1118,7 @@ function initGame() {
     damageTaken = 0;
     autoFireTimer = 0;
     const savedTotal = loadShopData().totalScore || 0;
-    playerLevel = Math.floor(savedTotal / 10000) + 1;
+    playerLevel = levelFromScore(savedTotal);
     const effectiveLevel = Math.max(playerLevel, gameLevel);
     maxActiveEnemies = 1 + (effectiveLevel - 1) * 3;
 
@@ -1120,7 +1137,7 @@ function addTotalScore() {
 
 function checkLevelUp() {
     const total = getTotalScore();
-    const newLevel = Math.floor(total / 10000) + 1;
+    const newLevel = levelFromScore(total);
     if (newLevel > playerLevel) {
         playerLevel = newLevel;
         maxActiveEnemies = 1 + (playerLevel - 1) * 3;
@@ -1234,6 +1251,7 @@ function playerShoot() {
     const ownedWeapons = player.weapons || ['standard'];
     const gunTipX = player.x + Math.cos(player.angle) * (player.r + 10);
     const gunTipY = player.y + Math.sin(player.angle) * (player.r + 10);
+    spawnMuzzleFlash(gunTipX, gunTipY, player.angle);
 
     // Critical hit check (shared across all weapons this shot)
     const baseDmg = player.bulletDmg || 20;
@@ -1567,12 +1585,16 @@ function update() {
                 const e = enemies[j];
                 if (Math.hypot(b.x - e.x, b.y - e.y) < e.r + BULLET_R) {
                     const dmgMult = player.doubleDmgTimer > 0 ? 2 : 1;
-                    e.hp -= (b.dmg || 20) * dmgMult;
+                    const actualDmg = (b.dmg || 20) * dmgMult;
+                    e.hp -= actualDmg;
                     shotsHit++;
+                    // Damage number
+                    spawnDamageNumber(e.x, e.y - e.r - 10, actualDmg, b.crit ? '#ffdd00' : '#fff', b.crit);
                     // Crit visual
                     if (b.crit) {
                         spawnParticles(b.x, b.y, '#ffdd00', 12);
                         spawnParticles(b.x, b.y, '#ffffff', 6);
+                        triggerScreenShake(4, 8);
                     } else {
                         spawnParticles(b.x, b.y, '#ff4444', 5);
                     }
@@ -1652,7 +1674,10 @@ function update() {
                     player.hp -= dmg;
                     damageTaken += dmg;
                     spawnParticles(b.x, b.y, '#ffaa00', 5);
+                    triggerScreenShake(6, 12);
+                    spawnDamageNumber(player.x, player.y - player.r - 10, dmg, '#ff4444', false);
                     if (player.hp <= 0) {
+                        triggerScreenShake(12, 20);
                         gameOver();
                     }
                 }
@@ -1755,6 +1780,7 @@ function update() {
             // Create explosion
             const blastR = bm.owner === 'player' ? Math.round(BOMB_BLAST_R * (player.bombBlastMult || 1)) : BOMB_BLAST_R;
             explosions.push({ x: bm.x, y: bm.y, r: 0, maxR: blastR, owner: bm.owner, life: 40 });
+            triggerScreenShake(10, 15);
             // Big burst of particles in all colors
             spawnParticles(bm.x, bm.y, '#ff8800', 40);
             spawnParticles(bm.x, bm.y, '#ffcc00', 30);
@@ -1835,6 +1861,9 @@ function update() {
         p.vy *= 0.95;
         if (p.life <= 0) particles.splice(i, 1);
     }
+
+    // Update enhanced effects
+    updateEffects();
 }
 
 function spawnParticles(x, y, color, count) {
@@ -1849,6 +1878,53 @@ function spawnParticles(x, y, color, count) {
             color,
             r: 2 + Math.random() * 2
         });
+    }
+}
+
+function triggerScreenShake(intensity, duration) {
+    screenShakeIntensity = intensity;
+    screenShakeTimer = duration || 10;
+}
+
+function spawnDamageNumber(x, y, dmg, color, isCrit) {
+    damageNumbers.push({
+        x, y,
+        text: (isCrit ? 'CRIT! ' : '') + dmg,
+        color: color || '#fff',
+        life: 50,
+        vy: -2,
+        scale: isCrit ? 1.5 : 1
+    });
+}
+
+function spawnMuzzleFlash(x, y, angle) {
+    muzzleFlashes.push({ x, y, angle, life: 6, maxLife: 6 });
+}
+
+function updateEffects() {
+    // Screen shake
+    if (screenShakeTimer > 0) {
+        screenShakeTimer--;
+        screenShakeX = (Math.random() - 0.5) * 2 * screenShakeIntensity * (screenShakeTimer / 10);
+        screenShakeY = (Math.random() - 0.5) * 2 * screenShakeIntensity * (screenShakeTimer / 10);
+    } else {
+        screenShakeX = 0;
+        screenShakeY = 0;
+    }
+
+    // Damage numbers
+    for (let i = damageNumbers.length - 1; i >= 0; i--) {
+        const dn = damageNumbers[i];
+        dn.y += dn.vy;
+        dn.vy *= 0.96;
+        dn.life--;
+        if (dn.life <= 0) damageNumbers.splice(i, 1);
+    }
+
+    // Muzzle flashes
+    for (let i = muzzleFlashes.length - 1; i >= 0; i--) {
+        muzzleFlashes[i].life--;
+        if (muzzleFlashes[i].life <= 0) muzzleFlashes.splice(i, 1);
     }
 }
 
@@ -2012,7 +2088,7 @@ function youWin() {
         startWinFireworks();
     } else {
         // Normal level win
-        document.getElementById('winSubtitle').textContent = 'Level ' + gameLevel + ' complete! (' + totalEnemies + ' enemies defeated)';
+        document.getElementById('winSubtitle').textContent = gameLevel > 1 ? 'Level ' + gameLevel + ' complete! (' + totalEnemies + ' enemies defeated)' : 'You Win! (' + totalEnemies + ' enemies defeated)';
         document.getElementById('winScoreBig').textContent = score;
         document.getElementById('winCoins').textContent = '+' + coinsEarned + ' coins earned';
         document.getElementById('winLevelInfo').textContent = 'Level ' + gameLevel + ' / ' + MAX_GAME_LEVEL;
@@ -2040,83 +2116,186 @@ function drawTile(c, r, camX, camY) {
         case 0: // Grass
             ctx.fillStyle = grassColors[(c * 7 + r * 13) % grassColors.length];
             ctx.fillRect(x, y, TILE, TILE);
+            // Grass blade details
+            ctx.strokeStyle = 'rgba(100,180,60,0.3)';
+            ctx.lineWidth = 1;
+            const seed0 = (c * 31 + r * 17) % 7;
+            for (let g = 0; g < 3; g++) {
+                const gx = x + ((seed0 + g * 13) % TILE);
+                const gy = y + ((seed0 * 3 + g * 11) % TILE);
+                ctx.beginPath();
+                ctx.moveTo(gx, gy + 4);
+                ctx.lineTo(gx + (g % 2 ? 2 : -2), gy);
+                ctx.stroke();
+            }
             break;
         case 1: // Tree
             ctx.fillStyle = grassColors[0];
             ctx.fillRect(x, y, TILE, TILE);
+            // Tree shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.15)';
+            ctx.beginPath();
+            ctx.ellipse(x + TILE / 2 + 3, y + TILE / 2 + 5, 15, 10, 0, 0, Math.PI * 2);
+            ctx.fill();
             // Trunk
             ctx.fillStyle = treeTrunk;
-            ctx.fillRect(x + 15, y + 15, 10, 10);
-            // Canopy
+            ctx.fillRect(x + 16, y + 16, 8, 10);
+            // Trunk bark detail
+            ctx.fillStyle = '#4a2810';
+            ctx.fillRect(x + 18, y + 18, 2, 6);
+            // Canopy (layered for depth)
+            ctx.fillStyle = '#1e4a12';
+            ctx.beginPath();
+            ctx.arc(x + TILE / 2 + 2, y + TILE / 2 + 2, 16, 0, Math.PI * 2);
+            ctx.fill();
             ctx.fillStyle = treeColor;
             ctx.beginPath();
-            ctx.arc(x + TILE / 2, y + TILE / 2, 16, 0, Math.PI * 2);
+            ctx.arc(x + TILE / 2, y + TILE / 2, 15, 0, Math.PI * 2);
             ctx.fill();
-            // Highlight
-            ctx.fillStyle = '#3a7a28';
+            // Canopy highlight
+            ctx.fillStyle = '#3a8a28';
             ctx.beginPath();
-            ctx.arc(x + TILE / 2 - 3, y + TILE / 2 - 3, 8, 0, Math.PI * 2);
+            ctx.arc(x + TILE / 2 - 4, y + TILE / 2 - 4, 8, 0, Math.PI * 2);
+            ctx.fill();
+            // Light speckle
+            ctx.fillStyle = 'rgba(120,220,80,0.3)';
+            ctx.beginPath();
+            ctx.arc(x + TILE / 2 - 6, y + TILE / 2 - 6, 4, 0, Math.PI * 2);
             ctx.fill();
             break;
         case 2: // Rock
             ctx.fillStyle = grassColors[1];
             ctx.fillRect(x, y, TILE, TILE);
+            // Rock shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.15)';
+            ctx.beginPath();
+            ctx.ellipse(x + TILE / 2 + 2, y + TILE / 2 + 3, 15, 12, 0, 0, Math.PI * 2);
+            ctx.fill();
+            // Main rock
             ctx.fillStyle = rockColors[(c + r) % rockColors.length];
             ctx.beginPath();
             ctx.ellipse(x + TILE / 2, y + TILE / 2, 14, 11, 0, 0, Math.PI * 2);
             ctx.fill();
-            ctx.fillStyle = '#9a9a9a';
+            // Rock outline
+            ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+            ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.ellipse(x + TILE / 2 - 2, y + TILE / 2 - 2, 7, 5, 0, 0, Math.PI * 2);
+            ctx.ellipse(x + TILE / 2, y + TILE / 2, 14, 11, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            // Rock highlight
+            ctx.fillStyle = 'rgba(255,255,255,0.2)';
+            ctx.beginPath();
+            ctx.ellipse(x + TILE / 2 - 3, y + TILE / 2 - 3, 7, 5, 0, 0, Math.PI * 2);
             ctx.fill();
+            // Crack detail
+            ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x + TILE / 2 - 5, y + TILE / 2);
+            ctx.lineTo(x + TILE / 2 + 3, y + TILE / 2 + 4);
+            ctx.stroke();
             break;
         case 3: // Water
-            ctx.fillStyle = waterColors[(c + r + Math.floor(Date.now() / 500)) % waterColors.length];
+            {
+            const wTime = Date.now() / 600;
+            const wBase = waterColors[(c + r + Math.floor(Date.now() / 500)) % waterColors.length];
+            ctx.fillStyle = wBase;
             ctx.fillRect(x, y, TILE, TILE);
-            // Ripple
-            ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+            // Animated wave ripples (multiple)
+            ctx.strokeStyle = 'rgba(255,255,255,0.18)';
             ctx.lineWidth = 1;
-            const ripOffset = Math.sin(Date.now() / 300 + c + r) * 4;
-            ctx.beginPath();
-            ctx.moveTo(x + 5, y + TILE / 2 + ripOffset);
-            ctx.quadraticCurveTo(x + TILE / 2, y + TILE / 2 - 4 + ripOffset, x + TILE - 5, y + TILE / 2 + ripOffset);
-            ctx.stroke();
+            for (let w = 0; w < 2; w++) {
+                const ripOffset = Math.sin(wTime + c * 2.3 + r * 1.7 + w * 3) * 4;
+                const wy = y + TILE * 0.3 + w * TILE * 0.35;
+                ctx.beginPath();
+                ctx.moveTo(x + 3, wy + ripOffset);
+                ctx.quadraticCurveTo(x + TILE * 0.3, wy - 3 + ripOffset, x + TILE * 0.5, wy + ripOffset);
+                ctx.quadraticCurveTo(x + TILE * 0.7, wy + 3 + ripOffset, x + TILE - 3, wy + ripOffset);
+                ctx.stroke();
+            }
+            // Foam/sparkle
+            const sparkle = Math.sin(wTime * 2 + c * 5 + r * 3);
+            if (sparkle > 0.7) {
+                ctx.fillStyle = 'rgba(255,255,255,0.3)';
+                ctx.beginPath();
+                ctx.arc(x + ((c * 17 + r * 7) % TILE), y + ((c * 11 + r * 23) % TILE), 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            }
             break;
         case 4: // Sand
             ctx.fillStyle = sandColor;
             ctx.fillRect(x, y, TILE, TILE);
-            // Speckles
+            // Sand texture speckles
             ctx.fillStyle = '#c4a86a';
-            ctx.fillRect(x + 8, y + 10, 2, 2);
-            ctx.fillRect(x + 25, y + 20, 2, 2);
-            ctx.fillRect(x + 15, y + 30, 2, 2);
+            const sandSeed = (c * 13 + r * 7) % 5;
+            ctx.fillRect(x + 8 + sandSeed, y + 10, 2, 2);
+            ctx.fillRect(x + 25 - sandSeed, y + 20, 2, 2);
+            ctx.fillRect(x + 15, y + 30 + sandSeed, 2, 2);
+            // Sand highlight
+            ctx.fillStyle = 'rgba(255,255,220,0.12)';
+            ctx.fillRect(x + 2, y + 2, TILE - 4, TILE / 3);
+            // Sand grain dots
+            ctx.fillStyle = '#bfa060';
+            ctx.fillRect(x + 32 - sandSeed, y + 8, 1, 1);
+            ctx.fillRect(x + 12 + sandSeed, y + 35, 1, 1);
             break;
         case 5: // Path
             ctx.fillStyle = pathColor;
             ctx.fillRect(x, y, TILE, TILE);
+            // Path worn groove
             ctx.fillStyle = '#8e7a5a';
             ctx.fillRect(x + 5, y + 12, 3, 3);
             ctx.fillRect(x + 22, y + 28, 3, 3);
+            // Path edge darker border
+            ctx.fillStyle = 'rgba(0,0,0,0.08)';
+            ctx.fillRect(x, y, TILE, 2);
+            ctx.fillRect(x, y + TILE - 2, TILE, 2);
+            // Path pebbles
+            ctx.fillStyle = '#7a6a4a';
+            ctx.beginPath();
+            ctx.arc(x + 12, y + 22, 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(x + 30, y + 14, 1.5, 0, Math.PI * 2);
+            ctx.fill();
             break;
         case 6: // Flower
             ctx.fillStyle = grassColors[2];
             ctx.fillRect(x, y, TILE, TILE);
-            const fc = flowerColors[(c * 3 + r * 7) % flowerColors.length];
-            ctx.fillStyle = fc;
+            // Grass detail under flower
+            ctx.strokeStyle = 'rgba(80,160,50,0.3)';
+            ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.arc(x + TILE / 2, y + TILE / 2, 4, 0, Math.PI * 2);
-            ctx.fill();
-            // Petals
+            ctx.moveTo(x + TILE / 2 - 2, y + TILE / 2 + 8);
+            ctx.lineTo(x + TILE / 2, y + TILE / 2 + 3);
+            ctx.stroke();
+            // Stem
+            ctx.strokeStyle = '#3a7a28';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(x + TILE / 2, y + TILE / 2 + 8);
+            ctx.quadraticCurveTo(x + TILE / 2 - 2, y + TILE / 2 + 3, x + TILE / 2, y + TILE / 2);
+            ctx.stroke();
+            // Petals with slight sway
+            const fc = flowerColors[(c * 3 + r * 7) % flowerColors.length];
+            const sway = Math.sin(Date.now() / 1000 + c + r) * 0.1;
             for (let p = 0; p < 5; p++) {
-                const pa = (p / 5) * Math.PI * 2;
+                const pa = (p / 5) * Math.PI * 2 + sway;
+                ctx.fillStyle = fc;
                 ctx.beginPath();
-                ctx.arc(x + TILE / 2 + Math.cos(pa) * 5, y + TILE / 2 + Math.sin(pa) * 5, 2.5, 0, Math.PI * 2);
+                ctx.ellipse(x + TILE / 2 + Math.cos(pa) * 5, y + TILE / 2 + Math.sin(pa) * 5, 3, 2, pa, 0, Math.PI * 2);
                 ctx.fill();
             }
             // Center
             ctx.fillStyle = '#ffe066';
             ctx.beginPath();
-            ctx.arc(x + TILE / 2, y + TILE / 2, 2, 0, Math.PI * 2);
+            ctx.arc(x + TILE / 2, y + TILE / 2, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+            // Center highlight
+            ctx.fillStyle = '#fff8cc';
+            ctx.beginPath();
+            ctx.arc(x + TILE / 2 - 0.5, y + TILE / 2 - 0.5, 1, 0, Math.PI * 2);
             ctx.fill();
             break;
     }
@@ -2125,68 +2304,243 @@ function drawTile(c, r, camX, camY) {
 function drawEntity(entity, color, camX, camY) {
     const sx = entity.x - camX;
     const sy = entity.y - camY;
+    const r = entity.r;
+    const isPlayer = entity === player;
 
-    // Body
-    ctx.fillStyle = color;
+    // Drop shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
     ctx.beginPath();
-    ctx.arc(sx, sy, entity.r, 0, Math.PI * 2);
+    ctx.ellipse(sx + 2, sy + r * 0.7, r * 0.9, r * 0.4, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+
+    // Feet/boots (two small circles behind body based on angle)
+    const footAngle = entity.angle + Math.PI;
+    const footSpread = 0.5;
+    for (let f = -1; f <= 1; f += 2) {
+        const fx = sx + Math.cos(footAngle + f * footSpread) * r * 0.5;
+        const fy = sy + Math.sin(footAngle + f * footSpread) * r * 0.5;
+        ctx.fillStyle = '#333';
+        ctx.beginPath();
+        ctx.arc(fx, fy, r * 0.25, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Body (main circle with gradient)
+    const bodyGrd = ctx.createRadialGradient(sx - r * 0.2, sy - r * 0.2, 0, sx, sy, r);
+    bodyGrd.addColorStop(0, lightenColor(color, 40));
+    bodyGrd.addColorStop(0.6, color);
+    bodyGrd.addColorStop(1, darkenColor(color, 40));
+    ctx.fillStyle = bodyGrd;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Body outline
+    ctx.strokeStyle = darkenColor(color, 60);
     ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Inner highlight
-    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    // Body armor/vest detail (V-shape)
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(sx - 3, sy - 3, entity.r * 0.4, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.moveTo(sx - r * 0.3, sy - r * 0.4);
+    ctx.lineTo(sx, sy + r * 0.2);
+    ctx.lineTo(sx + r * 0.3, sy - r * 0.4);
+    ctx.stroke();
 
-    // Gun
+    // Gun (improved with handle and barrel)
     ctx.save();
     ctx.translate(sx, sy);
     ctx.rotate(entity.angle);
-    ctx.fillStyle = '#444';
-    ctx.fillRect(entity.r - 2, -3, 14, 6);
-    ctx.fillStyle = '#666';
-    ctx.fillRect(entity.r + 8, -2, 4, 4);
+    // Gun handle
+    ctx.fillStyle = '#555';
+    ctx.fillRect(r * 0.3, -4, 8, 8);
+    // Barrel
+    const barrelGrd = ctx.createLinearGradient(r - 2, -3, r - 2, 3);
+    barrelGrd.addColorStop(0, '#777');
+    barrelGrd.addColorStop(0.5, '#444');
+    barrelGrd.addColorStop(1, '#333');
+    ctx.fillStyle = barrelGrd;
+    ctx.fillRect(r - 2, -3, 16, 6);
+    // Muzzle tip
+    ctx.fillStyle = '#888';
+    ctx.fillRect(r + 12, -4, 3, 8);
     ctx.restore();
 
-    // Health bar
-    const barW = 30;
-    const barH = 4;
+    // Head (smaller circle on top of body toward aim)
+    const headR = r * 0.45;
+    const headDist = r * 0.15;
+    const headX = sx + Math.cos(entity.angle) * headDist;
+    const headY = sy + Math.sin(entity.angle) * headDist;
+    const headGrd = ctx.createRadialGradient(headX - headR * 0.2, headY - headR * 0.2, 0, headX, headY, headR);
+    headGrd.addColorStop(0, lightenColor(color, 60));
+    headGrd.addColorStop(1, color);
+    ctx.fillStyle = headGrd;
+    ctx.beginPath();
+    ctx.arc(headX, headY, headR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = darkenColor(color, 60);
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Health bar (improved with rounded look)
+    const barW = 32;
+    const barH = 5;
     const barX = sx - barW / 2;
-    const barY = sy - entity.r - 10;
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
-    ctx.fillStyle = '#ff3333';
-    ctx.fillRect(barX, barY, barW, barH);
+    const barY = sy - r - 14;
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    roundRect(ctx, barX - 1, barY - 1, barW + 2, barH + 2, 3);
+    ctx.fill();
     const hpRatio = Math.max(0, entity.hp / entity.maxHp);
-    ctx.fillStyle = hpRatio > 0.5 ? '#44ff44' : hpRatio > 0.25 ? '#ffcc00' : '#ff3333';
-    ctx.fillRect(barX, barY, barW * hpRatio, barH);
+    // HP color gradient
+    const hpColor = hpRatio > 0.5 ? '#44ff44' : hpRatio > 0.25 ? '#ffcc00' : '#ff3333';
+    ctx.fillStyle = '#2a0000';
+    roundRect(ctx, barX, barY, barW, barH, 2);
+    ctx.fill();
+    if (hpRatio > 0) {
+        ctx.fillStyle = hpColor;
+        roundRect(ctx, barX, barY, barW * hpRatio, barH, 2);
+        ctx.fill();
+        // Shine on HP bar
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        roundRect(ctx, barX, barY, barW * hpRatio, barH * 0.4, 2);
+        ctx.fill();
+    }
+}
+
+// Helper: draw rounded rect path
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+// Helper: lighten a CSS color
+function lightenColor(color, amount) {
+    const c = parseColor(color);
+    if (!c) return color;
+    return `rgb(${Math.min(255, c.r + amount)},${Math.min(255, c.g + amount)},${Math.min(255, c.b + amount)})`;
+}
+
+function darkenColor(color, amount) {
+    const c = parseColor(color);
+    if (!c) return color;
+    return `rgb(${Math.max(0, c.r - amount)},${Math.max(0, c.g - amount)},${Math.max(0, c.b - amount)})`;
+}
+
+function parseColor(color) {
+    if (!color || typeof color !== 'string') return null;
+    // Handle rgba
+    if (color.startsWith('rgba')) {
+        const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+        if (m) return { r: +m[1], g: +m[2], b: +m[3] };
+    }
+    // Handle rgb
+    if (color.startsWith('rgb')) {
+        const m = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+        if (m) return { r: +m[1], g: +m[2], b: +m[3] };
+    }
+    // Handle hex
+    if (color.startsWith('#')) {
+        const hex = color.slice(1);
+        if (hex.length === 3) {
+            return { r: parseInt(hex[0]+hex[0], 16), g: parseInt(hex[1]+hex[1], 16), b: parseInt(hex[2]+hex[2], 16) };
+        }
+        if (hex.length >= 6) {
+            return { r: parseInt(hex.slice(0,2), 16), g: parseInt(hex.slice(2,4), 16), b: parseInt(hex.slice(4,6), 16) };
+        }
+    }
+    return null;
 }
 
 function drawBullet(b, camX, camY) {
     const sx = b.x - camX;
     const sy = b.y - camY;
-    ctx.fillStyle = b.owner === 'player' ? '#ffdd00' : '#ff4444';
+    const isPlayerBullet = b.owner === 'player';
+    const mainColor = isPlayerBullet ? '#ffdd00' : '#ff4444';
+    const glowColor = isPlayerBullet ? 'rgba(255,221,0,0.3)' : 'rgba(255,68,68,0.3)';
+    const trailColor = isPlayerBullet ? 'rgba(255,200,0,' : 'rgba(255,68,68,';
+
+    // Bullet trail (streak behind)
+    const speed = Math.hypot(b.vx, b.vy);
+    const trailLen = Math.min(speed * 3, 20);
+    const angle = Math.atan2(b.vy, b.vx);
+    const tailX = sx - Math.cos(angle) * trailLen;
+    const tailY = sy - Math.sin(angle) * trailLen;
+
+    const trailGrd = ctx.createLinearGradient(tailX, tailY, sx, sy);
+    trailGrd.addColorStop(0, trailColor + '0)');
+    trailGrd.addColorStop(1, trailColor + '0.6)');
+    ctx.strokeStyle = trailGrd;
+    ctx.lineWidth = BULLET_R * 2;
+    ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.arc(sx, sy, BULLET_R, 0, Math.PI * 2);
-    ctx.fill();
-    // Glow
-    ctx.fillStyle = b.owner === 'player' ? 'rgba(255,221,0,0.3)' : 'rgba(255,68,68,0.3)';
+    ctx.moveTo(tailX, tailY);
+    ctx.lineTo(sx, sy);
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+
+    // Outer glow
+    ctx.fillStyle = glowColor;
     ctx.beginPath();
-    ctx.arc(sx, sy, BULLET_R + 3, 0, Math.PI * 2);
+    ctx.arc(sx, sy, BULLET_R + 4, 0, Math.PI * 2);
     ctx.fill();
+
+    // Main bullet
+    ctx.fillStyle = mainColor;
+    ctx.beginPath();
+    ctx.arc(sx, sy, BULLET_R + 1, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Bright center
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(sx, sy, BULLET_R * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Burn bullets have extra flame effect
+    if (b.burn) {
+        ctx.fillStyle = 'rgba(255,100,0,0.4)';
+        ctx.beginPath();
+        ctx.arc(sx, sy, BULLET_R + 6, 0, Math.PI * 2);
+        ctx.fill();
+    }
 }
 
 function drawParticles(camX, camY) {
     for (const p of particles) {
         const sx = p.x - camX;
         const sy = p.y - camY;
-        ctx.globalAlpha = p.life / 30;
+        const alpha = p.life / 30;
+        ctx.globalAlpha = alpha;
+        // Particle glow
+        if (alpha > 0.3) {
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = alpha * 0.3;
+            ctx.beginPath();
+            ctx.arc(sx, sy, p.r * 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.globalAlpha = alpha;
         ctx.fillStyle = p.color;
         ctx.beginPath();
-        ctx.arc(sx, sy, p.r, 0, Math.PI * 2);
+        ctx.arc(sx, sy, p.r * alpha, 0, Math.PI * 2);
+        ctx.fill();
+        // Bright center
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.beginPath();
+        ctx.arc(sx, sy, p.r * alpha * 0.4, 0, Math.PI * 2);
         ctx.fill();
     }
     ctx.globalAlpha = 1;
@@ -2386,80 +2740,104 @@ function drawBombIndicator(entity, camX, camY) {
 function drawHUD() {
     const pad = 16;
 
-    // Player HP
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(pad, pad, 300, 70);
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 18px Arial';
-    ctx.fillText('HP', pad + 10, pad + 28);
-    ctx.fillStyle = '#333';
-    ctx.fillRect(pad + 40, pad + 10, 244, 26);
+    // Main HUD panel background
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    roundRect(ctx, pad, pad, 300, 70, 8);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    roundRect(ctx, pad, pad, 300, 70, 8);
+    ctx.stroke();
+
+    // HP label
+    ctx.fillStyle = '#ccc';
+    ctx.font = 'bold 16px Arial';
+    ctx.fillText('HP', pad + 10, pad + 26);
+
+    // HP bar (rounded)
+    ctx.fillStyle = '#1a0a0a';
+    roundRect(ctx, pad + 40, pad + 10, 244, 24, 6);
+    ctx.fill();
     const hpRatio = Math.max(0, player.hp / player.maxHp);
-    ctx.fillStyle = hpRatio > 0.5 ? '#44ff44' : hpRatio > 0.25 ? '#ffcc00' : '#ff3333';
-    ctx.fillRect(pad + 40, pad + 10, 244 * hpRatio, 26);
+    const hpColor = hpRatio > 0.5 ? '#44ff44' : hpRatio > 0.25 ? '#ffcc00' : '#ff3333';
+    if (hpRatio > 0) {
+        ctx.fillStyle = hpColor;
+        roundRect(ctx, pad + 40, pad + 10, 244 * hpRatio, 24, 6);
+        ctx.fill();
+        // HP bar shine
+        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+        roundRect(ctx, pad + 40, pad + 10, 244 * hpRatio, 10, 6);
+        ctx.fill();
+    }
     // HP text on bar
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 14px Arial';
-    ctx.fillText(Math.max(0, player.hp) + ' / ' + player.maxHp, pad + 130, pad + 28);
+    ctx.font = 'bold 13px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(Math.max(0, player.hp) + ' / ' + player.maxHp, pad + 162, pad + 27);
+    ctx.textAlign = 'left';
 
     // Score
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 18px Arial';
-    ctx.fillText('Score: ' + score, pad + 10, pad + 58);
+    ctx.font = 'bold 17px Arial';
+    ctx.fillText('Score: ' + score, pad + 10, pad + 56);
 
-    // Level display with progress bar (based on total score)
+    // Level display with progress bar
     const totalScoreNow = getTotalScore();
-    const nextLvlScore = playerLevel * 10000;
-    const prevLvlScore = (playerLevel - 1) * 10000;
+    const nextLvlScore = scoreForLevel(playerLevel + 1);
+    const prevLvlScore = scoreForLevel(playerLevel);
     const lvlProgress = Math.min(1, (totalScoreNow - prevLvlScore) / (nextLvlScore - prevLvlScore));
     ctx.fillStyle = '#ffdd00';
-    ctx.font = 'bold 14px Arial';
-    ctx.fillText('Lv.' + playerLevel, pad + 210, pad + 58);
-    ctx.fillStyle = '#333';
-    ctx.fillRect(pad + 245, pad + 46, 45, 10);
-    ctx.fillStyle = '#ffdd00';
-    ctx.fillRect(pad + 245, pad + 46, 45 * lvlProgress, 10);
+    ctx.font = 'bold 13px Arial';
+    ctx.fillText('Lv.' + playerLevel, pad + 210, pad + 56);
+    ctx.fillStyle = '#222';
+    roundRect(ctx, pad + 245, pad + 44, 45, 10, 4);
+    ctx.fill();
+    if (lvlProgress > 0) {
+        ctx.fillStyle = '#ffdd00';
+        roundRect(ctx, pad + 245, pad + 44, 45 * lvlProgress, 10, 4);
+        ctx.fill();
+    }
 
-    // Wave & enemy count background
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(pad, pad + 76, 300, 24);
-
-    // Game level
+    // Wave & enemy count
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    roundRect(ctx, pad, pad + 76, 300, 24, 6);
+    ctx.fill();
     ctx.fillStyle = '#ff9944';
     ctx.font = 'bold 14px Arial';
     ctx.fillText('Wave ' + gameLevel + '/' + MAX_GAME_LEVEL, pad + 10, pad + 92);
-
-    // Enemy count
     ctx.fillStyle = '#ff8888';
     ctx.font = '13px Arial';
-    ctx.fillText('Enemy: ' + enemiesDefeated + '/' + totalEnemies, pad + 160, pad + 92);
+    ctx.fillText('Enemies: ' + enemiesDefeated + '/' + totalEnemies, pad + 155, pad + 92);
 
     // Bomb indicator
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(pad, pad + 104, 300, 24);
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    roundRect(ctx, pad, pad + 104, 300, 24, 6);
+    ctx.fill();
     if (player.hasBomb) {
         ctx.fillStyle = '#00ffcc';
         ctx.font = 'bold 13px Arial';
         ctx.fillText('BOMB READY [Space / Right-Click]', pad + 10, pad + 120);
     } else {
-        ctx.fillStyle = '#666';
+        ctx.fillStyle = '#555';
         ctx.font = '13px Arial';
-        ctx.fillText('No bomb', pad + 10, pad + 120);
+        ctx.fillText('No bomb - collect a power-up!', pad + 10, pad + 120);
     }
 
     // Mini controls hint
+    const hintW = 250;
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
-    const hintW = 260;
-    ctx.fillRect(canvas.width - hintW - pad, pad, hintW, 52);
-    ctx.fillStyle = '#bbb';
+    roundRect(ctx, canvas.width - hintW - pad, pad, hintW, 52, 8);
+    ctx.fill();
+    ctx.fillStyle = '#aaa';
     ctx.font = '11px Arial';
-    ctx.fillText('WASD/Arrows: Move', canvas.width - hintW - pad + 8, pad + 15);
-    ctx.fillText('Mouse: Aim  |  Click: Shoot', canvas.width - hintW - pad + 8, pad + 30);
-    ctx.fillText('Space/Right-Click: Throw Bomb', canvas.width - hintW - pad + 8, pad + 45);
+    ctx.fillText('WASD/Arrows: Move', canvas.width - hintW - pad + 10, pad + 15);
+    ctx.fillText('Mouse: Aim  |  Click: Shoot', canvas.width - hintW - pad + 10, pad + 30);
+    ctx.fillText('Space/Right-Click: Throw Bomb', canvas.width - hintW - pad + 10, pad + 45);
 
-    // Character name
+    // Character name badge
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillRect(pad, pad + 132, 300, 22);
+    roundRect(ctx, pad, pad + 132, 160, 22, 6);
+    ctx.fill();
     ctx.fillStyle = player.color || '#3388ff';
     ctx.font = 'bold 12px Arial';
     ctx.fillText(selectedChar.name, pad + 10, pad + 147);
@@ -2471,17 +2849,21 @@ function drawHUD() {
     if (player.speedBoostTimer > 0) effects.push({ label: 'SPEED BOOST', color: '#00ccff', time: player.speedBoostTimer, max: SPEED_BOOST_DURATION });
     if (player.doubleDmgTimer > 0) effects.push({ label: '2x DAMAGE', color: '#ff4444', time: player.doubleDmgTimer, max: DOUBLE_DMG_DURATION });
     if (effects.length > 0) {
-        ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        ctx.fillRect(pad, effectY, 300, effects.length * 20 + 4);
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        roundRect(ctx, pad, effectY, 300, effects.length * 20 + 4, 6);
+        ctx.fill();
         for (const eff of effects) {
             effectY += 2;
-            // Timer bar
             const barRatio = eff.time / eff.max;
-            ctx.fillStyle = 'rgba(255,255,255,0.1)';
-            ctx.fillRect(pad + 2, effectY, 296, 16);
+            ctx.fillStyle = 'rgba(255,255,255,0.08)';
+            roundRect(ctx, pad + 2, effectY, 296, 16, 4);
+            ctx.fill();
             ctx.fillStyle = eff.color;
             ctx.globalAlpha = 0.4;
-            ctx.fillRect(pad + 2, effectY, 296 * barRatio, 16);
+            if (barRatio > 0) {
+                roundRect(ctx, pad + 2, effectY, 296 * barRatio, 16, 4);
+                ctx.fill();
+            }
             ctx.globalAlpha = 1;
             ctx.fillStyle = '#fff';
             ctx.font = 'bold 11px Arial';
@@ -2495,8 +2877,8 @@ function drawHUD() {
 function render() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    const camX = camera.x;
-    const camY = camera.y;
+    const camX = camera.x + screenShakeX;
+    const camY = camera.y + screenShakeY;
 
     // Draw visible tiles only
     const startCol = Math.max(0, Math.floor(camX / TILE));
@@ -2586,8 +2968,66 @@ function render() {
 
     drawBombIndicator(player, camX, camY);
 
+    // Muzzle flashes
+    for (const mf of muzzleFlashes) {
+        const mx = mf.x - camX;
+        const my = mf.y - camY;
+        const progress = mf.life / mf.maxLife;
+        const flashR = 12 + (1 - progress) * 8;
+        ctx.globalAlpha = progress * 0.8;
+        const mfGrd = ctx.createRadialGradient(mx, my, 0, mx, my, flashR);
+        mfGrd.addColorStop(0, '#ffffff');
+        mfGrd.addColorStop(0.3, '#ffee66');
+        mfGrd.addColorStop(0.7, '#ff8800');
+        mfGrd.addColorStop(1, 'rgba(255,136,0,0)');
+        ctx.fillStyle = mfGrd;
+        ctx.beginPath();
+        ctx.arc(mx, my, flashR, 0, Math.PI * 2);
+        ctx.fill();
+        // Directional flash cone
+        ctx.save();
+        ctx.translate(mx, my);
+        ctx.rotate(mf.angle);
+        ctx.globalAlpha = progress * 0.5;
+        ctx.fillStyle = '#ffee88';
+        ctx.beginPath();
+        ctx.moveTo(0, -4);
+        ctx.lineTo(flashR * 1.5, 0);
+        ctx.lineTo(0, 4);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+        ctx.globalAlpha = 1;
+    }
+
+    // Damage numbers
+    for (const dn of damageNumbers) {
+        const dx = dn.x - camX;
+        const dy = dn.y - camY;
+        const alpha = Math.min(1, dn.life / 20);
+        ctx.globalAlpha = alpha;
+        ctx.font = `bold ${Math.round(14 * dn.scale)}px Arial`;
+        ctx.fillStyle = '#000';
+        ctx.textAlign = 'center';
+        ctx.fillText(dn.text, dx + 1, dy + 1);
+        ctx.fillStyle = dn.color;
+        ctx.fillText(dn.text, dx, dy);
+        ctx.textAlign = 'left';
+    }
+    ctx.globalAlpha = 1;
+
     // HUD
     drawHUD();
+
+    // Vignette overlay (dark edges for atmosphere)
+    const vigGrd = ctx.createRadialGradient(
+        canvas.width / 2, canvas.height / 2, canvas.height * 0.35,
+        canvas.width / 2, canvas.height / 2, canvas.height * 0.75
+    );
+    vigGrd.addColorStop(0, 'rgba(0,0,0,0)');
+    vigGrd.addColorStop(1, 'rgba(0,0,0,0.35)');
+    ctx.fillStyle = vigGrd;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
 // ---- Game loop ----
