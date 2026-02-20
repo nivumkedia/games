@@ -1368,7 +1368,7 @@ function playerShoot() {
 }
 
 // ---- Update ----
-function update() {
+function update(dt) {
     if (!gameRunning) return;
 
     // Player movement
@@ -1391,8 +1391,8 @@ function update() {
     player.vy = dy * speed;
 
     // Move player with collision
-    const newPx = player.x + player.vx;
-    const newPy = player.y + player.vy;
+    const newPx = player.x + player.vx * dt;
+    const newPy = player.y + player.vy * dt;
 
     if (!tileBlocks(newPx, player.y, player.r)) {
         player.x = newPx;
@@ -1403,7 +1403,7 @@ function update() {
 
     // Auto-scroll upward
     camera.x = 0;
-    camera.y -= SCROLL_SPEED;
+    camera.y -= SCROLL_SPEED * dt;
     camera.y = Math.max(0, Math.min(MAP_H - canvas.height, camera.y));
 
     // Clamp player to visible screen area
@@ -1415,14 +1415,14 @@ function update() {
 
     // Auto-fire for Gunner
     if (player.autoFire && mouse.down) {
-        autoFireTimer++;
+        autoFireTimer += dt;
         const WEAPON_INTERVALS = { standard: 6, rapidfire: 4, heavy: 10, flamethrower: 2, railgun: 18, minigun: 2, laser: 3, shockwave: 20, sniper_rifle: 20, dualwield: 5, piercing: 6, scatter: 6, homing: 6, bouncer: 6 };
         // Use the fastest interval among owned weapons
         let fireInterval = 6;
         for (const w of (player.weapons || ['standard'])) {
             fireInterval = Math.min(fireInterval, WEAPON_INTERVALS[w] || 6);
         }
-        if (autoFireTimer % fireInterval === 0) playerShoot();
+        if (autoFireTimer >= fireInterval) { playerShoot(); autoFireTimer = 0; }
     } else {
         autoFireTimer = 0;
     }
@@ -1430,7 +1430,7 @@ function update() {
     // Regen (medic character + regen upgrade)
     const totalRegen = (player.regen ? 1 : 0) + (player.regenRate || 0);
     if (totalRegen > 0 && player.hp < player.maxHp) {
-        player.regenTimer = (player.regenTimer || 0) + 1;
+        player.regenTimer = (player.regenTimer || 0) + dt;
         if (player.regenTimer >= 60) {
             player.hp = Math.min(player.maxHp, player.hp + totalRegen);
             player.regenTimer = 0;
@@ -1445,12 +1445,12 @@ function update() {
         e.angle = angleToPlayer;
 
         let espeed = 1.5;
-        if (e.slowTimer > 0) { espeed *= 0.4; e.slowTimer--; }
+        if (e.slowTimer > 0) { espeed *= 0.4; e.slowTimer -= dt; }
         if (onWater(e.x, e.y)) espeed *= WATER_SLOW;
 
         // Burn damage tick
         if (e.burnTimer > 0) {
-            e.burnTimer--;
+            e.burnTimer -= dt;
             if (e.burnTimer % 15 === 0) {
                 e.hp -= 5;
                 spawnParticles(e.x, e.y, '#ff6600', 2);
@@ -1481,8 +1481,8 @@ function update() {
             e.vy = Math.sin(angleToPlayer + Math.PI / 2) * espeed * 0.5;
         }
 
-        const nex = e.x + e.vx;
-        const ney = e.y + e.vy;
+        const nex = e.x + e.vx * dt;
+        const ney = e.y + e.vy * dt;
         if (!tileBlocks(nex, e.y, e.r)) e.x = nex;
         if (!tileBlocks(e.x, ney, e.r)) e.y = ney;
         e.x = Math.max(e.r, Math.min(MAP_W - e.r, e.x));
@@ -1500,7 +1500,7 @@ function update() {
         }
 
         // Shoot
-        e.shootTimer -= 16.67;
+        e.shootTimer -= 16.67 * dt;
         if (e.shootTimer <= 0 && distToPlayer < 500) {
             e.shootTimer = ENEMY_SHOOT_INTERVAL + Math.random() * 500;
             const gunTipX = e.x + Math.cos(e.angle) * (e.r + 10);
@@ -1533,7 +1533,7 @@ function update() {
                 let diff = targetAngle - currentAngle;
                 while (diff > Math.PI) diff -= Math.PI * 2;
                 while (diff < -Math.PI) diff += Math.PI * 2;
-                const turnRate = 0.08;
+                const turnRate = 0.08 * dt;
                 const newAngle = currentAngle + Math.sign(diff) * Math.min(Math.abs(diff), turnRate);
                 const spd = Math.hypot(b.vx, b.vy);
                 b.vx = Math.cos(newAngle) * spd;
@@ -1541,9 +1541,9 @@ function update() {
             }
         }
 
-        b.x += b.vx;
-        b.y += b.vy;
-        b.life--;
+        b.x += b.vx * dt;
+        b.y += b.vy * dt;
+        b.life -= dt;
 
         // Off map or expired
         if (b.x < 0 || b.x > MAP_W || b.y < 0 || b.y > MAP_H || b.life <= 0) {
@@ -1564,7 +1564,7 @@ function update() {
                 if (Math.abs(dx) > Math.abs(dy)) { b.vx = -b.vx; }
                 else { b.vy = -b.vy; }
                 b.bounce--;
-                b.x += b.vx; b.y += b.vy;
+                b.x += b.vx * dt; b.y += b.vy * dt;
                 spawnParticles(b.x, b.y, '#88ff88', 3);
             } else {
                 spawnParticles(b.x, b.y, '#aaa', 3);
@@ -1686,7 +1686,7 @@ function update() {
     }
 
     // Spawn powerups
-    powerupTimer++;
+    powerupTimer += dt;
     if (powerups.length < POWERUP_MAX && powerupTimer >= POWERUP_RESPAWN) {
         spawnPowerup();
         powerupTimer = 0;
@@ -1740,9 +1740,9 @@ function update() {
     }
 
     // Update player status effect timers
-    if (player.invincibleTimer > 0) player.invincibleTimer--;
-    if (player.speedBoostTimer > 0) player.speedBoostTimer--;
-    if (player.doubleDmgTimer > 0) player.doubleDmgTimer--;
+    if (player.invincibleTimer > 0) player.invincibleTimer -= dt;
+    if (player.speedBoostTimer > 0) player.speedBoostTimer -= dt;
+    if (player.doubleDmgTimer > 0) player.doubleDmgTimer -= dt;
 
     // Enemy bomb throwing AI
     for (const e of enemies) {
@@ -1757,11 +1757,11 @@ function update() {
     // Update bombs
     for (let i = bombs.length - 1; i >= 0; i--) {
         const bm = bombs[i];
-        bm.x += bm.vx;
-        bm.y += bm.vy;
-        bm.vx *= 0.98;
-        bm.vy *= 0.98;
-        bm.life--;
+        bm.x += bm.vx * dt;
+        bm.y += bm.vy * dt;
+        bm.vx *= Math.pow(0.98, dt);
+        bm.vy *= Math.pow(0.98, dt);
+        bm.life -= dt;
 
         let explode = bm.life <= 0;
 
@@ -1845,7 +1845,7 @@ function update() {
     // Update explosions
     for (let i = explosions.length - 1; i >= 0; i--) {
         const ex = explosions[i];
-        ex.life--;
+        ex.life -= dt;
         const progress = 1 - ex.life / 40;
         ex.r = ex.maxR * Math.min(1, progress * 1.5); // fast expand, hold size
         if (ex.life <= 0) explosions.splice(i, 1);
@@ -1854,16 +1854,16 @@ function update() {
     // Update particles
     for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
-        p.x += p.vx;
-        p.y += p.vy;
-        p.life--;
-        p.vx *= 0.95;
-        p.vy *= 0.95;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.life -= dt;
+        p.vx *= Math.pow(0.95, dt);
+        p.vy *= Math.pow(0.95, dt);
         if (p.life <= 0) particles.splice(i, 1);
     }
 
     // Update enhanced effects
-    updateEffects();
+    updateEffects(dt);
 }
 
 function spawnParticles(x, y, color, count) {
@@ -1901,10 +1901,10 @@ function spawnMuzzleFlash(x, y, angle) {
     muzzleFlashes.push({ x, y, angle, life: 6, maxLife: 6 });
 }
 
-function updateEffects() {
+function updateEffects(dt) {
     // Screen shake
     if (screenShakeTimer > 0) {
-        screenShakeTimer--;
+        screenShakeTimer -= dt;
         screenShakeX = (Math.random() - 0.5) * 2 * screenShakeIntensity * (screenShakeTimer / 10);
         screenShakeY = (Math.random() - 0.5) * 2 * screenShakeIntensity * (screenShakeTimer / 10);
     } else {
@@ -1915,15 +1915,15 @@ function updateEffects() {
     // Damage numbers
     for (let i = damageNumbers.length - 1; i >= 0; i--) {
         const dn = damageNumbers[i];
-        dn.y += dn.vy;
-        dn.vy *= 0.96;
-        dn.life--;
+        dn.y += dn.vy * dt;
+        dn.vy *= Math.pow(0.96, dt);
+        dn.life -= dt;
         if (dn.life <= 0) damageNumbers.splice(i, 1);
     }
 
     // Muzzle flashes
     for (let i = muzzleFlashes.length - 1; i >= 0; i--) {
-        muzzleFlashes[i].life--;
+        muzzleFlashes[i].life -= dt;
         if (muzzleFlashes[i].life <= 0) muzzleFlashes.splice(i, 1);
     }
 }
@@ -1986,7 +1986,10 @@ function startWinFireworks() {
     }
 
     let frameCount = 0;
-    function winAnimLoop() {
+    let lastWinFrameTime = 0;
+    function winAnimLoop(timestamp) {
+        if (!timestamp) timestamp = performance.now();
+        lastWinFrameTime = timestamp;
         wCtx.clearRect(0, 0, winCanvasEl.width, winCanvasEl.height);
         frameCount++;
 
@@ -2028,7 +2031,7 @@ function startWinFireworks() {
             c.y += c.vy;
             c.vy += 0.05; // gravity
             c.vx *= 0.98;
-            c.life--;
+            c.life -= 1;
             wCtx.globalAlpha = Math.max(0, c.life / c.maxLife);
             wCtx.fillStyle = c.color;
             wCtx.beginPath();
@@ -3031,8 +3034,21 @@ function render() {
 }
 
 // ---- Game loop ----
-function gameLoop() {
-    update();
+let lastFrameTime = 0;
+let accumulator = 0;
+const FIXED_STEP = 16.667;
+
+function gameLoop(timestamp) {
+    if (!timestamp) timestamp = performance.now();
+    if (!lastFrameTime) lastFrameTime = timestamp;
+    let elapsed = timestamp - lastFrameTime;
+    lastFrameTime = timestamp;
+    if (elapsed > 100) elapsed = 100;
+    accumulator += elapsed;
+    while (accumulator >= FIXED_STEP) {
+        update(1);
+        accumulator -= FIXED_STEP;
+    }
     render();
     if (gameRunning) {
         animId = requestAnimationFrame(gameLoop);
@@ -3048,6 +3064,8 @@ document.getElementById('startBtn').addEventListener('click', () => {
     document.getElementById('finalScreen').style.display = 'none';
     resetRun();
     initGame();
+    lastFrameTime = 0;
+    accumulator = 0;
     gameLoop();
 });
 
@@ -3055,6 +3073,8 @@ document.getElementById('restartBtn').addEventListener('click', () => {
     gameOverScreen.style.display = 'none';
     // Retry same level, keep cumulative stats and deaths
     initGame();
+    lastFrameTime = 0;
+    accumulator = 0;
     gameLoop();
 });
 
@@ -3064,6 +3084,8 @@ document.getElementById('winNextLevelBtn').addEventListener('click', () => {
     cancelAnimationFrame(animId);
     gameLevel++;
     initGame();
+    lastFrameTime = 0;
+    accumulator = 0;
     gameLoop();
 });
 

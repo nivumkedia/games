@@ -518,6 +518,8 @@
         for (let i = 0; i < 20; i++) bgLayers.mid.push({ x: i * 75 - 200, h: 30 + Math.random() * 50, w: 65 + Math.random() * 35 });
         for (let i = 0; i < 30; i++) bgLayers.near.push({ x: i * 50 - 200, h: 15 + Math.random() * 25, w: 35 + Math.random() * 25 });
         let bgScrollFar = 0, bgScrollMid = 0, bgScrollNear = 0;
+        let lastFrameTime = 0;
+        let currentDt = 1;
         let ambientParts = [];
         const MAX_AMBIENT = 50;
         let bgStars = [];
@@ -1019,7 +1021,7 @@
                    rect1.y + rect1.height > rect2.y;
         }
 
-        function update() {
+        function update(dt) {
             if (gameState !== 'playing') return;
 
             // Update score
@@ -1224,15 +1226,15 @@
             const slowmoFactor = hasSlowmo ? 0.35 : 1;
 
             // Update player (slower during slow-mo)
-            player.velocityY += GRAVITY * slowmoFactor;
-            player.y += player.velocityY * slowmoFactor;
+            player.velocityY += GRAVITY * slowmoFactor * dt;
+            player.y += player.velocityY * slowmoFactor * dt;
 
             // Check platform collisions
             currentPlatform = null;
             for (let plat of platforms) {
                 // Update moving platforms
                 if (plat.type === 'moving') {
-                    plat.movePhase += 0.05;
+                    plat.movePhase += 0.05 * dt;
                     plat.y = plat.originalY + Math.sin(plat.movePhase) * 30;
                 }
 
@@ -1346,7 +1348,7 @@
 
                 // Update bubbles
                 lava.bubbles = lava.bubbles.filter(b => {
-                    b.y -= b.speed;
+                    b.y -= b.speed * dt;
                     return b.y > GROUND_Y - 20;
                 });
             }
@@ -1445,10 +1447,10 @@
 
             // Update obstacles
             for (let obs of obstacles) {
-                obs.x -= 6 * effectiveSpeed;
+                obs.x -= 6 * effectiveSpeed * dt;
 
                 if (obs.type === 'bird') {
-                    obs.wingPhase += 0.2;
+                    obs.wingPhase += 0.2 * dt;
                 }
 
                 // Check collision
@@ -1507,8 +1509,8 @@
 
             // Update collectibles
             for (let col of collectibles) {
-                col.x -= 6 * effectiveSpeed;
-                col.rotation += 0.1;
+                col.x -= 6 * effectiveSpeed * dt;
+                col.rotation += 0.1 * dt;
 
                 // Check collision with player
                 if (!col.collected) {
@@ -1545,26 +1547,26 @@
 
             // Update lava pits
             for (let lava of lavaPits) {
-                lava.x -= 6 * effectiveSpeed;
+                lava.x -= 6 * effectiveSpeed * dt;
             }
             lavaPits = lavaPits.filter(lava => lava.x + lava.width > -50);
 
             // Update platforms
             for (let plat of platforms) {
-                plat.x -= 6 * effectiveSpeed;
+                plat.x -= 6 * effectiveSpeed * dt;
             }
             platforms = platforms.filter(plat => plat.x + plat.width > -50 && plat.y < 500);
 
             // Update springs
             for (let spring of springs) {
-                spring.x -= 6 * effectiveSpeed;
+                spring.x -= 6 * effectiveSpeed * dt;
             }
             springs = springs.filter(spring => spring.x > -50);
 
             // Update power-ups
             for (let pu of powerUps) {
-                pu.x -= 6 * effectiveSpeed;
-                pu.rotation += 0.05;
+                pu.x -= 6 * effectiveSpeed * dt;
+                pu.rotation += 0.05 * dt;
 
                 // Check collision with player
                 if (!pu.collected) {
@@ -1703,10 +1705,10 @@
 
             // Update particles
             for (let p of particles) {
-                p.x += p.vx;
-                p.y += p.vy;
-                p.vy += 0.2;
-                p.life--;
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+                p.vy += 0.2 * dt;
+                p.life -= dt;
             }
             particles = particles.filter(p => p.life > 0);
         }
@@ -1715,9 +1717,9 @@
             const levelConfig = levelConfigs[currentLevel] || levelConfigs[1];
             const t = Date.now();
             const speed = gameState === 'playing' ? speedMultiplier : 0.1;
-            bgScrollFar += 0.3 * speed;
-            bgScrollMid += 0.7 * speed;
-            bgScrollNear += 1.2 * speed;
+            bgScrollFar += 0.3 * speed * currentDt;
+            bgScrollMid += 0.7 * speed * currentDt;
+            bgScrollNear += 1.2 * speed * currentDt;
 
             const farColors = { 1: '#5B8C3E', 2: '#5A3020', 3: '#6688AA', 4: '#1A0A2A', 5: '#2A0000' };
             const midColors = { 1: '#6B9C4E', 2: '#6A4030', 3: '#7799BB', 4: '#2A1A3A', 5: '#3A0000' };
@@ -1884,10 +1886,10 @@
                 ambientParts.push(p);
             }
             for (let p of ambientParts) {
-                p.x += p.vx; p.y += p.vy;
-                if (p.type === 'leaf') { p.vx += Math.sin(t / 500 + p.x * 0.01) * 0.02; p.rot += p.rotSpeed; }
+                p.x += p.vx * currentDt; p.y += p.vy * currentDt;
+                if (p.type === 'leaf') { p.vx += Math.sin(t / 500 + p.x * 0.01) * 0.02 * currentDt; p.rot += p.rotSpeed * currentDt; }
                 if (p.type === 'snow') { p.vx = Math.sin(t / 800 + p.x * 0.01) * 0.5; }
-                p.life--;
+                p.life -= currentDt;
             }
             ambientParts = ambientParts.filter(p => p.life > 0 && p.y < 410 && p.x > -20 && p.x < 820);
         }
@@ -3440,14 +3442,26 @@
             }
         }
 
-        function gameLoop() {
-            update();
+        let accumulator = 0;
+        const FIXED_STEP = 16.667;
+
+        function gameLoop(timestamp) {
+            if (!lastFrameTime) lastFrameTime = timestamp;
+            let elapsed = timestamp - lastFrameTime;
+            lastFrameTime = timestamp;
+            if (elapsed > 100) elapsed = 100;
+            accumulator += elapsed;
+            while (accumulator >= FIXED_STEP) {
+                update(1);
+                accumulator -= FIXED_STEP;
+            }
+            currentDt = 1;
             draw();
             requestAnimationFrame(gameLoop);
         }
 
         // Start the game
-        gameLoop();
+        requestAnimationFrame(gameLoop);
     </script>
 </body>
 </html>
