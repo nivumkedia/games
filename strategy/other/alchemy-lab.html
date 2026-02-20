@@ -2734,7 +2734,34 @@ function showHint() {
             if (discovered.has(a) && discovered.has(b)) hints.push(`Try mixing ${a} + ${b}`);
         }
     }
-    if (hints.length === 0) { hintEl.textContent = "You've discovered everything in this tab!"; return; }
+    if (hints.length === 0) {
+        // Check if there are undiscovered recipes whose inputs haven't been found yet
+        let undiscovered = 0;
+        if (activeZone === "workbench") {
+            for (const [k,r] of Object.entries(normalizedRecipes)) {
+                if (!discovered.has(r) && allIngredients[r]) undiscovered++;
+            }
+        } else if (activeZone === "machine") {
+            for (const mRec of Object.values(machineRecipes)) {
+                for (const [inp, out] of Object.entries(mRec)) {
+                    if (!discovered.has(out) && allIngredients[out]) undiscovered++;
+                }
+            }
+        } else if (activeZone === "testtubes") {
+            for (const [k,r] of Object.entries(normalizedTubeRecipes)) {
+                if (!discovered.has(r) && allIngredients[r]) undiscovered++;
+            }
+        }
+        if (undiscovered > 0) {
+            if (activeZone === "testtubes") hintEl.textContent = `${undiscovered} potions left — process ingredients in Machines first!`;
+            else if (activeZone === "machine") hintEl.textContent = `${undiscovered} results left — discover more base ingredients on the Workbench!`;
+            else hintEl.textContent = `${undiscovered} recipes left — discover more ingredients to unlock them!`;
+        } else {
+            hintEl.textContent = "You've discovered everything in this tab!";
+        }
+        setTimeout(() => { hintEl.textContent = ""; }, 5000);
+        return;
+    }
     hintsUsed++;
     saveProgress();
     hintEl.textContent = hints[Math.floor(Math.random()*hints.length)];
