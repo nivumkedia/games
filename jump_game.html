@@ -640,25 +640,38 @@
         canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
             initAudio();
-            const touch = e.touches[0];
-            const rect = canvas.getBoundingClientRect();
-            const y = touch.clientY - rect.top;
 
             if (gameState === 'start') {
                 gameState = 'playing';
             } else if (gameState === 'playing') {
-                if (y < canvas.height / 2) {
-                    // Top half - jump
-                    if (!player.isJumping) {
-                        player.velocityY = JUMP_VELOCITY;
-                        player.isJumping = true;
-                        playSound('jump');
+                if (!player.isJumping) {
+                    player.velocityY = JUMP_VELOCITY;
+                    player.isJumping = true;
+                    player.isDucking = false;
+                    playSound('jump');
+                    for (let i = 0; i < 5; i++) {
+                        particles.push({
+                            x: player.x + player.width / 2,
+                            y: player.y,
+                            vx: (Math.random() - 0.5) * 5,
+                            vy: -Math.random() * 3,
+                            life: 20,
+                            color: '#8B4513'
+                        });
                     }
-                } else {
-                    // Bottom half - duck
-                    if (!player.isDucking) {
-                        player.isDucking = true;
-                        playSound('duck');
+                } else if (canDoubleJump) {
+                    player.velocityY = JUMP_VELOCITY * 0.9;
+                    canDoubleJump = false;
+                    playSound('jump');
+                    for (let i = 0; i < 8; i++) {
+                        particles.push({
+                            x: player.x + player.width / 2,
+                            y: player.y,
+                            vx: (Math.random() - 0.5) * 6,
+                            vy: Math.random() * 3,
+                            life: 20,
+                            color: '#32CD32'
+                        });
                     }
                 }
             } else if (gameState === 'gameover') {
@@ -670,21 +683,28 @@
             player.isDucking = false;
         });
 
-        // Mouse click handling for inventory
+        // Mouse click handling for inventory and jump
         canvas.addEventListener('click', (e) => {
+            initAudio();
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
 
+            if (gameState === 'start') {
+                gameState = 'playing';
+                return;
+            }
+
             // Check inventory slots
+            let clickedSlot = false;
             if (gameState === 'playing') {
                 for (let slot of inventorySlots) {
                     if (x >= slot.x && x <= slot.x + slot.width &&
                         y >= slot.y && y <= slot.y + slot.height) {
+                        clickedSlot = true;
                         const count = inventory[slot.id] || 0;
                         if (count > 0) {
                             if (selectedInventoryItem === slot.id) {
-                                // Clicking same item deselects
                                 selectedInventoryItem = null;
                             } else {
                                 selectedInventoryItem = slot.id;
@@ -693,6 +713,46 @@
                         break;
                     }
                 }
+
+                // Jump if not clicking an inventory slot
+                if (!clickedSlot) {
+                    if (!player.isJumping) {
+                        player.velocityY = JUMP_VELOCITY;
+                        player.isJumping = true;
+                        player.isDucking = false;
+                        playSound('jump');
+                        for (let i = 0; i < 5; i++) {
+                            particles.push({
+                                x: player.x + player.width / 2,
+                                y: player.y,
+                                vx: (Math.random() - 0.5) * 5,
+                                vy: -Math.random() * 3,
+                                life: 20,
+                                color: '#8B4513'
+                            });
+                        }
+                    } else if (canDoubleJump) {
+                        player.velocityY = JUMP_VELOCITY * 0.9;
+                        canDoubleJump = false;
+                        playSound('jump');
+                        for (let i = 0; i < 8; i++) {
+                            particles.push({
+                                x: player.x + player.width / 2,
+                                y: player.y,
+                                vx: (Math.random() - 0.5) * 6,
+                                vy: Math.random() * 3,
+                                life: 20,
+                                color: '#32CD32'
+                            });
+                        }
+                    }
+                }
+            }
+
+            if (gameState === 'gameover') {
+                gameOverSaved = false;
+                resetGame();
+                return;
             }
 
             // Shop item clicking

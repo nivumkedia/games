@@ -48,6 +48,192 @@
 
         let score = 0, level = 1, lives = 10, gameRunning = true, invincible = 0, levelComplete = false, deathsThisLevel = 0;
 
+        // ---- Tutorial system ----
+        let tutorialShown = {};
+        let activeTutorials = [];
+        let tutorialIndex = 0;
+        let tutorialPaused = false;
+
+        const tutorialDefs = {
+            movement: { text: 'Arrow Keys / WASD to move, or click & drag!', target: 'player', offsetY: -70 },
+            jump: { text: 'SPACE / UP to jump, or tap / click!', target: 'player', offsetY: -40 },
+            coins: { text: 'Collect coins for points!', target: 'coin' },
+            spikes: { text: 'Avoid spikes! They hurt!', target: 'spike' },
+            lava: { text: 'Stay away from lava!', target: 'lava' },
+            flag: { text: 'Reach the flag to finish!', target: 'flag' },
+            springs: { text: 'Springs bounce you high!', target: 'spring' },
+            water: { text: 'Water heals +1 life!', target: 'water' },
+            movingPlatforms: { text: 'Moving platforms! Time your jumps!', target: 'movingPlatform' },
+            portals: { text: 'Portals teleport you!', target: 'portal' },
+            drones: { text: 'Drones shoot lasers! Dodge them!', target: 'drone' }
+        };
+
+        function getTutorialsForLevel(lvl) {
+            var tips = [];
+            if (lvl === 1) tips.push('movement', 'jump', 'coins', 'spikes', 'lava', 'flag');
+            if (lvl === 2) tips.push('springs', 'water');
+            if (lvl === 4) tips.push('movingPlatforms');
+            if (lvl === 5) tips.push('portals');
+            if (lvl === 20) tips.push('drones');
+            return tips.filter(function(t) { return !tutorialShown[t]; });
+        }
+
+        function getTutorialTargetPos(def) {
+            if (def.target === 'player') return { x: player.x + player.width / 2, y: player.y };
+            if (def.target === 'coin') { var c = coins.find(function(c) { return !c.collected; }); return c ? { x: c.x + 10, y: c.y } : null; }
+            if (def.target === 'spike') { var s = spikes[0]; return s ? { x: s.x + s.width / 2, y: s.y } : null; }
+            if (def.target === 'lava') { var l = lava[0]; return l ? { x: l.x + l.width / 2, y: l.y } : null; }
+            if (def.target === 'flag') return flag ? { x: flag.x + 10, y: flag.y } : null;
+            if (def.target === 'spring') { var sp = springs[0]; return sp ? { x: sp.x + sp.width / 2, y: sp.y } : null; }
+            if (def.target === 'water') { var w = water.find(function(w) { return !w.collected; }); return w ? { x: w.x + w.width / 2, y: w.y } : null; }
+            if (def.target === 'movingPlatform') { var mp = movingPlatforms[0]; return mp ? { x: mp.x + mp.width / 2, y: mp.y } : null; }
+            if (def.target === 'portal') { var p = portals[0]; return p ? { x: p.x + 15, y: p.y } : null; }
+            if (def.target === 'drone') { var d = drones[0]; return d ? { x: d.x + d.width / 2, y: d.y } : null; }
+            return null;
+        }
+
+        function showLevelTutorials() {
+            var tips = getTutorialsForLevel(level);
+            if (tips.length === 0) return;
+            activeTutorials = tips;
+            tutorialIndex = 0;
+            tutorialPaused = true;
+            tips.forEach(function(t) { tutorialShown[t] = true; });
+        }
+
+        function nextTutorial() {
+            tutorialIndex++;
+            if (tutorialIndex >= activeTutorials.length) {
+                activeTutorials = [];
+                tutorialIndex = 0;
+                tutorialPaused = false;
+            }
+        }
+
+        function dismissTutorials() {
+            activeTutorials = [];
+            tutorialIndex = 0;
+            tutorialPaused = false;
+        }
+
+        function drawTutorials() {
+            if (activeTutorials.length === 0) return;
+            var t = globalTime * 0.016;
+            var tipKey = activeTutorials[tutorialIndex];
+            var def = tutorialDefs[tipKey];
+            if (!def) return;
+            var pos = getTutorialTargetPos(def);
+            if (!pos) { nextTutorial(); return; }
+
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            var textY = pos.y - 45 + (def.offsetY || 0);
+            if (textY < 30) textY = pos.y + 55;
+            if (textY > 460) textY = 430;
+            var textX = pos.x;
+            if (textX < 100) textX = 100;
+            if (textX > 700) textX = 700;
+
+            var arrowPulse = Math.sin(t * 4) * 3;
+            var arrowY = textY + 18;
+            var arrowTargetY = pos.y - 5;
+            if (textY > pos.y) { arrowY = textY - 8; arrowTargetY = pos.y + 25; }
+
+            ctx.strokeStyle = '#FFD700';
+            ctx.lineWidth = 2.5;
+            ctx.setLineDash([5, 4]);
+            ctx.beginPath();
+            ctx.moveTo(textX, arrowY + arrowPulse);
+            ctx.lineTo(pos.x, arrowTargetY + arrowPulse);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            var angle = Math.atan2(arrowTargetY - arrowY, pos.x - textX);
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.moveTo(pos.x + arrowPulse * 0.3, arrowTargetY + arrowPulse);
+            ctx.lineTo(pos.x - Math.cos(angle - 0.4) * 10, arrowTargetY + arrowPulse - Math.sin(angle - 0.4) * 10);
+            ctx.lineTo(pos.x - Math.cos(angle + 0.4) * 10, arrowTargetY + arrowPulse - Math.sin(angle + 0.4) * 10);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.font = 'bold 16px "Segoe UI", Tahoma, sans-serif';
+            var textWidth = ctx.measureText(def.text).width;
+            var boxW = textWidth + 28;
+            var boxH = 32;
+            var boxX = textX - boxW / 2;
+            var boxY = textY - boxH / 2;
+            if (boxX < 4) boxX = 4;
+            if (boxX + boxW > 796) boxX = 796 - boxW;
+
+            ctx.fillStyle = 'rgba(0,0,0,0.8)';
+            ctx.beginPath(); ctx.roundRect(boxX, boxY, boxW, boxH, 10); ctx.fill();
+            ctx.strokeStyle = '#FFD700';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath(); ctx.roundRect(boxX, boxY, boxW, boxH, 10); ctx.stroke();
+
+            ctx.fillStyle = '#FFFFFF';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(def.text, boxX + boxW / 2, boxY + boxH / 2);
+
+            var bottomY = canvas.height - 30;
+            var isLast = tutorialIndex >= activeTutorials.length - 1;
+            var btnLabel = isLast ? 'Got it!' : 'Next  \u25B6';
+
+            var dotsStr = '';
+            for (var di = 0; di < activeTutorials.length; di++) {
+                dotsStr += di === tutorialIndex ? '\u25CF ' : '\u25CB ';
+            }
+            ctx.font = '14px "Segoe UI", Tahoma, sans-serif';
+            ctx.fillStyle = 'rgba(255,255,255,0.6)';
+            ctx.fillText(dotsStr.trim(), canvas.width / 2, bottomY + 16);
+
+            ctx.font = 'bold 18px "Segoe UI", Tahoma, sans-serif';
+            var btnTextW = ctx.measureText(btnLabel).width;
+            var btnW = btnTextW + 36;
+            var btnH = 36;
+            var btnX = canvas.width / 2 - btnW / 2;
+            var btnY = bottomY - btnH / 2;
+
+            ctx.fillStyle = 'rgba(255,215,0,0.15)';
+            ctx.beginPath(); ctx.roundRect(btnX - 4, btnY - 4, btnW + 8, btnH + 8, 14); ctx.fill();
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH, 10); ctx.fill();
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillText(btnLabel, canvas.width / 2, bottomY);
+
+            // Skip button (top right)
+            if (activeTutorials.length > 1) {
+                var skipLabel = 'Skip All';
+                ctx.font = 'bold 13px "Segoe UI", Tahoma, sans-serif';
+                var skipW = ctx.measureText(skipLabel).width + 20;
+                var skipH = 26;
+                var skipX = canvas.width - skipW - 10;
+                var skipY = 10;
+                drawTutorials._skipX = skipX;
+                drawTutorials._skipY = skipY;
+                drawTutorials._skipW = skipW;
+                drawTutorials._skipH = skipH;
+
+                ctx.fillStyle = 'rgba(255,255,255,0.15)';
+                ctx.beginPath(); ctx.roundRect(skipX, skipY, skipW, skipH, 8); ctx.fill();
+                ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.roundRect(skipX, skipY, skipW, skipH, 8); ctx.stroke();
+                ctx.fillStyle = 'rgba(255,255,255,0.7)';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(skipLabel, skipX + skipW / 2, skipY + skipH / 2);
+            } else {
+                drawTutorials._skipX = -1;
+            }
+
+            ctx.textAlign = 'start';
+            ctx.textBaseline = 'alphabetic';
+        }
+
         const player = {
             x: 50, y: 400, width: 30, height: 36,
             vx: 0, vy: 0, speed: 5, jumpPower: -13,
@@ -727,7 +913,7 @@
         }
 
         function update(dt) {
-            if (!gameRunning) return;
+            if (!gameRunning || tutorialPaused) return;
             if (invincible > 0) invincible -= dt;
 
             globalTime++;
@@ -866,7 +1052,7 @@
                     if (level >= 20) msg += ' - DRONES!';
                     if (bonusLives > 0) msg += ' (+' + bonusLives + ' lives)';
                     showMessage(msg, '#22C55E');
-                    setTimeout(() => hideMessage(), 1500);
+                    setTimeout(() => { hideMessage(); showLevelTutorials(); }, 1500);
                 }
             }
 
@@ -942,10 +1128,12 @@
 
         function restart() {
             score = 0; level = 1; lives = 10; deathsThisLevel = 0;
+            tutorialShown = {}; activeTutorials = []; tutorialIndex = 0; tutorialPaused = false;
             scoreEl.textContent = score; levelEl.textContent = level; livesEl.textContent = lives;
             gameRunning = true; invincible = 0; hideMessage();
             playerTrail = []; lavaEmbers = [];
             generateLevel(1);
+            showLevelTutorials();
         }
 
         // ===================== DRAW =====================
@@ -1785,6 +1973,9 @@
             // (vignette removed for clarity)
 
             ctx.restore(); // end screen shake
+
+            // --- TUTORIAL OVERLAYS ---
+            drawTutorials();
         }
 
         let lastFrameTime = 0;
@@ -1806,15 +1997,113 @@
         }
 
         document.addEventListener('keydown', e => {
+            if (tutorialPaused) {
+                if (e.code === 'Space' || e.code === 'Enter' || e.code === 'ArrowRight') nextTutorial();
+                if (e.code === 'Escape') dismissTutorials();
+                e.preventDefault();
+                return;
+            }
             keys[e.code] = true;
             if (e.code === 'KeyR') restart();
             if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
         });
         document.addEventListener('keyup', e => { keys[e.code] = false; });
 
+        // Touch controls for mobile
+        let touchStartX = null, touchStartY = null, touchActive = false;
+        const DRAG_THRESHOLD = 15;
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (tutorialPaused) { nextTutorial(); return; }
+            const t = e.touches[0];
+            touchStartX = t.clientX;
+            touchStartY = t.clientY;
+            touchActive = true;
+            // Tap jumps immediately
+            keys['Space'] = true;
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (!touchActive || touchStartX === null) return;
+            const t = e.touches[0];
+            const dx = t.clientX - touchStartX;
+            const dy = t.clientY - touchStartY;
+
+            // Horizontal movement
+            keys['ArrowLeft'] = false;
+            keys['ArrowRight'] = false;
+            if (dx < -DRAG_THRESHOLD) keys['ArrowLeft'] = true;
+            else if (dx > DRAG_THRESHOLD) keys['ArrowRight'] = true;
+
+            // Swipe up to jump
+            if (dy < -DRAG_THRESHOLD) keys['Space'] = true;
+            else keys['Space'] = false;
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            touchActive = false;
+            touchStartX = null;
+            touchStartY = null;
+            keys['ArrowLeft'] = false;
+            keys['ArrowRight'] = false;
+            keys['Space'] = false;
+        }, { passive: false });
+
+        // Mouse drag controls (desktop)
+        canvas.addEventListener('mousedown', (e) => {
+            if (tutorialPaused) { nextTutorial(); return; }
+            touchStartX = e.clientX;
+            touchStartY = e.clientY;
+            touchActive = true;
+            keys['Space'] = true;
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!touchActive || touchStartX === null) return;
+            const dx = e.clientX - touchStartX;
+            const dy = e.clientY - touchStartY;
+
+            keys['ArrowLeft'] = false;
+            keys['ArrowRight'] = false;
+            if (dx < -DRAG_THRESHOLD) keys['ArrowLeft'] = true;
+            else if (dx > DRAG_THRESHOLD) keys['ArrowRight'] = true;
+
+            if (dy < -DRAG_THRESHOLD) keys['Space'] = true;
+            else keys['Space'] = false;
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (!touchActive) return;
+            touchActive = false;
+            touchStartX = null;
+            touchStartY = null;
+            keys['ArrowLeft'] = false;
+            keys['ArrowRight'] = false;
+            keys['Space'] = false;
+        });
+
+        canvas.addEventListener('click', (e) => {
+            if (tutorialPaused) {
+                var rect = canvas.getBoundingClientRect();
+                var mx = e.clientX - rect.left, my = e.clientY - rect.top;
+                // Check skip button
+                if (drawTutorials._skipX >= 0 &&
+                    mx >= drawTutorials._skipX && mx <= drawTutorials._skipX + drawTutorials._skipW &&
+                    my >= drawTutorials._skipY && my <= drawTutorials._skipY + drawTutorials._skipH) {
+                    dismissTutorials();
+                } else {
+                    nextTutorial();
+                }
+            }
+        });
+
         initVisuals();
         initClouds();
         generateLevel(1);
+        showLevelTutorials();
         requestAnimationFrame(gameLoop);
     </script>
 </body>
