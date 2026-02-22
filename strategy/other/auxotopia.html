@@ -1,0 +1,3362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Auxotopia - Island City Builder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: #1a1a2e;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #fff;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        #topBar {
+            display: flex;
+            gap: 12px;
+            padding: 8px 16px;
+            background: linear-gradient(180deg, rgba(30,30,60,0.95) 0%, rgba(20,20,50,0.9) 100%);
+            border-bottom: 2px solid rgba(100,180,255,0.3);
+            width: 100%;
+            justify-content: center;
+            flex-wrap: wrap;
+            z-index: 10;
+            font-size: 15px;
+        }
+
+        .resource-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 8px;
+            white-space: nowrap;
+        }
+
+        .resource-item .icon {
+            font-size: 16px;
+        }
+
+        .resource-item .value {
+            font-weight: 600;
+            min-width: 20px;
+            text-align: right;
+        }
+
+        .resource-item .cap {
+            opacity: 0.5;
+            font-size: 12px;
+        }
+
+        #canvasContainer {
+            flex: 1;
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+            cursor: grab;
+        }
+
+        #canvasContainer:active {
+            cursor: grabbing;
+        }
+
+        #canvasContainer.placing {
+            cursor: crosshair;
+        }
+
+        #gameCanvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        #bottomPanel {
+            width: 100%;
+            background: linear-gradient(0deg, rgba(30,30,60,0.98) 0%, rgba(20,20,50,0.95) 100%);
+            border-top: 2px solid rgba(100,180,255,0.3);
+            padding: 8px;
+            z-index: 10;
+        }
+
+        #buildingBar {
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            padding: 4px 0;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(100,180,255,0.3) transparent;
+        }
+
+        #buildingBar::-webkit-scrollbar {
+            height: 4px;
+        }
+
+        #buildingBar::-webkit-scrollbar-thumb {
+            background: rgba(100,180,255,0.3);
+            border-radius: 2px;
+        }
+
+        .build-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            padding: 6px 10px;
+            background: rgba(255,255,255,0.08);
+            border: 2px solid rgba(255,255,255,0.15);
+            border-radius: 10px;
+            color: #fff;
+            font-size: 12px;
+            cursor: pointer;
+            min-width: 70px;
+            transition: all 0.15s;
+            flex-shrink: 0;
+        }
+
+        .build-btn:hover {
+            background: rgba(100,180,255,0.2);
+            border-color: rgba(100,180,255,0.5);
+        }
+
+        .build-btn.selected {
+            background: rgba(100,180,255,0.3);
+            border-color: #64b5f6;
+            box-shadow: 0 0 10px rgba(100,180,255,0.3);
+        }
+
+        .build-btn.locked {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+
+        .build-btn .emoji {
+            font-size: 22px;
+        }
+
+        .build-btn .name {
+            font-size: 10px;
+            opacity: 0.8;
+        }
+
+        .build-btn .cost {
+            font-size: 9px;
+            opacity: 0.5;
+        }
+
+        #actionBar {
+            display: flex;
+            gap: 6px;
+            margin-top: 6px;
+            justify-content: center;
+        }
+
+        .action-btn {
+            padding: 5px 14px;
+            background: rgba(255,255,255,0.08);
+            border: 2px solid rgba(255,255,255,0.15);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .action-btn:hover {
+            background: rgba(100,180,255,0.2);
+            border-color: rgba(100,180,255,0.5);
+        }
+
+        .action-btn.active {
+            background: rgba(255,180,50,0.3);
+            border-color: #ffb74d;
+        }
+
+        .action-btn.demolish-active {
+            background: rgba(255,80,80,0.3);
+            border-color: #ff5252;
+        }
+
+        #notifications {
+            position: fixed;
+            top: 50px;
+            right: 10px;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            pointer-events: none;
+            max-width: 300px;
+        }
+
+        .notification {
+            background: rgba(30,30,60,0.95);
+            border: 1px solid rgba(100,180,255,0.4);
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 13px;
+            color: #fff;
+            animation: notifLife 3.5s ease-out forwards;
+            pointer-events: auto;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        @keyframes notifLife {
+            0% { opacity: 0; transform: translateX(50px); }
+            8% { opacity: 1; transform: translateX(0); }
+            80% { opacity: 1; transform: translateX(0); }
+            100% { opacity: 0; transform: translateY(-10px); }
+        }
+
+        #eventBanner {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(20,20,50,0.97);
+            border: 2px solid #ffd54f;
+            border-radius: 16px;
+            padding: 20px 28px;
+            z-index: 200;
+            text-align: center;
+            max-width: 340px;
+            box-shadow: 0 0 40px rgba(255,213,79,0.3);
+            display: none;
+        }
+
+        #eventBanner .event-icon {
+            font-size: 40px;
+            margin-bottom: 8px;
+        }
+
+        #eventBanner .event-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 6px;
+            color: #ffd54f;
+        }
+
+        #eventBanner .event-desc {
+            font-size: 14px;
+            opacity: 0.85;
+            margin-bottom: 14px;
+            line-height: 1.4;
+        }
+
+        #eventBanner .event-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        #eventBanner .event-buttons button {
+            padding: 8px 20px;
+            border-radius: 8px;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        #eventBanner .accept-btn {
+            background: #4caf50;
+            color: #fff;
+        }
+
+        #eventBanner .dismiss-btn {
+            background: rgba(255,255,255,0.15);
+            color: #fff;
+        }
+
+        #buildingInfo {
+            position: fixed;
+            z-index: 150;
+            background: rgba(20,20,50,0.97);
+            border: 2px solid rgba(100,180,255,0.5);
+            border-radius: 14px;
+            padding: 16px;
+            min-width: 200px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            display: none;
+        }
+
+        #buildingInfo .info-header {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        #buildingInfo .info-detail {
+            font-size: 13px;
+            opacity: 0.8;
+            margin-bottom: 4px;
+            white-space: pre-line;
+        }
+
+        #buildingInfo .info-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        #buildingInfo .info-buttons button {
+            padding: 6px 14px;
+            border-radius: 6px;
+            border: none;
+            font-size: 12px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .demolish-btn {
+            background: #e53935;
+            color: #fff;
+        }
+
+        .close-btn {
+            background: rgba(255,255,255,0.15);
+            color: #fff;
+        }
+
+        #islandInfo {
+            position: fixed;
+            z-index: 150;
+            background: rgba(20,20,50,0.97);
+            border: 2px solid rgba(100,200,150,0.5);
+            border-radius: 14px;
+            padding: 16px;
+            min-width: 180px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            display: none;
+        }
+
+        #islandInfo .island-name {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        #islandInfo .island-detail {
+            font-size: 13px;
+            opacity: 0.8;
+            margin-bottom: 4px;
+            white-space: pre-line;
+        }
+
+        #islandInfo .island-close {
+            margin-top: 10px;
+            padding: 6px 14px;
+            border-radius: 6px;
+            border: none;
+            font-size: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            background: rgba(255,255,255,0.15);
+            color: #fff;
+        }
+
+        #victoryScreen {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85);
+            z-index: 500;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #victoryScreen .victory-content {
+            background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
+            border: 3px solid #ffd54f;
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            max-width: 400px;
+            box-shadow: 0 0 60px rgba(255,213,79,0.4);
+        }
+
+        #victoryScreen .victory-icon {
+            font-size: 60px;
+            margin-bottom: 12px;
+        }
+
+        #victoryScreen .victory-title {
+            font-size: 28px;
+            font-weight: 800;
+            color: #ffd54f;
+            margin-bottom: 10px;
+        }
+
+        #victoryScreen .victory-stats {
+            font-size: 15px;
+            opacity: 0.9;
+            line-height: 1.8;
+            margin-bottom: 20px;
+        }
+
+        #victoryScreen .continue-btn {
+            padding: 12px 30px;
+            background: #ffd54f;
+            color: #1a237e;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        #tooltip {
+            position: fixed;
+            z-index: 300;
+            background: rgba(20,20,50,0.95);
+            border: 1px solid rgba(100,180,255,0.4);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
+            pointer-events: none;
+            display: none;
+            max-width: 220px;
+            line-height: 1.4;
+            white-space: pre-line;
+        }
+
+        #startScreen {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 50%, #0d1b2a 100%);
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        #startScreen .title {
+            font-size: 48px;
+            font-weight: 800;
+            color: #ffd54f;
+            text-shadow: 0 2px 20px rgba(255,213,79,0.4);
+            margin-bottom: 8px;
+            letter-spacing: 3px;
+        }
+
+        #startScreen .subtitle {
+            font-size: 16px;
+            opacity: 0.6;
+            margin-bottom: 30px;
+        }
+
+        #startScreen .start-island {
+            font-size: 80px;
+            margin-bottom: 30px;
+        }
+
+        #startScreen .start-btn {
+            padding: 14px 40px;
+            background: linear-gradient(135deg, #4caf50, #66bb6a);
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            font-size: 20px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(76,175,80,0.4);
+            transition: transform 0.15s;
+        }
+
+        #startScreen .start-btn:hover {
+            transform: scale(1.05);
+        }
+
+        #startScreen .controls-hint {
+            margin-top: 20px;
+            font-size: 13px;
+            opacity: 0.4;
+        }
+
+        #jobsPanel {
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 280px;
+            background: rgba(20, 20, 50, 0.97);
+            border-right: 2px solid rgba(100,180,255,0.3);
+            z-index: 50;
+            padding: 12px;
+            overflow-y: auto;
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+        }
+
+        #jobsPanel.open {
+            transform: translateX(0);
+        }
+
+        .jobs-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: #64b5f6;
+        }
+
+        .job-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 6px;
+            margin-bottom: 3px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        .job-row.locked { opacity: 0.3; }
+
+        .job-left {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .job-icon { font-size: 17px; }
+        .job-name { font-weight: 600; font-size: 12px; }
+        .job-count { font-weight: 700; font-size: 15px; min-width: 22px; text-align: center; }
+
+        .job-btns { display: flex; gap: 3px; }
+
+        .job-btn {
+            width: 26px;
+            height: 26px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+            font-size: 15px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .job-btn:hover { background: rgba(100,180,255,0.3); border-color: #64b5f6; }
+        .job-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        .job-output { font-size: 10px; opacity: 0.6; }
+        .job-warning { color: #ffb74d; }
+
+        #techPanel {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85);
+            z-index: 60;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #techPanel.open { display: flex; }
+
+        .tech-content {
+            background: rgba(20, 20, 50, 0.98);
+            border: 2px solid rgba(100,180,255,0.4);
+            border-radius: 16px;
+            padding: 20px;
+            max-width: 650px;
+            width: 95%;
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+
+        .tech-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+            font-size: 18px;
+            font-weight: 700;
+            color: #64b5f6;
+        }
+
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+            gap: 10px;
+        }
+
+        .tech-card {
+            background: rgba(255,255,255,0.05);
+            border: 2px solid rgba(255,255,255,0.15);
+            border-radius: 10px;
+            padding: 10px;
+            text-align: center;
+            transition: all 0.2s;
+        }
+
+        .tech-card.researched { border-color: #4caf50; background: rgba(76,175,80,0.1); }
+        .tech-card.available { border-color: #64b5f6; background: rgba(100,180,255,0.1); cursor: pointer; }
+        .tech-card.available:hover { background: rgba(100,180,255,0.2); transform: scale(1.02); }
+        .tech-card.locked { opacity: 0.4; }
+
+        .tech-card .tech-icon { font-size: 28px; }
+        .tech-card .tech-name { font-size: 13px; font-weight: 700; margin: 2px 0; }
+        .tech-card .tech-cost { font-size: 11px; opacity: 0.7; }
+        .tech-card .tech-desc { font-size: 10px; opacity: 0.6; line-height: 1.3; margin: 4px 0; }
+        .tech-card .tech-prereqs { font-size: 9px; opacity: 0.5; }
+        .tech-card .tech-status { font-size: 11px; margin-top: 4px; font-weight: 600; }
+
+        .resource-rate {
+            font-size: 10px;
+            margin-left: 2px;
+        }
+        .resource-rate.positive { color: #81c784; }
+        .resource-rate.negative { color: #e57373; }
+
+        @media (max-width: 600px) {
+            #topBar {
+                gap: 6px;
+                padding: 6px 8px;
+                font-size: 12px;
+            }
+            .resource-item {
+                padding: 2px 5px;
+                gap: 2px;
+            }
+            .resource-item .icon { font-size: 13px; }
+            .build-btn {
+                min-width: 58px;
+                padding: 4px 6px;
+            }
+            .build-btn .emoji { font-size: 18px; }
+            .build-btn .name { font-size: 9px; }
+            #startScreen .title { font-size: 32px; }
+            #startScreen .start-island { font-size: 50px; }
+            #jobsPanel { width: 100%; }
+            .tech-grid { grid-template-columns: 1fr 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="startScreen">
+    <div class="start-island">🏝️</div>
+    <div class="title">AUXOTOPIA</div>
+    <div class="subtitle">Island City Builder</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">
+        <button class="start-btn" id="continueBtn" onclick="continueGame()" style="display:none">Continue</button>
+        <button class="start-btn" onclick="startNewGame()">Set Sail</button>
+    </div>
+    <div class="controls-hint">Drag to pan | WASD to move | Click to build</div>
+</div>
+
+<div id="topBar">
+    <div class="resource-item">
+        <span class="icon">👥</span>
+        <span class="value" id="popValue">10</span>/<span class="value" id="popCap">0</span>
+    </div>
+    <div class="resource-item">
+        <span class="icon">🌾</span>
+        <span class="value" id="foodValue">50</span>
+        <span class="resource-rate" id="foodRate"></span>
+        <span class="cap" id="foodCap">/100</span>
+    </div>
+    <div class="resource-item">
+        <span class="icon">🪵</span>
+        <span class="value" id="woodValue">25</span>
+        <span class="resource-rate" id="woodRate"></span>
+        <span class="cap" id="woodCap">/100</span>
+    </div>
+    <div class="resource-item">
+        <span class="icon">⛏️</span>
+        <span class="value" id="stoneValue">0</span>
+        <span class="resource-rate" id="stoneRate"></span>
+        <span class="cap" id="stoneCap">/100</span>
+    </div>
+    <div class="resource-item" id="ironResource" style="display:none">
+        <span class="icon">🔩</span>
+        <span class="value" id="ironValue">0</span>
+        <span class="resource-rate" id="ironRate"></span>
+        <span class="cap" id="ironCap">/100</span>
+    </div>
+    <div class="resource-item">
+        <span class="icon">🪙</span>
+        <span class="value" id="goldValue">0</span>
+        <span class="resource-rate" id="goldRate"></span>
+        <span class="cap" id="goldCap">/100</span>
+    </div>
+    <div class="resource-item">
+        <span class="icon">📚</span>
+        <span class="value" id="knowledgeValue">0</span>
+        <span class="resource-rate" id="knowledgeRate"></span>
+        <span class="cap" id="knowledgeCap">/100</span>
+    </div>
+    <div class="resource-item">
+        <span class="icon">😊</span>
+        <span class="value" id="happyValue">50</span>
+    </div>
+</div>
+
+<div id="canvasContainer">
+    <canvas id="gameCanvas"></canvas>
+</div>
+
+<div id="bottomPanel">
+    <div id="buildingBar"></div>
+    <div id="actionBar">
+        <button class="action-btn" id="jobsBtn" onclick="toggleJobsPanel()">👥 Jobs</button>
+        <button class="action-btn" id="techBtn" onclick="toggleTechPanel()">🔬 Research</button>
+        <button class="action-btn" id="exploreBtn" onclick="toggleExploreMode()" style="display:none">🗺️ Explore</button>
+        <button class="action-btn" id="demolishBtn" onclick="toggleDemolishMode()">🔨 Demolish</button>
+        <button class="action-btn" id="saveBtn" onclick="saveGame()">💾 Save</button>
+        <button class="action-btn" id="speedBtn" onclick="cycleSpeed()">▶️ x1</button>
+    </div>
+</div>
+
+<div id="notifications"></div>
+
+<div id="eventBanner">
+    <div class="event-icon" id="eventIcon"></div>
+    <div class="event-title" id="eventTitle"></div>
+    <div class="event-desc" id="eventDesc"></div>
+    <div class="event-buttons">
+        <button class="accept-btn" id="eventAccept">Accept</button>
+        <button class="dismiss-btn" id="eventDismiss">Dismiss</button>
+    </div>
+</div>
+
+<div id="buildingInfo">
+    <div class="info-header" id="infoHeader"></div>
+    <div class="info-detail" id="infoDetail"></div>
+    <div class="info-buttons">
+        <button class="demolish-btn" onclick="demolishSelected()">Demolish</button>
+        <button class="close-btn" onclick="closeBuildingInfo()">Close</button>
+    </div>
+</div>
+
+<div id="islandInfo">
+    <div class="island-name" id="islandName"></div>
+    <div class="island-detail" id="islandDetail"></div>
+    <button class="island-close" onclick="closeIslandInfo()">Close</button>
+</div>
+
+<div id="victoryScreen">
+    <div class="victory-content">
+        <div class="victory-icon">🏆</div>
+        <div class="victory-title">Thriving Colony!</div>
+        <div class="victory-stats" id="victoryStats"></div>
+        <button class="continue-btn" onclick="closeVictory()">Keep Building</button>
+    </div>
+</div>
+
+<div id="tooltip"></div>
+
+<div id="jobsPanel"></div>
+
+<div id="techPanel">
+    <div class="tech-content">
+        <div class="tech-header">
+            <span>🔬 Research</span>
+            <button class="close-btn" onclick="toggleTechPanel()">✕</button>
+        </div>
+        <div class="tech-grid" id="techGrid"></div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// CONSTANTS
+// ============================================================
+const TILE_SIZE = 40;
+const MAP_SIZE = 60;
+const TICK_INTERVAL = 1000; // ms per game tick at 1x speed
+
+const TERRAIN = {
+    WATER: 0,
+    SAND: 1,
+    GRASS: 2,
+    FOREST: 3,
+    ROCK: 4,
+    FOG: 5
+};
+
+const TERRAIN_COLORS = {
+    [TERRAIN.WATER]: ['#1565c0', '#1976d2', '#1e88e5'],
+    [TERRAIN.SAND]: ['#f9e4b7', '#f5deb3', '#edd5a0'],
+    [TERRAIN.GRASS]: ['#4caf50', '#43a047', '#388e3c'],
+    [TERRAIN.FOREST]: ['#2e7d32', '#1b5e20', '#266428'],
+    [TERRAIN.ROCK]: ['#9e9e9e', '#8d8d8d', '#7c7c7c'],
+    [TERRAIN.FOG]: ['#263238', '#37474f', '#2c3e3e']
+};
+
+const BUILDING_DEFS = {
+    // Tier 1
+    hut:          { emoji: '🛖', name: 'Hut',          tier: 1, cost: { wood: 5 },                           housing: 3,  production: null,                happiness: 0,   tileReq: [TERRAIN.GRASS, TERRAIN.SAND], needsAdjacentWater: false, desc: '+3 housing', jobType: null },
+    farm:         { emoji: '🌾', name: 'Farm',         tier: 1, cost: { wood: 3 },                           housing: 0,  production: { food: 2 },         happiness: 0,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: '+2 food/worker', jobType: 'farmer' },
+    lumber:       { emoji: '🪓', name: 'Lumber Camp',  tier: 1, cost: { wood: 2 },                           housing: 0,  production: { wood: 2 },         happiness: 0,   tileReq: [TERRAIN.FOREST],               needsAdjacentWater: false, desc: '+2 wood/worker', jobType: 'lumberjack' },
+    fishingDock:  { emoji: '🎣', name: 'Fishing Dock', tier: 1, cost: { wood: 5 },                           housing: 0,  production: { food: 3 },         happiness: 0,   tileReq: [TERRAIN.GRASS, TERRAIN.SAND],  needsAdjacentWater: true,  desc: '+3 food/worker', jobType: 'fisher' },
+    crabTrap:     { emoji: '🦀', name: 'Crab Trap',   tier: 1, cost: { wood: 4 },                           housing: 0,  production: { food: 2 },         happiness: 0,   tileReq: [TERRAIN.SAND],                 needsAdjacentWater: true,  desc: '+2 food/worker', jobType: 'fisher' },
+    path:         { emoji: '🟫', name: 'Path',         tier: 1, cost: { wood: 1 },                           housing: 0,  production: null,                happiness: 0.5, tileReq: [TERRAIN.GRASS, TERRAIN.SAND, TERRAIN.FOREST, TERRAIN.ROCK], needsAdjacentWater: false, desc: '+0.5 happiness', jobType: null },
+    // Tier 2
+    house:        { emoji: '🏠', name: 'House',        tier: 2, cost: { wood: 10, stone: 5 },                housing: 6,  production: null,                happiness: 0,   tileReq: [TERRAIN.GRASS, TERRAIN.SAND],  needsAdjacentWater: false, desc: '+6 housing', jobType: null },
+    quarry:       { emoji: '⛏️', name: 'Quarry',       tier: 2, cost: { wood: 8 },                           housing: 0,  production: { stone: 2 },        happiness: 0,   tileReq: [TERRAIN.ROCK],                 needsAdjacentWater: false, desc: '+2 stone/worker', jobType: 'miner' },
+    market:       { emoji: '🏪', name: 'Market',       tier: 2, cost: { wood: 10, stone: 5 },                housing: 0,  production: { gold: 2 },         happiness: 0,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: '+2 gold/worker', jobType: 'merchant' },
+    well:         { emoji: '🪣', name: 'Well',         tier: 2, cost: { stone: 5 },                          housing: 0,  production: null,                happiness: 2,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: '+2 happiness', jobType: null },
+    school:       { emoji: '🏫', name: 'School',       tier: 2, cost: { wood: 8, stone: 5 },                 housing: 0,  production: { knowledge: 1 },    happiness: 1,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: '+1 knowledge/worker', jobType: 'scholar' },
+    tavern:       { emoji: '🍺', name: 'Tavern',      tier: 2, cost: { wood: 8, stone: 3 },                 housing: 0,  production: { gold: 1 },         happiness: 3,   tileReq: [TERRAIN.GRASS, TERRAIN.SAND],  needsAdjacentWater: false, desc: '+1 gold/worker, +3 happiness', jobType: 'merchant' },
+    road:         { emoji: '🛣️', name: 'Road',        tier: 2, cost: { stone: 3 },                          housing: 0,  production: null,                happiness: 1,   tileReq: [TERRAIN.GRASS, TERRAIN.SAND, TERRAIN.ROCK], needsAdjacentWater: false, desc: 'People move 2x faster. Spawns cars.', jobType: null, isTransport: 'road' },
+    // Tier 3
+    townHall:     { emoji: '🏛️', name: 'Town Hall',    tier: 3, cost: { wood: 20, stone: 15, gold: 10 },     housing: 0,  production: null,                happiness: 5,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: '+5 happiness', jobType: null },
+    bakery:       { emoji: '🍞', name: 'Bakery',       tier: 3, cost: { wood: 10, stone: 8 },                housing: 0,  production: { gold: 1 },         happiness: 0,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: 'Converts 2 food → 1 gold', jobType: 'merchant', converts: { food: 2 } },
+    park:         { emoji: '🌳', name: 'Park',         tier: 3, cost: { wood: 5, stone: 3 },                 housing: 0,  production: null,                happiness: 3,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: '+3 happiness', jobType: null },
+    beach:        { emoji: '🏖️', name: 'Beach Resort', tier: 3, cost: { wood: 10, stone: 5, gold: 5 },      housing: 0,  production: { gold: 2 },         happiness: 4,   tileReq: [TERRAIN.SAND],                 needsAdjacentWater: true,  desc: '+2 gold/worker, +4 happiness', jobType: 'merchant' },
+    shipyard:     { emoji: '⛵', name: 'Shipyard',     tier: 3, cost: { wood: 25, stone: 10 },               housing: 0,  production: null,                happiness: 0,   tileReq: [TERRAIN.GRASS, TERRAIN.SAND],  needsAdjacentWater: true,  desc: 'Enables exploration', jobType: null },
+    windmill:     { emoji: '🌀', name: 'Windmill',     tier: 3, cost: { wood: 12, stone: 5 },                housing: 0,  production: { food: 3 },         happiness: 1,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: '+3 food/worker', jobType: 'farmer', techReq: 'agriculture' },
+    ironMine:     { emoji: '⚒️', name: 'Iron Mine',    tier: 3, cost: { wood: 10, stone: 8 },                housing: 0,  production: { iron: 2 },         happiness: 0,   tileReq: [TERRAIN.ROCK],                 needsAdjacentWater: false, desc: '+2 iron/worker', jobType: 'miner', techReq: 'metallurgy' },
+    forge:        { emoji: '🔥', name: 'Forge',        tier: 3, cost: { wood: 12, stone: 10 },               housing: 0,  production: { gold: 3 },         happiness: 0,   tileReq: [TERRAIN.GRASS, TERRAIN.ROCK],  needsAdjacentWater: false, desc: 'Converts 1 iron → 3 gold', jobType: 'merchant', techReq: 'metallurgy', converts: { iron: 1 } },
+    bank:         { emoji: '🏦', name: 'Bank',         tier: 3, cost: { wood: 15, stone: 10, gold: 10 },     housing: 0,  production: { gold: 3 },         happiness: 0,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: '+3 gold/worker', jobType: 'merchant', techReq: 'commerce' },
+    ferryDock:    { emoji: '⛴️', name: 'Ferry Dock',  tier: 3, cost: { wood: 20, stone: 10, gold: 5 },     housing: 0,  production: null,                happiness: 1,   tileReq: [TERRAIN.GRASS, TERRAIN.SAND],  needsAdjacentWater: true,  desc: 'Ferries travel between docks.', jobType: null, techReq: 'navigation', isTransport: 'ferry' },
+    // Tier 4
+    manor:        { emoji: '🏰', name: 'Manor',        tier: 4, cost: { wood: 30, stone: 20, gold: 15 },     housing: 12, production: null,                happiness: 0,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: '+12 housing', jobType: null },
+    warehouse:    { emoji: '📦', name: 'Warehouse',    tier: 4, cost: { wood: 15, stone: 10 },               housing: 0,  production: null,                happiness: 0,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: '+50% storage', jobType: null, storageBonus: 50 },
+    lighthouse:   { emoji: '🗼', name: 'Lighthouse',   tier: 4, cost: { stone: 20, gold: 10 },               housing: 0,  production: null,                happiness: 0,   tileReq: [TERRAIN.GRASS, TERRAIN.SAND],  needsAdjacentWater: true,  desc: '+50% immigration', jobType: null },
+    tradingPost:  { emoji: '🏴', name: 'Trading Post', tier: 4, cost: { wood: 15, stone: 10, gold: 10 },     housing: 0,  production: { gold: 4 },         happiness: 1,   tileReq: [TERRAIN.SAND],                 needsAdjacentWater: true,  desc: '+4 gold/worker', jobType: 'merchant', techReq: 'commerce' },
+    sandCastle:   { emoji: '🏯', name: 'Sand Fortress', tier: 4, cost: { stone: 20, gold: 15 },              housing: 8,  production: null,                happiness: 3,   tileReq: [TERRAIN.SAND],                 needsAdjacentWater: false, desc: '+8 housing, +3 happiness', jobType: null },
+    temple:       { emoji: '⛪', name: 'Temple',       tier: 4, cost: { stone: 25, gold: 20 },               housing: 0,  production: null,                happiness: 8,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: '+8 happiness', jobType: null },
+    hospital:     { emoji: '🏥', name: 'Hospital',     tier: 4, cost: { wood: 20, stone: 15, gold: 10 },     housing: 0,  production: null,                happiness: 5,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: '+5 happy, +50% growth', jobType: null, techReq: 'architecture' },
+    trainStation: { emoji: '🚂', name: 'Train Station', tier: 4, cost: { wood: 20, stone: 15, iron: 5 },   housing: 0,  production: null,                happiness: 2,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: 'Trains travel between stations.', jobType: null, techReq: 'industry', isTransport: 'train' },
+    library:      { emoji: '📖', name: 'Library',      tier: 4, cost: { wood: 12, stone: 8, gold: 5 },       housing: 0,  production: { knowledge: 2 },    happiness: 2,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: '+2 knowledge/worker', jobType: 'scholar', techReq: 'education' },
+    university:   { emoji: '🎓', name: 'University',   tier: 4, cost: { wood: 20, stone: 15, gold: 10 },     housing: 0,  production: { knowledge: 3 },    happiness: 2,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: '+3 knowledge/worker', jobType: 'scholar', techReq: 'education' },
+    // Tier 5
+    skyscraper:   { emoji: '🏢', name: 'Skyscraper',   tier: 5, cost: { wood: 30, stone: 25, gold: 20, iron: 15 }, housing: 20, production: null,          happiness: 2,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: '+20 housing', jobType: null, techReq: 'architecture' },
+    factory:      { emoji: '🏭', name: 'Factory',      tier: 5, cost: { wood: 25, stone: 20, iron: 10 },     housing: 0,  production: { gold: 5 },         happiness: -2,  tileReq: [TERRAIN.GRASS, TERRAIN.ROCK],  needsAdjacentWater: false, desc: 'Converts 2 iron → 5 gold', jobType: 'merchant', techReq: 'industry', converts: { iron: 2 } },
+    airport:      { emoji: '✈️', name: 'Airport',      tier: 5, cost: { stone: 30, iron: 15, gold: 20 },    housing: 0,  production: null,                happiness: 3,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: 'Planes fly between airports.', jobType: null, techReq: 'industry', isTransport: 'air' },
+    // Bridge
+    bridge:       { emoji: '🌉', name: 'Bridge',       tier: 3, cost: { wood: 15, stone: 10 },               housing: 0,  production: null,                happiness: 0,   tileReq: [TERRAIN.WATER],                needsAdjacentWater: false, desc: 'Bridge over water. Connects islands.', jobType: null, techReq: 'navigation' },
+    // Landfill
+    landfill:     { emoji: '🏗️', name: 'Landfill',     tier: 4, cost: { stone: 30, wood: 20, gold: 15 },     housing: 0,  production: null,                happiness: 0,   tileReq: [TERRAIN.WATER],                needsAdjacentWater: false, desc: 'Converts water to land. Expands islands.', jobType: null, techReq: 'architecture' }
+};
+
+const BUILDING_ORDER = [
+    'hut', 'farm', 'lumber', 'fishingDock', 'crabTrap', 'path',
+    'house', 'quarry', 'market', 'well', 'school', 'tavern', 'road',
+    'townHall', 'bakery', 'park', 'beach', 'shipyard', 'bridge', 'ferryDock', 'windmill', 'ironMine', 'forge', 'bank',
+    'manor', 'warehouse', 'lighthouse', 'tradingPost', 'sandCastle', 'temple', 'hospital', 'trainStation', 'landfill', 'library', 'university',
+    'skyscraper', 'factory', 'airport'
+];
+
+const TIER_UNLOCKS = { 1: 0, 2: 15, 3: 40, 4: 80, 5: 120 };
+const VICTORY_POP = 150;
+
+const JOB_DEFS = {
+    idle:       { icon: '😴', name: 'Idle', desc: 'Unassigned' },
+    farmer:     { icon: '🌾', name: 'Farmer', desc: 'Works farms & windmills' },
+    lumberjack: { icon: '🪓', name: 'Lumberjack', desc: 'Works lumber camps' },
+    miner:      { icon: '⛏️', name: 'Miner', desc: 'Works quarries & iron mines' },
+    fisher:     { icon: '🎣', name: 'Fisher', desc: 'Works fishing docks' },
+    merchant:   { icon: '🏪', name: 'Merchant', desc: 'Works markets, banks, forges' },
+    scholar:    { icon: '📚', name: 'Scholar', desc: 'Works schools & libraries' },
+    hunter:     { icon: '🏹', name: 'Hunter', desc: '+1 food/tick (no building)' },
+    builder:    { icon: '🔨', name: 'Builder', desc: 'Reduces build costs 10%/ea' },
+    explorer:   { icon: '🧭', name: 'Explorer', desc: 'Auto-reveals fog tiles' }
+};
+const JOB_ORDER = ['idle','farmer','lumberjack','miner','fisher','merchant','scholar','hunter','builder','explorer'];
+
+const TECH_DEFS = {
+    agriculture:  { name: 'Agriculture',  icon: '🌾', cost: { knowledge: 10 }, prereqs: [],                       desc: 'Farms +1 food. Unlocks Windmill.',          unlocks: ['windmill'] },
+    masonry:      { name: 'Masonry',      icon: '🧱', cost: { knowledge: 10 }, prereqs: [],                       desc: 'Quarries +1 stone.',                        unlocks: [] },
+    commerce:     { name: 'Commerce',     icon: '💰', cost: { knowledge: 15 }, prereqs: ['agriculture'],           desc: 'Markets +1 gold. Unlocks Bank.',            unlocks: ['bank'] },
+    metallurgy:   { name: 'Metallurgy',   icon: '⚒️', cost: { knowledge: 15 }, prereqs: ['masonry'],               desc: 'Unlocks Iron Mine and Forge.',              unlocks: ['ironMine','forge'] },
+    architecture: { name: 'Architecture', icon: '🏗️', cost: { knowledge: 25 }, prereqs: ['masonry','commerce'],    desc: 'Unlocks Skyscraper, Hospital & Landfill.', unlocks: ['skyscraper','hospital','landfill'] },
+    navigation:   { name: 'Navigation',   icon: '🧭', cost: { knowledge: 20 }, prereqs: ['commerce'],             desc: 'Explorers reveal 2 tiles at once. Unlocks Bridge & Ferry Dock.', unlocks: ['bridge','ferryDock'] },
+    education:    { name: 'Education',    icon: '🎓', cost: { knowledge: 30 }, prereqs: ['architecture'],          desc: 'Unlocks University and Library.',           unlocks: ['university','library'] },
+    industry:     { name: 'Industry',     icon: '🏭', cost: { knowledge: 35 }, prereqs: ['metallurgy','architecture'], desc: 'All production +25%. Unlocks Factory, Train Station & Airport.', unlocks: ['factory','trainStation','airport'] }
+};
+
+const EVENTS = [
+    {
+        icon: '🚢', title: 'Wandering Traders',
+        desc: 'Traders offer to exchange 10 wood for 5 stone.',
+        accept: (g) => { if (g.resources.wood >= 10) { g.resources.wood -= 10; g.resources.stone = Math.min(g.resources.stone + 5, g.storage.stone); return true; } return false; },
+        condition: (g) => g.resources.wood >= 10
+    },
+    {
+        icon: '👨‍👩‍👧', title: 'Lost Settlers',
+        desc: '3 lost settlers found your island and want to stay!',
+        accept: (g) => { g.population.current += 3; return true; },
+        condition: () => true
+    },
+    {
+        icon: '🌈', title: 'Bountiful Harvest',
+        desc: 'Perfect weather! All farms produce 2x for 30 seconds.',
+        accept: (g) => { g.eventBuffs.farmBoost = Date.now() + 30000; return true; },
+        condition: (g) => g.buildings.some(b => b.type === 'farm')
+    },
+    {
+        icon: '💎', title: 'Treasure Washed Ashore',
+        desc: 'Your settlers found treasure on the beach!',
+        accept: (g) => { const amt = 5 + Math.floor(Math.random() * 11); g.resources.gold = Math.min(g.resources.gold + amt, g.storage.gold); addNotification(`Found ${amt} gold!`); return true; },
+        condition: () => true
+    },
+    {
+        icon: '🐬', title: 'Friendly Dolphins',
+        desc: 'Dolphins drive fish to your docks! Fishing 2x for 30 seconds.',
+        accept: (g) => { g.eventBuffs.fishBoost = Date.now() + 30000; return true; },
+        condition: (g) => g.buildings.some(b => b.type === 'fishingDock')
+    },
+    {
+        icon: '🎉', title: 'Festival',
+        desc: 'Your people celebrate! Happiness +10 for 60 seconds.',
+        accept: (g) => { g.eventBuffs.festivalBoost = Date.now() + 60000; return true; },
+        condition: (g) => g.population.current >= 10
+    },
+    {
+        icon: '🗺️', title: 'Discovery',
+        desc: 'Explorers reveal nearby fog tiles for free!',
+        accept: (g) => { revealRandomFog(4); return true; },
+        condition: (g) => hasFogNearLand(g)
+    },
+    {
+        icon: '🚢', title: 'Wandering Traders',
+        desc: 'Traders offer to exchange 10 stone for 8 gold.',
+        accept: (g) => { if (g.resources.stone >= 10) { g.resources.stone -= 10; g.resources.gold = Math.min(g.resources.gold + 8, g.storage.gold); return true; } return false; },
+        condition: (g) => g.resources.stone >= 10
+    }
+];
+
+const ISLAND_NAMES = [
+    'Verdania', 'Coral Cay', 'Stoneport', 'Windhaven', 'Driftwood Isle',
+    'Emerald Atoll', 'Sunspire', 'Mossrock', 'Tidecrest', 'Ashveil',
+    'Galeshore', 'Fernhollow', 'Saltmere', 'Cloudpeak', 'Shellhaven',
+    'Bramblewood', 'Ironshore', 'Wavecrest', 'Thornridge', 'Mistral Isle'
+];
+
+// ============================================================
+// GAME STATE
+// ============================================================
+let game = null;
+let canvas, ctx;
+let canvasW, canvasH;
+let animFrame;
+let lastTime = 0;
+let tickAccumulator = 0;
+let eventTimer = 0;
+let nextEventTime = 60000 + Math.random() * 60000;
+let currentEvent = null;
+let selectedBuildingInfo = null;
+let demolishMode = false;
+let hoverTile = null;
+let keys = {};
+let dragStart = null;
+let isDragging = false;
+let touchDragStart = null;
+let gameStarted = false;
+let victoryShown = false;
+
+function initGame() {
+    game = {
+        map: [],
+        buildings: [],
+        population: { current: 10, capacity: 0 },
+        resources: { food: 50, wood: 25, stone: 5, gold: 0, knowledge: 0, iron: 0 },
+        storage: { food: 100, wood: 100, stone: 100, gold: 100, knowledge: 100, iron: 100 },
+        happiness: 50,
+        tick: 0,
+        camera: { x: 0, y: 0 },
+        selectedBuilding: null,
+        expandMode: false,
+        unlockedTier: 1,
+        particles: [],
+        hasShipyard: false,
+        immigrationTimer: 0,
+        gameSpeed: 1,
+        eventBuffs: { farmBoost: 0, fishBoost: 0, festivalBoost: 0 },
+        peopleDots: [],
+        dayPhase: 0,
+        jobs: { idle: 7, farmer: 2, lumberjack: 0, miner: 0, fisher: 0, merchant: 0, scholar: 0, hunter: 0, builder: 1, explorer: 0 },
+        research: new Set(),
+        explorerTimer: 0,
+        rates: { food: 0, wood: 0, stone: 0, gold: 0, knowledge: 0, iron: 0 },
+        islands: [],
+        vehicles: []
+    };
+
+    generateMap();
+    centerCamera();
+    updateBuildingBar();
+    updateResourceUI();
+    spawnInitialPeople();
+}
+
+// ============================================================
+// MAP GENERATION
+// ============================================================
+function generateIsland(map, cx, cy, radius, revealed) {
+    for (let y = 0; y < MAP_SIZE; y++) {
+        for (let x = 0; x < MAP_SIZE; x++) {
+            const dx = x - cx;
+            const dy = y - cy;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > radius + 1.5) continue;
+
+            let terrain;
+            if (dist <= radius - 1) {
+                const r = Math.random();
+                if (r < 0.15) terrain = TERRAIN.FOREST;
+                else if (r < 0.22) terrain = TERRAIN.ROCK;
+                else terrain = TERRAIN.GRASS;
+            } else if (dist <= radius) {
+                terrain = TERRAIN.SAND;
+            } else if (dist <= radius + 1.5) {
+                const edgeFade = (dist - radius) / 1.5;
+                terrain = Math.random() > edgeFade ? TERRAIN.SAND : null;
+            }
+
+            if (dist <= radius * 0.4) terrain = TERRAIN.GRASS;
+
+            if (terrain !== null && terrain !== undefined) {
+                map[y][x].terrain = terrain;
+                map[y][x].revealed = revealed;
+            }
+        }
+    }
+}
+
+function ensureMinimumResources(map, cx, cy, radius) {
+    let forests = 0, rocks = 0;
+    const innerR = Math.floor(radius - 1);
+    for (let y = cy - innerR; y <= cy + innerR; y++) {
+        for (let x = cx - innerR; x <= cx + innerR; x++) {
+            if (x >= 0 && x < MAP_SIZE && y >= 0 && y < MAP_SIZE) {
+                if (map[y][x].terrain === TERRAIN.FOREST) forests++;
+                if (map[y][x].terrain === TERRAIN.ROCK) rocks++;
+            }
+        }
+    }
+
+    let attempts = 0;
+    while (forests < 2 && attempts < 100) {
+        attempts++;
+        const fx = cx + Math.floor(Math.random() * (innerR * 2 + 1)) - innerR;
+        const fy = cy + Math.floor(Math.random() * (innerR * 2 + 1)) - innerR;
+        if (fx >= 0 && fx < MAP_SIZE && fy >= 0 && fy < MAP_SIZE) {
+            const d = Math.sqrt((fx-cx)*(fx-cx) + (fy-cy)*(fy-cy));
+            if (d > radius * 0.4 && d <= radius - 1 && map[fy][fx].terrain === TERRAIN.GRASS) {
+                map[fy][fx].terrain = TERRAIN.FOREST;
+                forests++;
+            }
+        }
+    }
+
+    attempts = 0;
+    while (rocks < 2 && attempts < 100) {
+        attempts++;
+        const rx = cx + Math.floor(Math.random() * (innerR * 2 + 1)) - innerR;
+        const ry = cy + Math.floor(Math.random() * (innerR * 2 + 1)) - innerR;
+        if (rx >= 0 && rx < MAP_SIZE && ry >= 0 && ry < MAP_SIZE) {
+            const d = Math.sqrt((rx-cx)*(rx-cx) + (ry-cy)*(ry-cy));
+            if (d > radius * 0.4 && d <= radius - 1 && map[ry][rx].terrain === TERRAIN.GRASS) {
+                map[ry][rx].terrain = TERRAIN.ROCK;
+                rocks++;
+            }
+        }
+    }
+}
+
+function generateMap() {
+    const map = [];
+    const cx = Math.floor(MAP_SIZE / 2);
+    const cy = Math.floor(MAP_SIZE / 2);
+
+    // Initialize entire grid as unrevealed water
+    for (let y = 0; y < MAP_SIZE; y++) {
+        map[y] = [];
+        for (let x = 0; x < MAP_SIZE; x++) {
+            map[y][x] = {
+                terrain: TERRAIN.WATER,
+                revealed: false,
+                building: null,
+                decorVariant: Math.floor(Math.random() * 3)
+            };
+        }
+    }
+
+    // Generate starting island at center, revealed
+    generateIsland(map, cx, cy, 5, true);
+    ensureMinimumResources(map, cx, cy, 5);
+
+    // Generate 5-7 additional islands, unrevealed
+    const shuffledNames = [...ISLAND_NAMES].sort(() => Math.random() - 0.5);
+    const islands = [{ x: cx, y: cy, radius: 5, name: shuffledNames[0] }];
+    const numIslands = 5 + Math.floor(Math.random() * 3);
+
+    for (let i = 0; i < numIslands; i++) {
+        const radius = 2 + Math.floor(Math.random() * 3); // 2-4
+        let placed = false;
+        for (let attempt = 0; attempt < 50; attempt++) {
+            const ix = 5 + Math.floor(Math.random() * (MAP_SIZE - 10));
+            const iy = 5 + Math.floor(Math.random() * (MAP_SIZE - 10));
+            // Check minimum gap from all existing islands
+            let tooClose = false;
+            for (const existing of islands) {
+                const dist = Math.sqrt((ix - existing.x) ** 2 + (iy - existing.y) ** 2);
+                if (dist < existing.radius + radius + 5) {
+                    tooClose = true;
+                    break;
+                }
+            }
+            if (!tooClose) {
+                generateIsland(map, ix, iy, radius, false);
+                ensureMinimumResources(map, ix, iy, radius);
+                islands.push({ x: ix, y: iy, radius, name: shuffledNames[islands.length] || ('Isle ' + islands.length) });
+                placed = true;
+                break;
+            }
+        }
+    }
+
+    game.map = map;
+    game.islands = islands;
+}
+
+function centerCamera() {
+    const cx = Math.floor(MAP_SIZE / 2);
+    const cy = Math.floor(MAP_SIZE / 2);
+    game.camera.x = cx * TILE_SIZE - canvasW / 2 + TILE_SIZE / 2;
+    game.camera.y = cy * TILE_SIZE - canvasH / 2 + TILE_SIZE / 2;
+}
+
+// ============================================================
+// CANVAS SETUP
+// ============================================================
+function setupCanvas() {
+    canvas = document.getElementById('gameCanvas');
+    ctx = canvas.getContext('2d');
+    const container = document.getElementById('canvasContainer');
+    canvasW = container.clientWidth;
+    canvasH = container.clientHeight;
+    canvas.width = canvasW;
+    canvas.height = canvasH;
+    canvas.style.width = canvasW + 'px';
+    canvas.style.height = canvasH + 'px';
+}
+
+function onResize() {
+    const container = document.getElementById('canvasContainer');
+    canvasW = container.clientWidth;
+    canvasH = container.clientHeight;
+    canvas.width = canvasW;
+    canvas.height = canvasH;
+    canvas.style.width = canvasW + 'px';
+    canvas.style.height = canvasH + 'px';
+}
+
+// ============================================================
+// RENDERING
+// ============================================================
+function render(timestamp) {
+    if (!gameStarted) return;
+
+    const dt = timestamp - lastTime;
+    lastTime = timestamp;
+
+    // Handle key-based panning
+    const panSpeed = 4;
+    if (keys['w'] || keys['arrowup']) game.camera.y -= panSpeed;
+    if (keys['s'] || keys['arrowdown']) game.camera.y += panSpeed;
+    if (keys['a'] || keys['arrowleft']) game.camera.x -= panSpeed;
+    if (keys['d'] || keys['arrowright']) game.camera.x += panSpeed;
+    clampCamera();
+
+    // Game tick accumulation
+    const tickMs = TICK_INTERVAL / game.gameSpeed;
+    tickAccumulator += dt;
+    while (tickAccumulator >= tickMs) {
+        tickAccumulator -= tickMs;
+        gameTick();
+    }
+
+    // Event timer
+    eventTimer += dt;
+    if (eventTimer > nextEventTime) {
+        eventTimer = 0;
+        nextEventTime = 60000 + Math.random() * 60000;
+        triggerRandomEvent();
+    }
+
+    // Day cycle
+    game.dayPhase += dt * 0.00003;
+
+    ctx.clearRect(0, 0, canvasW, canvasH);
+
+    // Draw ocean background
+    drawOceanBackground(timestamp);
+
+    // Draw tiles
+    drawTerrain(timestamp);
+
+    // Draw fog
+    drawFog();
+
+    // Draw buildings
+    drawBuildings(timestamp);
+
+    // Draw people dots
+    drawPeople(timestamp);
+
+    // Draw vehicles
+    drawVehicles(timestamp);
+
+    // Draw hover/placement preview
+    drawHoverPreview();
+
+    // Draw expand mode highlights
+    if (game.expandMode) drawExpandHighlights();
+
+    // Draw particles
+    drawParticles(dt);
+
+    // Day cycle tint
+    drawDayCycleTint();
+
+    // Island names
+    drawIslandNames();
+
+    animFrame = requestAnimationFrame(render);
+}
+
+function drawOceanBackground(t) {
+    // Gradient ocean background
+    const grad = ctx.createLinearGradient(0, 0, 0, canvasH);
+    grad.addColorStop(0, '#0a3d6b');
+    grad.addColorStop(0.5, '#0d47a1');
+    grad.addColorStop(1, '#0a3460');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, canvasW, canvasH);
+}
+
+// Helper: check if a neighbor tile is land
+function isLandTile(x, y) {
+    if (x < 0 || x >= MAP_SIZE || y < 0 || y >= MAP_SIZE) return false;
+    const t = game.map[y][x];
+    if (t.building && t.building.type === 'bridge') return true;
+    return t.revealed && t.terrain !== TERRAIN.WATER;
+}
+
+function drawTerrain(t) {
+    const startX = Math.floor(game.camera.x / TILE_SIZE) - 1;
+    const startY = Math.floor(game.camera.y / TILE_SIZE) - 1;
+    const endX = Math.ceil((game.camera.x + canvasW) / TILE_SIZE) + 1;
+    const endY = Math.ceil((game.camera.y + canvasH) / TILE_SIZE) + 1;
+
+    for (let y = startY; y <= endY; y++) {
+        for (let x = startX; x <= endX; x++) {
+            if (x < 0 || x >= MAP_SIZE || y < 0 || y >= MAP_SIZE) continue;
+            const tile = game.map[y][x];
+
+            const sx = x * TILE_SIZE - game.camera.x;
+            const sy = y * TILE_SIZE - game.camera.y;
+
+            if (!tile.revealed) continue;
+
+            if (tile.terrain === TERRAIN.WATER) {
+                // Layered animated water
+                const wave1 = Math.sin(t * 0.0015 + x * 0.7 + y * 0.4);
+                const wave2 = Math.sin(t * 0.002 + x * 0.3 - y * 0.5);
+                const combined = (wave1 + wave2) * 0.5;
+
+                // Base water with depth variation
+                const depth = 21 + Math.floor(combined * 15);
+                const r = 13 + Math.floor(combined * 5);
+                const g = 70 + Math.floor(combined * 12);
+                const b = 160 + Math.floor(combined * 20);
+                ctx.fillStyle = `rgb(${r},${g},${b})`;
+                ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+
+                // Wave crest highlights
+                const crest = Math.sin(t * 0.003 + x * 1.1 + y * 0.8);
+                if (crest > 0.5) {
+                    const alpha = (crest - 0.5) * 0.3;
+                    ctx.fillStyle = `rgba(150,210,255,${alpha})`;
+                    const waveY = sy + TILE_SIZE * 0.3 + Math.sin(t * 0.002 + x * 0.6) * 5;
+                    ctx.beginPath();
+                    ctx.ellipse(sx + TILE_SIZE * 0.5, waveY, TILE_SIZE * 0.4, 3, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // Sparkle on water
+                const sparkle = Math.sin(t * 0.007 + x * 3.1 + y * 2.7);
+                if (sparkle > 0.92) {
+                    ctx.fillStyle = `rgba(255,255,255,${(sparkle - 0.92) * 8})`;
+                    const spx = sx + ((x * 17 + y * 31) % 30) + 5;
+                    const spy = sy + ((x * 23 + y * 13) % 30) + 5;
+                    ctx.beginPath();
+                    ctx.arc(spx, spy, 1.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // Foam near land edges
+                const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
+                for (const [dx, dy] of dirs) {
+                    if (isLandTile(x + dx, y + dy)) {
+                        const foamWave = Math.sin(t * 0.003 + x * 0.9 + y * 0.7) * 0.5 + 0.5;
+                        ctx.fillStyle = `rgba(200,230,255,${0.15 + foamWave * 0.2})`;
+                        if (dx === -1) ctx.fillRect(sx, sy, 6, TILE_SIZE);
+                        else if (dx === 1) ctx.fillRect(sx + TILE_SIZE - 6, sy, 6, TILE_SIZE);
+                        else if (dy === -1) ctx.fillRect(sx, sy, TILE_SIZE, 6);
+                        else if (dy === 1) ctx.fillRect(sx, sy + TILE_SIZE - 6, TILE_SIZE, 6);
+                    }
+                }
+            } else {
+                // Land tiles with richer rendering
+                const colors = TERRAIN_COLORS[tile.terrain];
+                const baseColor = colors[tile.decorVariant];
+                ctx.fillStyle = baseColor;
+                ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+
+                // Texture overlay based on terrain type
+                const seed = x * 31 + y * 17;
+
+                if (tile.terrain === TERRAIN.GRASS) {
+                    // Grass tufts
+                    ctx.fillStyle = 'rgba(60,130,60,0.3)';
+                    for (let i = 0; i < 3; i++) {
+                        const gx = sx + ((seed * (i+1) * 7) % 32) + 4;
+                        const gy = sy + ((seed * (i+1) * 13) % 32) + 4;
+                        ctx.fillRect(gx, gy, 2, 3);
+                    }
+                    // Light patches
+                    if (seed % 7 === 0) {
+                        ctx.fillStyle = 'rgba(120,200,80,0.15)';
+                        ctx.beginPath();
+                        ctx.arc(sx + 20, sy + 20, 10, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                } else if (tile.terrain === TERRAIN.SAND) {
+                    // Sand texture - small dots and ripples
+                    ctx.fillStyle = 'rgba(200,180,130,0.2)';
+                    for (let i = 0; i < 4; i++) {
+                        const dx = ((seed * (i+3)) % 30) + 5;
+                        const dy = (((seed + 50) * (i+2)) % 30) + 5;
+                        ctx.beginPath();
+                        ctx.arc(sx + dx, sy + dy, 1, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    // Subtle wave pattern on sand
+                    ctx.strokeStyle = 'rgba(180,160,120,0.15)';
+                    ctx.lineWidth = 0.5;
+                    ctx.beginPath();
+                    ctx.moveTo(sx + 5, sy + 15 + (seed % 10));
+                    ctx.quadraticCurveTo(sx + 20, sy + 12 + (seed % 10), sx + 35, sy + 16 + (seed % 10));
+                    ctx.stroke();
+                } else if (tile.terrain === TERRAIN.FOREST && !tile.building) {
+                    // Draw multiple small trees for a denser forest look
+                    ctx.font = '14px serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    const treePositions = [
+                        [0.3, 0.35], [0.7, 0.3], [0.5, 0.65], [0.25, 0.7]
+                    ];
+                    const treeCount = 2 + (seed % 3);
+                    for (let i = 0; i < treeCount; i++) {
+                        const tp = treePositions[i];
+                        // Tree shadow
+                        ctx.fillStyle = 'rgba(0,0,0,0.15)';
+                        ctx.beginPath();
+                        ctx.ellipse(sx + tp[0] * TILE_SIZE + 2, sy + tp[1] * TILE_SIZE + 4, 5, 3, 0, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.fillText('🌲', sx + tp[0] * TILE_SIZE, sy + tp[1] * TILE_SIZE);
+                    }
+                } else if (tile.terrain === TERRAIN.ROCK && !tile.building) {
+                    // Rocky terrain with cracks
+                    ctx.fillStyle = 'rgba(80,80,80,0.2)';
+                    ctx.beginPath();
+                    ctx.moveTo(sx + 8, sy + 12);
+                    ctx.lineTo(sx + 20, sy + 8);
+                    ctx.lineTo(sx + 32, sy + 15);
+                    ctx.lineTo(sx + 28, sy + 28);
+                    ctx.lineTo(sx + 12, sy + 30);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    ctx.font = '16px serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('🪨', sx + TILE_SIZE/2, sy + TILE_SIZE/2);
+
+                    // Small crack lines
+                    ctx.strokeStyle = 'rgba(60,60,60,0.25)';
+                    ctx.lineWidth = 0.5;
+                    ctx.beginPath();
+                    ctx.moveTo(sx + 10, sy + 20);
+                    ctx.lineTo(sx + 22, sy + 18);
+                    ctx.lineTo(sx + 30, sy + 25);
+                    ctx.stroke();
+                }
+
+                // Subtle grid line
+                ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+                ctx.lineWidth = 0.5;
+                ctx.strokeRect(sx + 0.5, sy + 0.5, TILE_SIZE - 1, TILE_SIZE - 1);
+
+                // Edge shading: darken edges adjacent to water for coastline depth
+                const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
+                for (const [dx, dy] of dirs) {
+                    const nx = x + dx, ny = y + dy;
+                    if (nx >= 0 && nx < MAP_SIZE && ny >= 0 && ny < MAP_SIZE) {
+                        if (game.map[ny][nx].revealed && game.map[ny][nx].terrain === TERRAIN.WATER) {
+                            ctx.fillStyle = 'rgba(0,60,120,0.1)';
+                            if (dx === -1) ctx.fillRect(sx, sy, 4, TILE_SIZE);
+                            else if (dx === 1) ctx.fillRect(sx + TILE_SIZE - 4, sy, 4, TILE_SIZE);
+                            else if (dy === -1) ctx.fillRect(sx, sy, TILE_SIZE, 4);
+                            else if (dy === 1) ctx.fillRect(sx, sy + TILE_SIZE - 4, TILE_SIZE, 4);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+function drawFog() {
+    const startX = Math.floor(game.camera.x / TILE_SIZE) - 1;
+    const startY = Math.floor(game.camera.y / TILE_SIZE) - 1;
+    const endX = Math.ceil((game.camera.x + canvasW) / TILE_SIZE) + 1;
+    const endY = Math.ceil((game.camera.y + canvasH) / TILE_SIZE) + 1;
+
+    for (let y = startY; y <= endY; y++) {
+        for (let x = startX; x <= endX; x++) {
+            if (x < 0 || x >= MAP_SIZE || y < 0 || y >= MAP_SIZE) continue;
+            const tile = game.map[y][x];
+            if (tile.revealed) continue;
+
+            const sx = x * TILE_SIZE - game.camera.x;
+            const sy = y * TILE_SIZE - game.camera.y;
+
+            // Dark fog with subtle gradient
+            ctx.fillStyle = '#111a27';
+            ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+
+            // Misty swirl pattern
+            const seed = (x * 13 + y * 7);
+            const swirl = Math.sin(Date.now() * 0.0005 + seed * 0.3) * 0.5 + 0.5;
+            ctx.fillStyle = `rgba(40,60,80,${swirl * 0.3})`;
+            ctx.beginPath();
+            ctx.arc(sx + (seed % 25) + 8, sy + ((seed * 3) % 25) + 8, 8 + swirl * 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Question mark on explorable tiles (adjacent to any revealed)
+            if (game.hasShipyard && isAdjacentToAnyRevealed(x, y)) {
+                ctx.fillStyle = `rgba(255,213,79,${0.15 + swirl * 0.15})`;
+                ctx.font = '14px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('?', sx + TILE_SIZE/2, sy + TILE_SIZE/2);
+            }
+        }
+    }
+}
+
+// Building color themes for background tiles
+const BUILDING_COLORS = {
+    hut: '#8d6e4e', farm: '#6d8c3c', lumber: '#5d4e37', fishingDock: '#4a7c8c',
+    path: '#a08060', house: '#6e8aa0', quarry: '#707070', market: '#a08040',
+    well: '#5090a0', townHall: '#7070a0', bakery: '#a07050', park: '#4a8a4a',
+    shipyard: '#4a6a8a', manor: '#806090', warehouse: '#7a6a50', lighthouse: '#8a8a60',
+    temple: '#6a6a9a', school: '#5a7a9a', windmill: '#7a9a5a', ironMine: '#6a6060',
+    forge: '#9a5a3a', bank: '#8a8a4a', hospital: '#5a8a7a', skyscraper: '#5a6a8a',
+    university: '#6a5a8a', library: '#7a6a5a', factory: '#5a5a5a',
+    crabTrap: '#b06040', tavern: '#8a6a40', road: '#606060', beach: '#c0a050',
+    ferryDock: '#4a7090', tradingPost: '#7a6a50', sandCastle: '#b0a070',
+    trainStation: '#6a5050', airport: '#5a6a80',
+    bridge: '#5a7a9a', landfill: '#7a8a5a'
+};
+
+function drawBuildings(t) {
+    const startX = Math.floor(game.camera.x / TILE_SIZE) - 1;
+    const startY = Math.floor(game.camera.y / TILE_SIZE) - 1;
+    const endX = Math.ceil((game.camera.x + canvasW) / TILE_SIZE) + 1;
+    const endY = Math.ceil((game.camera.y + canvasH) / TILE_SIZE) + 1;
+
+    for (let i = 0; i < game.buildings.length; i++) {
+        const b = game.buildings[i];
+        if (b.x < startX || b.x > endX || b.y < startY || b.y > endY) continue;
+
+        const sx = b.x * TILE_SIZE - game.camera.x;
+        const sy = b.y * TILE_SIZE - game.camera.y;
+        const def = BUILDING_DEFS[b.type];
+        const bColor = BUILDING_COLORS[b.type] || '#666';
+
+        // Special road rendering
+        if (b.type === 'road') {
+            // Gray asphalt
+            ctx.fillStyle = '#505050';
+            ctx.fillRect(sx + 2, sy + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+            // Center line dashes
+            ctx.strokeStyle = '#c0c050';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(sx + TILE_SIZE / 2, sy + 2);
+            ctx.lineTo(sx + TILE_SIZE / 2, sy + TILE_SIZE - 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            // Emoji
+            ctx.font = '14px serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#fff';
+            ctx.fillText('🛣️', sx + TILE_SIZE / 2, sy + TILE_SIZE / 2);
+        } else if (b.type === 'bridge') {
+        // Special bridge rendering
+            // Wooden plank base
+            ctx.fillStyle = '#6b4f36';
+            ctx.fillRect(sx + 2, sy + 12, TILE_SIZE - 4, TILE_SIZE - 24);
+            // Plank lines
+            ctx.strokeStyle = '#5a4030';
+            ctx.lineWidth = 1;
+            for (let p = 6; p < TILE_SIZE - 4; p += 7) {
+                ctx.beginPath();
+                ctx.moveTo(sx + p, sy + 12);
+                ctx.lineTo(sx + p, sy + TILE_SIZE - 12);
+                ctx.stroke();
+            }
+            // Railing posts
+            ctx.fillStyle = '#8b6b4a';
+            ctx.fillRect(sx + 2, sy + 8, 4, TILE_SIZE - 16);
+            ctx.fillRect(sx + TILE_SIZE - 6, sy + 8, 4, TILE_SIZE - 16);
+            // Emoji
+            ctx.font = '22px serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(def.emoji, sx + TILE_SIZE / 2, sy + TILE_SIZE / 2);
+        } else {
+
+        // Building shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.beginPath();
+        ctx.roundRect(sx + 4, sy + 5, TILE_SIZE - 4, TILE_SIZE - 4, 4);
+        ctx.fill();
+
+        // Building base tile with colored background
+        const grad = ctx.createLinearGradient(sx, sy, sx, sy + TILE_SIZE);
+        grad.addColorStop(0, bColor);
+        grad.addColorStop(1, darkenColor(bColor, 0.7));
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.roundRect(sx + 2, sy + 2, TILE_SIZE - 4, TILE_SIZE - 4, 4);
+        ctx.fill();
+
+        // Inner highlight
+        ctx.fillStyle = 'rgba(255,255,255,0.1)';
+        ctx.beginPath();
+        ctx.roundRect(sx + 3, sy + 3, TILE_SIZE - 6, (TILE_SIZE - 6) * 0.4, [3, 3, 0, 0]);
+        ctx.fill();
+
+        // Border
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(sx + 2, sy + 2, TILE_SIZE - 4, TILE_SIZE - 4, 4);
+        ctx.stroke();
+
+        // Emoji icon
+        ctx.font = '22px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(def.emoji, sx + TILE_SIZE / 2, sy + TILE_SIZE / 2);
+
+        } // end non-bridge
+
+        // Production indicator - dim green = base, bright green = worker boosted
+        if (def.production) {
+            const pulse = Math.sin(t * 0.004 + i * 1.5) * 0.5 + 0.5;
+            const isWorked = def.jobType && (game.jobs[def.jobType] || 0) > 0;
+            if (isWorked) {
+                ctx.fillStyle = `rgba(100,255,100,${0.3 + pulse * 0.4})`;
+                ctx.beginPath();
+                ctx.arc(sx + TILE_SIZE - 7, sy + 7, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = `rgba(100,255,100,${pulse * 0.15})`;
+                ctx.beginPath();
+                ctx.arc(sx + TILE_SIZE - 7, sy + 7, 6, 0, Math.PI * 2);
+                ctx.fill();
+            } else {
+                ctx.fillStyle = `rgba(100,255,100,${0.2 + pulse * 0.15})`;
+                ctx.beginPath();
+                ctx.arc(sx + TILE_SIZE - 7, sy + 7, 2.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // Housing indicator
+        if (def.housing > 0) {
+            ctx.fillStyle = 'rgba(100,180,255,0.6)';
+            ctx.beginPath();
+            ctx.arc(sx + 7, sy + 7, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+}
+
+// Darken a hex color
+function darkenColor(hex, factor) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgb(${Math.floor(r * factor)},${Math.floor(g * factor)},${Math.floor(b * factor)})`;
+}
+
+function drawPeople(t) {
+    for (let i = 0; i < game.peopleDots.length; i++) {
+        const p = game.peopleDots[i];
+
+        // Update position
+        p.timer += 0.01;
+        if (p.timer > 1) {
+            p.timer = 0;
+            pickNewTarget(p);
+        }
+
+        // Move faster on roads
+        const gx = Math.floor(p.x), gy = Math.floor(p.y);
+        let speed = 0.02;
+        if (gx >= 0 && gx < MAP_SIZE && gy >= 0 && gy < MAP_SIZE) {
+            const tile = game.map[gy][gx];
+            if (tile.building && tile.building.type === 'road') speed = 0.04;
+        }
+        const nx = p.x + (p.tx - p.x) * speed;
+        const ny = p.y + (p.ty - p.y) * speed;
+        if (isWalkable(nx, ny)) {
+            p.x = nx;
+            p.y = ny;
+        } else {
+            // Can't walk there, pick a new target
+            p.timer = 1;
+        }
+
+        const sx = p.x * TILE_SIZE - game.camera.x + TILE_SIZE / 2;
+        const sy = p.y * TILE_SIZE - game.camera.y + TILE_SIZE / 2;
+
+        if (sx < -10 || sx > canvasW + 10 || sy < -10 || sy > canvasH + 10) continue;
+
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.beginPath();
+        ctx.ellipse(sx + 1, sy + 2, 3, 1.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Body
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Head
+        ctx.fillStyle = '#ffe0b2';
+        ctx.beginPath();
+        ctx.arc(sx, sy - 4, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Tiny body outline
+        ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+}
+
+function isWalkable(tx, ty) {
+    const gx = Math.floor(tx);
+    const gy = Math.floor(ty);
+    if (gx < 0 || gx >= MAP_SIZE || gy < 0 || gy >= MAP_SIZE) return false;
+    const t = game.map[gy][gx];
+    if (!t.revealed) return false;
+    if (t.terrain === TERRAIN.WATER && !(t.building && t.building.type === 'bridge')) return false;
+    return true;
+}
+
+function pickNewTarget(p) {
+    // Only pick buildings on revealed, walkable land
+    const valid = game.buildings.filter(b => {
+        if (b.x < 0 || b.x >= MAP_SIZE || b.y < 0 || b.y >= MAP_SIZE) return false;
+        const t = game.map[b.y][b.x];
+        return t.revealed;
+    });
+    if (valid.length === 0) {
+        // Wander near current position on walkable tiles
+        for (let attempt = 0; attempt < 10; attempt++) {
+            const nx = p.x + (Math.random() - 0.5) * 3;
+            const ny = p.y + (Math.random() - 0.5) * 3;
+            if (isWalkable(nx, ny)) {
+                p.tx = nx;
+                p.ty = ny;
+                return;
+            }
+        }
+        return;
+    }
+    const b = valid[Math.floor(Math.random() * valid.length)];
+    p.tx = b.x + (Math.random() - 0.5) * 2;
+    p.ty = b.y + (Math.random() - 0.5) * 2;
+}
+
+// ============================================================
+// VEHICLE SYSTEM
+// ============================================================
+const VEHICLE_DEFS = {
+    car:   { emoji: '🚗', speed: 0.04, size: 10 },
+    bus:   { emoji: '🚌', speed: 0.03, size: 12 },
+    ferry: { emoji: '⛴️', speed: 0.015, size: 14 },
+    train: { emoji: '🚂', speed: 0.025, size: 14 },
+    plane: { emoji: '✈️', speed: 0.05, size: 14 }
+};
+
+function updateVehicles() {
+    if (!game.vehicles) game.vehicles = [];
+
+    // Spawn vehicles based on transport buildings
+    const roads = game.buildings.filter(b => b.type === 'road');
+    const ferries = game.buildings.filter(b => b.type === 'ferryDock');
+    const trains = game.buildings.filter(b => b.type === 'trainStation');
+    const airports = game.buildings.filter(b => b.type === 'airport');
+
+    const maxCars = Math.min(Math.floor(roads.length / 3), 6);
+    const maxFerries = Math.min(Math.floor(ferries.length / 2), 4);
+    const maxTrains = Math.min(Math.floor(trains.length / 2), 3);
+    const maxPlanes = Math.min(Math.floor(airports.length / 2), 3);
+
+    const curCars = game.vehicles.filter(v => v.type === 'car' || v.type === 'bus').length;
+    const curFerries = game.vehicles.filter(v => v.type === 'ferry').length;
+    const curTrains = game.vehicles.filter(v => v.type === 'train').length;
+    const curPlanes = game.vehicles.filter(v => v.type === 'plane').length;
+
+    // Spawn cars on roads
+    if (curCars < maxCars && roads.length >= 2) {
+        const src = roads[Math.floor(Math.random() * roads.length)];
+        const vtype = Math.random() < 0.7 ? 'car' : 'bus';
+        game.vehicles.push({ type: vtype, x: src.x, y: src.y, tx: src.x, ty: src.y, progress: 0 });
+    }
+    // Spawn ferries between docks
+    if (curFerries < maxFerries && ferries.length >= 2) {
+        const src = ferries[Math.floor(Math.random() * ferries.length)];
+        game.vehicles.push({ type: 'ferry', x: src.x, y: src.y, tx: src.x, ty: src.y, progress: 0 });
+    }
+    // Spawn trains between stations
+    if (curTrains < maxTrains && trains.length >= 2) {
+        const src = trains[Math.floor(Math.random() * trains.length)];
+        game.vehicles.push({ type: 'train', x: src.x, y: src.y, tx: src.x, ty: src.y, progress: 0 });
+    }
+    // Spawn planes between airports
+    if (curPlanes < maxPlanes && airports.length >= 2) {
+        const src = airports[Math.floor(Math.random() * airports.length)];
+        game.vehicles.push({ type: 'plane', x: src.x, y: src.y, tx: src.x, ty: src.y, progress: 0 });
+    }
+
+    // Update each vehicle
+    for (let i = game.vehicles.length - 1; i >= 0; i--) {
+        const v = game.vehicles[i];
+        const def = VEHICLE_DEFS[v.type];
+
+        // Move toward target
+        const dx = v.tx - v.x;
+        const dy = v.ty - v.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < 0.3) {
+            // Arrived — pick new target
+            v.progress++;
+            if (v.progress > 6) {
+                // Vehicle has made enough trips, remove it
+                game.vehicles.splice(i, 1);
+                continue;
+            }
+            pickVehicleTarget(v);
+        } else {
+            v.x += (dx / dist) * def.speed * TILE_SIZE * 0.08;
+            v.y += (dy / dist) * def.speed * TILE_SIZE * 0.08;
+        }
+    }
+}
+
+function pickVehicleTarget(v) {
+    let targets;
+    if (v.type === 'car' || v.type === 'bus') {
+        targets = game.buildings.filter(b => b.type === 'road' && (b.x !== Math.round(v.x) || b.y !== Math.round(v.y)));
+        // Also allow targeting any building adjacent to a road
+        if (targets.length === 0) targets = game.buildings.filter(b => b.type === 'road');
+    } else if (v.type === 'ferry') {
+        targets = game.buildings.filter(b => b.type === 'ferryDock' && (b.x !== Math.round(v.x) || b.y !== Math.round(v.y)));
+    } else if (v.type === 'train') {
+        targets = game.buildings.filter(b => b.type === 'trainStation' && (b.x !== Math.round(v.x) || b.y !== Math.round(v.y)));
+    } else if (v.type === 'plane') {
+        targets = game.buildings.filter(b => b.type === 'airport' && (b.x !== Math.round(v.x) || b.y !== Math.round(v.y)));
+    }
+    if (targets && targets.length > 0) {
+        const t = targets[Math.floor(Math.random() * targets.length)];
+        v.tx = t.x;
+        v.ty = t.y;
+    }
+}
+
+function drawVehicles(t) {
+    if (!game.vehicles) return;
+    const startX = Math.floor(game.camera.x / TILE_SIZE) - 2;
+    const startY = Math.floor(game.camera.y / TILE_SIZE) - 2;
+    const endX = Math.ceil((game.camera.x + canvasW) / TILE_SIZE) + 2;
+    const endY = Math.ceil((game.camera.y + canvasH) / TILE_SIZE) + 2;
+
+    for (const v of game.vehicles) {
+        if (v.x < startX || v.x > endX || v.y < startY || v.y > endY) continue;
+
+        const def = VEHICLE_DEFS[v.type];
+        const sx = v.x * TILE_SIZE - game.camera.x + TILE_SIZE / 2;
+        const sy = v.y * TILE_SIZE - game.camera.y + TILE_SIZE / 2;
+
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.beginPath();
+        ctx.ellipse(sx + 1, sy + 3, def.size * 0.4, def.size * 0.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Vehicle emoji (rotated in direction of travel)
+        ctx.save();
+        ctx.translate(sx, v.type === 'plane' ? sy - 6 : sy);
+        const angle = Math.atan2(v.ty - v.y, v.tx - v.x);
+        if (v.type === 'plane') {
+            ctx.rotate(angle);
+        }
+        ctx.font = `${def.size}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(def.emoji, 0, 0);
+        ctx.restore();
+    }
+}
+
+function drawHoverPreview() {
+    if (!hoverTile) return;
+    const { x, y } = hoverTile;
+    if (x < 0 || x >= MAP_SIZE || y < 0 || y >= MAP_SIZE) return;
+
+    const sx = x * TILE_SIZE - game.camera.x;
+    const sy = y * TILE_SIZE - game.camera.y;
+
+    if (game.selectedBuilding) {
+        const canPlace = canPlaceBuilding(game.selectedBuilding, x, y);
+        ctx.fillStyle = canPlace ? 'rgba(76,175,80,0.35)' : 'rgba(244,67,54,0.35)';
+        ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+        ctx.strokeStyle = canPlace ? '#4caf50' : '#f44336';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(sx, sy, TILE_SIZE, TILE_SIZE);
+
+        // Show building emoji preview
+        const def = BUILDING_DEFS[game.selectedBuilding];
+        ctx.globalAlpha = 0.6;
+        ctx.font = '24px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(def.emoji, sx + TILE_SIZE / 2, sy + TILE_SIZE / 2);
+        ctx.globalAlpha = 1.0;
+    } else if (demolishMode) {
+        const tile = game.map[y][x];
+        if (tile.building) {
+            ctx.fillStyle = 'rgba(244,67,54,0.35)';
+            ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+            ctx.strokeStyle = '#f44336';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(sx, sy, TILE_SIZE, TILE_SIZE);
+        }
+    } else if (game.expandMode) {
+        // Handled in drawExpandHighlights
+    } else {
+        // Normal hover highlight
+        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(sx, sy, TILE_SIZE, TILE_SIZE);
+    }
+}
+
+function drawExpandHighlights() {
+    const startX = Math.floor(game.camera.x / TILE_SIZE);
+    const startY = Math.floor(game.camera.y / TILE_SIZE);
+    const endX = Math.ceil((game.camera.x + canvasW) / TILE_SIZE);
+    const endY = Math.ceil((game.camera.y + canvasH) / TILE_SIZE);
+
+    for (let y = startY; y <= endY; y++) {
+        for (let x = startX; x <= endX; x++) {
+            if (x < 0 || x >= MAP_SIZE || y < 0 || y >= MAP_SIZE) continue;
+            if (game.map[y][x].revealed) continue;
+            if (!isAdjacentToAnyRevealed(x, y)) continue;
+
+            const sx = x * TILE_SIZE - game.camera.x;
+            const sy = y * TILE_SIZE - game.camera.y;
+
+            const pulse = Math.sin(Date.now() * 0.004) * 0.15 + 0.25;
+            ctx.fillStyle = `rgba(255,213,79,${pulse})`;
+            ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+            ctx.strokeStyle = '#ffd54f';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(sx, sy, TILE_SIZE, TILE_SIZE);
+        }
+    }
+}
+
+function drawParticles(dt) {
+    for (let i = game.particles.length - 1; i >= 0; i--) {
+        const p = game.particles[i];
+        p.life -= dt;
+        if (p.life <= 0) {
+            game.particles.splice(i, 1);
+            continue;
+        }
+
+        const alpha = p.life / p.maxLife;
+        const sx = p.x * TILE_SIZE - game.camera.x;
+        const sy = p.y * TILE_SIZE - game.camera.y;
+
+        p.x += p.vx * dt * 0.001;
+        p.y += p.vy * dt * 0.001;
+
+        ctx.globalAlpha = alpha;
+        if (p.emoji) {
+            ctx.font = `${p.size}px serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(p.emoji, sx, sy);
+        } else {
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(sx, sy, p.size * alpha, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1.0;
+    }
+}
+
+function drawDayCycleTint() {
+    const phase = Math.sin(game.dayPhase);
+    const phase2 = Math.sin(game.dayPhase * 0.5);
+    if (phase > 0) {
+        // Warm golden hour
+        ctx.fillStyle = `rgba(255,200,80,${phase * 0.05})`;
+        ctx.fillRect(0, 0, canvasW, canvasH);
+        // Sun glow from top
+        const sunGrad = ctx.createRadialGradient(canvasW * 0.7, 0, 0, canvasW * 0.7, 0, canvasH * 0.6);
+        sunGrad.addColorStop(0, `rgba(255,220,100,${phase * 0.04})`);
+        sunGrad.addColorStop(1, 'rgba(255,220,100,0)');
+        ctx.fillStyle = sunGrad;
+        ctx.fillRect(0, 0, canvasW, canvasH);
+    } else {
+        // Cool evening / night
+        const strength = Math.abs(phase);
+        ctx.fillStyle = `rgba(20,20,80,${strength * 0.08})`;
+        ctx.fillRect(0, 0, canvasW, canvasH);
+    }
+}
+
+function getIslandBuildings(island) {
+    const r = island.radius + 2;
+    return game.buildings.filter(b => {
+        const dx = b.x - island.x;
+        const dy = b.y - island.y;
+        return Math.sqrt(dx*dx + dy*dy) <= r;
+    });
+}
+
+function getIslandClassification(island) {
+    const buildings = getIslandBuildings(island);
+    const count = buildings.length;
+    const housing = buildings.reduce((sum, b) => sum + (BUILDING_DEFS[b.type]?.housing || 0), 0);
+    const maxTier = buildings.reduce((max, b) => Math.max(max, BUILDING_DEFS[b.type]?.tier || 1), 0);
+    const hasProduction = buildings.some(b => BUILDING_DEFS[b.type]?.production);
+    const hasCommerce = buildings.some(b => ['market','bank','bakery','forge','factory'].includes(b.type));
+    const hasInfra = buildings.some(b => ['townHall','school','hospital','university','library','temple'].includes(b.type));
+
+    // Settlement type: based on island size, building types, and tier unlocks
+    let settlement;
+    if (island.radius >= 4 && maxTier >= 4 && hasInfra && hasCommerce && count >= 12) {
+        settlement = 'City';
+    } else if (maxTier >= 2 && (hasProduction || hasCommerce) && count >= 5) {
+        settlement = 'Town';
+    } else {
+        settlement = 'Village';
+    }
+
+    // Density: based on building type diversity, buildings per area, population, resources
+    const area = Math.PI * island.radius * island.radius;
+    const buildingDensity = count / Math.max(area, 1);
+    const uniqueTypes = new Set(buildings.map(b => b.type)).size;
+    const pop = game.population.current;
+    const totalResources = game.resources.food + game.resources.wood + game.resources.stone +
+                           game.resources.gold + game.resources.iron;
+
+    let densityScore = 0;
+    densityScore += buildingDensity >= 0.4 ? 2 : (buildingDensity >= 0.15 ? 1 : 0);
+    densityScore += uniqueTypes >= 8 ? 2 : (uniqueTypes >= 4 ? 1 : 0);
+    densityScore += pop >= 80 ? 2 : (pop >= 30 ? 1 : 0);
+    densityScore += totalResources >= 200 ? 1 : 0;
+
+    let density;
+    if (densityScore >= 5) {
+        density = 'Urban';
+    } else if (densityScore >= 3) {
+        density = 'Suburban';
+    } else {
+        density = 'Rural';
+    }
+
+    return { density, settlement, buildingCount: count, housing, maxTier, uniqueTypes };
+}
+
+function isIslandRevealed(island) {
+    // Island is visible if any of its land tiles are revealed
+    const r = Math.ceil(island.radius);
+    for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+            const tx = island.x + dx, ty = island.y + dy;
+            if (tx >= 0 && tx < MAP_SIZE && ty >= 0 && ty < MAP_SIZE) {
+                const t = game.map[ty][tx];
+                if (t.revealed && t.terrain !== TERRAIN.WATER) return true;
+            }
+        }
+    }
+    return false;
+}
+
+function drawIslandNames() {
+    if (!game.islands) return;
+    for (const island of game.islands) {
+        if (!isIslandRevealed(island)) continue;
+
+        const sx = island.x * TILE_SIZE - game.camera.x + TILE_SIZE / 2;
+        const sy = (island.y - island.radius - 1) * TILE_SIZE - game.camera.y;
+
+        // Skip if off-screen
+        if (sx < -100 || sx > canvasW + 100 || sy < -30 || sy > canvasH + 30) continue;
+
+        const cls = getIslandClassification(island);
+        const label = island.name;
+
+        ctx.font = 'bold 13px sans-serif';
+        const tw = ctx.measureText(label).width;
+
+        // Background pill
+        ctx.fillStyle = 'rgba(10,10,30,0.7)';
+        ctx.beginPath();
+        ctx.roundRect(sx - tw/2 - 8, sy - 10, tw + 16, 22, 6);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(100,200,150,0.5)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(sx - tw/2 - 8, sy - 10, tw + 16, 22, 6);
+        ctx.stroke();
+
+        // Text
+        ctx.fillStyle = '#e0f0e8';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, sx, sy + 1);
+    }
+}
+
+function showIslandInfo(island, screenX, screenY) {
+    const cls = getIslandClassification(island);
+    const info = document.getElementById('islandInfo');
+
+    const icon = cls.settlement === 'City' ? '🏙️' : (cls.settlement === 'Town' ? '🏘️' : '🏕️');
+    document.getElementById('islandName').textContent = `${icon} ${island.name}`;
+
+    let detail = `${cls.settlement} - ${cls.density}\n`;
+    detail += `Buildings: ${cls.buildingCount} (${cls.uniqueTypes} types)\n`;
+    detail += `Housing: ${cls.housing}\n`;
+    detail += `Max Tier: ${cls.maxTier || 'None'}`;
+    document.getElementById('islandDetail').textContent = detail;
+
+    info.style.left = Math.min(screenX + 10, window.innerWidth - 220) + 'px';
+    info.style.top = Math.min(screenY + 10, window.innerHeight - 200) + 'px';
+    info.style.display = 'block';
+}
+
+function closeIslandInfo() {
+    document.getElementById('islandInfo').style.display = 'none';
+}
+
+function getClickedIsland(canvasX, canvasY) {
+    if (!game.islands) return null;
+    for (const island of game.islands) {
+        if (!isIslandRevealed(island)) continue;
+
+        const sx = island.x * TILE_SIZE - game.camera.x + TILE_SIZE / 2;
+        const sy = (island.y - island.radius - 1) * TILE_SIZE - game.camera.y;
+
+        ctx.font = 'bold 13px sans-serif';
+        const tw = ctx.measureText(island.name).width;
+
+        const left = sx - tw/2 - 8;
+        const top = sy - 10;
+        const width = tw + 16;
+        const height = 22;
+
+        if (canvasX >= left && canvasX <= left + width && canvasY >= top && canvasY <= top + height) {
+            return island;
+        }
+    }
+    return null;
+}
+
+// ============================================================
+// GAME LOGIC
+// ============================================================
+function gameTick() {
+    game.tick++;
+    const rates = { food: 0, wood: 0, stone: 0, gold: 0, knowledge: 0, iron: 0 };
+
+    // === Determine which buildings have workers (for 2x bonus) ===
+    const workedSet = new Set();
+    const byJob = {};
+    for (const b of game.buildings) {
+        const def = BUILDING_DEFS[b.type];
+        if (def.jobType && def.production) {
+            if (!byJob[def.jobType]) byJob[def.jobType] = [];
+            byJob[def.jobType].push(b);
+        }
+    }
+    for (const [jt, blds] of Object.entries(byJob)) {
+        const w = game.jobs[jt] || 0;
+        blds.sort((a, b) => (Object.values(BUILDING_DEFS[b.type].production)[0]||0) - (Object.values(BUILDING_DEFS[a.type].production)[0]||0));
+        for (let i = 0; i < Math.min(w, blds.length); i++) workedSet.add(blds[i]);
+    }
+
+    // === All buildings auto-produce; workers double output ===
+    for (const b of game.buildings) {
+        const def = BUILDING_DEFS[b.type];
+        if (!def.production) continue;
+        const mult = workedSet.has(b) ? 2 : 1;
+        // Conversion buildings: need inputs * mult
+        if (def.converts) {
+            let canConvert = true;
+            for (const [res, amt] of Object.entries(def.converts)) {
+                if (game.resources[res] < amt * mult) canConvert = false;
+            }
+            if (!canConvert) continue;
+            for (const [res, amt] of Object.entries(def.converts)) {
+                game.resources[res] -= amt * mult;
+                rates[res] -= amt * mult;
+            }
+        }
+        for (const [res, amount] of Object.entries(def.production)) {
+            let fa = amount * mult;
+            if (res === 'food' && b.type === 'farm' && game.research.has('agriculture')) fa += mult;
+            if (res === 'stone' && b.type === 'quarry' && game.research.has('masonry')) fa += mult;
+            if (res === 'gold' && b.type === 'market' && game.research.has('commerce')) fa += mult;
+            if (res === 'food' && b.type === 'farm' && game.eventBuffs.farmBoost > Date.now()) fa *= 2;
+            if (res === 'food' && b.type === 'fishingDock' && game.eventBuffs.fishBoost > Date.now()) fa *= 2;
+            if (game.research.has('industry')) fa = Math.ceil(fa * 1.25);
+            game.resources[res] = Math.min(game.resources[res] + fa, game.storage[res]);
+            rates[res] += fa;
+        }
+    }
+
+    // Hunter production (no building needed)
+    const hunterFood = game.jobs.hunter * 1;
+    if (hunterFood > 0) {
+        game.resources.food = Math.min(game.resources.food + hunterFood, game.storage.food);
+        rates.food += hunterFood;
+    }
+
+    // === Food consumption: 1 per person per tick ===
+    const foodNeeded = game.population.current;
+    rates.food -= foodNeeded;
+    if (game.resources.food >= foodNeeded) {
+        game.resources.food -= foodNeeded;
+    } else {
+        game.resources.food = 0;
+        if (Math.random() < 0.3 && game.population.current > 1) {
+            game.population.current--;
+            addNotification('A settler left due to food shortage!');
+            removePeopleDot();
+        }
+    }
+
+    // === Explorer auto-discovery ===
+    if (game.jobs.explorer > 0 && game.hasShipyard) {
+        game.explorerTimer += game.jobs.explorer * 0.1;
+        while (game.explorerTimer >= 1) {
+            game.explorerTimer -= 1;
+            if (game.resources.gold >= 5) {
+                game.resources.gold -= 5;
+                rates.gold -= 5;
+                explorerRevealTiles(game.research.has('navigation') ? 2 : 1);
+            } else {
+                if (game.tick % 10 === 0) addNotification('Explorers need 5 gold per tile!');
+                game.explorerTimer = 0;
+                break;
+            }
+        }
+    }
+
+    game.rates = rates;
+    calculateHappiness();
+
+    // Housing capacity
+    game.population.capacity = 0;
+    for (const b of game.buildings) game.population.capacity += BUILDING_DEFS[b.type].housing;
+
+    // Storage capacity
+    const warehouseCount = game.buildings.filter(b => b.type === 'warehouse').length;
+    const sm = 1 + warehouseCount * 0.5;
+    for (const res of ['food','wood','stone','gold','knowledge','iron']) {
+        game.storage[res] = Math.floor(100 * sm);
+        game.resources[res] = Math.min(game.resources[res], game.storage[res]);
+    }
+
+    checkImmigration();
+    syncJobsWithPopulation();
+    checkUnlocks();
+
+    game.hasShipyard = game.buildings.some(b => b.type === 'shipyard');
+    document.getElementById('exploreBtn').style.display = game.hasShipyard ? '' : 'none';
+
+    // Show iron resource when metallurgy researched
+    const ironEl = document.getElementById('ironResource');
+    if (ironEl) ironEl.style.display = game.research.has('metallurgy') || game.resources.iron > 0 ? '' : 'none';
+
+    updateVehicles();
+    updateResourceUI();
+    if (document.getElementById('jobsPanel').classList.contains('open')) updateJobsPanel();
+    syncPeopleDots();
+
+    if (game.population.current >= VICTORY_POP && !victoryShown) showVictory();
+}
+
+function calculateHappiness() {
+    let happiness = 50; // base
+
+    // Food surplus bonus
+    const foodSurplus = game.resources.food - game.population.current;
+    if (foodSurplus > 0) {
+        happiness += Math.floor(foodSurplus / 5);
+    }
+
+    // Building happiness
+    for (const b of game.buildings) {
+        happiness += BUILDING_DEFS[b.type].happiness;
+    }
+
+    // Overcrowding penalty
+    if (game.population.current > game.population.capacity && game.population.capacity > 0) {
+        const overcrowded = game.population.current - game.population.capacity;
+        happiness -= overcrowded * 2;
+    }
+
+    // Festival buff
+    if (game.eventBuffs.festivalBoost > Date.now()) {
+        happiness += 10;
+    }
+
+    // No housing penalty
+    if (game.population.capacity === 0 && game.population.current > 0) {
+        happiness -= 5;
+    }
+
+    game.happiness = Math.max(0, Math.min(100, happiness));
+
+    // If happiness too low, people leave
+    if (game.happiness < 20 && Math.random() < 0.2 && game.population.current > 1) {
+        game.population.current--;
+        addNotification('A settler left due to unhappiness!');
+        removePeopleDot();
+    }
+}
+
+function checkImmigration() {
+    const housingRoom = game.population.capacity - game.population.current;
+    if (housingRoom <= 0) return;
+    const foodSurplus = game.resources.food - 20;
+    if (foodSurplus <= 0) return;
+
+    let growthRate = 0.02 * (foodSurplus / 30) * Math.min(housingRoom / 3, 1.5);
+    growthRate *= Math.max(0.1, game.happiness / 50);
+
+    if (game.buildings.some(b => b.type === 'lighthouse')) growthRate *= 1.5;
+    if (game.buildings.some(b => b.type === 'hospital')) growthRate *= 1.5;
+
+    game.immigrationTimer += growthRate;
+
+    if (game.immigrationTimer >= 1) {
+        game.immigrationTimer -= 1;
+        game.population.current++;
+        addNotification('A new settler arrived!');
+        spawnPeopleDot();
+        spawnParticles(Math.floor(MAP_SIZE / 2), Math.floor(MAP_SIZE / 2), '✨', 5);
+    }
+}
+
+function syncJobsWithPopulation() {
+    const total = Object.values(game.jobs).reduce((a, b) => a + b, 0);
+    const diff = game.population.current - total;
+    if (diff > 0) {
+        game.jobs.idle += diff;
+    } else if (diff < 0) {
+        let toRemove = -diff;
+        const fromIdle = Math.min(game.jobs.idle, toRemove);
+        game.jobs.idle -= fromIdle;
+        toRemove -= fromIdle;
+        const order = ['explorer','scholar','merchant','miner','lumberjack','fisher','farmer','hunter','builder'];
+        for (const job of order) {
+            if (toRemove <= 0) break;
+            const take = Math.min(game.jobs[job], toRemove);
+            game.jobs[job] -= take;
+            toRemove -= take;
+        }
+    }
+}
+
+function explorerRevealTiles(count) {
+    const candidates = [];
+    for (let y = 0; y < MAP_SIZE; y++) {
+        for (let x = 0; x < MAP_SIZE; x++) {
+            if (!game.map[y][x].revealed && isAdjacentToRevealed(x, y)) candidates.push({ x, y });
+        }
+    }
+    if (candidates.length === 0) return;
+    let foundLand = false;
+    for (let i = 0; i < Math.min(count, candidates.length); i++) {
+        const idx = Math.floor(Math.random() * candidates.length);
+        const { x, y } = candidates.splice(idx, 1)[0];
+        game.map[y][x].revealed = true;
+        spawnParticles(x, y, '🧭', 3);
+        if (game.map[y][x].terrain !== TERRAIN.WATER) foundLand = true;
+    }
+    addNotification(foundLand ? 'Explorers discovered new land!' : 'Explorers charted open water.');
+}
+
+function checkUnlocks() {
+    const pop = game.population.current;
+    let newTier = 1;
+    if (pop >= TIER_UNLOCKS[4]) newTier = 4;
+    else if (pop >= TIER_UNLOCKS[3]) newTier = 3;
+    else if (pop >= TIER_UNLOCKS[2]) newTier = 2;
+
+    if (newTier > game.unlockedTier) {
+        game.unlockedTier = newTier;
+        addNotification(`Tier ${newTier} buildings unlocked! 🔓`);
+        updateBuildingBar();
+    }
+}
+
+// ============================================================
+// BUILDING PLACEMENT
+// ============================================================
+function canPlaceBuilding(type, x, y) {
+    if (x < 0 || x >= MAP_SIZE || y < 0 || y >= MAP_SIZE) return false;
+    const tile = game.map[y][x];
+    if (!tile.revealed) return false;
+    if (tile.building) return false;
+
+    const def = BUILDING_DEFS[type];
+    if (!def.tileReq.includes(tile.terrain)) return false;
+
+    // Check adjacent water requirement
+    if (def.needsAdjacentWater) {
+        let hasWater = false;
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+        for (const [dx, dy] of dirs) {
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < MAP_SIZE && ny >= 0 && ny < MAP_SIZE) {
+                if (game.map[ny][nx].terrain === TERRAIN.WATER) {
+                    hasWater = true;
+                    break;
+                }
+            }
+        }
+        if (!hasWater) return false;
+    }
+
+    // Bridge and Landfill must be adjacent to a land tile or another bridge
+    if (type === 'bridge' || type === 'landfill') {
+        let hasLandOrBridge = false;
+        const dirs8 = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+        for (const [dx, dy] of dirs8) {
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < MAP_SIZE && ny >= 0 && ny < MAP_SIZE) {
+                const n = game.map[ny][nx];
+                if (n.revealed && (n.terrain !== TERRAIN.WATER || (n.building && n.building.type === 'bridge'))) {
+                    hasLandOrBridge = true;
+                    break;
+                }
+            }
+        }
+        if (!hasLandOrBridge) return false;
+    }
+
+    // Check can afford (with builder discount)
+    if (!canAfford(getDiscountedCost(def.cost))) return false;
+
+    // Check tier
+    if (def.tier > game.unlockedTier) return false;
+
+    // Check tech requirement
+    if (def.techReq && !game.research.has(def.techReq)) return false;
+
+    return true;
+}
+
+function canAfford(cost) {
+    for (const [res, amount] of Object.entries(cost)) {
+        if ((game.resources[res] || 0) < amount) return false;
+    }
+    return true;
+}
+
+function getDiscountedCost(cost) {
+    const discount = Math.min((game.jobs.builder || 0) * 0.1, 0.5);
+    if (discount === 0) return cost;
+    const result = {};
+    for (const [res, amt] of Object.entries(cost)) {
+        result[res] = Math.max(1, Math.ceil(amt * (1 - discount)));
+    }
+    return result;
+}
+
+function placeBuilding(type, x, y) {
+    if (!canPlaceBuilding(type, x, y)) return false;
+
+    const def = BUILDING_DEFS[type];
+
+    // Deduct discounted cost
+    const disc = getDiscountedCost(def.cost);
+    for (const [res, amount] of Object.entries(disc)) {
+        game.resources[res] -= amount;
+    }
+
+    // Landfill: converts water to grass then removes itself
+    if (type === 'landfill') {
+        game.map[y][x].terrain = TERRAIN.GRASS;
+        spawnParticles(x, y, '✨', 10);
+        addNotification('Landfill complete! Water converted to land.');
+        updateResourceUI();
+        return true;
+    }
+
+    const building = { type, x, y, placedTick: game.tick };
+    game.buildings.push(building);
+    game.map[y][x].building = building;
+
+    // Construction particles
+    spawnParticles(x, y, '✨', 8);
+
+    addNotification(`Built ${def.name}!`);
+    if (def.jobType && def.production) {
+        const jd = JOB_DEFS[def.jobType];
+        addNotification(`Assign a ${jd.icon} ${jd.name} for 2x output!`);
+    }
+    updateResourceUI();
+    return true;
+}
+
+function demolishBuilding(x, y) {
+    if (x < 0 || x >= MAP_SIZE || y < 0 || y >= MAP_SIZE) return;
+    const tile = game.map[y][x];
+    if (!tile.building) return;
+
+    const b = tile.building;
+    const def = BUILDING_DEFS[b.type];
+
+    // Partial refund (50%)
+    for (const [res, amount] of Object.entries(def.cost)) {
+        const refund = Math.floor(amount * 0.5);
+        game.resources[res] = Math.min(game.resources[res] + refund, game.storage[res]);
+    }
+
+    // Remove from buildings array
+    const idx = game.buildings.indexOf(b);
+    if (idx !== -1) game.buildings.splice(idx, 1);
+    tile.building = null;
+
+    spawnParticles(x, y, '💨', 5);
+    addNotification(`Demolished ${def.name}. 50% resources refunded.`);
+    updateResourceUI();
+}
+
+// ============================================================
+// LAND EXPANSION
+// ============================================================
+function isAdjacentToRevealed(x, y) {
+    const dirs = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+    for (const [dx, dy] of dirs) {
+        const nx = x + dx, ny = y + dy;
+        if (nx >= 0 && nx < MAP_SIZE && ny >= 0 && ny < MAP_SIZE) {
+            const neighbor = game.map[ny][nx];
+            if (neighbor.revealed && (
+                neighbor.terrain !== TERRAIN.WATER ||
+                (neighbor.building && neighbor.building.type === 'bridge')
+            )) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+function isAdjacentToAnyRevealed(x, y) {
+    const dirs = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+    for (const [dx, dy] of dirs) {
+        const nx = x + dx, ny = y + dy;
+        if (nx >= 0 && nx < MAP_SIZE && ny >= 0 && ny < MAP_SIZE) {
+            if (game.map[ny][nx].revealed) return true;
+        }
+    }
+    return false;
+}
+
+function expandLand(x, y) {
+    if (x < 0 || x >= MAP_SIZE || y < 0 || y >= MAP_SIZE) return false;
+    if (game.map[y][x].revealed) return false;
+    if (!isAdjacentToAnyRevealed(x, y)) return false;
+    if (game.resources.gold < 10) {
+        addNotification('Need 10 gold to explore!');
+        return false;
+    }
+
+    game.resources.gold -= 10;
+    game.map[y][x].revealed = true;
+
+    spawnParticles(x, y, '🗺️', 4);
+    if (game.map[y][x].terrain === TERRAIN.WATER) {
+        addNotification('Explored: open water.');
+    } else {
+        addNotification('Discovered new land!');
+    }
+    updateResourceUI();
+
+    // Small chance to discover a cluster of tiles
+    if (Math.random() < 0.15) {
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+        const bonusDir = dirs[Math.floor(Math.random() * dirs.length)];
+        const bx = x + bonusDir[0], by = y + bonusDir[1];
+        if (bx >= 0 && bx < MAP_SIZE && by >= 0 && by < MAP_SIZE && !game.map[by][bx].revealed) {
+            game.map[by][bx].revealed = true;
+            addNotification('Bonus: discovered adjacent tile!');
+        }
+    }
+
+    return true;
+}
+
+function revealRandomFog(count) {
+    const candidates = [];
+    for (let y = 0; y < MAP_SIZE; y++) {
+        for (let x = 0; x < MAP_SIZE; x++) {
+            if (!game.map[y][x].revealed && isAdjacentToRevealed(x, y)) {
+                candidates.push({ x, y });
+            }
+        }
+    }
+
+    for (let i = 0; i < Math.min(count, candidates.length); i++) {
+        const idx = Math.floor(Math.random() * candidates.length);
+        const { x, y } = candidates.splice(idx, 1)[0];
+        game.map[y][x].revealed = true;
+    }
+}
+
+function hasFogNearLand(g) {
+    for (let y = 0; y < MAP_SIZE; y++) {
+        for (let x = 0; x < MAP_SIZE; x++) {
+            if (!g.map[y][x].revealed && isAdjacentToRevealed(x, y)) return true;
+        }
+    }
+    return false;
+}
+
+// ============================================================
+// PARTICLES
+// ============================================================
+function spawnParticles(tileX, tileY, emoji, count) {
+    for (let i = 0; i < count; i++) {
+        game.particles.push({
+            x: tileX + 0.5 + (Math.random() - 0.5) * 0.5,
+            y: tileY + 0.5 + (Math.random() - 0.5) * 0.5,
+            vx: (Math.random() - 0.5) * 2,
+            vy: -Math.random() * 2 - 0.5,
+            life: 800 + Math.random() * 500,
+            maxLife: 1300,
+            emoji: emoji,
+            size: 12 + Math.random() * 6,
+            color: null
+        });
+    }
+}
+
+function spawnColorParticles(tileX, tileY, color, count) {
+    for (let i = 0; i < count; i++) {
+        game.particles.push({
+            x: tileX + 0.5 + (Math.random() - 0.5) * 0.8,
+            y: tileY + 0.5 + (Math.random() - 0.5) * 0.8,
+            vx: (Math.random() - 0.5) * 1.5,
+            vy: -Math.random() * 1.5,
+            life: 600 + Math.random() * 400,
+            maxLife: 1000,
+            emoji: null,
+            size: 3 + Math.random() * 3,
+            color: color
+        });
+    }
+}
+
+// ============================================================
+// PEOPLE DOTS
+// ============================================================
+function spawnInitialPeople() {
+    const colors = ['#e57373', '#64b5f6', '#81c784', '#fff176', '#ce93d8', '#ffb74d', '#4dd0e1'];
+    for (let i = 0; i < game.population.current; i++) {
+        spawnPeopleDot();
+    }
+}
+
+function spawnPeopleDot() {
+    const colors = ['#e57373', '#64b5f6', '#81c784', '#fff176', '#ce93d8', '#ffb74d', '#4dd0e1'];
+    // Spawn near a random building on revealed land, fallback to map center
+    let sx, sy;
+    const valid = game.buildings.filter(b => b.x >= 0 && b.x < MAP_SIZE && b.y >= 0 && b.y < MAP_SIZE && game.map[b.y][b.x].revealed);
+    if (valid.length > 0) {
+        const b = valid[Math.floor(Math.random() * valid.length)];
+        sx = b.x + (Math.random() - 0.5) * 2;
+        sy = b.y + (Math.random() - 0.5) * 2;
+    } else {
+        sx = Math.floor(MAP_SIZE / 2) + (Math.random() - 0.5) * 4;
+        sy = Math.floor(MAP_SIZE / 2) + (Math.random() - 0.5) * 4;
+    }
+    game.peopleDots.push({
+        x: sx, y: sy, tx: sx, ty: sy,
+        timer: Math.random(),
+        color: colors[Math.floor(Math.random() * colors.length)]
+    });
+}
+
+function removePeopleDot() {
+    if (game.peopleDots.length > 0) {
+        game.peopleDots.pop();
+    }
+}
+
+// Sync people dots with population
+function syncPeopleDots() {
+    while (game.peopleDots.length < game.population.current) {
+        spawnPeopleDot();
+    }
+    while (game.peopleDots.length > game.population.current) {
+        game.peopleDots.pop();
+    }
+}
+
+// ============================================================
+// EVENTS
+// ============================================================
+function triggerRandomEvent() {
+    if (currentEvent) return; // already showing one
+
+    const available = EVENTS.filter(e => e.condition(game));
+    if (available.length === 0) return;
+
+    const event = available[Math.floor(Math.random() * available.length)];
+    currentEvent = event;
+
+    document.getElementById('eventIcon').textContent = event.icon;
+    document.getElementById('eventTitle').textContent = event.title;
+    document.getElementById('eventDesc').textContent = event.desc;
+    document.getElementById('eventBanner').style.display = 'block';
+
+    document.getElementById('eventAccept').onclick = () => {
+        if (event.accept(game)) {
+            addNotification(`${event.title} - Accepted!`);
+        } else {
+            addNotification(`Cannot accept - not enough resources!`);
+        }
+        closeEvent();
+    };
+
+    document.getElementById('eventDismiss').onclick = () => {
+        closeEvent();
+    };
+}
+
+function closeEvent() {
+    currentEvent = null;
+    document.getElementById('eventBanner').style.display = 'none';
+}
+
+// ============================================================
+// UI UPDATES
+// ============================================================
+function updateResourceUI() {
+    document.getElementById('popValue').textContent = game.population.current;
+    document.getElementById('popCap').textContent = game.population.capacity;
+    document.getElementById('happyValue').textContent = Math.floor(game.happiness);
+
+    const resList = ['food','wood','stone','iron','gold','knowledge'];
+    for (const res of resList) {
+        const valEl = document.getElementById(res + 'Value');
+        const capEl = document.getElementById(res + 'Cap');
+        const rateEl = document.getElementById(res + 'Rate');
+        if (valEl) valEl.textContent = Math.floor(game.resources[res]);
+        if (capEl) capEl.textContent = '/' + game.storage[res];
+        if (rateEl && game.rates) {
+            const rate = Math.round(game.rates[res] || 0);
+            if (rate > 0) { rateEl.textContent = `+${rate}`; rateEl.className = 'resource-rate positive'; }
+            else if (rate < 0) { rateEl.textContent = `${rate}`; rateEl.className = 'resource-rate negative'; }
+            else { rateEl.textContent = ''; rateEl.className = 'resource-rate'; }
+        }
+        if (valEl) valEl.style.color = game.resources[res] >= game.storage[res] ? '#ffb74d' : '';
+    }
+
+    const popEl = document.getElementById('popValue');
+    popEl.style.color = (game.population.current >= game.population.capacity && game.population.capacity > 0) ? '#ff8a65' : '';
+
+    const happyEl = document.getElementById('happyValue');
+    if (game.happiness >= 70) happyEl.style.color = '#81c784';
+    else if (game.happiness < 30) happyEl.style.color = '#e57373';
+    else happyEl.style.color = '';
+}
+
+function updateBuildingBar() {
+    const bar = document.getElementById('buildingBar');
+    bar.innerHTML = '';
+    const costIcons = { wood:'🪵', stone:'⛏️', gold:'🪙', iron:'🔩' };
+
+    for (const key of BUILDING_ORDER) {
+        const def = BUILDING_DEFS[key];
+        const btn = document.createElement('div');
+        btn.className = 'build-btn';
+
+        const tierLocked = def.tier > game.unlockedTier;
+        const techLocked = def.techReq && !game.research.has(def.techReq);
+        const locked = tierLocked || techLocked;
+        if (locked) btn.classList.add('locked');
+
+        const costStr = Object.entries(def.cost).map(([r, a]) => `${costIcons[r]||r}${a}`).join(' ');
+        let lockText = '';
+        if (tierLocked) lockText = `Pop ${TIER_UNLOCKS[def.tier]}`;
+        else if (techLocked) lockText = `🔬 ${TECH_DEFS[def.techReq].name}`;
+
+        btn.innerHTML = `
+            <span class="emoji">${locked ? '🔒' : def.emoji}</span>
+            <span class="name">${def.name}</span>
+            <span class="cost">${locked ? lockText : costStr}</span>
+        `;
+
+        if (!locked) {
+            if (game.selectedBuilding === key) btn.classList.add('selected');
+            btn.onclick = () => selectBuilding(key, btn);
+            btn.onmouseenter = () => { showTooltip(btn, `${def.name}\n${def.desc}\nCost: ${costStr}`); };
+            btn.onmouseleave = hideTooltip;
+        }
+
+        bar.appendChild(btn);
+    }
+}
+
+function selectBuilding(type, btn) {
+    // Toggle selection
+    if (game.selectedBuilding === type) {
+        game.selectedBuilding = null;
+        document.querySelectorAll('.build-btn').forEach(b => b.classList.remove('selected'));
+        document.getElementById('canvasContainer').classList.remove('placing');
+        return;
+    }
+
+    game.selectedBuilding = type;
+    game.expandMode = false;
+    demolishMode = false;
+    document.getElementById('exploreBtn').classList.remove('active');
+    document.getElementById('demolishBtn').classList.remove('demolish-active');
+    document.querySelectorAll('.build-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    document.getElementById('canvasContainer').classList.add('placing');
+}
+
+function toggleExploreMode() {
+    game.expandMode = !game.expandMode;
+    if (game.expandMode) {
+        game.selectedBuilding = null;
+        demolishMode = false;
+        document.querySelectorAll('.build-btn').forEach(b => b.classList.remove('selected'));
+        document.getElementById('canvasContainer').classList.add('placing');
+        document.getElementById('exploreBtn').classList.add('active');
+        document.getElementById('demolishBtn').classList.remove('demolish-active');
+    } else {
+        document.getElementById('exploreBtn').classList.remove('active');
+        document.getElementById('canvasContainer').classList.remove('placing');
+    }
+}
+
+function toggleDemolishMode() {
+    demolishMode = !demolishMode;
+    if (demolishMode) {
+        game.selectedBuilding = null;
+        game.expandMode = false;
+        document.querySelectorAll('.build-btn').forEach(b => b.classList.remove('selected'));
+        document.getElementById('canvasContainer').classList.add('placing');
+        document.getElementById('demolishBtn').classList.add('demolish-active');
+        document.getElementById('exploreBtn').classList.remove('active');
+    } else {
+        document.getElementById('demolishBtn').classList.remove('demolish-active');
+        document.getElementById('canvasContainer').classList.remove('placing');
+    }
+}
+
+function cycleSpeed() {
+    const speeds = [1, 2, 3];
+    const idx = speeds.indexOf(game.gameSpeed);
+    game.gameSpeed = speeds[(idx + 1) % speeds.length];
+    document.getElementById('speedBtn').textContent = `▶️ x${game.gameSpeed}`;
+}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+function addNotification(text) {
+    const container = document.getElementById('notifications');
+    const notif = document.createElement('div');
+    notif.className = 'notification';
+    notif.textContent = text;
+
+    container.appendChild(notif);
+
+    setTimeout(() => {
+        if (notif.parentNode) notif.parentNode.removeChild(notif);
+    }, 3600);
+
+    // Limit visible notifications
+    while (container.children.length > 5) {
+        container.removeChild(container.firstChild);
+    }
+}
+
+// ============================================================
+// BUILDING INFO POPUP
+// ============================================================
+// ============================================================
+// JOBS PANEL
+// ============================================================
+function toggleJobsPanel() {
+    const panel = document.getElementById('jobsPanel');
+    panel.classList.toggle('open');
+    if (panel.classList.contains('open')) updateJobsPanel();
+}
+
+function adjustJob(jobType, delta) {
+    if (delta > 0) {
+        if (game.jobs.idle <= 0) return;
+        game.jobs.idle--;
+        game.jobs[jobType]++;
+    } else {
+        if (game.jobs[jobType] <= 0) return;
+        game.jobs[jobType]--;
+        game.jobs.idle++;
+    }
+    updateJobsPanel();
+}
+
+function updateJobsPanel() {
+    const panel = document.getElementById('jobsPanel');
+    if (!panel.classList.contains('open')) return;
+    const total = game.population.current;
+    let html = `<div class="jobs-title">👥 Jobs (${total} people)</div>`;
+    for (const jobKey of JOB_ORDER) {
+        const def = JOB_DEFS[jobKey];
+        const count = game.jobs[jobKey];
+        const isLocked = jobKey === 'explorer' && !game.hasShipyard;
+        let outputStr = '';
+        if (jobKey === 'idle') {
+            outputStr = '';
+        } else if (jobKey === 'hunter') {
+            outputStr = count > 0 ? `<span class="job-output">→ +${count}🌾/tick</span>` : '';
+        } else if (jobKey === 'builder') {
+            const disc = Math.min(count * 10, 50);
+            outputStr = count > 0 ? `<span class="job-output" style="color:#81c784">-${disc}% build cost</span>` : '';
+        } else if (jobKey === 'explorer') {
+            outputStr = count > 0 ? `<span class="job-output">→ ~1 tile/${Math.max(1,Math.ceil(10/count))}s</span>` : '';
+        } else {
+            const blds = game.buildings.filter(b => BUILDING_DEFS[b.type].jobType === jobKey);
+            if (blds.length > 0) {
+                const worked = Math.min(count, blds.length);
+                const sorted = [...blds].sort((a, b) => (Object.values(BUILDING_DEFS[b.type].production||{})[0]||0) - (Object.values(BUILDING_DEFS[a.type].production||{})[0]||0));
+                const out = {};
+                // Base from all buildings
+                for (const bd of blds) {
+                    const d = BUILDING_DEFS[bd.type];
+                    if (d.production) for (const [r,a] of Object.entries(d.production)) out[r] = (out[r]||0) + a;
+                }
+                // Bonus from worked buildings (doubles their output)
+                for (let i = 0; i < worked; i++) {
+                    const d = BUILDING_DEFS[sorted[i].type];
+                    if (d.production) for (const [r,a] of Object.entries(d.production)) out[r] = (out[r]||0) + a;
+                }
+                const icons = {food:'🌾',wood:'🪵',stone:'⛏️',gold:'🪙',knowledge:'📚',iron:'🔩'};
+                const parts = Object.entries(out).map(([r,a]) => `+${a}${icons[r]||r}`);
+                outputStr = `<span class="job-output">${blds.length} bldg → ${parts.join(' ')}/tick</span>`;
+                if (worked > 0) outputStr += ` <span class="job-output" style="color:#81c784">(${worked} boosted)</span>`;
+                if (count > blds.length) outputStr += ` <span class="job-output job-warning">(${count-blds.length} extra)</span>`;
+            } else if (count > 0) {
+                outputStr = '<span class="job-output job-warning">No buildings yet</span>';
+            }
+        }
+        const canAdd = game.jobs.idle > 0 && !isLocked;
+        const canRemove = count > 0 && jobKey !== 'idle';
+        html += `<div class="job-row${isLocked ? ' locked' : ''}">
+            <div class="job-left"><span class="job-icon">${def.icon}</span><div><div class="job-name">${def.name}</div>${outputStr}</div></div>
+            <span class="job-count">${count}</span>
+            <div class="job-btns">${jobKey !== 'idle' ? `<button class="job-btn" onclick="adjustJob('${jobKey}',-1)" ${canRemove?'':'disabled'}>−</button><button class="job-btn" onclick="adjustJob('${jobKey}',1)" ${canAdd?'':'disabled'}>+</button>` : ''}</div>
+        </div>`;
+    }
+    html += `<button class="action-btn" style="margin-top:10px;width:100%" onclick="toggleJobsPanel()">Close</button>`;
+    panel.innerHTML = html;
+}
+
+// ============================================================
+// TECH TREE
+// ============================================================
+function toggleTechPanel() {
+    const panel = document.getElementById('techPanel');
+    panel.classList.toggle('open');
+    if (panel.classList.contains('open')) updateTechPanel();
+}
+
+function researchTech(techKey) {
+    const tech = TECH_DEFS[techKey];
+    if (!tech || game.research.has(techKey)) return;
+    for (const p of tech.prereqs) {
+        if (!game.research.has(p)) { addNotification(`Need ${TECH_DEFS[p].name} first!`); return; }
+    }
+    for (const [res, amt] of Object.entries(tech.cost)) {
+        if ((game.resources[res]||0) < amt) { addNotification('Not enough resources!'); return; }
+    }
+    for (const [res, amt] of Object.entries(tech.cost)) game.resources[res] -= amt;
+    game.research.add(techKey);
+    addNotification(`Researched ${tech.name}!`);
+    if (tech.unlocks.length > 0) {
+        addNotification(`Unlocked: ${tech.unlocks.map(k => BUILDING_DEFS[k]?.name||k).join(', ')}`);
+    }
+    updateTechPanel();
+    updateBuildingBar();
+    updateResourceUI();
+}
+
+function updateTechPanel() {
+    const grid = document.getElementById('techGrid');
+    if (!grid) return;
+    const icons = {knowledge:'📚',gold:'🪙',iron:'🔩',wood:'🪵',stone:'⛏️'};
+    let html = '';
+    for (const [key, tech] of Object.entries(TECH_DEFS)) {
+        const done = game.research.has(key);
+        const prereqsMet = tech.prereqs.every(p => game.research.has(p));
+        const canAffordIt = Object.entries(tech.cost).every(([r,a]) => (game.resources[r]||0) >= a);
+        let status = done ? 'researched' : (prereqsMet ? 'available' : 'locked');
+        const costStr = Object.entries(tech.cost).map(([r,a]) => `${icons[r]||r}${a}`).join(' ');
+        const prereqStr = tech.prereqs.length > 0 ? `Needs: ${tech.prereqs.map(p => `${game.research.has(p)?'✓':'✗'} ${TECH_DEFS[p].name}`).join(', ')}` : 'No prerequisites';
+        html += `<div class="tech-card ${status}" ${status==='available'?`onclick="researchTech('${key}')"`:''}>
+            <div class="tech-icon">${tech.icon}</div><div class="tech-name">${tech.name}</div>
+            <div class="tech-cost">${costStr}</div><div class="tech-desc">${tech.desc}</div>
+            <div class="tech-prereqs">${prereqStr}</div>
+            <div class="tech-status">${done?'✅ Researched':(status==='available'?(canAffordIt?'🔬 Click to Research':'💰 Need Resources'):'🔒 Locked')}</div>
+        </div>`;
+    }
+    grid.innerHTML = html;
+}
+
+// ============================================================
+// SAVE / LOAD
+// ============================================================
+function saveGame(silent) {
+    if (!game) return;
+    const data = {
+        mapSize: MAP_SIZE,
+        islands: game.islands,
+        map: game.map.map(row => row.map(t => ({ terrain: t.terrain, revealed: t.revealed, decorVariant: t.decorVariant }))),
+        buildings: game.buildings.map(b => ({ type: b.type, x: b.x, y: b.y, placedTick: b.placedTick })),
+        population: game.population,
+        resources: game.resources,
+        storage: game.storage,
+        happiness: game.happiness,
+        tick: game.tick,
+        jobs: game.jobs,
+        research: [...game.research],
+        explorerTimer: game.explorerTimer,
+        hasShipyard: game.hasShipyard,
+        immigrationTimer: game.immigrationTimer,
+        gameSpeed: game.gameSpeed,
+        eventBuffs: game.eventBuffs,
+        unlockedTier: game.unlockedTier,
+        camera: game.camera,
+        dayPhase: game.dayPhase
+    };
+    localStorage.setItem('auxotopia_save', JSON.stringify(data));
+    if (!silent) addNotification('Game saved!');
+}
+
+function loadGame() {
+    const raw = localStorage.getItem('auxotopia_save');
+    if (!raw) return false;
+    try {
+        const d = JSON.parse(raw);
+        if (d.mapSize && d.mapSize !== MAP_SIZE) {
+            addNotification('Save incompatible: map size changed. Starting new game.');
+            return false;
+        }
+        game.map = d.map.map(row => row.map(t => ({ terrain: t.terrain, revealed: t.revealed, building: null, decorVariant: t.decorVariant })));
+        game.islands = d.islands || [];
+        game.buildings = d.buildings.map(b => {
+            const bld = { type: b.type, x: b.x, y: b.y, placedTick: b.placedTick };
+            if (BUILDING_DEFS[b.type] && b.y >= 0 && b.y < MAP_SIZE && b.x >= 0 && b.x < MAP_SIZE) {
+                game.map[b.y][b.x].building = bld;
+            }
+            return bld;
+        }).filter(b => BUILDING_DEFS[b.type]);
+        game.population = d.population;
+        game.resources = { food:0,wood:0,stone:0,gold:0,knowledge:0,iron:0, ...d.resources };
+        game.storage = { food:100,wood:100,stone:100,gold:100,knowledge:100,iron:100, ...d.storage };
+        game.happiness = d.happiness;
+        game.tick = d.tick;
+        game.jobs = { idle:0,farmer:0,lumberjack:0,miner:0,fisher:0,merchant:0,scholar:0,hunter:0,builder:0,explorer:0, ...d.jobs };
+        game.research = new Set(d.research || []);
+        game.explorerTimer = d.explorerTimer || 0;
+        game.hasShipyard = d.hasShipyard || false;
+        game.immigrationTimer = d.immigrationTimer || 0;
+        game.gameSpeed = d.gameSpeed || 1;
+        game.eventBuffs = d.eventBuffs || { farmBoost:0, fishBoost:0, festivalBoost:0 };
+        game.unlockedTier = d.unlockedTier || 1;
+        game.camera = d.camera || { x:0, y:0 };
+        game.dayPhase = d.dayPhase || 0;
+        game.particles = [];
+        game.peopleDots = [];
+        game.vehicles = [];
+        game.rates = { food:0,wood:0,stone:0,gold:0,knowledge:0,iron:0 };
+        game.selectedBuilding = null;
+        game.expandMode = false;
+        for (let i = 0; i < game.population.current; i++) spawnPeopleDot();
+        victoryShown = false;
+        updateBuildingBar();
+        updateResourceUI();
+        document.getElementById('speedBtn').textContent = `▶️ x${game.gameSpeed}`;
+        addNotification('Game loaded!');
+        return true;
+    } catch(e) { console.error('Load failed:', e); return false; }
+}
+
+// ============================================================
+// BUILDING INFO POPUP
+// ============================================================
+function showBuildingInfo(building, screenX, screenY) {
+    selectedBuildingInfo = building;
+    const def = BUILDING_DEFS[building.type];
+    const info = document.getElementById('buildingInfo');
+
+    document.getElementById('infoHeader').textContent = `${def.emoji} ${def.name}`;
+
+    let details = def.desc;
+    if (def.production) {
+        const prodStr = Object.entries(def.production).map(([r, a]) => `+${a} ${r}`).join(', ');
+        details += `\nProduction: ${prodStr}/tick`;
+    }
+    if (def.housing > 0) details += `\nHousing: +${def.housing}`;
+    if (def.jobType) {
+        const jd = JOB_DEFS[def.jobType];
+        const bc = game.buildings.filter(b => BUILDING_DEFS[b.type].jobType === def.jobType).length;
+        const wk = game.jobs[def.jobType] || 0;
+        details += `\nWorker: ${jd.icon} ${jd.name} (${Math.min(wk,bc)}/${bc} active)`;
+    }
+    document.getElementById('infoDetail').textContent = details;
+
+    // Position popup
+    info.style.left = Math.min(screenX + 10, window.innerWidth - 220) + 'px';
+    info.style.top = Math.min(screenY + 10, window.innerHeight - 200) + 'px';
+    info.style.display = 'block';
+}
+
+function closeBuildingInfo() {
+    selectedBuildingInfo = null;
+    document.getElementById('buildingInfo').style.display = 'none';
+}
+
+function demolishSelected() {
+    if (!selectedBuildingInfo) return;
+    demolishBuilding(selectedBuildingInfo.x, selectedBuildingInfo.y);
+    closeBuildingInfo();
+}
+
+// ============================================================
+// TOOLTIP
+// ============================================================
+function showTooltip(element, text) {
+    const tooltip = document.getElementById('tooltip');
+    const rect = element.getBoundingClientRect();
+    tooltip.textContent = text;
+    tooltip.style.left = rect.left + 'px';
+    tooltip.style.top = (rect.top - 60) + 'px';
+    tooltip.style.display = 'block';
+}
+
+function hideTooltip() {
+    document.getElementById('tooltip').style.display = 'none';
+}
+
+// ============================================================
+// VICTORY
+// ============================================================
+function showVictory() {
+    victoryShown = true;
+    const stats = document.getElementById('victoryStats');
+    stats.innerHTML = `
+        Population: ${game.population.current}<br>
+        Buildings: ${game.buildings.length}<br>
+        Happiness: ${Math.floor(game.happiness)}<br>
+        Game Ticks: ${game.tick}<br>
+        Food: ${Math.floor(game.resources.food)} | Wood: ${Math.floor(game.resources.wood)}<br>
+        Stone: ${Math.floor(game.resources.stone)} | Gold: ${Math.floor(game.resources.gold)}
+    `;
+    document.getElementById('victoryScreen').style.display = 'flex';
+}
+
+function closeVictory() {
+    document.getElementById('victoryScreen').style.display = 'none';
+}
+
+// ============================================================
+// CAMERA
+// ============================================================
+function clampCamera() {
+    const maxX = MAP_SIZE * TILE_SIZE - canvasW;
+    const maxY = MAP_SIZE * TILE_SIZE - canvasH;
+    game.camera.x = Math.max(0, Math.min(maxX, game.camera.x));
+    game.camera.y = Math.max(0, Math.min(maxY, game.camera.y));
+}
+
+function screenToTile(sx, sy) {
+    const tx = Math.floor((sx + game.camera.x) / TILE_SIZE);
+    const ty = Math.floor((sy + game.camera.y) / TILE_SIZE);
+    return { x: tx, y: ty };
+}
+
+// ============================================================
+// INPUT HANDLING
+// ============================================================
+function setupInput() {
+    // Keyboard
+    window.addEventListener('keydown', (e) => {
+        keys[e.key.toLowerCase()] = true;
+
+        // Escape to cancel selection and close panels
+        if (e.key === 'Escape') {
+            game.selectedBuilding = null;
+            game.expandMode = false;
+            demolishMode = false;
+            document.querySelectorAll('.build-btn').forEach(b => b.classList.remove('selected'));
+            document.getElementById('canvasContainer').classList.remove('placing');
+            document.getElementById('exploreBtn').classList.remove('active');
+            document.getElementById('demolishBtn').classList.remove('demolish-active');
+            closeBuildingInfo();
+            const jp = document.getElementById('jobsPanel');
+            if (jp.classList.contains('open')) jp.classList.remove('open');
+            const tp = document.getElementById('techPanel');
+            if (tp.classList.contains('open')) tp.classList.remove('open');
+        }
+    });
+
+    window.addEventListener('keyup', (e) => {
+        keys[e.key.toLowerCase()] = false;
+    });
+
+    // Mouse
+    canvas.addEventListener('mousedown', (e) => {
+        dragStart = { x: e.clientX, y: e.clientY };
+        isDragging = false;
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        hoverTile = screenToTile(mx, my);
+
+        if (dragStart) {
+            const dx = e.clientX - dragStart.x;
+            const dy = e.clientY - dragStart.y;
+            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+                isDragging = true;
+                game.camera.x -= dx;
+                game.camera.y -= dy;
+                clampCamera();
+                dragStart = { x: e.clientX, y: e.clientY };
+            }
+        }
+    });
+
+    canvas.addEventListener('mouseup', (e) => {
+        if (!isDragging && dragStart) {
+            const rect = canvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+            handleClick(mx, my, e.clientX, e.clientY);
+        }
+        dragStart = null;
+        isDragging = false;
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+        hoverTile = null;
+        dragStart = null;
+        isDragging = false;
+    });
+
+    // Touch
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (e.touches.length === 1) {
+            const t = e.touches[0];
+            touchDragStart = { x: t.clientX, y: t.clientY };
+            isDragging = false;
+        }
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (e.touches.length === 1 && touchDragStart) {
+            const t = e.touches[0];
+            const dx = t.clientX - touchDragStart.x;
+            const dy = t.clientY - touchDragStart.y;
+            if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+                isDragging = true;
+                game.camera.x -= dx;
+                game.camera.y -= dy;
+                clampCamera();
+                touchDragStart = { x: t.clientX, y: t.clientY };
+            }
+        }
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        if (!isDragging && touchDragStart) {
+            const rect = canvas.getBoundingClientRect();
+            const mx = touchDragStart.x - rect.left;
+            const my = touchDragStart.y - rect.top;
+            handleClick(mx, my, touchDragStart.x, touchDragStart.y);
+        }
+        touchDragStart = null;
+        isDragging = false;
+    }, { passive: false });
+
+    // Window resize
+    window.addEventListener('resize', onResize);
+}
+
+function handleClick(canvasX, canvasY, screenX, screenY) {
+    closeBuildingInfo();
+    closeIslandInfo();
+
+    // Check island name click (before bounds check since labels float above islands)
+    if (!game.selectedBuilding && !game.expandMode && !demolishMode) {
+        const clickedIsland = getClickedIsland(canvasX, canvasY);
+        if (clickedIsland) {
+            showIslandInfo(clickedIsland, screenX, screenY);
+            return;
+        }
+    }
+
+    const tile = screenToTile(canvasX, canvasY);
+    const { x, y } = tile;
+
+    if (x < 0 || x >= MAP_SIZE || y < 0 || y >= MAP_SIZE) return;
+
+    // Place building mode
+    if (game.selectedBuilding) {
+        if (placeBuilding(game.selectedBuilding, x, y)) {
+            // Keep building selected for repeated placement
+        }
+        return;
+    }
+
+    // Explore mode
+    if (game.expandMode) {
+        expandLand(x, y);
+        return;
+    }
+
+    // Demolish mode
+    if (demolishMode) {
+        demolishBuilding(x, y);
+        return;
+    }
+
+    // Click on existing building - show info
+    const mapTile = game.map[y][x];
+    if (mapTile.building) {
+        showBuildingInfo(mapTile.building, screenX, screenY);
+        return;
+    }
+}
+
+// ============================================================
+// START GAME
+// ============================================================
+function startNewGame() {
+    document.getElementById('startScreen').style.display = 'none';
+    gameStarted = true;
+    setupCanvas();
+    initGame();
+    setupInput();
+    lastTime = performance.now();
+    animFrame = requestAnimationFrame(render);
+    setTimeout(() => {
+        addNotification('Buildings auto-produce! Assign workers for 2x output.');
+        addNotification('Open Jobs to manage your workers.');
+    }, 800);
+    setInterval(() => { if (game) saveGame(true); }, 60000);
+}
+
+function continueGame() {
+    document.getElementById('startScreen').style.display = 'none';
+    gameStarted = true;
+    setupCanvas();
+    initGame();
+    setupInput();
+    if (!loadGame()) {
+        addNotification('No save found, starting new game.');
+    }
+    lastTime = performance.now();
+    animFrame = requestAnimationFrame(render);
+    setInterval(() => { if (game) saveGame(true); }, 60000);
+}
+
+// Show continue button if save exists
+if (localStorage.getItem('auxotopia_save')) {
+    document.getElementById('continueBtn').style.display = '';
+}
+
+// Prevent context menu on canvas
+document.addEventListener('contextmenu', (e) => {
+    if (e.target === canvas) e.preventDefault();
+});
+</script>
+</body>
+</html>
