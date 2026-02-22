@@ -29,7 +29,7 @@
         #wordPopup {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.5); display: none; justify-content: center;
-            align-items: center; z-index: 100;
+            align-items: center; z-index: 500;
         }
         #wordPopup .popup-card {
             background: white; border-radius: 15px; padding: 30px 40px;
@@ -50,7 +50,7 @@
         #greetPopup {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.7); display: none; justify-content: center;
-            align-items: center; z-index: 250;
+            align-items: center; z-index: 450;
         }
         #greetPopup .greet-card {
             background: linear-gradient(135deg, #ff6b35, #f7c948, #ff6b35);
@@ -76,7 +76,7 @@
         #startPopup {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.6); display: flex; justify-content: center;
-            align-items: center; z-index: 200;
+            align-items: center; z-index: 400;
         }
         #startPopup .popup-card {
             background: white; border-radius: 15px; padding: 30px 40px;
@@ -163,9 +163,47 @@
             border-radius: 10px; cursor: pointer; transition: transform 0.1s;
         }
         #saveNamePopup .save-actions button:hover { transform: scale(1.05); }
+        .tab-bar {
+            display: flex;
+            justify-content: center;
+            gap: 0;
+            margin-bottom: 15px;
+            width: 100%;
+            max-width: 820px;
+        }
+        .tab-bar button {
+            flex: 1;
+            padding: 12px 24px;
+            font-size: 18px;
+            font-weight: bold;
+            border: 3px solid #5D9E3C;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #e8f5e0;
+            color: #4a7030;
+        }
+        .tab-bar button:first-child { border-radius: 10px 0 0 10px; }
+        .tab-bar button:last-child { border-radius: 0 10px 10px 0; }
+        .tab-bar button.active {
+            background: #5D9E3C;
+            color: white;
+        }
+        .tab-bar button:hover:not(.active) { background: #d0ebca; }
+        #hopFrame {
+            display: none;
+            border: 4px solid #5D9E3C;
+            border-radius: 10px;
+            box-shadow: 0 0 30px rgba(93,158,60,0.4);
+            width: 800px;
+            height: 560px;
+            position: relative;
+            z-index: 1;
+        }
     </style>
 </head>
 <body>
+    <button id="backBtn" onclick="switchTab('platformer')" style="display:none; position:fixed; top:15px; left:15px; z-index:400; padding:10px 20px; font-size:16px; font-weight:bold; background:#5D9E3C; color:white; border:none; border-radius:10px; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,0.3);">Back to Menu</button>
+    <iframe id="hopFrame" src="platform-hop.html" tabindex="0"></iframe>
     <div id="gameContainer">
         <div id="ui">
             <span>Score: <b id="score">0</b></span>
@@ -179,48 +217,6 @@
         <canvas id="gameCanvas" width="800" height="500"></canvas>
         <div id="instructions">Arrow Keys/WASD to move | SPACE to jump | Collect coins, find water to heal, avoid lava!</div>
         <div id="message"></div>
-        <div id="startPopup">
-            <div class="popup-card">
-                <h2 style="margin-bottom:10px;">What's Your Name?</h2>
-                <input type="text" id="playerNameInput" placeholder="Type your name..." style="padding:10px 18px; font-size:18px; border:2px solid #4a7030; border-radius:10px; text-align:center; width:250px; outline:none; margin-bottom:15px;">
-                <h2>Choose Word Pattern</h2>
-                <p>What type of words do you want to practice?</p>
-                <div class="pattern-buttons">
-                    <button onclick="choosePattern('shortVowels', this)">Short Vowels</button>
-                    <button onclick="choosePattern('vowelTeams', this)">Vowel Teams</button>
-                    <button onclick="choosePattern('magicE', this)">Magic E</button>
-                    <button onclick="choosePattern('prefixSuffix', this)">Prefixes &amp; Suffixes</button>
-                    <button onclick="choosePattern('fakeBase', this)">Fake Bases + Affixes</button>
-                    <button onclick="choosePattern('latinGreek', this)">Latin &amp; Greek Affixes</button>
-                </div>
-                <div id="sylSection" style="display:none;">
-                    <h2 style="margin-top:15px;">Choose Syllable Count</h2>
-                    <p>How many syllables should each word have?</p>
-                    <div class="syl-buttons">
-                        <button id="syl1Btn" onclick="startWithSettings(1)">1</button>
-                        <button onclick="startWithSettings(2)">2</button>
-                        <button onclick="startWithSettings(3)">3</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div id="greetPopup">
-            <div class="greet-card">
-                <div class="greet-text" id="greetText">WHASSUP!</div>
-                <button class="greet-btn" onclick="dismissGreet()">LET'S GO!</button>
-            </div>
-        </div>
-        <div id="wordPopup">
-            <div class="popup-card">
-                <div class="popup-question">Read this word</div>
-                <div class="popup-word" id="popupWord"></div>
-                <div class="popup-buttons">
-                    <button class="btn-correct" onclick="answerPopup(true)">Correct</button>
-                    <button class="btn-incorrect" onclick="answerPopup(false)">Incorrect</button>
-                </div>
-                <div class="popup-result" id="popupResult"></div>
-            </div>
-        </div>
         <div id="savePopup">
             <div class="popup-card">
                 <h2 id="savePopupTitle">Load Game</h2>
@@ -244,7 +240,110 @@
         </div>
     </div>
 
+    <div id="startPopup">
+        <div class="popup-card">
+            <h2 style="margin-bottom:10px;">Choose a Game</h2>
+            <div class="tab-bar" style="margin-bottom:20px;">
+                <button class="active" onclick="switchTab('platformer')">Speech Therapy Platformer</button>
+                <button onclick="switchTab('hop')">Platform Hop</button>
+            </div>
+            <h2 style="margin-bottom:10px;">What's Your Name?</h2>
+            <input type="text" id="playerNameInput" placeholder="Type your name..." style="padding:10px 18px; font-size:18px; border:2px solid #4a7030; border-radius:10px; text-align:center; width:250px; outline:none; margin-bottom:15px;">
+            <h2>Choose Word Pattern</h2>
+            <p>What type of words do you want to practice?</p>
+            <div class="pattern-buttons">
+                <button onclick="choosePattern('shortVowels', this)">Short Vowels</button>
+                <button onclick="choosePattern('vowelTeams', this)">Vowel Teams</button>
+                <button onclick="choosePattern('magicE', this)">Magic E</button>
+                <button onclick="choosePattern('prefixSuffix', this)">Prefixes &amp; Suffixes</button>
+                <button onclick="choosePattern('fakeBase', this)">Fake Bases + Affixes</button>
+                <button onclick="choosePattern('latinGreek', this)">Latin &amp; Greek Affixes</button>
+            </div>
+            <div id="sylSection" style="display:none;">
+                <h2 style="margin-top:15px;">Choose Syllable Count</h2>
+                <p>How many syllables should each word have?</p>
+                <div class="syl-buttons">
+                    <button id="syl1Btn" onclick="startWithSettings(1)">1</button>
+                    <button onclick="startWithSettings(2)">2</button>
+                    <button onclick="startWithSettings(3)">3</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="greetPopup">
+        <div class="greet-card">
+            <div class="greet-text" id="greetText">WHASSUP!</div>
+            <button class="greet-btn" onclick="dismissGreet()">LET'S GO!</button>
+        </div>
+    </div>
+    <div id="wordPopup">
+        <div class="popup-card">
+            <div class="popup-question">Read this word</div>
+            <div class="popup-word" id="popupWord"></div>
+            <div class="popup-buttons">
+                <button class="btn-correct" onclick="answerPopup(true)">Correct</button>
+                <button class="btn-incorrect" onclick="answerPopup(false)">Incorrect</button>
+            </div>
+            <div class="popup-result" id="popupResult"></div>
+        </div>
+    </div>
+
     <script>
+        let activeGame = 'platformer';
+
+        function switchTab(tab) {
+            const gameContainer = document.getElementById('gameContainer');
+            const hopFrame = document.getElementById('hopFrame');
+            const buttons = document.querySelectorAll('.tab-bar button');
+            activeGame = tab;
+
+            if (tab === 'hop') {
+                gameContainer.style.display = 'none';
+                hopFrame.style.display = 'block';
+                document.getElementById('backBtn').style.display = 'block';
+                buttons.forEach(b => b.classList.remove('active'));
+                buttons[1].classList.add('active');
+                // Re-init the hop game now that iframe is visible
+                try { hopFrame.contentWindow.postMessage({ type: 'start' }, '*'); } catch(err) {}
+            } else {
+                hopFrame.style.display = 'none';
+                document.getElementById('backBtn').style.display = 'none';
+                gameContainer.style.display = 'flex';
+                buttons.forEach(b => b.classList.remove('active'));
+                buttons[0].classList.add('active');
+            }
+        }
+
+        // Listen for Platform Hop landing events (both direct call and postMessage)
+        window.onHopLanded = function() {
+            if (activeGame === 'hop' && typeof selectedWords !== 'undefined' && selectedWords && selectedWords.length > 0) {
+                var hopFrame = document.getElementById('hopFrame');
+                try { hopFrame.contentWindow.postMessage({ type: 'pause' }, '*'); } catch(err) {}
+                try { if (hopFrame.contentWindow.hopPause) hopFrame.contentWindow.hopPause(); } catch(err) {}
+                showWordPopup();
+            }
+        };
+        window.addEventListener('message', function(e) {
+            if (e.data && e.data.type === 'landed') {
+                window.onHopLanded();
+            }
+        });
+
+        // Forward key events to iframe when hop is active
+        document.addEventListener('keydown', function(e) {
+            if (activeGame === 'hop') {
+                if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+                var hopFrame = document.getElementById('hopFrame');
+                hopFrame.contentWindow.postMessage({ type: 'keydown', code: e.code }, '*');
+            }
+        });
+        document.addEventListener('keyup', function(e) {
+            if (activeGame === 'hop') {
+                var hopFrame = document.getElementById('hopFrame');
+                hopFrame.contentWindow.postMessage({ type: 'keyup', code: e.code }, '*');
+            }
+        });
+
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const scoreEl = document.getElementById('score');
@@ -782,12 +881,24 @@
             document.getElementById('greetText').textContent = 'WHASSUP ' + greetName + '!';
             document.getElementById('startPopup').style.display = 'none';
             document.getElementById('greetPopup').style.display = 'flex';
+
+            if (activeGame === 'hop') {
+                // Tell iframe to start
+                var hopFrame = document.getElementById('hopFrame');
+                hopFrame.contentWindow.postMessage({ type: 'start' }, '*');
+            }
         }
 
         function dismissGreet() {
             document.getElementById('greetPopup').style.display = 'none';
-            gamePaused = false;
-            showLevelTutorials();
+            if (activeGame === 'hop') {
+                var hopFrame = document.getElementById('hopFrame');
+                hopFrame.contentWindow.postMessage({ type: 'start' }, '*');
+                hopFrame.focus();
+            } else {
+                gamePaused = false;
+                showLevelTutorials();
+            }
         }
 
         function showWordPopup() {
@@ -820,7 +931,14 @@
             }
             setTimeout(() => {
                 document.getElementById('wordPopup').style.display = 'none';
-                gamePaused = false;
+                if (activeGame === 'hop') {
+                    var hopFrame = document.getElementById('hopFrame');
+                    try { hopFrame.contentWindow.postMessage({ type: 'resume' }, '*'); } catch(err) {}
+                    try { if (hopFrame.contentWindow.hopResume) hopFrame.contentWindow.hopResume(); } catch(err) {}
+                    hopFrame.focus();
+                } else {
+                    gamePaused = false;
+                }
             }, 1000);
         }
 
@@ -2838,6 +2956,7 @@
         const FIXED_STEP = 16.667;
 
         function gameLoop(timestamp) {
+            if (!timestamp) { draw(); requestAnimationFrame(gameLoop); return; }
             if (!lastFrameTime) lastFrameTime = timestamp;
             let elapsed = timestamp - lastFrameTime;
             lastFrameTime = timestamp;
@@ -2852,6 +2971,7 @@
         }
 
         document.addEventListener('keydown', e => {
+            if (activeGame === 'hop') return;
             if (tutorialPaused) {
                 if (e.code === 'Space' || e.code === 'Enter' || e.code === 'ArrowRight') {
                     nextTutorial();
@@ -2863,7 +2983,7 @@
             if (e.code === 'KeyR') restart();
             if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
         });
-        document.addEventListener('keyup', e => { keys[e.code] = false; });
+        document.addEventListener('keyup', e => { if (activeGame === 'hop') return; keys[e.code] = false; });
 
         // Touch controls for mobile
         let touchStartX = null, touchStartY = null, touchActive = false;
