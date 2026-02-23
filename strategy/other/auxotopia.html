@@ -489,6 +489,71 @@
             opacity: 0.4;
         }
 
+        #tutorialOverlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 900;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #tutorialBox {
+            background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
+            border: 2px solid rgba(100,180,255,0.5);
+            border-radius: 16px;
+            padding: 24px 28px;
+            max-width: 420px;
+            width: 90%;
+            box-shadow: 0 4px 30px rgba(0,0,0,0.5);
+        }
+
+        #tutorialBox .tut-step {
+            font-size: 11px;
+            opacity: 0.5;
+            margin-bottom: 6px;
+        }
+
+        #tutorialBox .tut-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: #ffd54f;
+        }
+
+        #tutorialBox .tut-body {
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 18px;
+            opacity: 0.9;
+        }
+
+        #tutorialBox .tut-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        #tutorialBox .tut-buttons button {
+            padding: 8px 20px;
+            border-radius: 8px;
+            border: none;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .tut-next {
+            background: linear-gradient(135deg, #4caf50, #66bb6a);
+            color: #fff;
+        }
+
+        .tut-skip {
+            background: rgba(255,255,255,0.15);
+            color: #fff;
+        }
+
         #jobsPanel {
             position: fixed;
             top: 0;
@@ -648,8 +713,34 @@
             .build-btn .name { font-size: 9px; }
             #startScreen .title { font-size: 32px; }
             #startScreen .start-island { font-size: 50px; }
+            #startScreen .start-btn {
+                padding: 12px 30px;
+                font-size: 17px;
+            }
+            #startScreen .subtitle { font-size: 14px; }
             #jobsPanel { width: 100%; }
             .tech-grid { grid-template-columns: 1fr 1fr; }
+            #tutorialBox {
+                padding: 16px 18px;
+                max-width: 90%;
+            }
+            #tutorialBox .tut-title { font-size: 17px; }
+            #tutorialBox .tut-body { font-size: 13px; }
+            #eventBanner {
+                padding: 16px 20px;
+                max-width: 85%;
+            }
+            #eventBanner .event-icon { font-size: 32px; }
+            #eventBanner .event-title { font-size: 16px; }
+            #eventBanner .event-desc { font-size: 13px; }
+            #buildingInfo {
+                min-width: 160px;
+                padding: 12px;
+            }
+            #islandInfo {
+                min-width: 150px;
+                padding: 12px;
+            }
         }
     </style>
 </head>
@@ -662,14 +753,28 @@
     <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">
         <button class="start-btn" id="continueBtn" onclick="continueGame()" style="display:none">Continue</button>
         <button class="start-btn" onclick="startNewGame()">Set Sail</button>
+        <button class="start-btn" onclick="startTutorial()" style="background:linear-gradient(135deg,#42a5f5,#64b5f6);box-shadow:0 4px 20px rgba(66,165,245,0.4);">Tutorial</button>
     </div>
     <div class="controls-hint">Drag to pan | WASD to move | Click to build</div>
+</div>
+
+<div id="tutorialOverlay">
+    <div id="tutorialBox">
+        <div class="tut-step" id="tutStep"></div>
+        <div class="tut-title" id="tutTitle"></div>
+        <div class="tut-body" id="tutBody"></div>
+        <div class="tut-buttons">
+            <button class="tut-skip" onclick="closeTutorial()">Skip</button>
+            <button class="tut-next" id="tutNextBtn" onclick="nextTutorial()">Next</button>
+        </div>
+    </div>
 </div>
 
 <div id="topBar">
     <div class="resource-item">
         <span class="icon">👥</span>
         <span class="value" id="popValue">10</span>/<span class="value" id="popCap">0</span>
+        <span class="value" id="homelessValue" style="color:#e57373;display:none"></span>
     </div>
     <div class="resource-item">
         <span class="icon">🌾</span>
@@ -784,7 +889,7 @@
 // CONSTANTS
 // ============================================================
 const TILE_SIZE = 40;
-const MAP_SIZE = 60;
+const MAP_SIZE = 100;
 const TICK_INTERVAL = 1000; // ms per game tick at 1x speed
 
 const TERRAIN = {
@@ -847,6 +952,23 @@ const BUILDING_DEFS = {
     skyscraper:   { emoji: '🏢', name: 'Skyscraper',   tier: 5, cost: { wood: 30, stone: 25, gold: 20, iron: 15 }, housing: 20, production: null,          happiness: 2,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: '+20 housing', jobType: null, techReq: 'architecture' },
     factory:      { emoji: '🏭', name: 'Factory',      tier: 5, cost: { wood: 25, stone: 20, iron: 10 },     housing: 0,  production: { gold: 5 },         happiness: -2,  tileReq: [TERRAIN.GRASS, TERRAIN.ROCK],  needsAdjacentWater: false, desc: 'Converts 2 iron → 5 gold', jobType: 'merchant', techReq: 'industry', converts: { iron: 2 } },
     airport:      { emoji: '✈️', name: 'Airport',      tier: 5, cost: { stone: 30, iron: 15, gold: 20 },    housing: 0,  production: null,                happiness: 3,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: 'Planes fly between airports.', jobType: null, techReq: 'industry', isTransport: 'air' },
+    greenhouse:   { emoji: '🌿', name: 'Greenhouse',   tier: 5, cost: { wood: 15, stone: 10, iron: 5 },     housing: 0,  production: { food: 5 },         happiness: 1,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: '+5 food/worker', jobType: 'farmer', techReq: 'biology' },
+    aqueduct:     { emoji: '🏛️', name: 'Aqueduct',     tier: 5, cost: { stone: 25, iron: 10 },              housing: 0,  production: null,                happiness: 4,   tileReq: [TERRAIN.GRASS, TERRAIN.ROCK],  needsAdjacentWater: false, desc: '+4 happiness. Farms nearby +1 food.', jobType: null, techReq: 'engineering' },
+    mint:         { emoji: '💰', name: 'Mint',          tier: 5, cost: { stone: 20, iron: 10, gold: 15 },    housing: 0,  production: { gold: 6 },         happiness: 0,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: '+6 gold/worker', jobType: 'merchant', techReq: 'economics' },
+    theater:      { emoji: '🎭', name: 'Theater',       tier: 5, cost: { wood: 20, stone: 15, gold: 10 },    housing: 0,  production: null,                happiness: 10,  tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: '+10 happiness', jobType: null, techReq: 'arts' },
+    observatory:  { emoji: '🔭', name: 'Observatory',   tier: 5, cost: { stone: 20, iron: 10, gold: 10 },    housing: 0,  production: { knowledge: 4 },    happiness: 3,   tileReq: [TERRAIN.GRASS, TERRAIN.ROCK],  needsAdjacentWater: false, desc: '+4 knowledge/worker', jobType: 'scholar', techReq: 'astronomy' },
+    harbor:       { emoji: '🚢', name: 'Harbor',        tier: 5, cost: { wood: 25, stone: 15, iron: 10 },    housing: 0,  production: { gold: 4 },         happiness: 2,   tileReq: [TERRAIN.SAND],                 needsAdjacentWater: true,  desc: '+4 gold/worker. +100% immigration.', jobType: 'merchant', techReq: 'seafaring' },
+    steelMill:    { emoji: '🔩', name: 'Steel Mill',    tier: 5, cost: { stone: 25, iron: 10 },              housing: 0,  production: { iron: 4 },         happiness: -1,  tileReq: [TERRAIN.GRASS, TERRAIN.ROCK],  needsAdjacentWater: false, desc: '+4 iron/worker', jobType: 'miner', techReq: 'engineering' },
+    museum:       { emoji: '🏛️', name: 'Museum',        tier: 5, cost: { stone: 25, gold: 20 },              housing: 0,  production: { knowledge: 2 },    happiness: 6,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: '+2 knowledge, +6 happiness', jobType: 'scholar', techReq: 'arts' },
+    // Tier 6
+    solarFarm:    { emoji: '☀️', name: 'Solar Farm',    tier: 6, cost: { iron: 15, gold: 20 },               housing: 0,  production: { gold: 4 },         happiness: 2,   tileReq: [TERRAIN.GRASS, TERRAIN.SAND],  needsAdjacentWater: false, desc: '+4 gold, +2 happy. Clean energy.', jobType: null, techReq: 'electricity' },
+    desalPlant:   { emoji: '💧', name: 'Desal Plant',   tier: 6, cost: { stone: 20, iron: 15, gold: 10 },    housing: 0,  production: { food: 4 },         happiness: 2,   tileReq: [TERRAIN.SAND],                 needsAdjacentWater: true,  desc: '+4 food. Converts seawater.', jobType: null, techReq: 'chemistry' },
+    researchLab:  { emoji: '🔬', name: 'Research Lab',  tier: 6, cost: { stone: 20, iron: 10, gold: 15 },    housing: 0,  production: { knowledge: 5 },    happiness: 2,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: '+5 knowledge/worker', jobType: 'scholar', techReq: 'physics' },
+    stadium:      { emoji: '🏟️', name: 'Stadium',      tier: 6, cost: { stone: 30, iron: 15, gold: 20 },    housing: 0,  production: { gold: 3 },         happiness: 12,  tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: '+12 happiness, +3 gold', jobType: null, techReq: 'arts' },
+    megaMall:     { emoji: '🏬', name: 'Mega Mall',     tier: 6, cost: { stone: 25, iron: 10, gold: 25 },    housing: 0,  production: { gold: 8 },         happiness: 5,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: '+8 gold/worker, +5 happy', jobType: 'merchant', techReq: 'economics' },
+    apartments:   { emoji: '🏙️', name: 'Apartments',   tier: 6, cost: { stone: 25, iron: 15, gold: 15 },    housing: 30, production: null,                happiness: 1,   tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: '+30 housing', jobType: null, techReq: 'engineering' },
+    nuclearPlant: { emoji: '☢️', name: 'Nuclear Plant', tier: 6, cost: { stone: 30, iron: 20, gold: 25 },    housing: 0,  production: { gold: 10 },        happiness: -5,  tileReq: [TERRAIN.ROCK],                 needsAdjacentWater: false, desc: '+10 gold. All prod +50%.', jobType: null, techReq: 'nuclear' },
+    spaceport:    { emoji: '🚀', name: 'Spaceport',     tier: 6, cost: { stone: 40, iron: 25, gold: 30 },    housing: 0,  production: { knowledge: 8 },    happiness: 10,  tileReq: [TERRAIN.GRASS],                needsAdjacentWater: false, desc: '+8 knowledge, +10 happy', jobType: null, techReq: 'rocketry' },
     // Bridge
     bridge:       { emoji: '🌉', name: 'Bridge',       tier: 3, cost: { wood: 15, stone: 10 },               housing: 0,  production: null,                happiness: 0,   tileReq: [TERRAIN.WATER],                needsAdjacentWater: false, desc: 'Bridge over water. Connects islands.', jobType: null, techReq: 'navigation' },
     // Landfill
@@ -858,10 +980,11 @@ const BUILDING_ORDER = [
     'house', 'quarry', 'market', 'well', 'school', 'tavern', 'road',
     'townHall', 'bakery', 'park', 'beach', 'shipyard', 'bridge', 'ferryDock', 'windmill', 'ironMine', 'forge', 'bank',
     'manor', 'warehouse', 'lighthouse', 'tradingPost', 'sandCastle', 'temple', 'hospital', 'trainStation', 'landfill', 'library', 'university',
-    'skyscraper', 'factory', 'airport'
+    'skyscraper', 'factory', 'airport', 'greenhouse', 'aqueduct', 'mint', 'theater', 'observatory', 'harbor', 'steelMill', 'museum',
+    'solarFarm', 'desalPlant', 'researchLab', 'stadium', 'megaMall', 'apartments', 'nuclearPlant', 'spaceport'
 ];
 
-const TIER_UNLOCKS = { 1: 0, 2: 15, 3: 40, 4: 80, 5: 120 };
+const TIER_UNLOCKS = { 1: 0, 2: 15, 3: 40, 4: 80, 5: 120, 6: 200 };
 const VICTORY_POP = 150;
 
 const JOB_DEFS = {
@@ -879,14 +1002,44 @@ const JOB_DEFS = {
 const JOB_ORDER = ['idle','farmer','lumberjack','miner','fisher','merchant','scholar','hunter','builder','explorer'];
 
 const TECH_DEFS = {
+    // Era 1 - Basics
     agriculture:  { name: 'Agriculture',  icon: '🌾', cost: { knowledge: 10 }, prereqs: [],                       desc: 'Farms +1 food. Unlocks Windmill.',          unlocks: ['windmill'] },
     masonry:      { name: 'Masonry',      icon: '🧱', cost: { knowledge: 10 }, prereqs: [],                       desc: 'Quarries +1 stone.',                        unlocks: [] },
+    fishing:      { name: 'Fishing',      icon: '🎣', cost: { knowledge: 8 },  prereqs: [],                       desc: 'Fishing Docks +1 food.',                    unlocks: [] },
+    // Era 2 - Growth
     commerce:     { name: 'Commerce',     icon: '💰', cost: { knowledge: 15 }, prereqs: ['agriculture'],           desc: 'Markets +1 gold. Unlocks Bank.',            unlocks: ['bank'] },
     metallurgy:   { name: 'Metallurgy',   icon: '⚒️', cost: { knowledge: 15 }, prereqs: ['masonry'],               desc: 'Unlocks Iron Mine and Forge.',              unlocks: ['ironMine','forge'] },
+    irrigation:   { name: 'Irrigation',   icon: '💧', cost: { knowledge: 12 }, prereqs: ['agriculture','fishing'], desc: 'All food buildings +1 food.',                unlocks: [] },
+    carpentry:    { name: 'Carpentry',    icon: '🪚', cost: { knowledge: 12 }, prereqs: ['masonry'],               desc: 'Lumber Camps +1 wood.',                     unlocks: [] },
+    // Era 3 - Expansion
     architecture: { name: 'Architecture', icon: '🏗️', cost: { knowledge: 25 }, prereqs: ['masonry','commerce'],    desc: 'Unlocks Skyscraper, Hospital & Landfill.', unlocks: ['skyscraper','hospital','landfill'] },
     navigation:   { name: 'Navigation',   icon: '🧭', cost: { knowledge: 20 }, prereqs: ['commerce'],             desc: 'Explorers reveal 2 tiles at once. Unlocks Bridge & Ferry Dock.', unlocks: ['bridge','ferryDock'] },
     education:    { name: 'Education',    icon: '🎓', cost: { knowledge: 30 }, prereqs: ['architecture'],          desc: 'Unlocks University and Library.',           unlocks: ['university','library'] },
-    industry:     { name: 'Industry',     icon: '🏭', cost: { knowledge: 35 }, prereqs: ['metallurgy','architecture'], desc: 'All production +25%. Unlocks Factory, Train Station & Airport.', unlocks: ['factory','trainStation','airport'] }
+    industry:     { name: 'Industry',     icon: '🏭', cost: { knowledge: 35 }, prereqs: ['metallurgy','architecture'], desc: 'All production +25%. Unlocks Factory, Train Station & Airport.', unlocks: ['factory','trainStation','airport'] },
+    theology:     { name: 'Theology',     icon: '📿', cost: { knowledge: 20 }, prereqs: ['education'],             desc: '+5 base happiness.',                        unlocks: [] },
+    medicine:     { name: 'Medicine',     icon: '💊', cost: { knowledge: 25 }, prereqs: ['education','irrigation'], desc: 'Hospital +3 happiness. -50% starvation loss.', unlocks: [] },
+    // Era 4 - Science
+    biology:      { name: 'Biology',      icon: '🧬', cost: { knowledge: 35 }, prereqs: ['medicine'],              desc: 'Unlocks Greenhouse. Farms +2 food.',        unlocks: ['greenhouse'] },
+    economics:    { name: 'Economics',    icon: '📊', cost: { knowledge: 35 }, prereqs: ['commerce','education'],   desc: 'Unlocks Mint & Mega Mall. Markets +2 gold.', unlocks: ['mint','megaMall'] },
+    engineering:  { name: 'Engineering',  icon: '⚙️', cost: { knowledge: 40 }, prereqs: ['industry','architecture'], desc: 'Unlocks Aqueduct, Steel Mill & Apartments.', unlocks: ['aqueduct','steelMill','apartments'] },
+    arts:         { name: 'Arts',         icon: '🎨', cost: { knowledge: 30 }, prereqs: ['education','theology'],  desc: 'Unlocks Theater, Museum & Stadium.',        unlocks: ['theater','museum','stadium'] },
+    astronomy:    { name: 'Astronomy',    icon: '🌟', cost: { knowledge: 35 }, prereqs: ['navigation','education'], desc: 'Unlocks Observatory. Explorers +1 tile.',   unlocks: ['observatory'] },
+    seafaring:    { name: 'Seafaring',    icon: '🚢', cost: { knowledge: 30 }, prereqs: ['navigation','metallurgy'], desc: 'Unlocks Harbor. Ferries 2x faster.',       unlocks: ['harbor'] },
+    gunpowder:    { name: 'Gunpowder',    icon: '💥', cost: { knowledge: 30 }, prereqs: ['metallurgy'],             desc: 'Quarries & Mines +2 production.',           unlocks: [] },
+    printing:     { name: 'Printing',     icon: '📜', cost: { knowledge: 25 }, prereqs: ['education'],             desc: 'Schools & Libraries +1 knowledge.',         unlocks: [] },
+    // Era 5 - Modern
+    electricity:  { name: 'Electricity',  icon: '⚡', cost: { knowledge: 50 }, prereqs: ['engineering'],            desc: 'Unlocks Solar Farm. All production +10%.', unlocks: ['solarFarm'] },
+    chemistry:    { name: 'Chemistry',    icon: '🧪', cost: { knowledge: 45 }, prereqs: ['biology','engineering'],  desc: 'Unlocks Desal Plant. Forges +2 gold.',     unlocks: ['desalPlant'] },
+    physics:      { name: 'Physics',      icon: '⚛️', cost: { knowledge: 50 }, prereqs: ['astronomy','engineering'], desc: 'Unlocks Research Lab.',                    unlocks: ['researchLab'] },
+    banking:      { name: 'Banking',      icon: '🏦', cost: { knowledge: 40 }, prereqs: ['economics'],             desc: 'Banks +2 gold. +25% storage.',              unlocks: [] },
+    democracy:    { name: 'Democracy',    icon: '🗳️', cost: { knowledge: 40 }, prereqs: ['arts','economics'],      desc: '+10 base happiness. +50% immigration.',     unlocks: [] },
+    // Era 6 - Atomic & Space
+    nuclear:      { name: 'Nuclear',      icon: '☢️', cost: { knowledge: 60 }, prereqs: ['physics','chemistry'],    desc: 'Unlocks Nuclear Plant. All prod +50%.',    unlocks: ['nuclearPlant'] },
+    rocketry:     { name: 'Rocketry',     icon: '🚀', cost: { knowledge: 70 }, prereqs: ['physics'],               desc: 'Unlocks Spaceport. Victory condition!',    unlocks: ['spaceport'] },
+    computing:    { name: 'Computing',    icon: '💻', cost: { knowledge: 55 }, prereqs: ['electricity','physics'],  desc: 'Research Labs +3 knowledge. All schools +2.', unlocks: [] },
+    genetics:     { name: 'Genetics',     icon: '🧬', cost: { knowledge: 55 }, prereqs: ['biology','chemistry'],    desc: 'Greenhouses +3 food. +100% growth.',       unlocks: [] },
+    globalTrade:  { name: 'Global Trade', icon: '🌐', cost: { knowledge: 50 }, prereqs: ['banking','seafaring'],    desc: 'All gold production doubled.',              unlocks: [] },
+    urbanPlan:    { name: 'Urban Planning', icon: '🗺️', cost: { knowledge: 45 }, prereqs: ['democracy','engineering'], desc: 'All housing +50%. Roads +2 happy.',     unlocks: [] }
 };
 
 const EVENTS = [
@@ -994,7 +1147,8 @@ function initGame() {
         explorerTimer: 0,
         rates: { food: 0, wood: 0, stone: 0, gold: 0, knowledge: 0, iron: 0 },
         islands: [],
-        vehicles: []
+        vehicles: [],
+        homelessTicks: 0
     };
 
     generateMap();
@@ -1098,16 +1252,16 @@ function generateMap() {
     }
 
     // Generate starting island at center, revealed
-    generateIsland(map, cx, cy, 5, true);
-    ensureMinimumResources(map, cx, cy, 5);
+    generateIsland(map, cx, cy, 7, true);
+    ensureMinimumResources(map, cx, cy, 7);
 
-    // Generate 5-7 additional islands, unrevealed
+    // Generate 12-18 additional islands, unrevealed
     const shuffledNames = [...ISLAND_NAMES].sort(() => Math.random() - 0.5);
-    const islands = [{ x: cx, y: cy, radius: 5, name: shuffledNames[0] }];
-    const numIslands = 5 + Math.floor(Math.random() * 3);
+    const islands = [{ x: cx, y: cy, radius: 7, name: shuffledNames[0] }];
+    const numIslands = 12 + Math.floor(Math.random() * 7);
 
     for (let i = 0; i < numIslands; i++) {
-        const radius = 2 + Math.floor(Math.random() * 3); // 2-4
+        const radius = 3 + Math.floor(Math.random() * 5); // 3-7
         let placed = false;
         for (let attempt = 0; attempt < 50; attempt++) {
             const ix = 5 + Math.floor(Math.random() * (MAP_SIZE - 10));
@@ -1184,12 +1338,14 @@ function render(timestamp) {
     if (keys['d'] || keys['arrowright']) game.camera.x += panSpeed;
     clampCamera();
 
-    // Game tick accumulation
-    const tickMs = TICK_INTERVAL / game.gameSpeed;
-    tickAccumulator += dt;
-    while (tickAccumulator >= tickMs) {
-        tickAccumulator -= tickMs;
-        gameTick();
+    // Game tick accumulation (pause during tutorial)
+    if (!tutorialOpen) {
+        const tickMs = TICK_INTERVAL / game.gameSpeed;
+        tickAccumulator += dt;
+        while (tickAccumulator >= tickMs) {
+            tickAccumulator -= tickMs;
+            gameTick();
+        }
     }
 
     // Event timer
@@ -1485,6 +1641,10 @@ const BUILDING_COLORS = {
     crabTrap: '#b06040', tavern: '#8a6a40', road: '#606060', beach: '#c0a050',
     ferryDock: '#4a7090', tradingPost: '#7a6a50', sandCastle: '#b0a070',
     trainStation: '#6a5050', airport: '#5a6a80',
+    greenhouse: '#3a8a3a', aqueduct: '#5a8aaa', mint: '#8a8a3a', theater: '#8a4a6a',
+    observatory: '#4a4a7a', harbor: '#3a6a8a', steelMill: '#5a5a6a', museum: '#7a6a8a',
+    solarFarm: '#8a8a40', desalPlant: '#4a7a9a', researchLab: '#5a5a8a', stadium: '#6a7a5a',
+    megaMall: '#7a6a5a', apartments: '#5a6a7a', nuclearPlant: '#6a6a3a', spaceport: '#4a5a7a',
     bridge: '#5a7a9a', landfill: '#7a8a5a'
 };
 
@@ -1693,6 +1853,18 @@ function isWalkable(tx, ty) {
     return true;
 }
 
+function getIslandForPos(x, y) {
+    // Return the index of the closest island to this position
+    if (!game.islands || game.islands.length === 0) return 0;
+    let best = 0, bestDist = Infinity;
+    for (let i = 0; i < game.islands.length; i++) {
+        const isl = game.islands[i];
+        const d = (x - isl.x) ** 2 + (y - isl.y) ** 2;
+        if (d < bestDist) { bestDist = d; best = i; }
+    }
+    return best;
+}
+
 function pickNewTarget(p) {
     // Only pick buildings on revealed, walkable land
     const valid = game.buildings.filter(b => {
@@ -1713,9 +1885,23 @@ function pickNewTarget(p) {
         }
         return;
     }
+
+    // Prefer buildings on same island (80% chance), otherwise any island (20%)
+    if (p.island !== undefined && Math.random() < 0.8) {
+        const sameIsland = valid.filter(b => getIslandForPos(b.x, b.y) === p.island);
+        if (sameIsland.length > 0) {
+            const b = sameIsland[Math.floor(Math.random() * sameIsland.length)];
+            p.tx = b.x + (Math.random() - 0.5) * 2;
+            p.ty = b.y + (Math.random() - 0.5) * 2;
+            return;
+        }
+    }
+
     const b = valid[Math.floor(Math.random() * valid.length)];
     p.tx = b.x + (Math.random() - 0.5) * 2;
     p.ty = b.y + (Math.random() - 0.5) * 2;
+    // Update island assignment when crossing to new island
+    p.island = getIslandForPos(b.x, b.y);
 }
 
 // ============================================================
@@ -1981,6 +2167,62 @@ function getIslandBuildings(island) {
     });
 }
 
+// Distribute population across settled islands based on housing capacity.
+// Each island gets pop/islands as a starting share. If an island can't house
+// its share, excess people move to islands with spare capacity. Any remaining
+// unhoused people are homeless.
+function distributePopulation() {
+    if (!game.islands || game.islands.length === 0) {
+        return { islands: [], homeless: game.population.current };
+    }
+    const settled = game.islands
+        .map(isl => {
+            if (!isIslandRevealed(isl)) return null;
+            const blds = getIslandBuildings(isl);
+            if (blds.length === 0) return null;
+            let housing = blds.reduce((sum, b) => sum + (BUILDING_DEFS[b.type]?.housing || 0), 0);
+            if (game.research.has('urbanPlan')) housing = Math.floor(housing * 1.5);
+            return { island: isl, housing, pop: 0 };
+        })
+        .filter(Boolean);
+
+    if (settled.length === 0) {
+        return { islands: [], homeless: game.population.current };
+    }
+
+    let remaining = game.population.current;
+
+    // First pass: give each island its even share, capped by housing
+    const share = Math.floor(remaining / settled.length);
+    for (const entry of settled) {
+        entry.pop = Math.min(share, entry.housing);
+        remaining -= entry.pop;
+    }
+
+    // Second pass: distribute leftover to islands with spare capacity
+    for (const entry of settled) {
+        if (remaining <= 0) break;
+        const room = entry.housing - entry.pop;
+        if (room > 0) {
+            const add = Math.min(room, remaining);
+            entry.pop += add;
+            remaining -= add;
+        }
+    }
+
+    return { islands: settled, homeless: remaining };
+}
+
+function getIslandPopulationFor(island) {
+    const dist = distributePopulation();
+    const entry = dist.islands.find(e => e.island === island);
+    return entry ? entry.pop : 0;
+}
+
+function getHomelessCount() {
+    return distributePopulation().homeless;
+}
+
 function getIslandClassification(island) {
     const buildings = getIslandBuildings(island);
     const count = buildings.length;
@@ -2000,11 +2242,11 @@ function getIslandClassification(island) {
         settlement = 'Village';
     }
 
-    // Density: based on building type diversity, buildings per area, population, resources
+    // Density: based on building type diversity, buildings per area, population per island, resources
     const area = Math.PI * island.radius * island.radius;
     const buildingDensity = count / Math.max(area, 1);
     const uniqueTypes = new Set(buildings.map(b => b.type)).size;
-    const pop = game.population.current;
+    const pop = getIslandPopulationFor(island);
     const totalResources = game.resources.food + game.resources.wood + game.resources.stone +
                            game.resources.gold + game.resources.iron;
 
@@ -2084,9 +2326,10 @@ function showIslandInfo(island, screenX, screenY) {
     const icon = cls.settlement === 'City' ? '🏙️' : (cls.settlement === 'Town' ? '🏘️' : '🏕️');
     document.getElementById('islandName').textContent = `${icon} ${island.name}`;
 
+    const islandPop = getIslandPopulationFor(island);
     let detail = `${cls.settlement} - ${cls.density}\n`;
+    detail += `Population: ${islandPop} / ${cls.housing} housed\n`;
     detail += `Buildings: ${cls.buildingCount} (${cls.uniqueTypes} types)\n`;
-    detail += `Housing: ${cls.housing}\n`;
     detail += `Max Tier: ${cls.maxTier || 'None'}`;
     document.getElementById('islandDetail').textContent = detail;
 
@@ -2164,12 +2407,34 @@ function gameTick() {
         }
         for (const [res, amount] of Object.entries(def.production)) {
             let fa = amount * mult;
+            // Era 1 bonuses
             if (res === 'food' && b.type === 'farm' && game.research.has('agriculture')) fa += mult;
             if (res === 'stone' && b.type === 'quarry' && game.research.has('masonry')) fa += mult;
             if (res === 'gold' && b.type === 'market' && game.research.has('commerce')) fa += mult;
+            if (res === 'food' && (b.type === 'fishingDock' || b.type === 'crabTrap') && game.research.has('fishing')) fa += mult;
+            // Era 2 bonuses
+            if (res === 'food' && game.research.has('irrigation')) fa += mult;
+            if (res === 'wood' && b.type === 'lumber' && game.research.has('carpentry')) fa += mult;
+            // Era 3 bonuses
+            if (game.research.has('industry')) fa = Math.ceil(fa * 1.25);
+            if (res === 'knowledge' && (b.type === 'school' || b.type === 'library') && game.research.has('printing')) fa += mult;
+            if ((res === 'stone' || res === 'iron') && (b.type === 'quarry' || b.type === 'ironMine') && game.research.has('gunpowder')) fa += 2 * mult;
+            // Era 4 bonuses
+            if (res === 'food' && b.type === 'farm' && game.research.has('biology')) fa += 2 * mult;
+            if (res === 'gold' && b.type === 'market' && game.research.has('economics')) fa += 2 * mult;
+            if (res === 'gold' && b.type === 'forge' && game.research.has('chemistry')) fa += 2 * mult;
+            if (res === 'gold' && b.type === 'bank' && game.research.has('banking')) fa += 2 * mult;
+            // Era 5 bonuses
+            if (game.research.has('electricity')) fa = Math.ceil(fa * 1.1);
+            if (res === 'knowledge' && b.type === 'researchLab' && game.research.has('computing')) fa += 3 * mult;
+            if (res === 'knowledge' && (b.type === 'school' || b.type === 'library') && game.research.has('computing')) fa += 2 * mult;
+            if (res === 'food' && b.type === 'greenhouse' && game.research.has('genetics')) fa += 3 * mult;
+            if (res === 'gold' && game.research.has('globalTrade')) fa *= 2;
+            // Nuclear boost
+            if (game.research.has('nuclear') && game.buildings.some(bl => bl.type === 'nuclearPlant')) fa = Math.ceil(fa * 1.5);
+            // Event buffs
             if (res === 'food' && b.type === 'farm' && game.eventBuffs.farmBoost > Date.now()) fa *= 2;
             if (res === 'food' && b.type === 'fishingDock' && game.eventBuffs.fishBoost > Date.now()) fa *= 2;
-            if (game.research.has('industry')) fa = Math.ceil(fa * 1.25);
             game.resources[res] = Math.min(game.resources[res] + fa, game.storage[res]);
             rates[res] += fa;
         }
@@ -2189,7 +2454,8 @@ function gameTick() {
         game.resources.food -= foodNeeded;
     } else {
         game.resources.food = 0;
-        if (Math.random() < 0.3 && game.population.current > 1) {
+        const starvChance = game.research.has('medicine') ? 0.15 : 0.3;
+        if (Math.random() < starvChance && game.population.current > 1) {
             game.population.current--;
             addNotification('A settler left due to food shortage!');
             removePeopleDot();
@@ -2204,7 +2470,10 @@ function gameTick() {
             if (game.resources.gold >= 5) {
                 game.resources.gold -= 5;
                 rates.gold -= 5;
-                explorerRevealTiles(game.research.has('navigation') ? 2 : 1);
+                let revealCount = 1;
+                if (game.research.has('navigation')) revealCount = 2;
+                if (game.research.has('astronomy')) revealCount = 3;
+                explorerRevealTiles(revealCount);
             } else {
                 if (game.tick % 10 === 0) addNotification('Explorers need 5 gold per tile!');
                 game.explorerTimer = 0;
@@ -2219,13 +2488,28 @@ function gameTick() {
     // Housing capacity
     game.population.capacity = 0;
     for (const b of game.buildings) game.population.capacity += BUILDING_DEFS[b.type].housing;
+    if (game.research.has('urbanPlan')) game.population.capacity = Math.floor(game.population.capacity * 1.5);
 
     // Storage capacity
     const warehouseCount = game.buildings.filter(b => b.type === 'warehouse').length;
-    const sm = 1 + warehouseCount * 0.5;
+    let sm = 1 + warehouseCount * 0.5;
+    if (game.research.has('banking')) sm *= 1.25;
     for (const res of ['food','wood','stone','gold','knowledge','iron']) {
         game.storage[res] = Math.floor(100 * sm);
         game.resources[res] = Math.min(game.resources[res], game.storage[res]);
+    }
+
+    // Homeless tracking: if people can't be housed anywhere for 11 ticks, they leave
+    if (getHomelessCount() > 0) {
+        game.homelessTicks++;
+        if (game.homelessTicks >= 11 && game.population.current > 1) {
+            game.population.current--;
+            game.homelessTicks = 0;
+            addNotification('A homeless settler left!');
+            removePeopleDot();
+        }
+    } else {
+        game.homelessTicks = 0;
     }
 
     checkImmigration();
@@ -2261,10 +2545,19 @@ function calculateHappiness() {
         happiness += BUILDING_DEFS[b.type].happiness;
     }
 
-    // Overcrowding penalty
-    if (game.population.current > game.population.capacity && game.population.capacity > 0) {
-        const overcrowded = game.population.current - game.population.capacity;
-        happiness -= overcrowded * 2;
+    // Homeless penalty
+    const homeless = getHomelessCount();
+    if (homeless > 0) {
+        happiness -= homeless * 2;
+    }
+
+    // Tech happiness bonuses
+    if (game.research.has('theology')) happiness += 5;
+    if (game.research.has('democracy')) happiness += 10;
+    if (game.research.has('medicine')) happiness += 3;
+    if (game.research.has('urbanPlan')) {
+        const roadCount = game.buildings.filter(b => b.type === 'road').length;
+        happiness += roadCount * 2;
     }
 
     // Festival buff
@@ -2298,6 +2591,17 @@ function checkImmigration() {
 
     if (game.buildings.some(b => b.type === 'lighthouse')) growthRate *= 1.5;
     if (game.buildings.some(b => b.type === 'hospital')) growthRate *= 1.5;
+    if (game.buildings.some(b => b.type === 'harbor')) growthRate *= 2;
+    if (game.research.has('democracy')) growthRate *= 1.5;
+    if (game.research.has('genetics')) growthRate *= 2;
+
+    // Higher tier buildings attract more settlers
+    const maxTier = game.buildings.reduce((max, b) => Math.max(max, BUILDING_DEFS[b.type]?.tier || 1), 0);
+    growthRate *= 1 + (maxTier - 1) * 0.15; // +15% per tier above 1
+
+    // More researched techs attract more settlers
+    const techCount = game.research.size;
+    growthRate *= 1 + techCount * 0.05; // +5% per tech researched
 
     game.immigrationTimer += growthRate;
 
@@ -2352,7 +2656,9 @@ function explorerRevealTiles(count) {
 function checkUnlocks() {
     const pop = game.population.current;
     let newTier = 1;
-    if (pop >= TIER_UNLOCKS[4]) newTier = 4;
+    if (pop >= TIER_UNLOCKS[6]) newTier = 6;
+    else if (pop >= TIER_UNLOCKS[5]) newTier = 5;
+    else if (pop >= TIER_UNLOCKS[4]) newTier = 4;
     else if (pop >= TIER_UNLOCKS[3]) newTier = 3;
     else if (pop >= TIER_UNLOCKS[2]) newTier = 2;
 
@@ -2635,10 +2941,30 @@ function spawnInitialPeople() {
 
 function spawnPeopleDot() {
     const colors = ['#e57373', '#64b5f6', '#81c784', '#fff176', '#ce93d8', '#ffb74d', '#4dd0e1'];
-    // Spawn near a random building on revealed land, fallback to map center
-    let sx, sy;
+    let sx, sy, island = 0;
     const valid = game.buildings.filter(b => b.x >= 0 && b.x < MAP_SIZE && b.y >= 0 && b.y < MAP_SIZE && game.map[b.y][b.x].revealed);
-    if (valid.length > 0) {
+    if (valid.length > 0 && game.islands && game.islands.length > 0) {
+        // Group buildings by island and pick island weighted by building count
+        const byIsland = {};
+        for (const b of valid) {
+            const idx = getIslandForPos(b.x, b.y);
+            if (!byIsland[idx]) byIsland[idx] = [];
+            byIsland[idx].push(b);
+        }
+        const entries = Object.entries(byIsland);
+        // Weighted random: more buildings = more likely to spawn there
+        const total = valid.length;
+        let r = Math.random() * total;
+        let picked = entries[0];
+        for (const entry of entries) {
+            r -= entry[1].length;
+            if (r <= 0) { picked = entry; break; }
+        }
+        island = parseInt(picked[0]);
+        const b = picked[1][Math.floor(Math.random() * picked[1].length)];
+        sx = b.x + (Math.random() - 0.5) * 2;
+        sy = b.y + (Math.random() - 0.5) * 2;
+    } else if (valid.length > 0) {
         const b = valid[Math.floor(Math.random() * valid.length)];
         sx = b.x + (Math.random() - 0.5) * 2;
         sy = b.y + (Math.random() - 0.5) * 2;
@@ -2649,7 +2975,8 @@ function spawnPeopleDot() {
     game.peopleDots.push({
         x: sx, y: sy, tx: sx, ty: sy,
         timer: Math.random(),
-        color: colors[Math.floor(Math.random() * colors.length)]
+        color: colors[Math.floor(Math.random() * colors.length)],
+        island: island
     });
 }
 
@@ -2727,6 +3054,15 @@ function updateResourceUI() {
             else { rateEl.textContent = ''; rateEl.className = 'resource-rate'; }
         }
         if (valEl) valEl.style.color = game.resources[res] >= game.storage[res] ? '#ffb74d' : '';
+    }
+
+    const homeless = getHomelessCount();
+    const homelessEl = document.getElementById('homelessValue');
+    if (homeless > 0) {
+        homelessEl.textContent = ` (${homeless} homeless)`;
+        homelessEl.style.display = '';
+    } else {
+        homelessEl.style.display = 'none';
     }
 
     const popEl = document.getElementById('popValue');
@@ -3008,7 +3344,8 @@ function saveGame(silent) {
         eventBuffs: game.eventBuffs,
         unlockedTier: game.unlockedTier,
         camera: game.camera,
-        dayPhase: game.dayPhase
+        dayPhase: game.dayPhase,
+        homelessTicks: game.homelessTicks
     };
     localStorage.setItem('auxotopia_save', JSON.stringify(data));
     if (!silent) addNotification('Game saved!');
@@ -3047,6 +3384,7 @@ function loadGame() {
         game.unlockedTier = d.unlockedTier || 1;
         game.camera = d.camera || { x:0, y:0 };
         game.dayPhase = d.dayPhase || 0;
+        game.homelessTicks = d.homelessTicks || 0;
         game.particles = [];
         game.peopleDots = [];
         game.vehicles = [];
@@ -3314,6 +3652,61 @@ function handleClick(canvasX, canvasY, screenX, screenY) {
         showBuildingInfo(mapTile.building, screenX, screenY);
         return;
     }
+}
+
+// ============================================================
+// TUTORIAL
+// ============================================================
+const TUTORIAL_STEPS = [
+    { title: 'Welcome to Auxotopia!', body: 'You are the leader of a small island settlement. Your goal is to grow your population, explore the ocean, discover new islands, research technologies, and build a thriving civilization.\n\nLet\'s learn how to play!' },
+    { title: 'Resources', body: 'Your island produces 6 resources:\n\n🌾 Food - Feeds your people (1/person/tick)\n🪵 Wood - Basic building material\n⛏️ Stone - Advanced building material\n🪙 Gold - For exploration & premium buildings\n📚 Knowledge - For researching technologies\n🔩 Iron - For late-game buildings\n\nWatch the top bar to track your rates.' },
+    { title: 'Buildings', body: 'The bottom bar shows buildings you can construct. Click a building, then click a tile to place it.\n\nBuildings auto-produce resources every tick. Assign a worker (in the Jobs panel) to DOUBLE their output!\n\nStart with Farms for food and Lumber Camps for wood.' },
+    { title: 'Workers & Jobs', body: 'Click the "Jobs" button to open the jobs panel. You can assign your population to different roles:\n\n🌾 Farmer - Works farms & windmills\n🪓 Lumberjack - Works lumber camps\n⛏️ Miner - Works quarries & mines\n🏪 Merchant - Works markets, banks, forges\n📚 Scholar - Works schools & libraries\n🏹 Hunter - Produces food without a building\n🔨 Builder - Reduces build costs 10% each\n🧭 Explorer - Auto-reveals fog tiles' },
+    { title: 'Population Growth', body: 'Your population grows through immigration when:\n\n1. You have housing capacity (build Huts, Houses, Manors)\n2. You have surplus food\n3. Your happiness is high\n\nKeep food production ahead of consumption and build housing to grow!' },
+    { title: 'Happiness', body: 'Happiness affects immigration and can cause people to leave if too low.\n\nBoost it with: Parks, Temples, Taverns, Wells, and other special buildings.\n\nOvercrowding (pop > housing) and food shortage lower happiness.' },
+    { title: 'Technology', body: 'Click the "Tech" button to see the tech tree. Assign Scholars to Schools to produce Knowledge, then research technologies.\n\nTechs unlock new buildings, boost production, and provide powerful bonuses. The tree spans 6 eras from Agriculture to Rocketry!' },
+    { title: 'Tiers & Unlocks', body: 'Buildings are organized in tiers (1-6). Higher tiers unlock at population milestones:\n\nTier 2: 15 pop | Tier 3: 40 pop\nTier 4: 80 pop | Tier 5: 120 pop\nTier 6: 200 pop\n\nSome buildings also need specific technologies.' },
+    { title: 'Exploration', body: 'Build a Shipyard (Tier 3) near water to enable exploration.\n\nAssign Explorers in the Jobs panel - they auto-reveal fog for 5 gold per tile.\n\nYou can also click "Explore" and manually reveal tiles for 10 gold each.\n\nDiscover new islands scattered across the ocean!' },
+    { title: 'Bridges & Connections', body: 'Research Navigation to unlock Bridges. Place them on water tiles adjacent to land to connect islands.\n\nChain bridges across water gaps to reach remote islands and build on them!\n\nFerry Docks let boats carry people between islands.' },
+    { title: 'Island Expansion', body: 'Research Architecture to unlock Landfill - an expensive building that converts water tiles into grass, permanently expanding your island.\n\nYou can also build on Sand tiles with specialized buildings like Crab Traps, Beach Resorts, and Trading Posts.' },
+    { title: 'Transportation', body: 'Build Roads for 2x walking speed and car traffic.\nFerry Docks for sea transport between islands.\nTrain Stations (Industry tech) for rail connections.\nAirports (Industry tech) for air travel.\n\nVehicles appear automatically and move between transport buildings!' },
+    { title: 'Island Names', body: 'Each island has a name floating above it. Click the name to see its classification:\n\nSettlement type (Village/Town/City) based on size and buildings.\nDensity (Rural/Suburban/Urban) based on building variety and population.' },
+    { title: 'Tips for Success', body: '1. Balance food production with population growth\n2. Don\'t neglect happiness - build Parks and Temples\n3. Assign workers to maximize production\n4. Research techs early - Knowledge is powerful\n5. Explore to find resource-rich islands\n6. Use Builders to reduce costs (10% each)\n7. Save often! Auto-saves every 60 seconds.' },
+    { title: 'You\'re Ready!', body: 'That\'s everything you need to know! Build your island empire, research advanced technologies, connect your islands with bridges and transport, and lead your civilization to the stars.\n\nGood luck, Governor!' }
+];
+
+let tutorialStep = 0;
+let tutorialOpen = false;
+
+function startTutorial() {
+    startNewGame();
+    tutorialStep = 0;
+    showTutorialStep();
+}
+
+function showTutorialStep() {
+    tutorialOpen = true;
+    const overlay = document.getElementById('tutorialOverlay');
+    overlay.style.display = 'flex';
+    const step = TUTORIAL_STEPS[tutorialStep];
+    document.getElementById('tutStep').textContent = `Step ${tutorialStep + 1} of ${TUTORIAL_STEPS.length}`;
+    document.getElementById('tutTitle').textContent = step.title;
+    document.getElementById('tutBody').textContent = step.body;
+    document.getElementById('tutNextBtn').textContent = tutorialStep === TUTORIAL_STEPS.length - 1 ? 'Start Playing!' : 'Next';
+}
+
+function nextTutorial() {
+    tutorialStep++;
+    if (tutorialStep >= TUTORIAL_STEPS.length) {
+        closeTutorial();
+        return;
+    }
+    showTutorialStep();
+}
+
+function closeTutorial() {
+    tutorialOpen = false;
+    document.getElementById('tutorialOverlay').style.display = 'none';
 }
 
 // ============================================================
