@@ -1787,6 +1787,16 @@ function drawPeople(t) {
     for (let i = 0; i < game.peopleDots.length; i++) {
         const p = game.peopleDots[i];
 
+        // Unstick people on water
+        if (!isWalkable(p.x, p.y)) {
+            const isl = game.islands && game.islands[p.island || 0];
+            if (isl) {
+                const spot = findWalkableSpot(isl.x, isl.y, isl.radius);
+                p.x = spot.x; p.y = spot.y;
+                p.tx = p.x; p.ty = p.y;
+            }
+        }
+
         // Update position
         p.timer += 0.01;
         if (p.timer > 1) {
@@ -1886,8 +1896,8 @@ function pickNewTarget(p) {
         return;
     }
 
-    // Prefer buildings on same island (80% chance), otherwise any island (20%)
-    if (p.island !== undefined && Math.random() < 0.8) {
+    // People stay on their assigned island
+    if (p.island !== undefined) {
         const sameIsland = valid.filter(b => getIslandForPos(b.x, b.y) === p.island);
         if (sameIsland.length > 0) {
             const b = sameIsland[Math.floor(Math.random() * sameIsland.length)];
@@ -1900,7 +1910,6 @@ function pickNewTarget(p) {
     const b = valid[Math.floor(Math.random() * valid.length)];
     p.tx = b.x + (Math.random() - 0.5) * 2;
     p.ty = b.y + (Math.random() - 0.5) * 2;
-    // Update island assignment when crossing to new island
     p.island = getIslandForPos(b.x, b.y);
 }
 
@@ -1910,9 +1919,9 @@ function pickNewTarget(p) {
 const VEHICLE_DEFS = {
     car:   { emoji: '🚗', speed: 0.04, size: 10 },
     bus:   { emoji: '🚌', speed: 0.03, size: 12 },
-    ferry: { emoji: '⛴️', speed: 0.015, size: 14 },
-    train: { emoji: '🚂', speed: 0.025, size: 14 },
-    plane: { emoji: '✈️', speed: 0.05, size: 14 }
+    ferry: { emoji: '⛴️', speed: 0.3, size: 14 },
+    train: { emoji: '🚂', speed: 0.5, size: 14 },
+    plane: { emoji: '✈️', speed: 0.8, size: 14 }
 };
 
 function updateVehicles() {
@@ -2932,6 +2941,25 @@ function spawnColorParticles(tileX, tileY, color, count) {
 // ============================================================
 // PEOPLE DOTS
 // ============================================================
+function findWalkableSpot(cx, cy, radius) {
+    // Try to find a walkable tile near the given center
+    for (let attempt = 0; attempt < 20; attempt++) {
+        const x = cx + (Math.random() - 0.5) * radius;
+        const y = cy + (Math.random() - 0.5) * radius;
+        if (isWalkable(x, y)) return { x, y };
+    }
+    // Fallback: scan nearby tiles
+    const r = Math.ceil(radius);
+    for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+            const tx = Math.floor(cx) + dx;
+            const ty = Math.floor(cy) + dy;
+            if (isWalkable(tx + 0.5, ty + 0.5)) return { x: tx + 0.5, y: ty + 0.5 };
+        }
+    }
+    return { x: cx, y: cy }; // last resort
+}
+
 function spawnInitialPeople() {
     const colors = ['#e57373', '#64b5f6', '#81c784', '#fff176', '#ce93d8', '#ffb74d', '#4dd0e1'];
     for (let i = 0; i < game.population.current; i++) {
@@ -2943,27 +2971,42 @@ function spawnPeopleDot() {
     const colors = ['#e57373', '#64b5f6', '#81c784', '#fff176', '#ce93d8', '#ffb74d', '#4dd0e1'];
     let sx, sy, island = 0;
     const valid = game.buildings.filter(b => b.x >= 0 && b.x < MAP_SIZE && b.y >= 0 && b.y < MAP_SIZE && game.map[b.y][b.x].revealed);
+
     if (valid.length > 0 && game.islands && game.islands.length > 0) {
-        // Group buildings by island and pick island weighted by building count
-        const byIsland = {};
-        for (const b of valid) {
-            const idx = getIslandForPos(b.x, b.y);
-            if (!byIsland[idx]) byIsland[idx] = [];
-            byIsland[idx].push(b);
+        // Pick island based on population distribution (islands needing more people get priority)
+        const dist = distributePopulation();
+        const dotsByIsland = {};
+        for (const p of game.peopleDots) {
+            const idx = p.island || 0;
+            dotsByIsland[idx] = (dotsByIsland[idx] || 0) + 1;
         }
-        const entries = Object.entries(byIsland);
-        // Weighted random: more buildings = more likely to spawn there
-        const total = valid.length;
-        let r = Math.random() * total;
-        let picked = entries[0];
-        for (const entry of entries) {
-            r -= entry[1].length;
-            if (r <= 0) { picked = entry; break; }
+
+        // Find the island with the biggest deficit of dots
+        let bestIdx = 0, bestDeficit = -Infinity;
+        for (const entry of dist.islands) {
+            const idx = game.islands.indexOf(entry.island);
+            if (idx < 0) continue;
+            const current = dotsByIsland[idx] || 0;
+            const deficit = entry.pop - current;
+            if (deficit > bestDeficit) {
+                bestDeficit = deficit;
+                bestIdx = idx;
+            }
         }
-        island = parseInt(picked[0]);
-        const b = picked[1][Math.floor(Math.random() * picked[1].length)];
-        sx = b.x + (Math.random() - 0.5) * 2;
-        sy = b.y + (Math.random() - 0.5) * 2;
+        island = bestIdx;
+
+        // Spawn near a building on that island
+        const islandBuildings = valid.filter(b => getIslandForPos(b.x, b.y) === island);
+        if (islandBuildings.length > 0) {
+            const b = islandBuildings[Math.floor(Math.random() * islandBuildings.length)];
+            sx = b.x + (Math.random() - 0.5) * 2;
+            sy = b.y + (Math.random() - 0.5) * 2;
+        } else {
+            const isl = game.islands[island];
+            const spot = findWalkableSpot(isl.x, isl.y, isl.radius);
+            sx = spot.x;
+            sy = spot.y;
+        }
     } else if (valid.length > 0) {
         const b = valid[Math.floor(Math.random() * valid.length)];
         sx = b.x + (Math.random() - 0.5) * 2;
@@ -2986,13 +3029,77 @@ function removePeopleDot() {
     }
 }
 
-// Sync people dots with population
+// Sync people dots with population, distributing across islands
 function syncPeopleDots() {
+    // First, ensure total dot count matches population
     while (game.peopleDots.length < game.population.current) {
         spawnPeopleDot();
     }
     while (game.peopleDots.length > game.population.current) {
         game.peopleDots.pop();
+    }
+
+    // Now redistribute dots across islands to match distributePopulation()
+    const dist = distributePopulation();
+    if (dist.islands.length <= 1) return;
+
+    // Count dots per island
+    const dotsByIsland = {};
+    for (const p of game.peopleDots) {
+        const idx = p.island || 0;
+        dotsByIsland[idx] = (dotsByIsland[idx] || 0) + 1;
+    }
+
+    // Build target counts per island index
+    const targetByIsland = {};
+    for (const entry of dist.islands) {
+        const idx = game.islands.indexOf(entry.island);
+        if (idx >= 0) targetByIsland[idx] = entry.pop;
+    }
+
+    // Move excess dots from overpopulated islands to underpopulated ones
+    const needMore = []; // islands that need more dots
+    const haveExtra = []; // dots that can be reassigned
+
+    for (const [idx, target] of Object.entries(targetByIsland)) {
+        const current = dotsByIsland[idx] || 0;
+        if (current < target) {
+            needMore.push({ idx: parseInt(idx), need: target - current });
+        }
+    }
+
+    if (needMore.length === 0) return;
+
+    // Collect excess dots from islands with too many
+    for (const [idx, current] of Object.entries(dotsByIsland)) {
+        const target = targetByIsland[idx] || 0;
+        if (current > target) {
+            let toMove = current - target;
+            for (const p of game.peopleDots) {
+                if (toMove <= 0) break;
+                if ((p.island || 0) === parseInt(idx)) {
+                    haveExtra.push(p);
+                    toMove--;
+                }
+            }
+        }
+    }
+
+    // Reassign extra dots to islands that need them
+    for (const entry of needMore) {
+        const isl = game.islands[entry.idx];
+        if (!isl) continue;
+        for (let i = 0; i < entry.need && haveExtra.length > 0; i++) {
+            const p = haveExtra.pop();
+            p.island = entry.idx;
+            // Teleport to a walkable spot on the new island
+            const spot = findWalkableSpot(isl.x, isl.y, isl.radius);
+            p.x = spot.x;
+            p.y = spot.y;
+            p.tx = p.x;
+            p.ty = p.y;
+            p.timer = 0;
+        }
     }
 }
 
