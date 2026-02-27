@@ -2407,6 +2407,39 @@
             pointer-events: none;
             z-index: 100;
         }
+        @media (max-width: 768px) {
+            .counter-surface {
+                flex-direction: column;
+                align-items: center;
+            }
+            .counter-area {
+                padding: 0 8px;
+            }
+            #orderRow {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                justify-content: flex-start !important;
+            }
+            .customer-area {
+                padding: 10px;
+            }
+            .ingredient-btn {
+                min-height: 44px;
+                min-width: 44px;
+            }
+            .action-btn, .shop-btn, .roll-btn {
+                min-height: 44px;
+            }
+        }
+
+        .touch-ghost {
+            position: fixed;
+            pointer-events: none;
+            z-index: 9999;
+            opacity: 0.85;
+            transform: translate(-50%, -50%) scale(1.1);
+            transition: none;
+        }
     </style>
 </head>
 <body>
@@ -4201,6 +4234,137 @@
 
         // Start the game
         initGame();
+
+        // === TOUCH DRAG POLYFILL ===
+        const isMobile = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+
+        if (isMobile) {
+            let touchDragEl = null;
+            let touchGhost = null;
+            let touchSource = null; // 'workspace' or 'bento'
+            let touchBentoSushi = null;
+            let touchBentoFillings = [];
+
+            function findDraggable(el) {
+                while (el) {
+                    if (el.classList && el.classList.contains('draggable')) return el;
+                    if (el.classList && el.classList.contains('bento-sushi') && el.getAttribute('draggable') === 'true') return el;
+                    el = el.parentElement;
+                }
+                return null;
+            }
+
+            document.addEventListener('touchstart', (e) => {
+                const draggable = findDraggable(e.target);
+                if (!draggable) return;
+
+                touchDragEl = draggable;
+
+                if (draggable.classList.contains('bento-sushi')) {
+                    touchSource = 'bento';
+                    touchBentoSushi = draggable;
+                    touchBentoFillings = draggable.sushiFillings || [];
+                } else {
+                    touchSource = 'workspace';
+                }
+
+                // Create ghost
+                touchGhost = draggable.cloneNode(true);
+                touchGhost.classList.add('touch-ghost');
+                const rect = draggable.getBoundingClientRect();
+                touchGhost.style.width = rect.width + 'px';
+                touchGhost.style.height = rect.height + 'px';
+                document.body.appendChild(touchGhost);
+
+                const touch = e.touches[0];
+                touchGhost.style.left = touch.clientX + 'px';
+                touchGhost.style.top = touch.clientY + 'px';
+
+                draggable.style.opacity = '0.4';
+            }, { passive: true });
+
+            document.addEventListener('touchmove', (e) => {
+                if (!touchGhost) return;
+                e.preventDefault();
+                const touch = e.touches[0];
+                touchGhost.style.left = touch.clientX + 'px';
+                touchGhost.style.top = touch.clientY + 'px';
+            }, { passive: false });
+
+            document.addEventListener('touchend', (e) => {
+                if (!touchGhost || !touchDragEl) return;
+
+                const touch = e.changedTouches[0];
+                touchGhost.style.display = 'none'; // hide to allow elementFromPoint
+                const dropTarget = document.elementFromPoint(touch.clientX, touch.clientY);
+                touchGhost.remove();
+                touchGhost = null;
+                touchDragEl.style.opacity = '';
+
+                if (!dropTarget) { cleanup(); return; }
+
+                // Find the actual drop zone
+                let target = dropTarget;
+                let handled = false;
+
+                while (target) {
+                    // Drop on bento
+                    if (target.id === 'bentoInterior' && touchSource === 'workspace') {
+                        addSushiToBento(currentSushiFillings);
+                        resetGame();
+                        handled = true;
+                        break;
+                    }
+
+                    // Drop on bamboo mat (return from bento)
+                    if (target.classList && target.classList.contains('bamboo-mat') && touchSource === 'bento' && touchBentoSushi) {
+                        displaySushiOnPlate(touchBentoFillings);
+                        touchBentoSushi.remove();
+                        bentoCount--;
+                        document.getElementById('bentoCount').textContent = bentoCount + ' roll' + (bentoCount !== 1 ? 's' : '') + ' stored';
+                        if (bentoCount === 0) {
+                            document.getElementById('bentoEmpty').style.display = 'block';
+                        }
+                        handled = true;
+                        break;
+                    }
+
+                    // Drop on order box
+                    if (target.orderFillings) {
+                        let sushiFillings = [];
+                        if (touchSource === 'workspace') {
+                            sushiFillings = [...currentSushiFillings];
+                            resetGame();
+                        } else if (touchSource === 'bento' && touchBentoSushi) {
+                            sushiFillings = [...touchBentoFillings];
+                            touchBentoSushi.remove();
+                            bentoCount--;
+                            document.getElementById('bentoCount').textContent = bentoCount + ' roll' + (bentoCount !== 1 ? 's' : '') + ' stored';
+                            if (bentoCount === 0) {
+                                document.getElementById('bentoEmpty').style.display = 'block';
+                            }
+                        }
+                        if (sushiFillings.length > 0) {
+                            checkOrder(target, sushiFillings);
+                        }
+                        handled = true;
+                        break;
+                    }
+
+                    target = target.parentElement;
+                }
+
+                cleanup();
+
+                function cleanup() {
+                    touchDragEl = null;
+                    touchSource = null;
+                    touchBentoSushi = null;
+                    touchBentoFillings = [];
+                    dragSource = null;
+                }
+            }, { passive: true });
+        }
     </script>
 </body>
 </html>

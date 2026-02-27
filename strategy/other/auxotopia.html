@@ -1746,22 +1746,58 @@ function drawBuildings(t) {
 
         // Production indicator - dim green = base, bright green = worker boosted
         if (def.production) {
-            const pulse = Math.sin(t * 0.004 + i * 1.5) * 0.5 + 0.5;
-            const isWorked = def.jobType && (game.jobs[def.jobType] || 0) > 0;
-            if (isWorked) {
-                ctx.fillStyle = `rgba(100,255,100,${0.3 + pulse * 0.4})`;
+            const isDepleted = b.duration !== undefined && b.duration <= 0;
+            if (isDepleted) {
+                // Depleted overlay — gray tint
+                ctx.fillStyle = 'rgba(0,0,0,0.45)';
+                ctx.beginPath();
+                ctx.roundRect(sx + 2, sy + 2, TILE_SIZE - 4, TILE_SIZE - 4, 4);
+                ctx.fill();
+                // Red X indicator
+                ctx.fillStyle = 'rgba(255,80,80,0.8)';
                 ctx.beginPath();
                 ctx.arc(sx + TILE_SIZE - 7, sy + 7, 3, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.fillStyle = `rgba(100,255,100,${pulse * 0.15})`;
-                ctx.beginPath();
-                ctx.arc(sx + TILE_SIZE - 7, sy + 7, 6, 0, Math.PI * 2);
-                ctx.fill();
             } else {
-                ctx.fillStyle = `rgba(100,255,100,${0.2 + pulse * 0.15})`;
-                ctx.beginPath();
-                ctx.arc(sx + TILE_SIZE - 7, sy + 7, 2.5, 0, Math.PI * 2);
-                ctx.fill();
+                const pulse = Math.sin(t * 0.004 + i * 1.5) * 0.5 + 0.5;
+                const isWorked = def.jobType && (game.jobs[def.jobType] || 0) > 0;
+                if (isWorked) {
+                    ctx.fillStyle = `rgba(100,255,100,${0.3 + pulse * 0.4})`;
+                    ctx.beginPath();
+                    ctx.arc(sx + TILE_SIZE - 7, sy + 7, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = `rgba(100,255,100,${pulse * 0.15})`;
+                    ctx.beginPath();
+                    ctx.arc(sx + TILE_SIZE - 7, sy + 7, 6, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    ctx.fillStyle = `rgba(100,255,100,${0.2 + pulse * 0.15})`;
+                    ctx.beginPath();
+                    ctx.arc(sx + TILE_SIZE - 7, sy + 7, 2.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            // Duration bar under the building
+            if (b.duration !== undefined) {
+                const maxDuration = 60;
+                const ratio = Math.max(0, b.duration) / maxDuration;
+                const barW = TILE_SIZE - 6;
+                const barH = 3;
+                const barX = sx + 3;
+                const barY = sy + TILE_SIZE - 5;
+                // Background
+                ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                ctx.fillRect(barX, barY, barW, barH);
+                // Fill — green to yellow to red
+                const r = ratio < 0.5 ? Math.floor(255 * (1 - ratio * 2)) : 255;
+                const g = ratio > 0.5 ? Math.floor(255 * ((ratio - 0.5) * 2)) : 255;
+                ctx.fillStyle = `rgb(${255 - Math.floor(ratio * 155)},${Math.floor(ratio * 255)},50)`;
+                ctx.fillRect(barX, barY, barW * ratio, barH);
+                // Border
+                ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                ctx.lineWidth = 0.5;
+                ctx.strokeRect(barX, barY, barW, barH);
             }
         }
 
@@ -2401,7 +2437,17 @@ function gameTick() {
     for (const b of game.buildings) {
         const def = BUILDING_DEFS[b.type];
         if (!def.production) continue;
+        // Skip depleted buildings
+        if (b.duration !== undefined && b.duration <= 0) continue;
         const mult = workedSet.has(b) ? 2 : 1;
+        // Decrement duration — workers slow the decay (worked = 0.5/tick, unworked = 1/tick)
+        if (b.duration !== undefined) {
+            b.duration -= workedSet.has(b) ? 0.5 : 1;
+            if (b.duration <= 0) {
+                b.duration = 0;
+                addNotification(`${def.name} has been depleted!`);
+            }
+        }
         // Conversion buildings: need inputs * mult
         if (def.converts) {
             let canConvert = true;
@@ -2773,6 +2819,11 @@ function placeBuilding(type, x, y) {
     }
 
     const building = { type, x, y, placedTick: game.tick };
+    // Resource-gathering buildings deplete over time
+    const DEPLETABLE = ['farm','lumber','fishingDock','crabTrap','quarry'];
+    if (DEPLETABLE.includes(type)) {
+        building.duration = 60; // base 60 ticks
+    }
     game.buildings.push(building);
     game.map[y][x].building = building;
 
@@ -3436,7 +3487,7 @@ function saveGame(silent) {
         mapSize: MAP_SIZE,
         islands: game.islands,
         map: game.map.map(row => row.map(t => ({ terrain: t.terrain, revealed: t.revealed, decorVariant: t.decorVariant }))),
-        buildings: game.buildings.map(b => ({ type: b.type, x: b.x, y: b.y, placedTick: b.placedTick })),
+        buildings: game.buildings.map(b => ({ type: b.type, x: b.x, y: b.y, placedTick: b.placedTick, duration: b.duration })),
         population: game.population,
         resources: game.resources,
         storage: game.storage,
@@ -3471,6 +3522,11 @@ function loadGame() {
         game.islands = d.islands || [];
         game.buildings = d.buildings.map(b => {
             const bld = { type: b.type, x: b.x, y: b.y, placedTick: b.placedTick };
+            // Restore or initialize duration for depletable buildings
+            const DEPLETABLE = ['farm','lumber','fishingDock','crabTrap','quarry'];
+            if (DEPLETABLE.includes(b.type)) {
+                bld.duration = (b.duration !== undefined) ? b.duration : 60;
+            }
             if (BUILDING_DEFS[b.type] && b.y >= 0 && b.y < MAP_SIZE && b.x >= 0 && b.x < MAP_SIZE) {
                 game.map[b.y][b.x].building = bld;
             }
@@ -3522,6 +3578,13 @@ function showBuildingInfo(building, screenX, screenY) {
     if (def.production) {
         const prodStr = Object.entries(def.production).map(([r, a]) => `+${a} ${r}`).join(', ');
         details += `\nProduction: ${prodStr}/tick`;
+        if (building.duration !== undefined) {
+            if (building.duration <= 0) {
+                details += `\n⛔ DEPLETED — no longer producing`;
+            } else {
+                details += `\n⏱️ Duration: ${Math.ceil(building.duration)}/60 ticks remaining`;
+            }
+        }
     }
     if (def.housing > 0) details += `\nHousing: +${def.housing}`;
     if (def.jobType) {

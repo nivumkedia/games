@@ -90,6 +90,17 @@ let hourglassTimer = 0;
 let hourglassActive = false;
 let shieldActive = false;
 
+// --- Blade/BG Ability State ---
+let chainSlicing = false;  // Guard flag to prevent infinite recursion in explode/chain
+let lightningBolts = [];   // Visual lightning bolt effects for chain blade
+let bgPlatforms = [];      // Platforms for forest/neon/frozen backgrounds
+let lavaBubbles = [];       // Lava bubbles for volcano background
+let lavaBubbleTimer = 0;   // Timer for spawning lava bubbles
+let wavePhase = 0;         // Phase for ocean wave animation
+let bladeSliceCount = 0;   // For blood blade lifesteal counter
+let stormTimer = 0;        // Storm blade: slice-all timer
+let meteorTimer = 0;       // Meteor blade: bonus score timer
+
 // --- Unlock / Mode State ---
 let savedUnlocks = JSON.parse(localStorage.getItem(UNLOCK_STORAGE_KEY) || '{}');
 let unlockedSword = !!savedUnlocks.sword;
@@ -98,6 +109,159 @@ let currentMode = 'blade'; // 'blade' | 'sword' | 'archery'
 let arrows = [];
 let selectedModeIndex = 0;
 let unlockMessage = '';
+
+// --- Shop / Coin System ---
+const SHOP_STORAGE_KEY = 'fruitNinjaShop';
+
+const BLADE_ITEMS = [
+    { id: 'blade_classic', name: 'Classic', price: 0, glow: 'rgba(150,200,255,0.7)', fill: 'rgba(180,220,255,0.3)', mid: 'rgba(210,235,255,0.55)', core: 'rgba(255,255,255,0.9)', sparkle: 'rgba(180,220,255,', special: null, bonus: 'none', bonusDesc: 'No bonus' },
+    { id: 'blade_fire', name: 'Fire Blade', price: 50, glow: 'rgba(255,80,0,0.7)', fill: 'rgba(255,120,40,0.3)', mid: 'rgba(255,160,60,0.55)', core: 'rgba(255,220,100,0.9)', sparkle: 'rgba(255,120,40,', special: null, bonus: 'explode', bonusDesc: 'Sliced fruits explode nearby' },
+    { id: 'blade_ice', name: 'Ice Blade', price: 50, glow: 'rgba(100,220,255,0.7)', fill: 'rgba(150,240,255,0.3)', mid: 'rgba(200,250,255,0.55)', core: 'rgba(255,255,255,0.9)', sparkle: 'rgba(150,240,255,', special: null, bonus: 'freeze', bonusDesc: 'Fruits freeze mid-air' },
+    { id: 'blade_toxic', name: 'Toxic Blade', price: 75, glow: 'rgba(0,255,80,0.7)', fill: 'rgba(40,255,100,0.3)', mid: 'rgba(80,255,130,0.55)', core: 'rgba(200,255,200,0.9)', sparkle: 'rgba(40,255,100,', special: null, bonus: 'poison_immune', bonusDesc: 'Immune to poison' },
+    { id: 'blade_shadow', name: 'Shadow Blade', price: 100, glow: 'rgba(140,60,220,0.7)', fill: 'rgba(100,30,180,0.3)', mid: 'rgba(160,80,240,0.55)', core: 'rgba(220,180,255,0.9)', sparkle: 'rgba(140,60,220,', special: null, bonus: 'wider', bonusDesc: '+50% blade width' },
+    { id: 'blade_golden', name: 'Golden Blade', price: 150, glow: 'rgba(255,200,0,0.7)', fill: 'rgba(255,220,60,0.3)', mid: 'rgba(255,230,100,0.55)', core: 'rgba(255,255,200,0.9)', sparkle: 'rgba(255,220,60,', special: null, bonus: 'bonus_coins', bonusDesc: '+2 coins per slice' },
+    { id: 'blade_rainbow', name: 'Rainbow Blade', price: 200, glow: 'rgba(255,100,100,0.7)', fill: 'rgba(255,200,100,0.3)', mid: 'rgba(100,255,100,0.55)', core: 'rgba(255,255,255,0.9)', sparkle: 'rgba(255,200,100,', special: 'rainbow', bonus: 'random_bonus', bonusDesc: 'Random bonus each slice' },
+    { id: 'blade_lightning', name: 'Lightning Blade', price: 250, glow: 'rgba(255,255,100,0.7)', fill: 'rgba(255,255,150,0.3)', mid: 'rgba(255,255,200,0.55)', core: 'rgba(255,255,255,0.9)', sparkle: 'rgba(255,255,100,', special: null, bonus: 'chain', bonusDesc: 'Chain lightning hits +2' },
+    { id: 'blade_sakura', name: 'Sakura Blade', price: 300, glow: 'rgba(255,150,180,0.7)', fill: 'rgba(255,180,200,0.3)', mid: 'rgba(255,200,220,0.55)', core: 'rgba(255,240,245,0.9)', sparkle: 'rgba(255,150,180,', special: 'sakura', bonus: 'second_life', bonusDesc: 'Missed fruits may return' },
+    { id: 'blade_galaxy', name: 'Galaxy Blade', price: 500, glow: 'rgba(80,0,180,0.7)', fill: 'rgba(60,0,140,0.3)', mid: 'rgba(120,40,220,0.55)', core: 'rgba(200,150,255,0.9)', sparkle: 'rgba(120,40,220,', special: 'galaxy', bonus: 'gravity', bonusDesc: 'Fruits orbit blade' },
+    { id: 'blade_dragon', name: 'Dragon Blade', price: 750, glow: 'rgba(255,40,0,0.7)', fill: 'rgba(255,60,20,0.3)', mid: 'rgba(255,100,40,0.55)', core: 'rgba(255,200,100,0.9)', sparkle: 'rgba(255,60,20,', special: 'dragon', bonus: 'fire_breath', bonusDesc: 'Burn trail slices' },
+    { id: 'blade_crystal', name: 'Crystal Blade', price: 1000, glow: 'rgba(220,240,255,0.7)', fill: 'rgba(240,250,255,0.3)', mid: 'rgba(250,255,255,0.55)', core: 'rgba(255,255,255,0.95)', sparkle: 'rgba(220,240,255,', special: 'crystal', bonus: 'double_chance', bonusDesc: '30% chance 2x points' },
+    // --- More weapons ---
+    { id: 'blade_plasma', name: 'Plasma Blade', price: 80, glow: 'rgba(0,200,255,0.7)', fill: 'rgba(0,180,255,0.3)', mid: 'rgba(80,220,255,0.55)', core: 'rgba(200,240,255,0.9)', sparkle: 'rgba(0,200,255,', special: null, bonus: 'magnet', bonusDesc: 'Coins fly to you (+1 bonus)' },
+    { id: 'blade_blood', name: 'Blood Blade', price: 120, glow: 'rgba(180,0,0,0.7)', fill: 'rgba(200,20,20,0.3)', mid: 'rgba(220,40,40,0.55)', core: 'rgba(255,100,100,0.9)', sparkle: 'rgba(200,20,20,', special: null, bonus: 'lifesteal', bonusDesc: 'Every 5 slices heals 1 life' },
+    { id: 'blade_wind', name: 'Wind Blade', price: 90, glow: 'rgba(180,255,200,0.7)', fill: 'rgba(200,255,220,0.3)', mid: 'rgba(220,255,230,0.55)', core: 'rgba(240,255,245,0.9)', sparkle: 'rgba(200,255,220,', special: null, bonus: 'push', bonusDesc: 'Push fruits upward on near miss' },
+    { id: 'blade_lava', name: 'Lava Blade', price: 175, glow: 'rgba(255,100,0,0.7)', fill: 'rgba(255,60,0,0.3)', mid: 'rgba(255,140,20,0.55)', core: 'rgba(255,200,50,0.9)', sparkle: 'rgba(255,100,0,', special: null, bonus: 'melt_bombs', bonusDesc: 'Bombs give +5 pts instead of death' },
+    { id: 'blade_void', name: 'Void Blade', price: 400, glow: 'rgba(40,0,60,0.7)', fill: 'rgba(60,0,100,0.3)', mid: 'rgba(100,20,160,0.55)', core: 'rgba(180,100,255,0.9)', sparkle: 'rgba(60,0,100,', special: null, bonus: 'void_pull', bonusDesc: 'Missed fruits get sucked back' },
+    { id: 'blade_solar', name: 'Solar Blade', price: 350, glow: 'rgba(255,220,50,0.7)', fill: 'rgba(255,240,100,0.3)', mid: 'rgba(255,245,150,0.55)', core: 'rgba(255,255,220,0.95)', sparkle: 'rgba(255,220,50,', special: null, bonus: 'sunburn', bonusDesc: '+1 point to all fruits' },
+    { id: 'blade_storm', name: 'Storm Blade', price: 280, glow: 'rgba(80,80,120,0.7)', fill: 'rgba(100,100,150,0.3)', mid: 'rgba(140,140,200,0.55)', core: 'rgba(200,200,255,0.9)', sparkle: 'rgba(100,100,180,', special: null, bonus: 'storm', bonusDesc: 'Every 10s a storm slices all fruit' },
+    { id: 'blade_candy', name: 'Candy Blade', price: 130, glow: 'rgba(255,150,200,0.7)', fill: 'rgba(255,180,220,0.3)', mid: 'rgba(255,200,230,0.55)', core: 'rgba(255,230,240,0.9)', sparkle: 'rgba(255,150,200,', special: null, bonus: 'sweet', bonusDesc: 'Combos start at 2 instead of 3' },
+    { id: 'blade_ghost', name: 'Ghost Blade', price: 220, glow: 'rgba(200,200,200,0.5)', fill: 'rgba(220,220,220,0.2)', mid: 'rgba(240,240,240,0.4)', core: 'rgba(255,255,255,0.7)', sparkle: 'rgba(200,200,200,', special: null, bonus: 'phase', bonusDesc: 'Blade passes through rocks safely' },
+    { id: 'blade_nature', name: 'Nature Blade', price: 160, glow: 'rgba(50,180,50,0.7)', fill: 'rgba(70,200,70,0.3)', mid: 'rgba(100,220,100,0.55)', core: 'rgba(180,255,180,0.9)', sparkle: 'rgba(70,200,70,', special: null, bonus: 'regrow', bonusDesc: 'Sliced fruits may regrow (+1 pt)' },
+    { id: 'blade_meteor', name: 'Meteor Blade', price: 600, glow: 'rgba(255,120,40,0.7)', fill: 'rgba(255,80,0,0.3)', mid: 'rgba(255,160,60,0.55)', core: 'rgba(255,230,150,0.95)', sparkle: 'rgba(255,120,40,', special: null, bonus: 'meteor', bonusDesc: 'Every 15s a meteor scores +10' },
+    { id: 'blade_time', name: 'Time Blade', price: 450, glow: 'rgba(100,200,255,0.7)', fill: 'rgba(120,210,255,0.3)', mid: 'rgba(160,230,255,0.55)', core: 'rgba(220,245,255,0.9)', sparkle: 'rgba(100,200,255,', special: null, bonus: 'rewind', bonusDesc: 'Every miss has 50% undo chance' },
+];
+
+const BG_ITEMS = [
+    { id: 'bg_classic', name: 'Classic Dojo', price: 0, tint: null, alpha: 0, mechanic: 'none', mechanicDesc: 'No bonus' },
+    { id: 'bg_night', name: 'Night Dojo', price: 100, tint: '#0a1030', alpha: 0.35, mechanic: 'glow_fruits', mechanicDesc: 'Fruits glow brighter' },
+    { id: 'bg_sunset', name: 'Sunset Dojo', price: 100, tint: '#ff6020', alpha: 0.18, mechanic: 'updraft', mechanicDesc: 'Warm updrafts slow falls' },
+    { id: 'bg_forest', name: 'Forest', price: 150, tint: '#104010', alpha: 0.25, mechanic: 'branches', mechanicDesc: 'Branches bounce fruit up' },
+    { id: 'bg_ocean', name: 'Ocean', price: 150, tint: '#001848', alpha: 0.3, mechanic: 'waves', mechanicDesc: 'Waves save falling fruit' },
+    { id: 'bg_volcano', name: 'Volcano', price: 200, tint: '#400000', alpha: 0.3, mechanic: 'lava_pop', mechanicDesc: 'Lava bubbles pop fruit' },
+    { id: 'bg_space', name: 'Space', price: 300, tint: '#000020', alpha: 0.55, mechanic: 'low_gravity', mechanicDesc: 'Low gravity, fruits float' },
+    { id: 'bg_neon', name: 'Neon City', price: 400, tint: '#300040', alpha: 0.35, mechanic: 'platforms', mechanicDesc: 'Neon platforms bounce fruit' },
+    { id: 'bg_frozen', name: 'Frozen Temple', price: 500, tint: '#c0e8ff', alpha: 0.2, mechanic: 'ice_shelf', mechanicDesc: 'Ice shelves catch fruit' },
+];
+
+const POWER_ITEMS = [
+    { id: 'pow_extralife', name: 'Extra Life', price: 30, desc: 'Start with 4 lives' },
+    { id: 'pow_headstart', name: 'Head Start', price: 40, desc: 'Start with 10 pts' },
+    { id: 'pow_magnet', name: 'Coin Magnet', price: 60, desc: '2x coin earnings' },
+    { id: 'pow_lucky', name: 'Lucky Star', price: 80, desc: 'More specials' },
+    { id: 'pow_slow', name: 'Slow Start', price: 50, desc: 'Slower spawn 10s' },
+    { id: 'pow_thick', name: 'Thick Blade', price: 100, desc: 'Wider hitbox' },
+    { id: 'pow_combo', name: 'Combo Master', price: 120, desc: 'Longer combos' },
+    { id: 'pow_shield', name: 'Shield Start', price: 150, desc: 'Start shielded' },
+];
+
+const EXTRA_ITEMS = [
+    { id: 'ext_double', name: 'Double Points', price: 500, desc: '2x score' },
+    { id: 'ext_defuser', name: 'Bomb Defuser', price: 400, desc: '50% less bombs' },
+    { id: 'ext_frenzy', name: 'Fruit Frenzy', price: 350, desc: 'More fruits' },
+    { id: 'ext_diamond', name: 'Diamond Finder', price: 300, desc: 'More diamonds' },
+    { id: 'ext_revive', name: 'Second Chance', price: 600, desc: 'Free revive' },
+    { id: 'ext_streak', name: 'Score Streak', price: 450, desc: 'Streak bonus' },
+];
+
+const SHOP_CATEGORIES = [
+    { key: 'blades', label: 'Blades', items: BLADE_ITEMS },
+    { key: 'backgrounds', label: 'BG', items: BG_ITEMS },
+    { key: 'powers', label: 'Powers', items: POWER_ITEMS },
+    { key: 'extras', label: 'Extras', items: EXTRA_ITEMS },
+];
+
+function loadShopData() {
+    const raw = localStorage.getItem(SHOP_STORAGE_KEY);
+    if (raw) {
+        try {
+            const data = JSON.parse(raw);
+            // Ensure all fields exist
+            if (!data.owned) data.owned = ['blade_classic', 'bg_classic'];
+            if (!data.equipped) data.equipped = { blade: 'blade_classic', background: 'bg_classic', powers: [] };
+            if (!data.equipped.powers) data.equipped.powers = [];
+            if (!data.equipped.blade) data.equipped.blade = 'blade_classic';
+            if (!data.equipped.background) data.equipped.background = 'bg_classic';
+            if (typeof data.coins !== 'number') data.coins = 0;
+            return data;
+        } catch(e) {}
+    }
+    return {
+        coins: 0,
+        owned: ['blade_classic', 'bg_classic'],
+        equipped: { blade: 'blade_classic', background: 'bg_classic', powers: [] }
+    };
+}
+
+function saveShopData() {
+    localStorage.setItem(SHOP_STORAGE_KEY, JSON.stringify(shopData));
+}
+
+let shopData = loadShopData();
+shopData.coins = 99999; saveShopData(); // DEBUG: free coins for testing
+let shopCategory = 0;
+let shopScrollY = 0;
+let shopScrollTarget = 0;
+let shopDragging = false;
+let shopDragStartY = 0;
+let shopDragScrollStart = 0;
+let shopLastDragY = 0;
+let shopScrollVelocity = 0;
+let coinsEarnedThisGame = 0;
+let coinPopups = [];
+let usedReviveThisGame = false;
+let scoreStreak = 0;
+let lastSliceWasMiss = false;
+
+function getEquippedBlade() {
+    const id = shopData.equipped.blade || 'blade_classic';
+    return BLADE_ITEMS.find(b => b.id === id) || BLADE_ITEMS[0];
+}
+
+function getEquippedBg() {
+    const id = shopData.equipped.background || 'bg_classic';
+    return BG_ITEMS.find(b => b.id === id) || BG_ITEMS[0];
+}
+
+function hasPower(id) {
+    return shopData.equipped.powers && shopData.equipped.powers.includes(id);
+}
+
+function hasExtra(id) {
+    return shopData.owned && shopData.owned.includes(id);
+}
+
+function earnCoins(amount) {
+    if (hasPower('pow_magnet')) amount *= 2;
+    shopData.coins += amount;
+    coinsEarnedThisGame += amount;
+    saveShopData();
+    return amount;
+}
+
+// Space background stars (generated once)
+let spaceStars = [];
+function initSpaceStars() {
+    spaceStars = [];
+    for (let i = 0; i < 120; i++) {
+        spaceStars.push({
+            x: Math.random() * W,
+            y: Math.random() * H,
+            size: 0.5 + Math.random() * 2,
+            twinkleSpeed: 1 + Math.random() * 3,
+            twinklePhase: Math.random() * Math.PI * 2,
+        });
+    }
+}
 
 function getAvailableModes() {
     const modes = ['blade'];
@@ -165,6 +329,7 @@ function resize() {
     initWoodKnots();
     initDustMotes();
     initStartScreenFruits();
+    initSpaceStars();
 }
 window.addEventListener('resize', resize);
 resize();
@@ -175,15 +340,78 @@ function getPos(e) {
     return { x: t.clientX, y: t.clientY };
 }
 
-canvas.addEventListener('mousedown', e => { isPointerDown = true; pointerPos = getPos(e); lastPointerPos = { ...pointerPos }; bladePoints = [{ ...pointerPos, t: performance.now() }]; handleStartInput(); });
-canvas.addEventListener('mousemove', e => { pointerPos = getPos(e); if (isPointerDown) bladePoints.push({ ...pointerPos, t: performance.now() }); });
-canvas.addEventListener('mouseup', () => { isPointerDown = false; bladePoints = []; lastPointerPos = null; });
-canvas.addEventListener('mouseleave', () => { isPointerDown = false; bladePoints = []; lastPointerPos = null; });
+let shopTapStartPos = null;
 
-canvas.addEventListener('touchstart', e => { e.preventDefault(); isPointerDown = true; pointerPos = getPos(e); lastPointerPos = { ...pointerPos }; bladePoints = [{ ...pointerPos, t: performance.now() }]; handleStartInput(); }, { passive: false });
-canvas.addEventListener('touchmove', e => { e.preventDefault(); pointerPos = getPos(e); if (isPointerDown) bladePoints.push({ ...pointerPos, t: performance.now() }); }, { passive: false });
-canvas.addEventListener('touchend', e => { e.preventDefault(); isPointerDown = false; bladePoints = []; lastPointerPos = null; }, { passive: false });
-canvas.addEventListener('touchcancel', () => { isPointerDown = false; bladePoints = []; lastPointerPos = null; });
+canvas.addEventListener('mousedown', e => {
+    isPointerDown = true; pointerPos = getPos(e); lastPointerPos = { ...pointerPos }; bladePoints = [{ ...pointerPos, t: performance.now() }];
+    if (state === 'shop') {
+        shopDragging = true; shopDragStartY = pointerPos.y; shopDragScrollStart = shopScrollY; shopLastDragY = pointerPos.y; shopScrollVelocity = 0;
+        shopTapStartPos = { x: pointerPos.x, y: pointerPos.y };
+    } else {
+        handleStartInput();
+    }
+});
+canvas.addEventListener('mousemove', e => {
+    pointerPos = getPos(e);
+    if (isPointerDown) bladePoints.push({ ...pointerPos, t: performance.now() });
+    if (state === 'shop' && shopDragging && pointerPos.y > 110) {
+        shopScrollVelocity = shopLastDragY - pointerPos.y;
+        shopScrollY = shopDragScrollStart + (shopDragStartY - pointerPos.y);
+        shopLastDragY = pointerPos.y;
+        if (shopScrollY < 0) shopScrollY = 0;
+    }
+});
+canvas.addEventListener('mouseup', () => {
+    if (state === 'shop' && shopDragging) {
+        const dragDist = shopTapStartPos ? Math.abs(pointerPos.y - shopTapStartPos.y) : 999;
+        shopDragging = false; shopScrollTarget = shopScrollY;
+        if (dragDist < 15) { handleShopInput(); }
+        shopTapStartPos = null;
+    }
+    isPointerDown = false; bladePoints = []; lastPointerPos = null;
+});
+canvas.addEventListener('mouseleave', () => { isPointerDown = false; bladePoints = []; lastPointerPos = null; shopDragging = false; shopTapStartPos = null; });
+
+// Mouse wheel scrolling for shop
+canvas.addEventListener('wheel', e => {
+    if (state === 'shop') {
+        e.preventDefault();
+        shopScrollY += e.deltaY;
+        shopScrollTarget = shopScrollY;
+        if (shopScrollY < 0) { shopScrollY = 0; shopScrollTarget = 0; }
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchstart', e => {
+    e.preventDefault(); isPointerDown = true; pointerPos = getPos(e); lastPointerPos = { ...pointerPos }; bladePoints = [{ ...pointerPos, t: performance.now() }];
+    if (state === 'shop') {
+        shopDragging = true; shopDragStartY = pointerPos.y; shopDragScrollStart = shopScrollY; shopLastDragY = pointerPos.y; shopScrollVelocity = 0;
+        shopTapStartPos = { x: pointerPos.x, y: pointerPos.y };
+    } else {
+        handleStartInput();
+    }
+}, { passive: false });
+canvas.addEventListener('touchmove', e => {
+    e.preventDefault(); pointerPos = getPos(e);
+    if (isPointerDown) bladePoints.push({ ...pointerPos, t: performance.now() });
+    if (state === 'shop' && shopDragging && pointerPos.y > 110) {
+        shopScrollVelocity = shopLastDragY - pointerPos.y;
+        shopScrollY = shopDragScrollStart + (shopDragStartY - pointerPos.y);
+        shopLastDragY = pointerPos.y;
+        if (shopScrollY < 0) shopScrollY = 0;
+    }
+}, { passive: false });
+canvas.addEventListener('touchend', e => {
+    e.preventDefault();
+    if (state === 'shop' && shopDragging) {
+        const dragDist = shopTapStartPos ? Math.abs(pointerPos.y - shopTapStartPos.y) : 999;
+        shopDragging = false; shopScrollTarget = shopScrollY;
+        if (dragDist < 15) { handleShopInput(); }
+        shopTapStartPos = null;
+    }
+    isPointerDown = false; bladePoints = []; lastPointerPos = null;
+}, { passive: false });
+canvas.addEventListener('touchcancel', () => { isPointerDown = false; bladePoints = []; lastPointerPos = null; shopDragging = false; shopTapStartPos = null; });
 
 function fireArrow(targetX, targetY) {
     // If click is on a fruit, lock on to that fruit
@@ -215,8 +443,18 @@ function fireArrow(targetX, targetY) {
 }
 
 function handleStartInput() {
-    if (state === 'playing' && currentMode === 'archery') {
-        fireArrow(pointerPos.x, pointerPos.y);
+    if (state === 'playing') {
+        // Check restart button (bottom-center)
+        const rbtnX = W / 2, rbtnY = H - 30, rbtnW = 100, rbtnH = 32;
+        if (pointerPos.x > rbtnX - rbtnW/2 && pointerPos.x < rbtnX + rbtnW/2 &&
+            pointerPos.y > rbtnY - rbtnH/2 && pointerPos.y < rbtnY + rbtnH/2) {
+            startGame();
+            return;
+        }
+        if (currentMode === 'archery') {
+            fireArrow(pointerPos.x, pointerPos.y);
+            return;
+        }
         return;
     }
     if (state === 'gameover') {
@@ -224,6 +462,20 @@ function handleStartInput() {
         return;
     }
     if (state === 'start') {
+        // Check if tap is on the SHOP button (bottom center area)
+        const shopBtnY = H * 0.82;
+        const shopBtnW = 160;
+        const shopBtnH = 48;
+        if (pointerPos.x > W / 2 - shopBtnW / 2 && pointerPos.x < W / 2 + shopBtnW / 2 &&
+            pointerPos.y > shopBtnY - shopBtnH / 2 && pointerPos.y < shopBtnY + shopBtnH / 2) {
+            state = 'shop';
+            shopCategory = 0;
+            shopScrollY = 0;
+            shopScrollTarget = 0;
+            shopScrollVelocity = 0;
+            return;
+        }
+
         const modes = getAvailableModes();
         if (modes.length > 1) {
             // Check if tap is in the mode selector area
@@ -238,7 +490,110 @@ function handleStartInput() {
     }
 }
 
+// --- Shop Input Handling ---
+function handleShopInput() {
+    const px = pointerPos.x;
+    const py = pointerPos.y;
+
+    // Back button (top-left)
+    if (px < 100 && py < 60) {
+        state = 'start';
+        return;
+    }
+
+    // Category tabs (top bar)
+    const tabY = 55;
+    const tabH = 40;
+    if (py >= tabY && py <= tabY + tabH) {
+        const tabW = W / SHOP_CATEGORIES.length;
+        const tabIdx = Math.floor(px / tabW);
+        if (tabIdx >= 0 && tabIdx < SHOP_CATEGORIES.length) {
+            shopCategory = tabIdx;
+            shopScrollY = 0;
+            shopScrollTarget = 0;
+        }
+        return;
+    }
+
+    // Item grid tap
+    const gridTop = 110;
+    if (py > gridTop) {
+        const cat = SHOP_CATEGORIES[shopCategory];
+        const items = cat.items;
+        const cols = Math.max(2, Math.min(4, Math.floor(W / 140)));
+        const cardW = (W - 20) / cols - 10;
+        const hasGameplayDescInput = (cat.key === 'blades' || cat.key === 'backgrounds');
+        const cardH = hasGameplayDescInput ? 150 : 130;
+        const adjustedY = py + shopScrollY - gridTop;
+        const row = Math.floor(adjustedY / (cardH + 10));
+        const col = Math.floor((px - 15) / (cardW + 10));
+        const idx = row * cols + col;
+
+        if (idx >= 0 && idx < items.length) {
+            const item = items[idx];
+            const isOwned = shopData.owned.includes(item.id);
+
+            if (!isOwned) {
+                // Buy
+                if (shopData.coins >= item.price) {
+                    shopData.coins -= item.price;
+                    shopData.owned.push(item.id);
+                    // Auto-equip if it's the first of its type
+                    if (cat.key === 'blades') shopData.equipped.blade = item.id;
+                    else if (cat.key === 'backgrounds') shopData.equipped.background = item.id;
+                    else if (cat.key === 'powers') {
+                        if (!shopData.equipped.powers) shopData.equipped.powers = [];
+                        shopData.equipped.powers.push(item.id);
+                    }
+                    saveShopData();
+                }
+            } else {
+                // Equip / toggle
+                if (cat.key === 'blades') {
+                    shopData.equipped.blade = item.id;
+                    saveShopData();
+                } else if (cat.key === 'backgrounds') {
+                    shopData.equipped.background = item.id;
+                    saveShopData();
+                } else if (cat.key === 'powers') {
+                    if (!shopData.equipped.powers) shopData.equipped.powers = [];
+                    const idx2 = shopData.equipped.powers.indexOf(item.id);
+                    if (idx2 >= 0) {
+                        shopData.equipped.powers.splice(idx2, 1);
+                    } else {
+                        shopData.equipped.powers.push(item.id);
+                    }
+                    saveShopData();
+                }
+                // Extras: no toggle, just owned
+            }
+        }
+    }
+}
+
 // --- Game Logic ---
+function triggerGameOver() {
+    // Second Chance revive
+    if (hasExtra('ext_revive') && !usedReviveThisGame) {
+        usedReviveThisGame = true;
+        lives = 1;
+        popups.push({
+            x: W / 2, y: H * 0.4,
+            text: 'SECOND CHANCE!',
+            life: 1.5, vy: -80, size: 36,
+            color: '#ffdd44', scale: 1.8,
+        });
+        screenFlash = 0.3;
+        return; // Don't go to gameover
+    }
+    state = 'gameover';
+    if (score > bestScore) {
+        bestScore = score;
+        localStorage.setItem(STORAGE_KEY, bestScore);
+    }
+    checkAndApplyUnlocks();
+}
+
 function startGame() {
     state = 'playing';
     score = 0;
@@ -266,6 +621,65 @@ function startGame() {
     hourglassTimer = 0;
     hourglassActive = false;
     shieldActive = false;
+    coinsEarnedThisGame = 0;
+    coinPopups = [];
+    usedReviveThisGame = false;
+    scoreStreak = 0;
+    lastSliceWasMiss = false;
+    bladeSliceCount = 0;
+    stormTimer = 0;
+    meteorTimer = 0;
+
+    // Reset blade/bg ability state
+    chainSlicing = false;
+    lightningBolts = [];
+    lavaBubbles = [];
+    lavaBubbleTimer = 3 + Math.random() * 2;
+    wavePhase = 0;
+
+    // Initialize bg platforms based on equipped background
+    bgPlatforms = [];
+    const startBg = getEquippedBg();
+    if (startBg.mechanic === 'branches') {
+        // 2-3 wooden branch platforms
+        const numBranches = 2 + Math.floor(Math.random() * 2);
+        for (let i = 0; i < numBranches; i++) {
+            bgPlatforms.push({
+                x: W * 0.1 + Math.random() * W * 0.6,
+                y: H * 0.4 + Math.random() * H * 0.35,
+                width: 80 + Math.random() * 60,
+                type: 'branch',
+            });
+        }
+    } else if (startBg.mechanic === 'platforms') {
+        // 3 neon platforms
+        const colors = ['#ff44aa', '#44ffff', '#ffff44'];
+        for (let i = 0; i < 3; i++) {
+            bgPlatforms.push({
+                x: W * 0.1 + Math.random() * W * 0.6,
+                y: H * 0.35 + Math.random() * H * 0.35,
+                width: 80 + Math.random() * 50,
+                type: 'neon',
+                color: colors[i],
+            });
+        }
+    } else if (startBg.mechanic === 'ice_shelf') {
+        // 2 ice platforms
+        for (let i = 0; i < 2; i++) {
+            bgPlatforms.push({
+                x: W * 0.15 + Math.random() * W * 0.5,
+                y: H * 0.45 + Math.random() * H * 0.3,
+                width: 100 + Math.random() * 60,
+                type: 'ice',
+            });
+        }
+    }
+
+    // Apply powerups
+    if (hasPower('pow_extralife')) lives = MAX_LIVES + 1;
+    if (hasPower('pow_headstart')) score = 10;
+    if (hasPower('pow_shield')) shieldActive = true;
+    if (hasPower('pow_slow')) spawnInterval = 3.5; // slower initial spawning
 }
 
 function spawnFruit() {
@@ -320,10 +734,17 @@ function spawnBomb() {
 
 function spawnSpecial() {
     // Weighted random selection (diamond is rare)
-    const totalWeight = SPECIAL_TYPES.reduce((sum, t) => sum + t.rarity, 0);
+    // Diamond Finder extra boosts diamond rarity
+    const modifiedTypes = SPECIAL_TYPES.map(t => {
+        if (t.name === 'diamond' && hasExtra('ext_diamond')) {
+            return { ...t, rarity: t.rarity * 3 };
+        }
+        return t;
+    });
+    const totalWeight = modifiedTypes.reduce((sum, t) => sum + t.rarity, 0);
     let roll = Math.random() * totalWeight;
-    let type = SPECIAL_TYPES[0];
-    for (const t of SPECIAL_TYPES) {
+    let type = modifiedTypes[0];
+    for (const t of modifiedTypes) {
         roll -= t.rarity;
         if (roll <= 0) { type = t; break; }
     }
@@ -355,8 +776,20 @@ function spawnSpecial() {
 function sliceSpecial(fruit) {
     const type = fruit.specialType;
 
-    // Rock: can't be sliced
+    // Rock: can't be sliced (Ghost Blade phases through safely)
     if (type.unsliceable) {
+        if (getEquippedBlade().bonus === 'phase') {
+            // Ghost Blade: pass through rocks harmlessly, get +3
+            fruit.sliced = true;
+            score += 3;
+            for (let i = 0; i < 15; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 60 + Math.random() * 200;
+                particles.push({ x: fruit.x, y: fruit.y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 0.4 + Math.random() * 0.4, maxLife: 0.8, radius: 2 + Math.random() * 3, color: 'rgba(200,200,200,0.6)' });
+            }
+            popups.push({ x: fruit.x, y: fruit.y - 30, text: 'PHASED! +3', life: 1, vy: -80, size: 28, color: '#ccccff', scale: 1.3 });
+            return;
+        }
         fruit.sliced = false; // stays on screen
         // Spark particles
         for (let i = 0; i < 15; i++) {
@@ -384,9 +817,7 @@ function sliceSpecial(fruit) {
             scale: 1.5,
         });
         if (lives <= 0) {
-            state = 'gameover';
-            if (score > bestScore) { bestScore = score; localStorage.setItem(STORAGE_KEY, bestScore); }
-            checkAndApplyUnlocks();
+            triggerGameOver();
         }
         return;
     }
@@ -414,15 +845,26 @@ function sliceSpecial(fruit) {
     timeScale = 0.25;
     slowMoTimer = 0.08;
 
+    // Earn coins for slicing specials
+    let specialCoins = 1;
+    if (type.name === 'star') specialCoins = 3;
+    else if (type.name === 'diamond') specialCoins = 5;
+    else if (type.name === 'coin') specialCoins = 2;
+    if (type.name !== 'skull' && type.name !== 'poison') {
+        const earned = earnCoins(specialCoins);
+        coinPopups.push({ x: fruit.x + 30, y: fruit.y - 20, text: '+' + earned + ' coin' + (earned > 1 ? 's' : ''), life: 1.0, vy: -60 });
+    }
+
     // Apply effect
     switch (type.name) {
         case 'star':
         case 'diamond':
-        case 'coin':
-            score += type.points;
+        case 'coin': {
+            const specialPts = hasExtra('ext_double') ? type.points * 2 : type.points;
+            score += specialPts;
             popups.push({
                 x: fruit.x, y: fruit.y,
-                text: '+' + type.points,
+                text: '+' + specialPts,
                 life: 1.2,
                 vy: -80,
                 size: type.name === 'diamond' ? 42 : 34,
@@ -430,6 +872,7 @@ function sliceSpecial(fruit) {
                 scale: type.name === 'diamond' ? 1.6 : 1.3,
             });
             break;
+        }
         case 'heart':
             lives = MAX_LIVES;
             popups.push({
@@ -479,22 +922,33 @@ function sliceSpecial(fruit) {
                 scale: 1.4,
             });
             if (lives <= 0) {
-                state = 'gameover';
-                if (score > bestScore) { bestScore = score; localStorage.setItem(STORAGE_KEY, bestScore); }
-                checkAndApplyUnlocks();
+                triggerGameOver();
             }
             break;
         case 'poison':
-            score = Math.max(0, score - 5);
-            popups.push({
-                x: fruit.x, y: fruit.y,
-                text: '-5',
-                life: 1.2,
-                vy: -80,
-                size: 34,
-                color: '#44ff44',
-                scale: 1.3,
-            });
+            if (getEquippedBlade().bonus === 'poison_immune') {
+                score += 5;
+                popups.push({
+                    x: fruit.x, y: fruit.y,
+                    text: '+5 IMMUNE!',
+                    life: 1.2,
+                    vy: -80,
+                    size: 34,
+                    color: '#88ff88',
+                    scale: 1.3,
+                });
+            } else {
+                score = Math.max(0, score - 5);
+                popups.push({
+                    x: fruit.x, y: fruit.y,
+                    text: '-5',
+                    life: 1.2,
+                    vy: -80,
+                    size: 34,
+                    color: '#44ff44',
+                    scale: 1.3,
+                });
+            }
             break;
     }
 }
@@ -539,6 +993,19 @@ function sliceFruit(fruit) {
             });
             return;
         }
+        // Lava Blade: bombs give +5 points instead of death
+        if (getEquippedBlade().bonus === 'melt_bombs') {
+            score += 5;
+            for (let i = 0; i < 20; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 60 + Math.random() * 200;
+                particles.push({ x: fruit.x, y: fruit.y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 0.4 + Math.random() * 0.5, maxLife: 0.9, radius: 2 + Math.random() * 4, color: Math.random() > 0.5 ? '#ff8800' : '#ffcc00' });
+            }
+            screenShake = { x: 0, y: 0, timer: 0.15 };
+            screenFlash = 0.15;
+            popups.push({ x: fruit.x, y: fruit.y, text: 'MELTED! +5', life: 1.2, vy: -90, size: 32, color: '#ffaa00', scale: 1.4 });
+            return;
+        }
         // Bomb explosion particles
         for (let i = 0; i < 40; i++) {
             const angle = Math.random() * Math.PI * 2;
@@ -565,12 +1032,7 @@ function sliceFruit(fruit) {
         // Screen flash (red tint for bomb)
         screenFlash = 0.3;
 
-        state = 'gameover';
-        if (score > bestScore) {
-            bestScore = score;
-            localStorage.setItem(STORAGE_KEY, bestScore);
-        }
-        checkAndApplyUnlocks();
+        triggerGameOver();
         return;
     }
 
@@ -579,9 +1041,56 @@ function sliceFruit(fruit) {
 
     // Score
     comboCount++;
-    comboTimer = 0.5;
-    const pts = fruit.points;
+    const comboTime = hasPower('pow_combo') ? 0.8 : 0.5;
+    comboTimer = comboTime;
+    let pts = fruit.points;
+    if (hasExtra('ext_double')) pts *= 2;
+    // Crystal Blade: 30% chance double points
+    const blade = getEquippedBlade();
+    if (blade.bonus === 'double_chance' && Math.random() < 0.3) {
+        pts *= 2;
+        popups.push({ x: fruit.x + 20, y: fruit.y - 50, text: '2X!', life: 0.8, vy: -100, size: 28, color: '#aaddff', scale: 1.6 });
+    }
     score += pts;
+
+    // Score streak bonus
+    if (hasExtra('ext_streak')) {
+        scoreStreak++;
+        if (scoreStreak >= 5) {
+            const bonus = Math.floor(scoreStreak / 5);
+            score += bonus;
+        }
+    }
+
+    // Earn coin
+    const earned = earnCoins(1);
+    coinPopups.push({ x: fruit.x + 25, y: fruit.y - 15, text: '+' + earned, life: 0.8, vy: -50 });
+
+    // Golden Blade: +2 extra coins per slice
+    if (blade.bonus === 'bonus_coins') {
+        const extraCoins = earnCoins(2);
+        coinPopups.push({ x: fruit.x - 20, y: fruit.y - 25, text: '+' + extraCoins + ' gold', life: 0.8, vy: -60 });
+    }
+
+    // Rainbow Blade: random bonus each slice
+    if (blade.bonus === 'random_bonus') {
+        const roll = Math.random();
+        if (roll < 0.25) {
+            score += 3;
+            popups.push({ x: fruit.x - 30, y: fruit.y - 40, text: '+3 BONUS', life: 0.8, vy: -90, size: 22, color: '#ff88ff', scale: 1.2 });
+        } else if (roll < 0.5) {
+            lives = Math.min(lives + 1, MAX_LIVES);
+            popups.push({ x: fruit.x - 30, y: fruit.y - 40, text: '+1 LIFE', life: 0.8, vy: -90, size: 22, color: '#ff6688', scale: 1.2 });
+        } else if (roll < 0.75) {
+            const bonusCoins = earnCoins(5);
+            coinPopups.push({ x: fruit.x - 30, y: fruit.y - 35, text: '+' + bonusCoins + ' coins!', life: 0.8, vy: -60 });
+        } else {
+            shieldActive = true;
+            popups.push({ x: fruit.x - 30, y: fruit.y - 40, text: 'SHIELD!', life: 0.8, vy: -90, size: 22, color: '#88ccff', scale: 1.2 });
+            // Shield will last 2 seconds (set a timer in update)
+            setTimeout(() => { shieldActive = false; }, 2000);
+        }
+    }
 
     // Screen flash (white for slice)
     screenFlash = 0.12;
@@ -640,9 +1149,11 @@ function sliceFruit(fruit) {
         scale: 1.3,
     });
 
-    // Combo popup with scale bounce
-    if (comboCount >= 3) {
-        const bonus = comboCount;
+    // Combo popup with scale bounce (Candy Blade: starts at 2)
+    const comboThreshold = getEquippedBlade().bonus === 'sweet' ? 2 : 3;
+    if (comboCount >= comboThreshold) {
+        let bonus = comboCount;
+        if (hasExtra('ext_double')) bonus *= 2;
         score += bonus;
         popups.push({
             x: fruit.x, y: fruit.y - 40,
@@ -717,6 +1228,85 @@ function sliceFruit(fruit) {
         });
         if (splatters.length > MAX_SPLATTERS) splatters.shift();
     }
+
+    // Fire Blade: explode nearby fruits (120px radius)
+    if (blade.bonus === 'explode' && !chainSlicing) {
+        chainSlicing = true;
+        for (const other of fruits) {
+            if (other.sliced || other === fruit || other.isBomb) continue;
+            const dx = other.x - fruit.x;
+            const dy = other.y - fruit.y;
+            if (Math.hypot(dx, dy) <= 120) {
+                sliceFruit(other);
+            }
+        }
+        chainSlicing = false;
+        // Explosion visual
+        shockwaves.push({ x: fruit.x, y: fruit.y, radius: 10, maxRadius: 120, life: 0.4, maxLife: 0.4 });
+    }
+
+    // Lightning Blade: chain to up to 2 nearby unsliced fruits (200px)
+    if (blade.bonus === 'chain' && !chainSlicing) {
+        chainSlicing = true;
+        // Find nearest unsliced non-bomb fruits within 200px
+        const candidates = [];
+        for (const other of fruits) {
+            if (other.sliced || other === fruit || other.isBomb) continue;
+            const dist = Math.hypot(other.x - fruit.x, other.y - fruit.y);
+            if (dist <= 200) {
+                candidates.push({ fruit: other, dist });
+            }
+        }
+        candidates.sort((a, b) => a.dist - b.dist);
+        const chainTargets = candidates.slice(0, 2);
+        for (const target of chainTargets) {
+            // Visual lightning bolt
+            lightningBolts.push({
+                x1: fruit.x, y1: fruit.y,
+                x2: target.fruit.x, y2: target.fruit.y,
+                life: 0.3, maxLife: 0.3,
+            });
+            sliceFruit(target.fruit);
+        }
+        chainSlicing = false;
+    }
+
+    // Plasma Blade: bonus coin per slice
+    if (blade.bonus === 'magnet') {
+        const extraC = earnCoins(1);
+        coinPopups.push({ x: fruit.x - 15, y: fruit.y - 35, text: '+' + extraC + ' magnet', life: 0.7, vy: -55 });
+    }
+
+    // Blood Blade: every 5 slices heals 1 life
+    if (blade.bonus === 'lifesteal') {
+        bladeSliceCount++;
+        if (bladeSliceCount % 5 === 0) {
+            lives = Math.min(lives + 1, MAX_LIVES + 1);
+            popups.push({ x: fruit.x, y: fruit.y - 50, text: 'LIFESTEAL!', life: 1, vy: -90, size: 24, color: '#ff4444', scale: 1.3 });
+        }
+    }
+
+    // Solar Blade: +1 point to all fruits
+    if (blade.bonus === 'sunburn') {
+        score += 1;
+    }
+
+    // Candy Blade: combos start at 2 instead of 3 (handled via comboCount check later)
+    // Nature Blade: 25% chance sliced fruit regrows as a new fruit worth +1
+    if (blade.bonus === 'regrow' && Math.random() < 0.25 && !chainSlicing) {
+        const type = FRUIT_TYPES[Math.floor(Math.random() * FRUIT_TYPES.length)];
+        const targetY = H * (0.2 + Math.random() * 0.3);
+        fruits.push({
+            x: fruit.x + (Math.random() - 0.5) * 60, y: fruit.y,
+            vx: (Math.random() - 0.5) * 200,
+            vy: -Math.sqrt(2 * GRAVITY * (H - targetY + 30)),
+            radius: type.radius, points: type.points + 1,
+            name: type.name, outer: type.outer, inner: type.inner, juice: type.juice,
+            rotation: Math.random() * Math.PI * 2, rotSpeed: (Math.random() - 0.5) * 6,
+            sliced: false, missed: false, isBomb: false,
+        });
+        popups.push({ x: fruit.x, y: fruit.y - 45, text: 'REGROW!', life: 0.8, vy: -80, size: 22, color: '#88ff88', scale: 1.2 });
+    }
 }
 
 function segmentCircleIntersect(ax, ay, bx, by, cx, cy, r) {
@@ -738,6 +1328,8 @@ const MIN_SLICE_SPEED = 8; // minimum pixel distance per blade segment to count 
 function checkSlicing() {
     if (!isPointerDown) return;
 
+    const bladeBonus = getEquippedBlade().bonus;
+
     // --- Swipe check (Blade mode) ---
     if (currentMode === 'blade') {
         if (bladePoints.length >= 2) {
@@ -756,10 +1348,30 @@ function checkSlicing() {
                         if (segLen < 2) continue;
                         for (const fruit of fruits) {
                             if (fruit.sliced) continue;
-                            if (segmentCircleIntersect(a.x, a.y, b.x, b.y, fruit.x, fruit.y, fruit.radius)) {
+                            let sliceRadius = hasPower('pow_thick') ? fruit.radius * 1.4 : fruit.radius;
+                            // Shadow Blade: +50% blade width (stacks with thick blade)
+                            if (bladeBonus === 'wider') sliceRadius *= 1.5;
+                            if (segmentCircleIntersect(a.x, a.y, b.x, b.y, fruit.x, fruit.y, sliceRadius)) {
                                 sliceFruit(fruit);
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        // Dragon Blade: lingering trail hitbox (check trail from last 500ms)
+        if (bladeBonus === 'fire_breath' && bladePoints.length >= 2) {
+            const now = performance.now();
+            const trailPoints = bladePoints.filter(p => now - p.t < 500 && now - p.t >= 100);
+            for (let i = 1; i < trailPoints.length; i++) {
+                const a = trailPoints[i - 1];
+                const b = trailPoints[i];
+                for (const fruit of fruits) {
+                    if (fruit.sliced) continue;
+                    let sliceRadius = hasPower('pow_thick') ? fruit.radius * 1.4 : fruit.radius;
+                    if (segmentCircleIntersect(a.x, a.y, b.x, b.y, fruit.x, fruit.y, sliceRadius)) {
+                        sliceFruit(fruit);
                     }
                 }
             }
@@ -772,7 +1384,10 @@ function checkSlicing() {
             if (fruit.sliced) continue;
             const dx = pointerPos.x - fruit.x;
             const dy = pointerPos.y - fruit.y;
-            if (dx * dx + dy * dy <= fruit.radius * fruit.radius) {
+            let swordR = hasPower('pow_thick') ? fruit.radius * 1.4 : fruit.radius;
+            // Shadow Blade: +50% blade width in sword mode too
+            if (bladeBonus === 'wider') swordR *= 1.5;
+            if (dx * dx + dy * dy <= swordR * swordR) {
                 sliceFruit(fruit);
             }
         }
@@ -895,12 +1510,66 @@ function update(dt) {
         }
     }
 
+    // Storm Blade: every 10s, slice all on-screen fruits
+    if (getEquippedBlade().bonus === 'storm') {
+        stormTimer += dt;
+        if (stormTimer >= 10) {
+            stormTimer = 0;
+            chainSlicing = true;
+            let stormCount = 0;
+            for (const f of fruits) {
+                if (!f.sliced && !f.isBomb) {
+                    sliceFruit(f);
+                    stormCount++;
+                }
+            }
+            chainSlicing = false;
+            if (stormCount > 0) {
+                screenFlash = 0.25;
+                screenShake = { x: 0, y: 0, timer: 0.3 };
+                popups.push({ x: W/2, y: H*0.4, text: 'STORM! x' + stormCount, life: 1.5, vy: -60, size: 40, color: '#aabbff', scale: 2.0 });
+            }
+        }
+    }
+
+    // Meteor Blade: every 15s, a meteor scores +10
+    if (getEquippedBlade().bonus === 'meteor') {
+        meteorTimer += dt;
+        if (meteorTimer >= 15) {
+            meteorTimer = 0;
+            score += 10;
+            screenFlash = 0.2;
+            screenShake = { x: 0, y: 0, timer: 0.2 };
+            popups.push({ x: W/2, y: H*0.3, text: 'METEOR! +10', life: 1.5, vy: -50, size: 38, color: '#ff8844', scale: 2.0 });
+            // Meteor particles
+            for (let i = 0; i < 20; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 100 + Math.random() * 300;
+                particles.push({ x: W/2, y: H*0.3, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 0.6 + Math.random() * 0.5, maxLife: 1.1, radius: 3 + Math.random() * 5, color: Math.random() > 0.5 ? '#ff6600' : '#ffaa00' });
+            }
+            shockwaves.push({ x: W/2, y: H*0.3, radius: 10, maxRadius: 200, life: 0.5, maxLife: 0.5 });
+        }
+    }
+
+    // Difficulty scaling: more owned items = harder game
+    // Count non-default owned items (exclude blade_classic and bg_classic)
+    const ownedCount = shopData.owned.filter(id => id !== 'blade_classic' && id !== 'bg_classic').length;
+    const difficultyMult = 1 + ownedCount * 0.03; // +3% difficulty per owned item
+
     // Difficulty ramp
-    let baseInterval = Math.max(0.5, 1.8 - gameTime * 0.015);
+    let baseInterval = Math.max(0.3, (1.8 - gameTime * 0.015) / difficultyMult);
     if (hourglassActive) baseInterval *= 2.5;
+    // Slow Start powerup: slower spawn for first 10 seconds
+    if (hasPower('pow_slow') && gameTime < 10) baseInterval *= 1.8;
+    // Fruit Frenzy extra: more fruits spawn (shorter interval)
+    if (hasExtra('ext_frenzy')) baseInterval *= 0.75;
     spawnInterval = baseInterval;
-    const bombChance = Math.min(0.25, 0.05 + gameTime * 0.003);
-    const specialChance = Math.min(0.35, 0.10 + gameTime * 0.005);
+    let bombChance = Math.min(0.35, (0.05 + gameTime * 0.003) * difficultyMult);
+    // Bomb Defuser extra: 50% less bombs
+    if (hasExtra('ext_defuser')) bombChance *= 0.5;
+    let specialChance = Math.min(0.35, 0.10 + gameTime * 0.005);
+    // Lucky Star powerup: more specials
+    if (hasPower('pow_lucky')) specialChance = Math.min(0.5, specialChance * 1.5);
     const burstChance = Math.min(0.5, gameTime * 0.005);
     const burstMax = Math.min(5, 2 + Math.floor(gameTime / 20));
 
@@ -908,7 +1577,7 @@ function update(dt) {
     spawnTimer += dt;
     if (spawnTimer >= spawnInterval) {
         spawnTimer -= spawnInterval;
-        const count = Math.random() < burstChance ? 2 + Math.floor(Math.random() * burstMax) : 1;
+        const count = Math.random() < burstChance ? 2 : 1;
         for (let i = 0; i < count; i++) {
             const roll = Math.random();
             if (roll < bombChance) {
@@ -960,15 +1629,172 @@ function update(dt) {
 
     // Update fruits
     const hgMult = hourglassActive ? 0.5 : 1;
+    const currentBlade = getEquippedBlade();
+    const currentBg = getEquippedBg();
+
+    // Determine effective gravity based on background
+    let effectiveGravity = GRAVITY;
+    if (currentBg.mechanic === 'low_gravity') effectiveGravity *= 0.6;   // Space: 40% reduction
+    else if (currentBg.mechanic === 'updraft') effectiveGravity *= 0.8;  // Sunset: 20% reduction
+
     for (const f of fruits) {
         if (f.sliced) continue;
-        f.x += f.vx * dt * hgMult;
-        f.y += f.vy * dt;
-        f.vy += GRAVITY * dt;
+
+        // Ice Blade: freeze fruits near pointer
+        if (currentBlade.bonus === 'freeze' && isPointerDown) {
+            const distToPointer = Math.hypot(f.x - pointerPos.x, f.y - pointerPos.y);
+            if (distToPointer <= 150) {
+                if (!f.frozenTimer) f.frozenTimer = 0;
+                f.frozenTimer = 1.0; // 1 second freeze
+            }
+        }
+        if (f.frozenTimer && f.frozenTimer > 0) {
+            f.frozenTimer -= dt;
+            // Frozen fruits move at 20% speed
+            f.x += f.vx * dt * hgMult * 0.2;
+            f.y += f.vy * dt * 0.2;
+            f.vy += effectiveGravity * dt * 0.2;
+        } else {
+            f.x += f.vx * dt * hgMult;
+            f.y += f.vy * dt;
+            f.vy += effectiveGravity * dt;
+        }
+
+        // Galaxy Blade: gravitational pull toward pointer
+        if (currentBlade.bonus === 'gravity' && isPointerDown) {
+            const dx = pointerPos.x - f.x;
+            const dy = pointerPos.y - f.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist > 0 && dist <= 200) {
+                const accel = 100; // 100 units/s^2
+                f.vx += (dx / dist) * accel * dt;
+                f.vy += (dy / dist) * accel * dt;
+            }
+        }
+
+        // Wind Blade: push nearby falling fruits upward
+        if (currentBlade.bonus === 'push' && isPointerDown) {
+            const dx = f.x - pointerPos.x;
+            const dy = f.y - pointerPos.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist > 0 && dist <= 130 && f.vy > 0) {
+                f.vy -= 400 * dt; // push upward
+            }
+        }
+
         f.rotation += f.rotSpeed * dt;
         if (f.isBomb) f.fuseAngle += 12 * dt;
 
+        // Ice shelf (Frozen bg): catch fruit on platform
+        if (f.iceCaught) {
+            f.iceCaughtTimer -= dt;
+            if (f.iceCaughtTimer <= 0) {
+                f.iceCaught = false; // unfreeze, let it fall
+            } else {
+                f.vx = 0;
+                f.vy = 0;
+                continue; // skip miss detection, fruit is sitting on shelf
+            }
+        }
+
+        // Platform collision (forest branches, neon platforms, frozen ice shelves)
+        if (currentBg.mechanic === 'branches' || currentBg.mechanic === 'platforms' || currentBg.mechanic === 'ice_shelf') {
+            if (f.vy > 0) { // only when falling
+                for (const plat of bgPlatforms) {
+                    if (f.x + f.radius > plat.x && f.x - f.radius < plat.x + plat.width &&
+                        f.y + f.radius >= plat.y && f.y + f.radius <= plat.y + 20) {
+                        if (currentBg.mechanic === 'ice_shelf') {
+                            // Ice shelf: catch and hold for 2 seconds
+                            f.iceCaught = true;
+                            f.iceCaughtTimer = 2.0;
+                            f.y = plat.y - f.radius;
+                            f.vx = 0;
+                            f.vy = 0;
+                        } else {
+                            // Bounce: reverse vy at 60% (forest/neon)
+                            f.vy = -Math.abs(f.vy) * 0.6;
+                            f.y = plat.y - f.radius;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
         if (!f.missed && f.vy > 0 && f.y > H + f.radius + 20) {
+            // Ocean waves: 50% chance to bounce back
+            if (currentBg.mechanic === 'waves' && !f.isBomb && !f.isSpecial && Math.random() < 0.5 && !f.waveBounced) {
+                f.waveBounced = true;
+                f.y = H - f.radius;
+                f.vy = -Math.abs(f.vy) * 0.7;
+                // Wave splash particles
+                for (let i = 0; i < 8; i++) {
+                    particles.push({
+                        x: f.x + (Math.random() - 0.5) * 40,
+                        y: H - 10,
+                        vx: (Math.random() - 0.5) * 100,
+                        vy: -50 - Math.random() * 100,
+                        life: 0.5 + Math.random() * 0.4,
+                        maxLife: 0.9,
+                        radius: 2 + Math.random() * 4,
+                        color: '#66aaff',
+                    });
+                }
+                continue;
+            }
+
+            // Void Blade: missed fruits get sucked back (60% chance)
+            if (currentBlade.bonus === 'void_pull' && !f.isBomb && !f.isSpecial && Math.random() < 0.6 && !f.voidPulled) {
+                f.voidPulled = true;
+                f.y = H - f.radius - 10;
+                const targetY = H * (0.25 + Math.random() * 0.25);
+                f.vy = -Math.sqrt(2 * GRAVITY * (H - targetY + 40));
+                f.vx = (Math.random() - 0.5) * 150;
+                for (let i = 0; i < 10; i++) {
+                    particles.push({ x: f.x, y: H, vx: (Math.random()-0.5)*80, vy: -40 - Math.random()*80, life: 0.5, maxLife: 0.5, radius: 2 + Math.random()*3, color: '#8844cc' });
+                }
+                popups.push({ x: f.x, y: H - 40, text: 'VOID PULL!', life: 0.7, vy: -70, size: 20, color: '#aa66ee', scale: 1.1 });
+                continue;
+            }
+
+            // Time Blade: 50% chance to undo a miss
+            if (currentBlade.bonus === 'rewind' && !f.isBomb && !f.isSpecial && Math.random() < 0.5 && !f.timeRewound) {
+                f.timeRewound = true;
+                f.y = H + f.radius + 10;
+                const targetY = H * (0.2 + Math.random() * 0.3);
+                f.vy = -Math.sqrt(2 * GRAVITY * (H - targetY + 50));
+                f.vx = (Math.random() - 0.5) * 180;
+                for (let i = 0; i < 10; i++) {
+                    particles.push({ x: f.x, y: H, vx: (Math.random()-0.5)*60, vy: -30 - Math.random()*60, life: 0.5, maxLife: 0.5, radius: 2 + Math.random()*3, color: '#88ccff' });
+                }
+                popups.push({ x: f.x, y: H - 40, text: 'REWIND!', life: 0.7, vy: -70, size: 20, color: '#88ddff', scale: 1.1 });
+                continue;
+            }
+
+            // Sakura Blade: 40% chance missed fruit respawns
+            if (currentBlade.bonus === 'second_life' && !f.isBomb && !f.isSpecial && Math.random() < 0.4 && !f.respawned) {
+                f.respawned = true;
+                f.y = H + f.radius + 10;
+                const targetY = H * (0.2 + Math.random() * 0.3);
+                f.vy = -Math.sqrt(2 * GRAVITY * (H - targetY + 50));
+                f.vx = (Math.random() - 0.5) * 200;
+                // Pink petal burst
+                for (let i = 0; i < 12; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = 60 + Math.random() * 120;
+                    particles.push({
+                        x: f.x, y: H,
+                        vx: Math.cos(angle) * speed,
+                        vy: Math.sin(angle) * speed - 40,
+                        life: 0.6 + Math.random() * 0.5,
+                        maxLife: 1.1,
+                        radius: 2 + Math.random() * 4,
+                        color: Math.random() > 0.5 ? '#ffaacc' : '#ff88bb',
+                    });
+                }
+                continue;
+            }
+
             f.missed = true;
             if (!f.isBomb && !f.isSpecial) {
                 lives--;
@@ -983,18 +1809,74 @@ function update(dt) {
                     color: missesInRow >= MAX_LIVES ? '#ff0000' : '#ff4444',
                     scale: 1.2 + missesInRow * 0.3,
                 });
+                // Reset score streak on miss
+                if (hasExtra('ext_streak')) scoreStreak = 0;
                 if (lives <= 0) {
-                    state = 'gameover';
-                    if (score > bestScore) {
-                        bestScore = score;
-                        localStorage.setItem(STORAGE_KEY, bestScore);
-                    }
-                    checkAndApplyUnlocks();
+                    triggerGameOver();
                 }
             }
         }
     }
     fruits = fruits.filter(f => !(f.sliced || f.missed));
+
+    // Update lightning bolts
+    for (const lb of lightningBolts) lb.life -= dt;
+    lightningBolts = lightningBolts.filter(lb => lb.life > 0);
+
+    // Update lava bubbles (volcano bg)
+    if (currentBg.mechanic === 'lava_pop') {
+        lavaBubbleTimer -= dt;
+        if (lavaBubbleTimer <= 0) {
+            lavaBubbleTimer = 3 + Math.random() * 2; // 3-5 seconds
+            lavaBubbles.push({
+                x: W * 0.15 + Math.random() * W * 0.7,
+                y: H + 20,
+                vy: -150 - Math.random() * 100,
+                radius: 12 + Math.random() * 10,
+                life: 4.0,
+            });
+        }
+        for (const lb of lavaBubbles) {
+            lb.y += lb.vy * dt;
+            lb.life -= dt;
+            // Check if lava bubble hits any fruit
+            for (const f of fruits) {
+                if (f.sliced) continue;
+                const dist = Math.hypot(f.x - lb.x, f.y - lb.y);
+                if (dist < f.radius + lb.radius) {
+                    f.sliced = true;
+                    // Burst particles but no coins for lava pop
+                    for (let i = 0; i < 15; i++) {
+                        const angle = Math.random() * Math.PI * 2;
+                        const speed = 40 + Math.random() * 200;
+                        particles.push({
+                            x: f.x, y: f.y,
+                            vx: Math.cos(angle) * speed,
+                            vy: Math.sin(angle) * speed,
+                            life: 0.4 + Math.random() * 0.5,
+                            maxLife: 0.9,
+                            radius: 2 + Math.random() * 4,
+                            color: Math.random() > 0.5 ? '#ff6600' : '#ffaa00',
+                        });
+                    }
+                    // Add points but no coins
+                    const lavaPts = f.isBomb ? 0 : f.points;
+                    if (lavaPts > 0) {
+                        score += lavaPts;
+                        popups.push({ x: f.x, y: f.y, text: '+' + lavaPts + ' LAVA', life: 0.8, vy: -80, size: 24, color: '#ff8800', scale: 1.1 });
+                    }
+                    lb.life = 0;
+                    break;
+                }
+            }
+        }
+        lavaBubbles = lavaBubbles.filter(lb => lb.life > 0);
+    }
+
+    // Update wave phase for ocean bg
+    if (currentBg.mechanic === 'waves') {
+        wavePhase += dt * 2;
+    }
 
     // Update halves
     for (const h of halves) {
@@ -1026,9 +1908,17 @@ function update(dt) {
     }
     popups = popups.filter(p => p.life > 0);
 
-    // Trim blade trail
-    const now = performance.now();
-    bladePoints = bladePoints.filter(p => now - p.t < 220);
+    // Update coin popups
+    for (const cp of coinPopups) {
+        cp.y += cp.vy * dt;
+        cp.life -= dt;
+    }
+    coinPopups = coinPopups.filter(cp => cp.life > 0);
+
+    // Trim blade trail (dragon blade keeps trail longer for lingering hitbox)
+    const trailNow = performance.now();
+    const trailRetain = getEquippedBlade().bonus === 'fire_breath' ? 500 : 220;
+    bladePoints = bladePoints.filter(p => trailNow - p.t < trailRetain);
 }
 
 // ===========================================
@@ -1741,6 +2631,29 @@ function drawBackground() {
         ctx.stroke();
     }
 
+    // === BACKGROUND TINT from equipped background ===
+    const equippedBg = getEquippedBg();
+    if (equippedBg.tint && equippedBg.alpha > 0) {
+        ctx.globalAlpha = equippedBg.alpha;
+        ctx.fillStyle = equippedBg.tint;
+        ctx.fillRect(0, 0, W, H);
+        ctx.globalAlpha = 1;
+    }
+    // Space background: draw twinkling stars
+    if (equippedBg.id === 'bg_space') {
+        if (spaceStars.length === 0) initSpaceStars();
+        const nowS = performance.now() * 0.001;
+        for (const star of spaceStars) {
+            const twinkle = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(nowS * star.twinkleSpeed + star.twinklePhase));
+            ctx.globalAlpha = twinkle * 0.8;
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+    }
+
     // === SOFT VIGNETTE (subtle for daytime) ===
     const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.4, W / 2, H / 2, Math.max(W, H) * 0.8);
     vg.addColorStop(0, 'rgba(0,0,0,0)');
@@ -1763,6 +2676,170 @@ function drawSplatters() {
         ctx.fill();
     }
     ctx.globalAlpha = 1;
+}
+
+function drawBgMechanics() {
+    const bg = getEquippedBg();
+
+    // Forest branches
+    if (bg.mechanic === 'branches') {
+        for (const plat of bgPlatforms) {
+            // Wooden plank
+            const bGrad = ctx.createLinearGradient(plat.x, plat.y, plat.x, plat.y + 12);
+            bGrad.addColorStop(0, '#8B6914');
+            bGrad.addColorStop(0.3, '#A0782A');
+            bGrad.addColorStop(0.7, '#8B6914');
+            bGrad.addColorStop(1, '#6B4E0A');
+            ctx.fillStyle = bGrad;
+            ctx.fillRect(plat.x, plat.y, plat.width, 12);
+            // Wood grain lines
+            ctx.strokeStyle = 'rgba(60,40,10,0.3)';
+            ctx.lineWidth = 1;
+            for (let y = plat.y + 3; y < plat.y + 12; y += 4) {
+                ctx.beginPath();
+                ctx.moveTo(plat.x + 2, y);
+                ctx.lineTo(plat.x + plat.width - 2, y);
+                ctx.stroke();
+            }
+            // Border
+            ctx.strokeStyle = 'rgba(80,55,15,0.6)';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(plat.x, plat.y, plat.width, 12);
+        }
+    }
+
+    // Neon platforms
+    if (bg.mechanic === 'platforms') {
+        const t = performance.now() * 0.003;
+        for (let i = 0; i < bgPlatforms.length; i++) {
+            const plat = bgPlatforms[i];
+            const pulse = 0.6 + 0.4 * Math.sin(t + i * 2.1);
+            // Glow
+            ctx.save();
+            ctx.shadowColor = plat.color;
+            ctx.shadowBlur = 15 * pulse;
+            ctx.fillStyle = plat.color;
+            ctx.globalAlpha = 0.7 * pulse;
+            ctx.fillRect(plat.x, plat.y, plat.width, 8);
+            ctx.restore();
+            // Solid core
+            ctx.fillStyle = '#ffffff';
+            ctx.globalAlpha = 0.5;
+            ctx.fillRect(plat.x + 2, plat.y + 2, plat.width - 4, 4);
+            ctx.globalAlpha = 1;
+        }
+    }
+
+    // Frozen ice shelves
+    if (bg.mechanic === 'ice_shelf') {
+        for (const plat of bgPlatforms) {
+            // Translucent blue ice
+            ctx.fillStyle = 'rgba(160, 210, 255, 0.4)';
+            ctx.fillRect(plat.x, plat.y, plat.width, 14);
+            // Highlight
+            ctx.fillStyle = 'rgba(220, 240, 255, 0.3)';
+            ctx.fillRect(plat.x + 2, plat.y + 1, plat.width - 4, 4);
+            // Border
+            ctx.strokeStyle = 'rgba(180, 220, 255, 0.6)';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(plat.x, plat.y, plat.width, 14);
+        }
+    }
+
+    // Ocean waves
+    if (bg.mechanic === 'waves') {
+        const waveY = H - 30;
+        ctx.save();
+        // Draw animated sine waves at bottom
+        for (let layer = 0; layer < 3; layer++) {
+            ctx.beginPath();
+            ctx.moveTo(0, H);
+            for (let x = 0; x <= W; x += 5) {
+                const y = waveY + layer * 8 + Math.sin(x * 0.02 + wavePhase + layer * 1.5) * (8 - layer * 2);
+                ctx.lineTo(x, y);
+            }
+            ctx.lineTo(W, H);
+            ctx.closePath();
+            ctx.fillStyle = `rgba(40, ${100 + layer * 30}, ${200 + layer * 20}, ${0.3 - layer * 0.08})`;
+            ctx.fill();
+        }
+        // White foam on top wave
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let x = 0; x <= W; x += 5) {
+            const y = waveY + Math.sin(x * 0.02 + wavePhase) * 8;
+            if (x === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    // Volcano lava bubbles
+    if (bg.mechanic === 'lava_pop') {
+        for (const lb of lavaBubbles) {
+            const alpha = Math.min(1, lb.life);
+            // Outer glow
+            ctx.save();
+            ctx.shadowColor = '#ff4400';
+            ctx.shadowBlur = 15;
+            ctx.beginPath();
+            ctx.arc(lb.x, lb.y, lb.radius, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 100, 0, ${alpha * 0.8})`;
+            ctx.fill();
+            ctx.restore();
+            // Inner bright core
+            ctx.beginPath();
+            ctx.arc(lb.x, lb.y, lb.radius * 0.6, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 200, 50, ${alpha * 0.9})`;
+            ctx.fill();
+            // Highlight
+            ctx.beginPath();
+            ctx.arc(lb.x - lb.radius * 0.2, lb.y - lb.radius * 0.2, lb.radius * 0.25, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 255, 200, ${alpha * 0.5})`;
+            ctx.fill();
+        }
+    }
+}
+
+function drawLightningBolts() {
+    for (const lb of lightningBolts) {
+        const alpha = lb.life / lb.maxLife;
+        ctx.save();
+        ctx.strokeStyle = `rgba(255, 255, 100, ${alpha})`;
+        ctx.lineWidth = 3;
+        ctx.shadowColor = '#ffff00';
+        ctx.shadowBlur = 10;
+        // Draw jagged lightning bolt between two points
+        const dx = lb.x2 - lb.x1;
+        const dy = lb.y2 - lb.y1;
+        const segments = 6;
+        ctx.beginPath();
+        ctx.moveTo(lb.x1, lb.y1);
+        for (let i = 1; i < segments; i++) {
+            const t = i / segments;
+            const x = lb.x1 + dx * t + (Math.random() - 0.5) * 20;
+            const y = lb.y1 + dy * t + (Math.random() - 0.5) * 20;
+            ctx.lineTo(x, y);
+        }
+        ctx.lineTo(lb.x2, lb.y2);
+        ctx.stroke();
+        // Draw a thinner white core
+        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.7})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(lb.x1, lb.y1);
+        for (let i = 1; i < segments; i++) {
+            const t = i / segments;
+            const x = lb.x1 + dx * t + (Math.random() - 0.5) * 10;
+            const y = lb.y1 + dy * t + (Math.random() - 0.5) * 10;
+            ctx.lineTo(x, y);
+        }
+        ctx.lineTo(lb.x2, lb.y2);
+        ctx.stroke();
+        ctx.restore();
+    }
 }
 
 function drawDustMotes() {
@@ -2578,6 +3655,30 @@ function drawPoison(r) {
 function drawFruit(f) {
     ctx.save();
     ctx.translate(f.x, f.y);
+
+    // Night background: glow aura around fruits
+    if (getEquippedBg().mechanic === 'glow_fruits' && !f.isBomb) {
+        ctx.save();
+        const glowColor = f.isSpecial ? f.inner : f.outer;
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = 25;
+        ctx.beginPath();
+        ctx.arc(0, 0, f.radius * 0.8, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,200,0.15)';
+        ctx.fill();
+        ctx.restore();
+    }
+
+    // Ice blade: frozen visual (blue tint overlay)
+    if (f.frozenTimer && f.frozenTimer > 0) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(0, 0, f.radius + 5, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(100, 200, 255, 0.25)';
+        ctx.fill();
+        ctx.restore();
+    }
+
     ctx.rotate(f.rotation);
 
     if (f.isBomb) {
@@ -2922,15 +4023,31 @@ function drawBladeTrail() {
     }
     ctx.closePath();
 
+    // Get equipped blade colors
+    const blade = getEquippedBlade();
+    let glowColor = blade.glow;
+    let fillColor = blade.fill;
+    let midColor = blade.mid;
+    let coreColor = blade.core;
+
+    // Rainbow blade cycles colors
+    if (blade.special === 'rainbow') {
+        const hue = (performance.now() * 0.15) % 360;
+        glowColor = `hsla(${hue}, 100%, 60%, 0.7)`;
+        fillColor = `hsla(${hue}, 100%, 70%, 0.3)`;
+        midColor = `hsla(${(hue + 60) % 360}, 100%, 75%, 0.55)`;
+        coreColor = `hsla(${(hue + 120) % 360}, 100%, 90%, 0.9)`;
+    }
+
     // Glow fill
-    ctx.shadowColor = 'rgba(150, 200, 255, 0.7)';
+    ctx.shadowColor = glowColor;
     ctx.shadowBlur = 22;
-    ctx.fillStyle = 'rgba(180, 220, 255, 0.3)';
+    ctx.fillStyle = fillColor;
     ctx.fill();
     ctx.shadowBlur = 0;
 
-    // Mid layer (white-blue)
-    ctx.fillStyle = 'rgba(210, 235, 255, 0.55)';
+    // Mid layer
+    ctx.fillStyle = midColor;
     ctx.fill();
 
     // Bright core line (along center)
@@ -2945,21 +4062,102 @@ function drawBladeTrail() {
             ctx.lineTo(recent[i].x, recent[i].y);
         }
     }
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.strokeStyle = coreColor;
     ctx.lineWidth = 2;
     ctx.lineCap = 'round';
     ctx.stroke();
+
+    // Special blade particle effects along trail
+    if (blade.special && recent.length >= 2) {
+        const head = recent[recent.length - 1];
+        if (blade.special === 'sakura') {
+            // Pink petal particles
+            for (let i = 0; i < 2; i++) {
+                const px = head.x + (Math.random() - 0.5) * 20;
+                const py = head.y + (Math.random() - 0.5) * 20;
+                ctx.save();
+                ctx.translate(px, py);
+                ctx.rotate(Math.random() * Math.PI * 2);
+                ctx.globalAlpha = 0.5 + Math.random() * 0.3;
+                ctx.fillStyle = Math.random() > 0.5 ? '#ffb0c8' : '#ff88aa';
+                ctx.beginPath();
+                ctx.ellipse(0, 0, 3, 1.5, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+                ctx.restore();
+            }
+        } else if (blade.special === 'galaxy') {
+            // Star sparkles
+            for (let i = 0; i < 2; i++) {
+                const px = head.x + (Math.random() - 0.5) * 24;
+                const py = head.y + (Math.random() - 0.5) * 24;
+                const sr = 1 + Math.random() * 2;
+                ctx.save();
+                ctx.globalAlpha = 0.6 + Math.random() * 0.4;
+                ctx.fillStyle = Math.random() > 0.5 ? '#ffffff' : '#c090ff';
+                ctx.beginPath();
+                // 4-point star
+                for (let j = 0; j < 8; j++) {
+                    const a = j * Math.PI / 4;
+                    const r2 = j % 2 === 0 ? sr : sr * 0.3;
+                    ctx[j === 0 ? 'moveTo' : 'lineTo'](px + Math.cos(a) * r2, py + Math.sin(a) * r2);
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.globalAlpha = 1;
+                ctx.restore();
+            }
+        } else if (blade.special === 'dragon') {
+            // Ember particles
+            for (let i = 0; i < 3; i++) {
+                const px = head.x + (Math.random() - 0.5) * 22;
+                const py = head.y + (Math.random() - 0.5) * 22;
+                const er = 1 + Math.random() * 3;
+                const eg = ctx.createRadialGradient(px, py, 0, px, py, er);
+                eg.addColorStop(0, 'rgba(255,200,50,0.8)');
+                eg.addColorStop(0.5, 'rgba(255,80,0,0.5)');
+                eg.addColorStop(1, 'rgba(255,30,0,0)');
+                ctx.beginPath();
+                ctx.arc(px, py, er, 0, Math.PI * 2);
+                ctx.fillStyle = eg;
+                ctx.fill();
+            }
+        } else if (blade.special === 'crystal') {
+            // Prismatic sparkles
+            for (let i = 0; i < 2; i++) {
+                const px = head.x + (Math.random() - 0.5) * 20;
+                const py = head.y + (Math.random() - 0.5) * 20;
+                const hue2 = (performance.now() * 0.3 + i * 120) % 360;
+                ctx.save();
+                ctx.globalAlpha = 0.6;
+                ctx.fillStyle = `hsl(${hue2}, 80%, 85%)`;
+                ctx.beginPath();
+                // Diamond shape
+                const ds = 2 + Math.random() * 2;
+                ctx.moveTo(px, py - ds);
+                ctx.lineTo(px + ds * 0.6, py);
+                ctx.lineTo(px, py + ds);
+                ctx.lineTo(px - ds * 0.6, py);
+                ctx.closePath();
+                ctx.fill();
+                ctx.globalAlpha = 1;
+                ctx.restore();
+            }
+        }
+    }
 
     ctx.restore();
 }
 
 function drawBladeSparkles() {
+    const blade = getEquippedBlade();
+    const sparkBase = blade.sparkle || 'rgba(180,220,255,';
     for (const s of bladeSparkles) {
         const alpha = Math.max(0, s.life / s.maxLife);
         const sg = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.radius * 2);
         sg.addColorStop(0, `rgba(255, 255, 255, ${alpha})`);
-        sg.addColorStop(0.4, `rgba(180, 220, 255, ${alpha * 0.5})`);
-        sg.addColorStop(1, 'rgba(150, 200, 255, 0)');
+        sg.addColorStop(0.4, sparkBase + `${alpha * 0.5})`);
+        sg.addColorStop(1, sparkBase + '0)');
         ctx.beginPath();
         ctx.arc(s.x, s.y, s.radius * 2, 0, Math.PI * 2);
         ctx.fillStyle = sg;
@@ -3067,11 +4265,14 @@ function drawSliceLines() {
 //  DRAWING — POPUPS (enhanced)
 // ===========================================
 function drawPopups() {
+    const nightGlow = getEquippedBg().mechanic === 'glow_fruits';
     for (const p of popups) {
         const alpha = Math.max(0, Math.min(1, p.life));
         ctx.globalAlpha = alpha;
 
-        const scale = p.scale || 1;
+        let scale = p.scale || 1;
+        // Night background: score popups are 1.5x larger
+        if (nightGlow) scale *= 1.5;
         ctx.save();
         ctx.translate(p.x, p.y);
         if (scale !== 1) ctx.scale(scale, scale);
@@ -3111,6 +4312,29 @@ function drawHUD() {
     ctx.strokeText('Best: ' + bestScore, W - 20, 44);
     ctx.fillStyle = '#ffdd44';
     ctx.fillText('Best: ' + bestScore, W - 20, 44);
+
+    // Coins earned this game
+    ctx.font = 'bold 22px "Segoe UI", sans-serif';
+    ctx.textAlign = 'right';
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.lineWidth = 3;
+    ctx.strokeText('Coins: +' + coinsEarnedThisGame, W - 20, 72);
+    ctx.fillStyle = '#ffd700';
+    ctx.fillText('Coins: +' + coinsEarnedThisGame, W - 20, 72);
+
+    // Draw coin popups
+    for (const cp of coinPopups) {
+        const alpha = Math.max(0, Math.min(1, cp.life * 2));
+        ctx.globalAlpha = alpha;
+        ctx.font = 'bold 16px "Segoe UI", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+        ctx.lineWidth = 2;
+        ctx.strokeText(cp.text, cp.x, cp.y);
+        ctx.fillStyle = '#ffd700';
+        ctx.fillText(cp.text, cp.x, cp.y);
+    }
+    ctx.globalAlpha = 1;
 
     // Lives as mini apple icons
     const lifeSpacing = 44;
@@ -3217,6 +4441,22 @@ function drawHUD() {
         ctx.strokeRect(W - 24 - tw, indicatorY - 18, tw + 8, 24);
         indicatorY -= 30;
     }
+
+    // Restart button (bottom-center)
+    const rbtnX = W / 2;
+    const rbtnY = H - 30;
+    ctx.font = 'bold 18px "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    const rbtnW = 100, rbtnH = 32;
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.beginPath();
+    ctx.roundRect(rbtnX - rbtnW/2, rbtnY - rbtnH/2, rbtnW, rbtnH, 8);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fillText('RESTART', rbtnX, rbtnY + 6);
 }
 
 // ===========================================
@@ -3357,6 +4597,496 @@ function drawStartScreen() {
         ctx.fillStyle = `rgba(255, 255, 255, ${0.4 + pulse * 0.6})`;
         ctx.fillText('Tap or Click to Start', W / 2, H * 0.65);
     }
+
+    // === SHOP BUTTON (always visible on start screen) ===
+    const shopBtnY = H * 0.82;
+    const shopBtnW = 160;
+    const shopBtnH = 48;
+    // Button background
+    const sbGrad = ctx.createLinearGradient(W / 2 - shopBtnW / 2, shopBtnY - shopBtnH / 2, W / 2 + shopBtnW / 2, shopBtnY + shopBtnH / 2);
+    sbGrad.addColorStop(0, 'rgba(120, 80, 20, 0.9)');
+    sbGrad.addColorStop(0.5, 'rgba(160, 110, 30, 0.95)');
+    sbGrad.addColorStop(1, 'rgba(120, 80, 20, 0.9)');
+    ctx.fillStyle = sbGrad;
+    // Rounded rect for button
+    const bx = W / 2 - shopBtnW / 2;
+    const by = shopBtnY - shopBtnH / 2;
+    const br = 12;
+    ctx.beginPath();
+    ctx.moveTo(bx + br, by);
+    ctx.lineTo(bx + shopBtnW - br, by);
+    ctx.quadraticCurveTo(bx + shopBtnW, by, bx + shopBtnW, by + br);
+    ctx.lineTo(bx + shopBtnW, by + shopBtnH - br);
+    ctx.quadraticCurveTo(bx + shopBtnW, by + shopBtnH, bx + shopBtnW - br, by + shopBtnH);
+    ctx.lineTo(bx + br, by + shopBtnH);
+    ctx.quadraticCurveTo(bx, by + shopBtnH, bx, by + shopBtnH - br);
+    ctx.lineTo(bx, by + br);
+    ctx.quadraticCurveTo(bx, by, bx + br, by);
+    ctx.closePath();
+    ctx.fill();
+    // Gold border
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // Button text
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 24px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#ffd700';
+    ctx.fillText('SHOP', W / 2, shopBtnY + 8);
+
+    // Coin display below shop button
+    ctx.font = '18px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#ffd700';
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.lineWidth = 2;
+    ctx.strokeText('Coins: ' + shopData.coins, W / 2, shopBtnY + 36);
+    ctx.fillText('Coins: ' + shopData.coins, W / 2, shopBtnY + 36);
+}
+
+// ===========================================
+//  DRAWING — SHOP SCREEN
+// ===========================================
+function drawShopItemIcon(item, x, y, size) {
+    ctx.save();
+    ctx.translate(x, y);
+    const s = size / 40; // scale factor
+
+    if (item.id.startsWith('blade_')) {
+        // Draw a small blade/sword icon with the blade's color
+        const blade = BLADE_ITEMS.find(b => b.id === item.id);
+        if (blade) {
+            // Blade line
+            ctx.strokeStyle = blade.core;
+            ctx.lineWidth = 3 * s;
+            ctx.lineCap = 'round';
+            ctx.shadowColor = blade.glow;
+            ctx.shadowBlur = 8 * s;
+            ctx.beginPath();
+            ctx.moveTo(-12 * s, 12 * s);
+            ctx.lineTo(12 * s, -12 * s);
+            ctx.stroke();
+            // Glow
+            ctx.strokeStyle = blade.fill;
+            ctx.lineWidth = 8 * s;
+            ctx.beginPath();
+            ctx.moveTo(-12 * s, 12 * s);
+            ctx.lineTo(12 * s, -12 * s);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            // Handle
+            ctx.fillStyle = '#8a6a40';
+            ctx.fillRect(-14 * s, 10 * s, 6 * s, 8 * s);
+        }
+    } else if (item.id.startsWith('bg_')) {
+        // Draw a small landscape icon with the bg tint
+        const bg = BG_ITEMS.find(b => b.id === item.id);
+        // Frame
+        ctx.strokeStyle = '#888';
+        ctx.lineWidth = 2 * s;
+        ctx.strokeRect(-14 * s, -10 * s, 28 * s, 20 * s);
+        // Sky
+        ctx.fillStyle = bg && bg.tint ? bg.tint : '#87CEEB';
+        ctx.globalAlpha = bg && bg.tint ? 0.7 : 0.4;
+        ctx.fillRect(-13 * s, -9 * s, 26 * s, 12 * s);
+        ctx.globalAlpha = 1;
+        // Ground
+        ctx.fillStyle = '#5a8a3a';
+        ctx.fillRect(-13 * s, 3 * s, 26 * s, 6 * s);
+        if (bg && bg.id === 'bg_space') {
+            // Stars
+            ctx.fillStyle = '#fff';
+            for (let i = 0; i < 5; i++) {
+                ctx.beginPath();
+                ctx.arc((-10 + i * 5) * s, (-6 + (i % 3) * 3) * s, 1 * s, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+    } else if (item.id.startsWith('pow_')) {
+        // Draw power-specific icons
+        const id = item.id;
+        if (id === 'pow_extralife') {
+            // Heart
+            ctx.fillStyle = '#ff4466';
+            ctx.beginPath();
+            ctx.arc(-4 * s, -4 * s, 6 * s, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(4 * s, -4 * s, 6 * s, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(-10 * s, -1 * s);
+            ctx.lineTo(0, 12 * s);
+            ctx.lineTo(10 * s, -1 * s);
+            ctx.fill();
+        } else if (id === 'pow_headstart') {
+            // Arrow up
+            ctx.fillStyle = '#44dd44';
+            ctx.beginPath();
+            ctx.moveTo(0, -12 * s);
+            ctx.lineTo(10 * s, 0);
+            ctx.lineTo(4 * s, 0);
+            ctx.lineTo(4 * s, 12 * s);
+            ctx.lineTo(-4 * s, 12 * s);
+            ctx.lineTo(-4 * s, 0);
+            ctx.lineTo(-10 * s, 0);
+            ctx.closePath();
+            ctx.fill();
+        } else if (id === 'pow_magnet') {
+            // Magnet shape
+            ctx.strokeStyle = '#ffd700';
+            ctx.lineWidth = 4 * s;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.arc(0, -2 * s, 8 * s, Math.PI, 0);
+            ctx.stroke();
+            ctx.strokeStyle = '#cc0000';
+            ctx.beginPath();
+            ctx.moveTo(-8 * s, -2 * s);
+            ctx.lineTo(-8 * s, 10 * s);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(8 * s, -2 * s);
+            ctx.lineTo(8 * s, 10 * s);
+            ctx.stroke();
+        } else if (id === 'pow_lucky') {
+            // Star
+            ctx.fillStyle = '#ffd700';
+            ctx.beginPath();
+            for (let i = 0; i < 10; i++) {
+                const a = -Math.PI / 2 + i * Math.PI / 5;
+                const r = i % 2 === 0 ? 12 * s : 5 * s;
+                ctx[i === 0 ? 'moveTo' : 'lineTo'](Math.cos(a) * r, Math.sin(a) * r);
+            }
+            ctx.closePath();
+            ctx.fill();
+        } else if (id === 'pow_slow') {
+            // Clock
+            ctx.strokeStyle = '#4488ff';
+            ctx.lineWidth = 2 * s;
+            ctx.beginPath();
+            ctx.arc(0, 0, 10 * s, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(0, -7 * s);
+            ctx.moveTo(0, 0);
+            ctx.lineTo(5 * s, 2 * s);
+            ctx.stroke();
+        } else if (id === 'pow_thick') {
+            // Wide blade
+            ctx.fillStyle = 'rgba(200,230,255,0.7)';
+            ctx.fillRect(-3 * s, -12 * s, 6 * s, 24 * s);
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2 * s;
+            ctx.strokeRect(-3 * s, -12 * s, 6 * s, 24 * s);
+        } else if (id === 'pow_combo') {
+            // Lightning bolt
+            ctx.fillStyle = '#ffdd44';
+            ctx.beginPath();
+            ctx.moveTo(2 * s, -12 * s);
+            ctx.lineTo(-6 * s, 2 * s);
+            ctx.lineTo(0, 2 * s);
+            ctx.lineTo(-2 * s, 12 * s);
+            ctx.lineTo(6 * s, -2 * s);
+            ctx.lineTo(0, -2 * s);
+            ctx.closePath();
+            ctx.fill();
+        } else if (id === 'pow_shield') {
+            // Shield
+            ctx.fillStyle = '#4488ff';
+            ctx.beginPath();
+            ctx.moveTo(0, -10 * s);
+            ctx.quadraticCurveTo(12 * s, -6 * s, 10 * s, 2 * s);
+            ctx.quadraticCurveTo(6 * s, 10 * s, 0, 12 * s);
+            ctx.quadraticCurveTo(-6 * s, 10 * s, -10 * s, 2 * s);
+            ctx.quadraticCurveTo(-12 * s, -6 * s, 0, -10 * s);
+            ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.4)';
+            ctx.fillRect(-2 * s, -6 * s, 4 * s, 12 * s);
+            ctx.fillRect(-6 * s, -2 * s, 12 * s, 4 * s);
+        }
+    } else if (item.id.startsWith('ext_')) {
+        // Extras icons
+        const id = item.id;
+        if (id === 'ext_double') {
+            // x2
+            ctx.font = `bold ${16 * s}px "Segoe UI", sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#ffd700';
+            ctx.fillText('x2', 0, 0);
+        } else if (id === 'ext_defuser') {
+            // Bomb with X
+            ctx.fillStyle = '#333';
+            ctx.beginPath();
+            ctx.arc(0, 2 * s, 8 * s, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#ff3333';
+            ctx.lineWidth = 3 * s;
+            ctx.beginPath();
+            ctx.moveTo(-10 * s, -10 * s);
+            ctx.lineTo(10 * s, 10 * s);
+            ctx.moveTo(10 * s, -10 * s);
+            ctx.lineTo(-10 * s, 10 * s);
+            ctx.stroke();
+        } else if (id === 'ext_frenzy') {
+            // Multiple fruits
+            ctx.fillStyle = '#ff3333';
+            ctx.beginPath(); ctx.arc(-5 * s, -3 * s, 5 * s, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#e87800';
+            ctx.beginPath(); ctx.arc(5 * s, -3 * s, 4 * s, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#44bb44';
+            ctx.beginPath(); ctx.arc(0, 5 * s, 4.5 * s, 0, Math.PI * 2); ctx.fill();
+        } else if (id === 'ext_diamond') {
+            // Diamond
+            ctx.fillStyle = '#88ddff';
+            ctx.beginPath();
+            ctx.moveTo(0, -10 * s);
+            ctx.lineTo(7 * s, 0);
+            ctx.lineTo(0, 10 * s);
+            ctx.lineTo(-7 * s, 0);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+            ctx.lineWidth = 1 * s;
+            ctx.stroke();
+        } else if (id === 'ext_revive') {
+            // Revive heart with plus
+            ctx.fillStyle = '#ff4466';
+            ctx.beginPath();
+            ctx.arc(-3 * s, -3 * s, 5 * s, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(3 * s, -3 * s, 5 * s, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(-8 * s, -1 * s);
+            ctx.lineTo(0, 10 * s);
+            ctx.lineTo(8 * s, -1 * s);
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(-1.5 * s, -6 * s, 3 * s, 8 * s);
+            ctx.fillRect(-4 * s, -3.5 * s, 8 * s, 3 * s);
+        } else if (id === 'ext_streak') {
+            // Fire streak
+            ctx.fillStyle = '#ff8800';
+            ctx.beginPath();
+            ctx.moveTo(0, -12 * s);
+            ctx.quadraticCurveTo(8 * s, -4 * s, 4 * s, 4 * s);
+            ctx.quadraticCurveTo(6 * s, 8 * s, 0, 12 * s);
+            ctx.quadraticCurveTo(-6 * s, 8 * s, -4 * s, 4 * s);
+            ctx.quadraticCurveTo(-8 * s, -4 * s, 0, -12 * s);
+            ctx.fill();
+            ctx.fillStyle = '#ffdd44';
+            ctx.beginPath();
+            ctx.moveTo(0, -4 * s);
+            ctx.quadraticCurveTo(3 * s, 0, 2 * s, 4 * s);
+            ctx.quadraticCurveTo(0, 8 * s, -2 * s, 4 * s);
+            ctx.quadraticCurveTo(-3 * s, 0, 0, -4 * s);
+            ctx.fill();
+        }
+    }
+
+    ctx.restore();
+}
+
+function drawShop() {
+    // Dark overlay
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.fillRect(0, 0, W, H);
+
+    // Shop title bar
+    ctx.fillStyle = 'rgba(40, 20, 10, 0.95)';
+    ctx.fillRect(0, 0, W, 50);
+
+    // Back button
+    ctx.font = 'bold 24px "Segoe UI", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ff6644';
+    ctx.fillText('< BACK', 15, 34);
+
+    // Title
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 28px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#ffd700';
+    ctx.fillText('SHOP', W / 2, 36);
+
+    // Coin display
+    ctx.textAlign = 'right';
+    ctx.font = 'bold 22px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#ffd700';
+    ctx.fillText('Coins: ' + shopData.coins, W - 15, 34);
+
+    // Category tabs
+    const tabY = 55;
+    const tabH = 40;
+    const tabW = W / SHOP_CATEGORIES.length;
+    for (let i = 0; i < SHOP_CATEGORIES.length; i++) {
+        const cat = SHOP_CATEGORIES[i];
+        const isActive = i === shopCategory;
+        // Tab background
+        ctx.fillStyle = isActive ? 'rgba(80, 50, 20, 0.9)' : 'rgba(30, 15, 5, 0.8)';
+        ctx.fillRect(i * tabW, tabY, tabW, tabH);
+        // Tab text
+        ctx.textAlign = 'center';
+        ctx.font = `bold ${isActive ? 18 : 15}px "Segoe UI", sans-serif`;
+        ctx.fillStyle = isActive ? '#ffd700' : '#999';
+        ctx.fillText(cat.label, i * tabW + tabW / 2, tabY + tabH / 2 + 6);
+        // Active tab underline
+        if (isActive) {
+            ctx.fillStyle = '#ffd700';
+            ctx.fillRect(i * tabW + 10, tabY + tabH - 3, tabW - 20, 3);
+        }
+        // Tab separator
+        if (i > 0) {
+            ctx.fillStyle = 'rgba(100,80,50,0.3)';
+            ctx.fillRect(i * tabW, tabY + 5, 1, tabH - 10);
+        }
+    }
+
+    // Item grid
+    const gridTop = 110;
+    const cat = SHOP_CATEGORIES[shopCategory];
+    const items = cat.items;
+    const cols = Math.max(2, Math.min(4, Math.floor(W / 140)));
+    const cardW = (W - 20) / cols - 10;
+    const hasGameplayDesc = (cat.key === 'blades' || cat.key === 'backgrounds');
+    const cardH = hasGameplayDesc ? 150 : 130;
+
+    // Clip to grid area
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, gridTop - 5, W, H - gridTop + 5);
+    ctx.clip();
+
+    // Smooth scroll
+    if (!shopDragging) {
+        shopScrollY += (shopScrollTarget - shopScrollY) * 0.15;
+        // Inertia
+        shopScrollTarget += shopScrollVelocity * 0.5;
+        shopScrollVelocity *= 0.92;
+        if (Math.abs(shopScrollVelocity) < 0.5) shopScrollVelocity = 0;
+    }
+    // Clamp scroll
+    const totalRows = Math.ceil(items.length / cols);
+    const maxScroll = Math.max(0, totalRows * (cardH + 10) - (H - gridTop) + 20);
+    if (shopScrollY < 0) shopScrollY = 0;
+    if (shopScrollY > maxScroll) shopScrollY = maxScroll;
+    if (shopScrollTarget < 0) shopScrollTarget = 0;
+    if (shopScrollTarget > maxScroll) shopScrollTarget = maxScroll;
+
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const row = Math.floor(i / cols);
+        const col = i % cols;
+        const cx = 15 + col * (cardW + 10) + cardW / 2;
+        const cy = gridTop + row * (cardH + 10) + cardH / 2 - shopScrollY;
+
+        // Skip if off screen
+        if (cy + cardH / 2 < gridTop - 10 || cy - cardH / 2 > H + 10) continue;
+
+        const isOwned = shopData.owned.includes(item.id);
+        let isEquipped = false;
+        if (cat.key === 'blades') isEquipped = shopData.equipped.blade === item.id;
+        else if (cat.key === 'backgrounds') isEquipped = shopData.equipped.background === item.id;
+        else if (cat.key === 'powers') isEquipped = shopData.equipped.powers && shopData.equipped.powers.includes(item.id);
+        else if (cat.key === 'extras') isEquipped = isOwned;
+
+        // Card background
+        let borderColor = '#555'; // locked
+        if (isEquipped) borderColor = '#ffd700'; // equipped = gold
+        else if (isOwned) borderColor = '#44bb44'; // owned = green
+
+        // Card bg
+        ctx.fillStyle = 'rgba(50, 35, 20, 0.9)';
+        const cardLeft = cx - cardW / 2;
+        const cardTop = cy - cardH / 2;
+
+        // Rounded rect
+        const rr = 8;
+        ctx.beginPath();
+        ctx.moveTo(cardLeft + rr, cardTop);
+        ctx.lineTo(cardLeft + cardW - rr, cardTop);
+        ctx.quadraticCurveTo(cardLeft + cardW, cardTop, cardLeft + cardW, cardTop + rr);
+        ctx.lineTo(cardLeft + cardW, cardTop + cardH - rr);
+        ctx.quadraticCurveTo(cardLeft + cardW, cardTop + cardH, cardLeft + cardW - rr, cardTop + cardH);
+        ctx.lineTo(cardLeft + rr, cardTop + cardH);
+        ctx.quadraticCurveTo(cardLeft, cardTop + cardH, cardLeft, cardTop + cardH - rr);
+        ctx.lineTo(cardLeft, cardTop + rr);
+        ctx.quadraticCurveTo(cardLeft, cardTop, cardLeft + rr, cardTop);
+        ctx.closePath();
+        ctx.fill();
+
+        // Border
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = isEquipped ? 3 : 2;
+        ctx.stroke();
+
+        // Icon area
+        drawShopItemIcon(item, cx, cy - 22, Math.min(cardW * 0.6, 50));
+
+        // Item name
+        ctx.textAlign = 'center';
+        ctx.font = `bold ${Math.min(13, cardW * 0.11)}px "Segoe UI", sans-serif`;
+        ctx.fillStyle = '#fff';
+        ctx.fillText(item.name, cx, cy + 22);
+
+        // Gameplay description for blades (bonusDesc) and backgrounds (mechanicDesc)
+        const gameplayDesc = item.bonusDesc || item.mechanicDesc;
+        if (gameplayDesc && gameplayDesc !== 'No bonus') {
+            ctx.font = `${Math.min(9, cardW * 0.075)}px "Segoe UI", sans-serif`;
+            ctx.fillStyle = '#88ccff';
+            ctx.fillText(gameplayDesc, cx, cy + 35);
+        } else if (gameplayDesc === 'No bonus') {
+            ctx.font = `${Math.min(9, cardW * 0.075)}px "Segoe UI", sans-serif`;
+            ctx.fillStyle = '#777';
+            ctx.fillText(gameplayDesc, cx, cy + 35);
+        }
+
+        // Description for powers/extras
+        if (item.desc) {
+            ctx.font = `${Math.min(10, cardW * 0.08)}px "Segoe UI", sans-serif`;
+            ctx.fillStyle = '#aaa';
+            ctx.fillText(item.desc, cx, cy + 42);
+        }
+
+        // Price / Status label
+        const statusY = hasGameplayDesc ? cy + 66 : cy + 56;
+        if (isEquipped) {
+            ctx.font = `bold ${Math.min(13, cardW * 0.1)}px "Segoe UI", sans-serif`;
+            ctx.fillStyle = '#ffd700';
+            if (cat.key === 'extras') {
+                ctx.fillText('OWNED', cx, statusY);
+            } else {
+                ctx.fillText('EQUIPPED', cx, statusY);
+            }
+        } else if (isOwned) {
+            ctx.font = `bold ${Math.min(13, cardW * 0.1)}px "Segoe UI", sans-serif`;
+            if (cat.key === 'powers') {
+                ctx.fillStyle = '#aaa';
+                ctx.fillText('TAP TO EQUIP', cx, statusY);
+            } else {
+                ctx.fillStyle = '#44bb44';
+                ctx.fillText('TAP TO EQUIP', cx, statusY);
+            }
+        } else {
+            // Price
+            ctx.font = `bold ${Math.min(14, cardW * 0.11)}px "Segoe UI", sans-serif`;
+            const canAfford = shopData.coins >= item.price;
+            ctx.fillStyle = canAfford ? '#ffd700' : '#ff4444';
+            ctx.fillText(item.price === 0 ? 'FREE' : item.price + ' coins', cx, statusY);
+        }
+    }
+
+    ctx.restore();
+
+    // Scroll indicator
+    if (maxScroll > 0) {
+        const scrollBarH = Math.max(30, (H - gridTop) * (H - gridTop) / (totalRows * (cardH + 10)));
+        const scrollBarY = gridTop + (shopScrollY / maxScroll) * (H - gridTop - scrollBarH);
+        ctx.fillStyle = 'rgba(255,200,100,0.3)';
+        ctx.fillRect(W - 6, scrollBarY, 4, scrollBarH);
+    }
 }
 
 // ===========================================
@@ -3427,18 +5157,26 @@ function drawGameOver() {
         ctx.fillText('Best: ' + bestScore, W / 2, H * 0.50);
     }
 
+    // Coins earned
+    ctx.font = 'bold 24px "Segoe UI", sans-serif';
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.lineWidth = 4;
+    ctx.strokeText('Coins Earned: +' + coinsEarnedThisGame, W / 2, H * 0.56);
+    ctx.fillStyle = '#ffd700';
+    ctx.fillText('Coins Earned: +' + coinsEarnedThisGame, W / 2, H * 0.56);
+
     // Unlock notification
-    let retryY = H * 0.62;
+    let retryY = H * 0.66;
     if (unlockMessage) {
         const unlockPulse = 0.7 + 0.3 * Math.sin(performance.now() * 0.005);
         ctx.font = 'bold 28px "Segoe UI", sans-serif';
         ctx.strokeStyle = 'rgba(0,0,0,0.7)';
         ctx.lineWidth = 5;
         ctx.lineJoin = 'round';
-        ctx.strokeText(unlockMessage, W / 2, H * 0.58);
+        ctx.strokeText(unlockMessage, W / 2, H * 0.62);
         ctx.fillStyle = `rgba(255, 200, 50, ${unlockPulse})`;
-        ctx.fillText(unlockMessage, W / 2, H * 0.58);
-        retryY = H * 0.68;
+        ctx.fillText(unlockMessage, W / 2, H * 0.62);
+        retryY = H * 0.72;
     }
 
     ctx.font = '20px "Segoe UI", sans-serif';
@@ -3560,12 +5298,14 @@ function gameLoop(timestamp) {
     drawDustMotes();
 
     if (state === 'playing') {
+        drawBgMechanics();
         // Fruit shadows
         for (const f of fruits) if (!f.isBomb) drawFruitShadow(f);
         drawParticles();
         drawShockwaves();
         for (const h of halves) drawHalf(h);
         for (const f of fruits) drawFruit(f);
+        drawLightningBolts();
         drawArrows();
         drawBladeTrail();
         drawBladeSparkles();
@@ -3577,6 +5317,8 @@ function gameLoop(timestamp) {
     } else if (state === 'start') {
         drawStartScreen();
         drawCursor();
+    } else if (state === 'shop') {
+        drawShop();
     } else if (state === 'gameover') {
         drawParticles();
         drawShockwaves();

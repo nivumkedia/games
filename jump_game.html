@@ -282,6 +282,35 @@
         // Persistent data (load from localStorage)
         let totalCoins = parseInt(localStorage.getItem('jumpGame_coins') || '0');
         let inventory = JSON.parse(localStorage.getItem('jumpGame_inventory') || '{}');
+        let tutorialCompleted = localStorage.getItem('jumpGame_tutorialDone') === 'true';
+
+        // Tutorial state
+        let isTutorial = false;
+        let tutorialPhase = 0;
+        let tutorialTimer = 0;
+        let tutorialMessage = '';
+        let tutorialSubMessage = '';
+        let tutorialElementSpawned = false;
+
+        // Demo mode (after tutorial)
+        let demoMode = false;
+        let demoTimer = 0;
+        let demoMessage = '';
+        let demoMessageTimer = 0;
+
+        // Tutorial phases definition
+        const tutorialPhases = [
+            { id: 'run', message: "You're running automatically!", sub: 'No need to press anything', autoAdvance: 120 },
+            { id: 'jump', message: 'Press SPACE or UP to jump!', sub: 'Try it now!', trigger: 'jump' },
+            { id: 'coins', message: 'Collect coins for the shop!', sub: 'Run into the coins ahead', trigger: 'coin' },
+            { id: 'duck', message: 'Press DOWN to duck under birds!', sub: 'A bird is coming — duck!', trigger: 'duckPass' },
+            { id: 'cactus', message: 'Jump over obstacles!', sub: 'A cactus is ahead — jump!', trigger: 'obstaclePass' },
+            { id: 'lava', message: 'Jump over lava pits!', sub: 'Don\'t fall in!', trigger: 'lavaClear' },
+            { id: 'platform', message: 'Land on platforms!', sub: 'Jump up to the platform ahead', trigger: 'platformLand' },
+            { id: 'spring', message: 'Bounce on springs!', sub: 'Step on the spring ahead', trigger: 'springBounce' },
+            { id: 'powerup', message: 'Grab power-ups for abilities!', sub: 'A shield is ahead — grab it!', trigger: 'powerupCollect' },
+            { id: 'done', message: "Nice! Let's try for real — starting easy!", sub: '', autoAdvance: 120 },
+        ];
 
         // Shop items
         const shopItems = [
@@ -548,6 +577,7 @@
                         player.isJumping = true;
                         player.isDucking = false;
                         playSound('jump');
+                        onTutorialAction('jump');
                         // Jump particles
                         for (let i = 0; i < 5; i++) {
                             particles.push({
@@ -596,10 +626,13 @@
                 gameState = 'shop';
             }
 
-            // Shop controls
+            // Shop and tutorial controls
             if (gameState === 'start') {
                 if (e.code === 'KeyS') {
                     gameState = 'shop';
+                }
+                if (e.code === 'KeyT') {
+                    startTutorial();
                 }
             }
 
@@ -642,13 +675,23 @@
             initAudio();
 
             if (gameState === 'start') {
-                gameState = 'playing';
+                // Check if touch is on tutorial text area
+                const touch = e.touches[0];
+                const rect = canvas.getBoundingClientRect();
+                const ty = (touch.clientY - rect.top) * (canvas.height / rect.height);
+                const tutY = canvas.height / 2 + 55;
+                if (ty >= tutY - 18 && ty <= tutY + 6) {
+                    startTutorial();
+                } else {
+                    gameState = 'playing';
+                }
             } else if (gameState === 'playing') {
                 if (!player.isJumping) {
                     player.velocityY = JUMP_VELOCITY;
                     player.isJumping = true;
                     player.isDucking = false;
                     playSound('jump');
+                    onTutorialAction('jump');
                     for (let i = 0; i < 5; i++) {
                         particles.push({
                             x: player.x + player.width / 2,
@@ -691,6 +734,12 @@
             const y = e.clientY - rect.top;
 
             if (gameState === 'start') {
+                // Check if clicked tutorial text area
+                const tutY = canvas.height / 2 + 55;
+                if (y >= tutY - 18 && y <= tutY + 6) {
+                    startTutorial();
+                    return;
+                }
                 gameState = 'playing';
                 return;
             }
@@ -721,6 +770,7 @@
                         player.isJumping = true;
                         player.isDucking = false;
                         playSound('jump');
+                        onTutorialAction('jump');
                         for (let i = 0; i < 5; i++) {
                             particles.push({
                                 x: player.x + player.width / 2,
@@ -779,6 +829,282 @@
             }
         });
 
+        function startTutorial() {
+            resetGame();
+            isTutorial = true;
+            tutorialPhase = 0;
+            tutorialTimer = 0;
+            tutorialElementSpawned = false;
+            tutorialMessage = tutorialPhases[0].message;
+            tutorialSubMessage = tutorialPhases[0].sub;
+            // Suppress all spawns
+            spawnTimer = 99999;
+            collectibleTimer = 99999;
+            lavaTimer = 99999;
+            platformTimer = 99999;
+            springTimer = 99999;
+            powerUpTimer = 99999;
+        }
+
+        function updateTutorial() {
+            if (!isTutorial) return;
+
+            // Force suppress spawn timers
+            spawnTimer = 99999;
+            collectibleTimer = 99999;
+            lavaTimer = 99999;
+            platformTimer = 99999;
+            springTimer = 99999;
+            powerUpTimer = 99999;
+
+            const phase = tutorialPhases[tutorialPhase];
+            if (!phase) return;
+
+            tutorialTimer++;
+
+            // Auto-advance phases
+            if (phase.autoAdvance && tutorialTimer >= phase.autoAdvance) {
+                advanceTutorialPhase();
+                return;
+            }
+
+            // Spawn tutorial elements once per phase
+            if (!tutorialElementSpawned) {
+                tutorialElementSpawned = true;
+                switch (phase.id) {
+                    case 'coins':
+                        // Spawn a line of coins at ground level
+                        for (let i = 0; i < 5; i++) {
+                            collectibles.push({
+                                x: canvas.width + 100 + i * 40,
+                                y: GROUND_Y - 20,
+                                type: 'coin',
+                                size: 20,
+                                value: 25,
+                                rotation: 0,
+                                collected: false
+                            });
+                        }
+                        break;
+                    case 'duck':
+                        // Spawn a low bird to duck under
+                        obstacles.push({
+                            x: canvas.width + 150,
+                            type: 'bird',
+                            passed: false,
+                            width: 50,
+                            height: 30,
+                            y: GROUND_Y - 40,
+                            wingPhase: 0
+                        });
+                        break;
+                    case 'cactus':
+                        // Spawn a single cactus
+                        obstacles.push({
+                            x: canvas.width + 150,
+                            type: 'cactus',
+                            passed: false,
+                            width: 30,
+                            height: 50,
+                            y: GROUND_Y
+                        });
+                        break;
+                    case 'lava':
+                        // Spawn a small lava pit
+                        lavaPits.push({
+                            x: canvas.width + 150,
+                            width: 50,
+                            bubbles: []
+                        });
+                        break;
+                    case 'platform':
+                        // Spawn a static platform
+                        platforms.push({
+                            x: canvas.width + 150,
+                            y: GROUND_Y - 80,
+                            width: 150,
+                            height: 15,
+                            type: 'static',
+                            originalY: GROUND_Y - 80,
+                            movePhase: 0,
+                            crumbleTime: 0,
+                            isCrumbling: false
+                        });
+                        break;
+                    case 'spring':
+                        // Spawn a spring
+                        springs.push({
+                            x: canvas.width + 150,
+                            y: GROUND_Y,
+                            width: 30,
+                            height: 20,
+                            compressed: false,
+                            compressTime: 0
+                        });
+                        break;
+                    case 'powerup':
+                        // Spawn a shield power-up
+                        powerUps.push({
+                            x: canvas.width + 150,
+                            y: GROUND_Y - 60,
+                            type: 'shield',
+                            size: 30,
+                            rotation: 0,
+                            collected: false
+                        });
+                        break;
+                }
+            }
+
+            // Re-spawn elements if they scrolled off without interaction
+            switch (phase.id) {
+                case 'coins':
+                    if (collectibles.length === 0) tutorialElementSpawned = false;
+                    break;
+                case 'duck':
+                case 'cactus':
+                    if (obstacles.length === 0) tutorialElementSpawned = false;
+                    break;
+                case 'lava':
+                    if (lavaPits.length === 0) tutorialElementSpawned = false;
+                    break;
+                case 'platform':
+                    if (platforms.length === 0) tutorialElementSpawned = false;
+                    break;
+                case 'spring':
+                    if (springs.length === 0) tutorialElementSpawned = false;
+                    break;
+                case 'powerup':
+                    if (powerUps.filter(p => !p.collected).length === 0) tutorialElementSpawned = false;
+                    break;
+            }
+        }
+
+        function advanceTutorialPhase() {
+            tutorialPhase++;
+            tutorialTimer = 0;
+            tutorialElementSpawned = false;
+
+            if (tutorialPhase >= tutorialPhases.length) {
+                // Tutorial complete — transition to demo mode
+                startDemoMode();
+                return;
+            }
+
+            tutorialMessage = tutorialPhases[tutorialPhase].message;
+            tutorialSubMessage = tutorialPhases[tutorialPhase].sub;
+        }
+
+        function onTutorialAction(action) {
+            if (!isTutorial) return;
+            const phase = tutorialPhases[tutorialPhase];
+            if (!phase || !phase.trigger) return;
+            if (phase.trigger === action) {
+                advanceTutorialPhase();
+            }
+        }
+
+        function startDemoMode() {
+            isTutorial = false;
+            demoMode = true;
+            demoTimer = 0;
+            score = 0;
+            coins = 0;
+            obstacles = [];
+            lavaPits = [];
+            platforms = [];
+            springs = [];
+            powerUps = [];
+            collectibles = [];
+            particles = [];
+            spawnTimer = 0;
+            collectibleTimer = 0;
+            lavaTimer = 60;
+            platformTimer = 30;
+            springTimer = 100;
+            powerUpTimer = 200;
+            player.y = GROUND_Y;
+            player.velocityY = 0;
+            player.isJumping = false;
+            demoMessage = 'Starting easy...';
+            demoMessageTimer = 120;
+            // Mark tutorial as completed
+            tutorialCompleted = true;
+            localStorage.setItem('jumpGame_tutorialDone', 'true');
+        }
+
+        function drawTutorialOverlay() {
+            if (isTutorial) {
+                // Semi-transparent banner
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.beginPath();
+                ctx.roundRect(canvas.width / 2 - 250, 30, 500, 80, 15);
+                ctx.fill();
+
+                // Main message
+                ctx.fillStyle = '#FFD700';
+                ctx.font = 'bold 24px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(tutorialMessage, canvas.width / 2, 65);
+
+                // Sub message
+                if (tutorialSubMessage) {
+                    ctx.fillStyle = '#ccc';
+                    ctx.font = '16px Arial';
+                    ctx.fillText(tutorialSubMessage, canvas.width / 2, 92);
+                }
+
+                // Progress dots
+                const dotY = 120;
+                const totalDots = tutorialPhases.length;
+                const dotSpacing = 20;
+                const startDotX = canvas.width / 2 - (totalDots - 1) * dotSpacing / 2;
+                for (let i = 0; i < totalDots; i++) {
+                    if (i < tutorialPhase) {
+                        ctx.fillStyle = '#32CD32';
+                    } else if (i === tutorialPhase) {
+                        ctx.fillStyle = '#FFD700';
+                    } else {
+                        ctx.fillStyle = '#555';
+                    }
+                    ctx.beginPath();
+                    ctx.arc(startDotX + i * dotSpacing, dotY, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.textAlign = 'left';
+            }
+
+            if (demoMode) {
+                // Show demo message banner if active
+                if (demoMessageTimer > 0) {
+                    demoMessageTimer--;
+                    const alpha = Math.min(1, demoMessageTimer / 30);
+                    ctx.fillStyle = `rgba(0, 0, 0, ${0.6 * alpha})`;
+                    ctx.beginPath();
+                    ctx.roundRect(canvas.width / 2 - 150, 40, 300, 50, 12);
+                    ctx.fill();
+                    ctx.fillStyle = `rgba(50, 205, 50, ${alpha})`;
+                    ctx.font = 'bold 22px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(demoMessage, canvas.width / 2, 72);
+                    ctx.textAlign = 'left';
+                }
+
+                // Show difficulty percentage (subtle)
+                const demoMultiplier = Math.min(1.0, 0.15 + demoTimer / 3600 * 0.85);
+                const pct = Math.round(demoMultiplier * 100);
+                if (pct < 100) {
+                    const alpha = Math.max(0.2, 1 - demoMultiplier);
+                    ctx.fillStyle = `rgba(150, 150, 150, ${alpha})`;
+                    ctx.font = '14px Arial';
+                    ctx.textAlign = 'right';
+                    ctx.fillText(`Difficulty: ${pct}%`, canvas.width - 15, canvas.height - 15);
+                    ctx.textAlign = 'left';
+                }
+            }
+        }
+
         function resetGame() {
             gameState = 'playing';
             score = 0;
@@ -818,6 +1144,13 @@
             portalSpawned = false;
             levelTransition = false;
             transitionTimer = 0;
+            isTutorial = false;
+            tutorialPhase = 0;
+            tutorialTimer = 0;
+            tutorialElementSpawned = false;
+            demoMode = false;
+            demoTimer = 0;
+            demoMessageTimer = 0;
         }
 
         function spawnCollectible() {
@@ -1084,8 +1417,23 @@
         function update(dt) {
             if (gameState !== 'playing') return;
 
-            // Update score
-            score++;
+            // Update tutorial
+            if (isTutorial) {
+                updateTutorial();
+            }
+
+            // Update demo timer
+            if (demoMode) {
+                demoTimer++;
+                if (demoTimer >= 3600) {
+                    demoMode = false;
+                    demoMessage = 'Full speed!';
+                    demoMessageTimer = 90;
+                }
+            }
+
+            // Update score (not during tutorial)
+            if (!isTutorial) score++;
             const levelConfig = levelConfigs[currentLevel] || levelConfigs[1];
             // Speed increases at half rate during autopilot
             const speedIncreaseRate = hasAutopilot ? 0.1 : 0.2;
@@ -1314,6 +1662,7 @@
                         player.isJumping = false;
                         canDoubleJump = hasDoubleJump;
                         currentPlatform = plat;
+                        onTutorialAction('platformLand');
 
                         // Crumbling platform
                         if (plat.type === 'crumbling' && !plat.isCrumbling) {
@@ -1348,6 +1697,7 @@
                     spring.compressed = true;
                     spring.compressTime = 10;
                     playSound('spring');
+                    onTutorialAction('springBounce');
 
                     // Spring particles
                     for (let i = 0; i < 8; i++) {
@@ -1373,7 +1723,12 @@
                 const playerCenterX = player.x + player.width / 2;
                 if (playerCenterX > lava.x && playerCenterX < lava.x + lava.width &&
                     player.y >= GROUND_Y) {
-                    if (!hasShield && !hasInvincible && !hasAutopilot) {
+                    if (isTutorial) {
+                        // Rescue player back to ground during tutorial
+                        player.y = GROUND_Y - 60;
+                        player.velocityY = JUMP_VELOCITY * 0.7;
+                        player.isJumping = true;
+                    } else if (!hasShield && !hasInvincible && !hasAutopilot) {
                         gameState = 'gameover';
                         if (score > highScore) highScore = score;
                         playSound('lava');
@@ -1432,7 +1787,11 @@
 
             // Fall off bottom of screen (into lava)
             if (player.y > canvas.height) {
-                if (!hasShield && !hasInvincible && !hasAutopilot) {
+                if (isTutorial) {
+                    // Rescue during tutorial
+                    player.y = GROUND_Y - 100;
+                    player.velocityY = 0;
+                } else if (!hasShield && !hasInvincible && !hasAutopilot) {
                     gameState = 'gameover';
                     if (score > highScore) highScore = score;
                     playSound('lava');
@@ -1443,6 +1802,9 @@
                 }
             }
 
+            // Demo mode difficulty multiplier
+            const demoMultiplier = demoMode ? Math.min(1.0, 0.15 + demoTimer / 3600 * 0.85) : 1;
+
             // Spawn obstacles (more frequently in higher levels)
             spawnTimer--;
             if (spawnTimer <= 0) {
@@ -1450,7 +1812,7 @@
                 const obstacleRate = levelConfig.obstacleRate || 1;
                 // Ensure minimum time between obstacles for fairness
                 const minTime = Math.max(40, 60 / speedMultiplier);
-                spawnTimer = Math.floor(minTime + Math.random() * 50 / obstacleRate);
+                spawnTimer = Math.floor((minTime + Math.random() * 50 / obstacleRate) / demoMultiplier);
             }
 
             // Spawn collectibles
@@ -1461,14 +1823,14 @@
             }
 
             // Spawn lava pits (after score 200, more in higher levels)
-            if (score > 200) {
+            if (score > 200 || demoMode) {
                 lavaTimer--;
                 if (lavaTimer <= 0) {
                     spawnLavaPit();
                     const lavaRate = levelConfig.lavaRate || 1;
                     // Ensure minimum spacing between lava pits for fairness
                     const minLavaTime = Math.max(80, 100 / speedMultiplier);
-                    lavaTimer = Math.floor(minLavaTime + Math.random() * 80 / lavaRate);
+                    lavaTimer = Math.floor((minLavaTime + Math.random() * 80 / lavaRate) / demoMultiplier);
                 }
             }
 
@@ -1476,15 +1838,15 @@
             platformTimer--;
             if (platformTimer <= 0) {
                 spawnPlatform();
-                platformTimer = Math.floor((180 + Math.random() * 120) / speedMultiplier);
+                platformTimer = Math.floor((180 + Math.random() * 120) / speedMultiplier / demoMultiplier);
             }
 
             // Spawn springs (after score 300)
-            if (score > 300) {
+            if (score > 300 || demoMode) {
                 springTimer--;
                 if (springTimer <= 0) {
                     spawnSpring();
-                    springTimer = Math.floor((120 + Math.random() * 100) / speedMultiplier);
+                    springTimer = Math.floor((120 + Math.random() * 100) / speedMultiplier / demoMultiplier);
                 }
             }
 
@@ -1492,7 +1854,7 @@
             powerUpTimer--;
             if (powerUpTimer <= 0) {
                 spawnPowerUp();
-                powerUpTimer = Math.floor((300 + Math.random() * 200) / speedMultiplier);
+                powerUpTimer = Math.floor((300 + Math.random() * 200) / speedMultiplier / demoMultiplier);
             }
 
             // Spawn portal when score reaches threshold (every 2500 points per level)
@@ -1522,7 +1884,10 @@
                 };
 
                 if (checkCollision(player.hitbox, obsHitbox)) {
-                    if (hasInvincible || hasShield || hasAutopilot) {
+                    if (isTutorial) {
+                        // Push obstacle away during tutorial
+                        obs.x = -1000;
+                    } else if (hasInvincible || hasShield || hasAutopilot) {
                         // Destroy obstacle instead
                         obs.x = -1000;
                         score += 100;
@@ -1561,6 +1926,11 @@
                     obs.passed = true;
                     score += 50;
                     playSound('score');
+                    if (obs.type === 'bird') {
+                        onTutorialAction('duckPass');
+                    } else {
+                        onTutorialAction('obstaclePass');
+                    }
                 }
             }
 
@@ -1586,6 +1956,7 @@
                         score += col.value;
                         coins++;
                         playSound(col.type);
+                        onTutorialAction('coin');
 
                         // Sparkle particles
                         for (let i = 0; i < 8; i++) {
@@ -1609,7 +1980,13 @@
             for (let lava of lavaPits) {
                 lava.x -= 6 * effectiveSpeed * dt;
             }
-            lavaPits = lavaPits.filter(lava => lava.x + lava.width > -50);
+            lavaPits = lavaPits.filter(lava => {
+                if (lava.x + lava.width <= -50) {
+                    onTutorialAction('lavaClear');
+                    return false;
+                }
+                return true;
+            });
 
             // Update platforms
             for (let plat of platforms) {
@@ -1640,6 +2017,7 @@
                     if (checkCollision(player.hitbox, puHitbox)) {
                         pu.collected = true;
                         playSound('powerup');
+                        onTutorialAction('powerupCollect');
 
                         switch (pu.type) {
                             case 'shield':
@@ -3246,15 +3624,19 @@
             ctx.font = '22px Arial';
             ctx.fillText('Press S for SHOP', canvas.width / 2, canvas.height / 2 + 20);
 
+            ctx.fillStyle = '#32CD32';
+            ctx.font = '20px Arial';
+            ctx.fillText(tutorialCompleted ? 'Press T - Play Tutorial Again' : 'Press T - First Time Playing?', canvas.width / 2, canvas.height / 2 + 55);
+
             ctx.fillStyle = '#ccc';
             ctx.font = '16px Arial';
-            ctx.fillText('Jump over obstacles, collect coins, grab power-ups!', canvas.width / 2, canvas.height / 2 + 60);
-            ctx.fillText('Use number keys 1-8 to activate items from inventory', canvas.width / 2, canvas.height / 2 + 85);
+            ctx.fillText('Jump over obstacles, collect coins, grab power-ups!', canvas.width / 2, canvas.height / 2 + 90);
+            ctx.fillText('Use number keys 1-8 to activate items from inventory', canvas.width / 2, canvas.height / 2 + 115);
 
             // Show total coins
             ctx.fillStyle = '#FFD700';
             ctx.font = 'bold 20px Arial';
-            ctx.fillText(`Total Coins: ${totalCoins}`, canvas.width / 2, canvas.height / 2 + 130);
+            ctx.fillText(`Total Coins: ${totalCoins}`, canvas.width / 2, canvas.height / 2 + 155);
 
             ctx.textAlign = 'left';
         }
@@ -3448,6 +3830,11 @@
 
             // Draw UI
             drawUI();
+
+            // Draw tutorial/demo overlay
+            if (isTutorial || demoMode) {
+                drawTutorialOverlay();
+            }
 
             // Draw slow-mo effect
             if (hasSlowmo) {

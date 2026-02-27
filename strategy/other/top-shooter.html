@@ -219,23 +219,149 @@
         .upgrade-bar-fill { height: 100%; background: #00cc66; border-radius: 3px; transition: width 0.3s; }
         .badge-maxed { display: inline-block; background: #00cc66; color: #000; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 4px; }
         .coins-earned { font-size: 16px; color: #ffcc00; margin-top: 8px; }
+
+        /* Tutorial */
+        #tutorialOverlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            z-index: 100;
+            pointer-events: none;
+        }
+        .tutorial-dim {
+            position: absolute;
+            background: rgba(0,0,0,0.75);
+            pointer-events: auto;
+        }
+        #tutorialHighlight {
+            position: absolute;
+            border: 2px solid #44aaff;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(68,170,255,0.5), inset 0 0 20px rgba(68,170,255,0.1);
+            pointer-events: none;
+            transition: all 0.35s ease;
+        }
+        #tutorialBox {
+            position: absolute;
+            background: rgba(10,10,30,0.95);
+            border: 2px solid rgba(68,170,255,0.5);
+            border-radius: 14px;
+            padding: 20px 28px;
+            color: #fff;
+            max-width: 440px;
+            pointer-events: auto;
+            box-shadow: 0 0 40px rgba(68,170,255,0.2);
+            animation: tutFadeIn 0.3s ease;
+        }
+        @keyframes tutFadeIn {
+            0% { opacity: 0; transform: translateY(10px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        #tutorialBox .btn { min-width: 80px; }
+        /* Mobile touch controls */
+        #touch-controls {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            z-index: 5;
+            pointer-events: none;
+        }
+        #joystick-zone {
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 50%;
+            height: 60%;
+            pointer-events: auto;
+            touch-action: none;
+        }
+        #joystick-base {
+            position: absolute;
+            left: 30px;
+            bottom: 30px;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.12);
+            border: 2px solid rgba(255,255,255,0.25);
+        }
+        #joystick-thumb {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 50px;
+            height: 50px;
+            margin-left: -25px;
+            margin-top: -25px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.35);
+            border: 2px solid rgba(255,255,255,0.5);
+            transition: none;
+        }
+        #aim-zone {
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: auto;
+            touch-action: none;
+        }
+        #bomb-btn {
+            position: absolute;
+            right: 20px;
+            bottom: 30px;
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: rgba(255,80,80,0.5);
+            border: 3px solid rgba(255,80,80,0.8);
+            color: white;
+            font-size: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+            user-select: none;
+            touch-action: none;
+        }
+
+        @media (max-width: 768px) {
+            canvas { cursor: default; }
+            .btn { min-height: 44px; }
+            #startScreen p { font-size: 14px; }
+        }
     </style>
 </head>
 <body>
 
 <canvas id="game"></canvas>
 
+<div id="touch-controls">
+    <div id="aim-zone"></div>
+    <div id="joystick-zone">
+        <div id="joystick-base">
+            <div id="joystick-thumb"></div>
+        </div>
+    </div>
+    <div id="bomb-btn">💣</div>
+</div>
+
 <div id="startScreen">
     <h1>Top-View Shooter</h1>
-    <p>WASD / Arrow Keys to move</p>
-    <p>Mouse to aim, Click to shoot</p>
-    <p>Space / Right-Click to throw bombs</p>
+    <p class="desktop-hint">WASD / Arrow Keys to move</p>
+    <p class="desktop-hint">Mouse to aim, Click to shoot</p>
+    <p class="desktop-hint">Space / Right-Click to throw bombs</p>
+    <p class="mobile-hint" style="display:none">Left joystick to move</p>
+    <p class="mobile-hint" style="display:none">Touch to aim & auto-shoot</p>
+    <p class="mobile-hint" style="display:none">Bomb button to throw bombs</p>
     <p>Pick up glowing orbs for bomb power!</p>
     <div id="startCoins" style="font-size:16px;color:#ffcc00;margin-top:12px"></div>
     <div id="startCharName" style="font-size:14px;color:#aaa;margin-top:4px"></div>
     <div id="startWeaponName" style="font-size:13px;color:#888;margin-top:2px"></div>
     <button class="btn" id="startBtn">Start Game</button>
     <button class="btn" id="shopBtn" style="background:#ffcc00;color:#000;margin-top:8px">Shop</button>
+    <button class="btn" id="tutorialBtn" style="background:#44aaff;color:#000;margin-top:8px">Tutorial</button>
     <button class="btn" id="resetBtn" style="background:#ff4444;color:#fff;margin-top:8px;font-size:14px;padding:8px 20px">Reset All Progress</button>
 </div>
 
@@ -346,6 +472,23 @@
         </div>
         <div class="coins-earned" id="finalCoins"></div>
         <button class="btn" id="finalRestartBtn">Restart from Level 1</button>
+    </div>
+</div>
+
+<div id="tutorialOverlay" style="display:none">
+    <div id="tutorialDimTop" class="tutorial-dim"></div>
+    <div id="tutorialDimBottom" class="tutorial-dim"></div>
+    <div id="tutorialDimLeft" class="tutorial-dim"></div>
+    <div id="tutorialDimRight" class="tutorial-dim"></div>
+    <div id="tutorialHighlight"></div>
+    <div id="tutorialBox">
+        <div id="tutorialStep" style="font-size:12px;color:#888;margin-bottom:4px"></div>
+        <div id="tutorialTitle" style="font-size:22px;font-weight:bold;margin-bottom:8px"></div>
+        <div id="tutorialText" style="font-size:14px;color:#ccc;line-height:1.6"></div>
+        <div style="display:flex;gap:10px;margin-top:16px;justify-content:center">
+            <button class="btn" id="tutPrev" style="background:#555;color:#fff;padding:10px 24px;font-size:15px">Back</button>
+            <button class="btn" id="tutNext" style="padding:10px 24px;font-size:15px">Next</button>
+        </div>
     </div>
 </div>
 
@@ -715,7 +858,7 @@ document.getElementById('shopBuyBtn').addEventListener('click', () => {
             shopData.coins -= ch.cost;
             shopData.unlocked.push(ch.id);
             shopData.selected = ch.id;
-            shopData.extraEnemies = (shopData.extraEnemies || 0) + 3;
+            shopData.extraEnemies = (shopData.extraEnemies || 0) + 1;
             saveShopData(shopData);
         }
         selectedChar = getSelectedChar();
@@ -728,7 +871,7 @@ document.getElementById('shopBuyBtn').addEventListener('click', () => {
         if (shopData.coins >= cost) {
             shopData.coins -= cost;
             shopData.upgrades[upg.id] = currentLvl + 1;
-            shopData.extraEnemies = (shopData.extraEnemies || 0) + 3;
+            shopData.extraEnemies = (shopData.extraEnemies || 0) + 1;
             saveShopData(shopData);
         }
     } else if (shopTab === 'weapons') {
@@ -742,7 +885,7 @@ document.getElementById('shopBuyBtn').addEventListener('click', () => {
             shopData.coins -= wp.cost;
             shopData.weapons.push(wp.id);
             shopData.selectedWeapon = wp.id;
-            shopData.extraEnemies = (shopData.extraEnemies || 0) + 3;
+            shopData.extraEnemies = (shopData.extraEnemies || 0) + 1;
             saveShopData(shopData);
         }
     }
@@ -801,11 +944,20 @@ function updateStartScreen() {
 }
 updateStartScreen();
 
-canvas.width = Math.floor(window.innerWidth / 2);
+const isMobile = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+
+canvas.width = isMobile ? window.innerWidth : Math.floor(window.innerWidth / 2);
 canvas.height = window.innerHeight;
 
+if (isMobile) {
+    document.getElementById('touch-controls').style.display = 'block';
+    canvas.style.touchAction = 'none';
+    document.querySelectorAll('.desktop-hint').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.mobile-hint').forEach(el => el.style.display = '');
+}
+
 window.addEventListener('resize', () => {
-    canvas.width = Math.floor(window.innerWidth / 2);
+    canvas.width = isMobile ? window.innerWidth : Math.floor(window.innerWidth / 2);
     canvas.height = window.innerHeight;
 });
 
@@ -1104,7 +1256,7 @@ function initGame() {
     explosions = [];
     powerupTimer = 0;
     score = 0;
-    totalEnemies = 12 + loadShopData().extraEnemies + (gameLevel - 1) * 3;
+    totalEnemies = 12 + loadShopData().extraEnemies + (gameLevel - 1);
     enemiesDefeated = 0;
 
     camera = { x: 0, y: MAP_H - canvas.height };
@@ -1119,8 +1271,7 @@ function initGame() {
     autoFireTimer = 0;
     const savedTotal = loadShopData().totalScore || 0;
     playerLevel = levelFromScore(savedTotal);
-    const effectiveLevel = Math.max(playerLevel, gameLevel);
-    maxActiveEnemies = 1 + (effectiveLevel - 1) * 3;
+    maxActiveEnemies = 1 + (playerLevel - 1) * 3;
 
     spawnEnemies(maxActiveEnemies);
 }
@@ -1245,6 +1396,110 @@ canvas.addEventListener('contextmenu', e => {
         throwBomb(player, player.angle, 'player');
     }
 });
+
+// === MOBILE TOUCH CONTROLS ===
+let joystickState = { active: false, dx: 0, dy: 0 };
+let joystickTouchId = null;
+let aimTouchId = null;
+
+if (isMobile) {
+    const joystickZone = document.getElementById('joystick-zone');
+    const joystickBase = document.getElementById('joystick-base');
+    const joystickThumb = document.getElementById('joystick-thumb');
+    const aimZone = document.getElementById('aim-zone');
+    const bombBtn = document.getElementById('bomb-btn');
+
+    // Joystick
+    joystickZone.addEventListener('touchstart', e => {
+        e.preventDefault();
+        for (const t of e.changedTouches) {
+            if (joystickTouchId === null) {
+                joystickTouchId = t.identifier;
+                joystickState.active = true;
+                const rect = joystickBase.getBoundingClientRect();
+                joystickState.centerX = rect.left + rect.width / 2;
+                joystickState.centerY = rect.top + rect.height / 2;
+                joystickState.dx = 0;
+                joystickState.dy = 0;
+            }
+        }
+    }, { passive: false });
+
+    joystickZone.addEventListener('touchmove', e => {
+        e.preventDefault();
+        for (const t of e.changedTouches) {
+            if (t.identifier === joystickTouchId) {
+                joystickState.dx = t.clientX - joystickState.centerX;
+                joystickState.dy = t.clientY - joystickState.centerY;
+                const maxDist = 50;
+                const d = Math.sqrt(joystickState.dx ** 2 + joystickState.dy ** 2);
+                if (d > maxDist) {
+                    joystickState.dx = (joystickState.dx / d) * maxDist;
+                    joystickState.dy = (joystickState.dy / d) * maxDist;
+                }
+                joystickThumb.style.transform = `translate(${joystickState.dx}px, ${joystickState.dy}px)`;
+            }
+        }
+    }, { passive: false });
+
+    joystickZone.addEventListener('touchend', e => {
+        for (const t of e.changedTouches) {
+            if (t.identifier === joystickTouchId) {
+                joystickTouchId = null;
+                joystickState.active = false;
+                joystickState.dx = 0;
+                joystickState.dy = 0;
+                joystickThumb.style.transform = '';
+            }
+        }
+    });
+
+    // Aim zone — touch to aim and auto-fire
+    aimZone.addEventListener('touchstart', e => {
+        for (const t of e.changedTouches) {
+            // Skip if this touch is on joystick or bomb button
+            const el = document.elementFromPoint(t.clientX, t.clientY);
+            if (el && (el.closest('#joystick-zone') || el.closest('#bomb-btn'))) continue;
+            if (aimTouchId === null) {
+                aimTouchId = t.identifier;
+                const rect = canvas.getBoundingClientRect();
+                mouse.x = t.clientX - rect.left;
+                mouse.y = t.clientY - rect.top;
+                mouse.down = true;
+                playerShoot();
+            }
+        }
+    }, { passive: true });
+
+    aimZone.addEventListener('touchmove', e => {
+        for (const t of e.changedTouches) {
+            if (t.identifier === aimTouchId) {
+                const rect = canvas.getBoundingClientRect();
+                mouse.x = t.clientX - rect.left;
+                mouse.y = t.clientY - rect.top;
+            }
+        }
+    }, { passive: true });
+
+    aimZone.addEventListener('touchend', e => {
+        for (const t of e.changedTouches) {
+            if (t.identifier === aimTouchId) {
+                aimTouchId = null;
+                mouse.down = false;
+            }
+        }
+    });
+
+    // Bomb button
+    bombBtn.addEventListener('touchstart', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (gameRunning && player && player.hasBomb) {
+            bombsUsed++;
+            throwBomb(player, player.angle, 'player');
+        }
+    }, { passive: false });
+}
 
 function playerShoot() {
     if (!gameRunning) return;
@@ -1373,14 +1628,20 @@ function update(dt) {
 
     // Player movement
     let dx = 0, dy = 0;
-    if (keys['w'] || keys['arrowup']) dy -= 1;
-    if (keys['s'] || keys['arrowdown']) dy += 1;
-    if (keys['a'] || keys['arrowleft']) dx -= 1;
-    if (keys['d'] || keys['arrowright']) dx += 1;
+    if (joystickState.active) {
+        const maxDist = 50;
+        dx = joystickState.dx / maxDist;
+        dy = joystickState.dy / maxDist;
+    } else {
+        if (keys['w'] || keys['arrowup']) dy -= 1;
+        if (keys['s'] || keys['arrowdown']) dy += 1;
+        if (keys['a'] || keys['arrowleft']) dx -= 1;
+        if (keys['d'] || keys['arrowright']) dx += 1;
+    }
 
     if (dx !== 0 && dy !== 0) {
-        dx *= 0.7071;
-        dy *= 0.7071;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        if (len > 1) { dx /= len; dy /= len; }
     }
 
     let speed = player.charSpeed || PLAYER_SPEED;
@@ -2833,9 +3094,15 @@ function drawHUD() {
     ctx.fill();
     ctx.fillStyle = '#aaa';
     ctx.font = '11px Arial';
-    ctx.fillText('WASD/Arrows: Move', canvas.width - hintW - pad + 10, pad + 15);
-    ctx.fillText('Mouse: Aim  |  Click: Shoot', canvas.width - hintW - pad + 10, pad + 30);
-    ctx.fillText('Space/Right-Click: Throw Bomb', canvas.width - hintW - pad + 10, pad + 45);
+    if (isMobile) {
+        ctx.fillText('Left: Joystick to Move', canvas.width - hintW - pad + 10, pad + 15);
+        ctx.fillText('Touch: Aim & Auto-Shoot', canvas.width - hintW - pad + 10, pad + 30);
+        ctx.fillText('Bomb Button: Throw Bomb', canvas.width - hintW - pad + 10, pad + 45);
+    } else {
+        ctx.fillText('WASD/Arrows: Move', canvas.width - hintW - pad + 10, pad + 15);
+        ctx.fillText('Mouse: Aim  |  Click: Shoot', canvas.width - hintW - pad + 10, pad + 30);
+        ctx.fillText('Space/Right-Click: Throw Bomb', canvas.width - hintW - pad + 10, pad + 45);
+    }
 
     // Character name badge
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
@@ -3113,6 +3380,357 @@ document.getElementById('resetBtn').addEventListener('click', () => {
         updateStartScreen();
     }
 });
+
+// ---- Tutorial System ----
+const tutorialOverlay = document.getElementById('tutorialOverlay');
+const tutorialBox = document.getElementById('tutorialBox');
+const tutTitleEl = document.getElementById('tutorialTitle');
+const tutTextEl = document.getElementById('tutorialText');
+const tutStepEl = document.getElementById('tutorialStep');
+const tutPrevBtn = document.getElementById('tutPrev');
+const tutNextBtn = document.getElementById('tutNext');
+let tutorialStep = 0;
+let tutorialActive = false;
+
+const TUTORIAL_STEPS = [
+    // --- Intro ---
+    {
+        title: 'Welcome to the Tutorial!',
+        text: 'This guide will walk you through <b>everything</b> you need to know — controls, the HUD, the shop, leveling, and how enemies scale.<br><br>Press <b>Next</b> to get started!',
+        target: null,
+        setup: () => {
+            startScreen.style.display = 'none';
+            shopScreen.style.display = 'none';
+        }
+    },
+    // --- Controls ---
+    {
+        title: 'Movement',
+        text: 'Use <b>WASD</b> or <b>Arrow Keys</b> to move your character around the map.<br><br>The map scrolls upward as you progress — push forward to find enemies!',
+        target: null
+    },
+    {
+        title: 'Aiming & Shooting',
+        text: 'Move your <b>mouse</b> to aim — your character always faces the cursor.<br><br><b>Click</b> to fire bullets. Some characters have <b>auto-fire</b> — just hold down the mouse button!',
+        target: null
+    },
+    {
+        title: 'Bombs',
+        text: 'Press <b>Space</b> or <b>Right-Click</b> to throw a bomb in the direction you\'re aiming.<br><br>Bombs deal <b>massive splash damage</b> in a large radius. You need to pick up a bomb power-up first (the glowing orbs on the map).',
+        target: null
+    },
+    {
+        title: 'Power-Ups',
+        text: 'Glowing orbs spawn across the map. Pick them up for temporary boosts:<br><br>' +
+              '• <span style="color:#00ffcc">Bomb</span> — Gives you a throwable bomb<br>' +
+              '• <span style="color:#44ff44">Health</span> — Restores HP<br>' +
+              '• <span style="color:#ffdd00">Invincible</span> — Can\'t take damage for 10 seconds<br>' +
+              '• <span style="color:#00ccff">Speed</span> — Move faster for 8 seconds<br>' +
+              '• <span style="color:#ff4444">Double Damage</span> — 2x bullet damage for 8 seconds',
+        target: null
+    },
+    // --- HUD ---
+    {
+        title: 'The HUD — Overview',
+        text: 'During gameplay, the HUD appears in the <b>top-left corner</b>. It shows your HP, score, player level, wave progress, and bomb status.<br><br>Let\'s go through each part.',
+        target: null
+    },
+    {
+        title: 'HP Bar & Score',
+        text: 'The <b>green HP bar</b> shows your remaining health. It turns <span style="color:#ffcc00">yellow</span> below 50% and <span style="color:#ff3333">red</span> below 25%.<br><br>Your <b>Score</b> increases as you defeat enemies. Score determines coins earned and contributes to your <b>Player Level</b>.',
+        target: null
+    },
+    {
+        title: 'Player Level (Lv.)',
+        text: 'Your <span style="color:#ffdd00">Player Level</span> is based on your <b>all-time total score</b>. A small progress bar shows how close you are to the next level.<br><br>' +
+              '• Levels 1–10: <b>50,000 score each</b><br>' +
+              '• Levels 11+: <b>10,000 score each</b><br><br>' +
+              'Higher levels unlock <b>more weapon slots</b> and increase <b>max active enemies</b> on the field.',
+        target: null
+    },
+    {
+        title: 'Wave Counter & Enemies',
+        text: 'Below the HP bar you\'ll see <span style="color:#ff9944">Wave X/20</span> and <span style="color:#ff8888">Enemies: X/Y</span>.<br><br>' +
+              'There are <b>20 waves</b> total. Defeat all enemies in a wave to advance. Each wave adds <b>+1 more enemy</b> than the last.<br><br>' +
+              'Beat all 20 waves to become the <b>Champion</b>!',
+        target: null
+    },
+    // --- Shop intro ---
+    {
+        title: 'The Shop',
+        text: 'The Shop is where you spend <span style="color:#ffcc00">coins</span> to unlock characters, buy upgrades, and equip weapons.<br><br>Let\'s open it up and explore each tab!',
+        target: null,
+        setup: () => {
+            shopScreen.style.display = 'none';
+        }
+    },
+    // --- Characters tab ---
+    {
+        title: 'Shop — Characters Tab',
+        text: 'The <b>Characters</b> tab shows all 17 playable characters. Each has unique stats:<br><br>' +
+              '• <b>HP</b> — How much damage you can take<br>' +
+              '• <b>Speed</b> — How fast you move<br>' +
+              '• <b>Damage</b> — How hard your bullets hit<br>' +
+              '• <b>Special abilities</b> — Auto-fire, lifesteal, splash damage, tiny hitbox, and more!<br><br>' +
+              '<span style="color:#44ff44">Soldier is free</span>. Others cost coins. Click a character to view it, then <b>Buy</b> or <b>Equip</b>.',
+        target: () => document.querySelector('.shop-tab[data-tab="characters"]'),
+        setup: () => {
+            shopTab = 'characters';
+            shopViewChar = null;
+            shopScreen.style.display = 'flex';
+            renderShop();
+        }
+    },
+    {
+        title: 'Buying & Selling Characters',
+        text: 'Click any character card to select it, then use the buttons below:<br><br>' +
+              '• <b style="color:#ffcc00">Buy</b> — Purchase with coins (auto-equips)<br>' +
+              '• <b style="color:#00cc66">Equip</b> — Switch to an owned character<br>' +
+              '• <b style="color:#cc3333">Sell</b> — Sell for <b>half</b> the purchase price<br><br>' +
+              '<span style="color:#ff9944">Important:</span> Each purchase adds <b>+1 total enemy</b> to every wave, making the game harder!',
+        target: () => document.getElementById('shopGrid'),
+        setup: () => {
+            shopTab = 'characters';
+            renderShop();
+        }
+    },
+    // --- Upgrades tab ---
+    {
+        title: 'Shop — Upgrades Tab',
+        text: 'The <b>Upgrades</b> tab has 14 permanent stat boosts. Each can be leveled up multiple times:<br><br>' +
+              '• <b>Damage Up</b> — +5 bullet damage per level<br>' +
+              '• <b>HP Up</b> — +25 max HP per level<br>' +
+              '• <b>Speed / Bullet Speed</b> — Faster movement & shots<br>' +
+              '• <b>Armor</b> — -10% damage taken per level<br>' +
+              '• <b>Critical Hit</b> — +10% chance for 3x damage<br>' +
+              '• <b>Multi-Shot</b> — Fire extra bullets!<br>' +
+              '…and more. The <span style="color:#00cc66">green bar</span> shows progress to max.',
+        target: () => document.querySelector('.shop-tab[data-tab="upgrades"]'),
+        setup: () => {
+            shopTab = 'upgrades';
+            shopViewUpgrade = null;
+            renderShop();
+        }
+    },
+    {
+        title: 'Upgrade Costs & Scaling',
+        text: 'Each upgrade level costs <b>more</b> than the last. For example, Damage Up costs:<br>' +
+              '<span style="color:#ffcc00">200 → 400 → 600 → 800 → 1000</span><br><br>' +
+              'When an upgrade is <span class="badge-maxed" style="display:inline">MAXED</span>, it can\'t be leveled further.<br><br>' +
+              '<span style="color:#ff9944">Important:</span> Each upgrade purchase also adds <b>+1 total enemy</b>, so choose wisely!',
+        target: () => document.getElementById('shopGrid'),
+        setup: () => {
+            shopTab = 'upgrades';
+            renderShop();
+        }
+    },
+    // --- Weapons tab ---
+    {
+        title: 'Shop — Weapons Tab',
+        text: 'The <b>Weapons</b> tab has 14 weapons with wildly different playstyles:<br><br>' +
+              '• <b>Rapid Fire</b> — Fast shots, less damage<br>' +
+              '• <b>Piercing Rounds</b> — Bullets pass through enemies<br>' +
+              '• <b>Homing Missiles</b> — Bullets track enemies<br>' +
+              '• <b>Railgun</b> — Instant line pierce, huge damage<br>' +
+              '• <b>Laser Beam</b> — Continuous damage beam<br>' +
+              '…and more! <span style="color:#44ff44">Standard Gun is free</span>.',
+        target: () => document.querySelector('.shop-tab[data-tab="weapons"]'),
+        setup: () => {
+            shopTab = 'weapons';
+            shopViewWeapon = null;
+            renderShop();
+        }
+    },
+    {
+        title: 'Weapon Slots',
+        text: 'You can only own a limited number of weapons at once!<br><br>' +
+              'Weapon slots = <b>3 + (Player Level - 1) &times; 2</b><br><br>' +
+              '• Level 1: <b>3 weapon slots</b><br>' +
+              '• Level 2: <b>5 weapon slots</b><br>' +
+              '• Level 5: <b>11 weapon slots</b><br><br>' +
+              'If you\'re at the cap, <b>sell</b> a weapon first to make room. Selling gives <b>half</b> the buy price back in coins.<br><br>' +
+              '<span style="color:#ff9944">Buying weapons also adds +1 enemy!</span>',
+        target: () => document.getElementById('shopGrid'),
+        setup: () => {
+            shopTab = 'weapons';
+            renderShop();
+        }
+    },
+    // --- Enemy scaling ---
+    {
+        title: 'Enemy Scaling',
+        text: 'This is key to understanding the game\'s difficulty:<br><br>' +
+              '<b>Total enemies per wave</b> = 12 + shop purchases + (wave - 1)<br><br>' +
+              'Every time you buy a character, upgrade, or weapon, <b>+1 enemy</b> is permanently added to every wave. Each new wave also adds <b>+1 more</b> enemy.<br><br>' +
+              'Wave 1 starts with 12 enemies, Wave 2 has 13, Wave 10 has 21, Wave 20 has 31 (plus any shop extras).',
+        target: null,
+        setup: () => {
+            shopScreen.style.display = 'none';
+        }
+    },
+    {
+        title: 'Active Enemies',
+        text: 'Not all enemies spawn at once. The <b>max active enemies</b> on screen at a time depends on your Player Level and current wave:<br><br>' +
+              '<b>Max active</b> = 1 + (level - 1) &times; 3<br><br>' +
+              '• Level 1: <b>1 enemy</b> at a time<br>' +
+              '• Level 5: <b>13 enemies</b> at a time<br>' +
+              '• Level 10: <b>28 enemies</b> at a time<br><br>' +
+              'As you defeat them, more spawn until you\'ve beaten them all.',
+        target: null
+    },
+    // --- Coins ---
+    {
+        title: 'Earning Coins',
+        text: 'Coins are earned at the end of each wave (win or lose):<br><br>' +
+              '<b>Coins earned</b> = Score &divide; 10 &times; Coin Bonus<br>' +
+              '+ <b>50 bonus coins</b> if you win the wave<br><br>' +
+              'The <span style="color:#ffcc00">Coin Bonus</span> upgrade increases earnings by 15% per level.<br><br>' +
+              'Spend coins wisely — every purchase makes the game harder!',
+        target: null
+    },
+    // --- Tips ---
+    {
+        title: 'Tips & Strategy',
+        text: '• Start with <b>upgrades</b> before buying expensive characters<br>' +
+              '• <b>Armor</b> and <b>HP Up</b> help survive later waves<br>' +
+              '• <b>Critical Hit</b> and <b>Multi-Shot</b> are powerful damage upgrades<br>' +
+              '• Use <b>terrain</b> — trees and rocks block bullets for you AND enemies<br>' +
+              '• <b>Water</b> slows your movement — avoid it during fights<br>' +
+              '• Save bombs for <b>large groups</b> of enemies<br>' +
+              '• The <b>Coin Bonus</b> upgrade pays for itself over time',
+        target: null
+    },
+    // --- Done ---
+    {
+        title: 'You\'re Ready!',
+        text: 'That\'s everything! Go defeat all 20 waves and become the <b style="color:#ffcc00">Champion</b>!<br><br>Good luck out there!',
+        target: null,
+        setup: () => {
+            shopScreen.style.display = 'none';
+        }
+    }
+];
+
+function showTutorialStep() {
+    const step = TUTORIAL_STEPS[tutorialStep];
+    if (step.setup) step.setup();
+
+    tutStepEl.textContent = 'Step ' + (tutorialStep + 1) + ' of ' + TUTORIAL_STEPS.length;
+    tutTitleEl.textContent = step.title;
+    tutTextEl.innerHTML = step.text;
+    tutPrevBtn.style.display = tutorialStep === 0 ? 'none' : '';
+    tutNextBtn.textContent = tutorialStep === TUTORIAL_STEPS.length - 1 ? 'Finish' : 'Next';
+
+    // Position highlight and dims
+    const targetEl = step.target ? (typeof step.target === 'function' ? step.target() : step.target) : null;
+    const highlight = document.getElementById('tutorialHighlight');
+    const dimTop = document.getElementById('tutorialDimTop');
+    const dimBottom = document.getElementById('tutorialDimBottom');
+    const dimLeft = document.getElementById('tutorialDimLeft');
+    const dimRight = document.getElementById('tutorialDimRight');
+
+    if (targetEl) {
+        const rect = targetEl.getBoundingClientRect();
+        const pad = 6;
+        const hx = rect.left - pad;
+        const hy = rect.top - pad;
+        const hw = rect.width + pad * 2;
+        const hh = rect.height + pad * 2;
+
+        highlight.style.display = 'block';
+        highlight.style.left = hx + 'px';
+        highlight.style.top = hy + 'px';
+        highlight.style.width = hw + 'px';
+        highlight.style.height = hh + 'px';
+
+        // Dims around the highlight
+        dimTop.style.left = '0';
+        dimTop.style.top = '0';
+        dimTop.style.width = '100vw';
+        dimTop.style.height = hy + 'px';
+
+        dimBottom.style.left = '0';
+        dimBottom.style.top = (hy + hh) + 'px';
+        dimBottom.style.width = '100vw';
+        dimBottom.style.height = 'calc(100vh - ' + (hy + hh) + 'px)';
+
+        dimLeft.style.left = '0';
+        dimLeft.style.top = hy + 'px';
+        dimLeft.style.width = hx + 'px';
+        dimLeft.style.height = hh + 'px';
+
+        dimRight.style.left = (hx + hw) + 'px';
+        dimRight.style.top = hy + 'px';
+        dimRight.style.width = 'calc(100vw - ' + (hx + hw) + 'px)';
+        dimRight.style.height = hh + 'px';
+
+        // Position tutorial box below or above the highlight
+        const boxBelow = hy + hh + 16;
+        const boxAbove = hy - 16;
+        if (boxBelow + 250 < window.innerHeight) {
+            tutorialBox.style.top = boxBelow + 'px';
+            tutorialBox.style.bottom = '';
+        } else {
+            tutorialBox.style.top = '';
+            tutorialBox.style.bottom = (window.innerHeight - boxAbove) + 'px';
+        }
+        tutorialBox.style.left = Math.max(16, Math.min(hx, window.innerWidth - 460)) + 'px';
+    } else {
+        highlight.style.display = 'none';
+        // Full screen dim
+        dimTop.style.left = '0';
+        dimTop.style.top = '0';
+        dimTop.style.width = '100vw';
+        dimTop.style.height = '100vh';
+        dimBottom.style.height = '0';
+        dimLeft.style.width = '0';
+        dimRight.style.width = '0';
+
+        // Center the tutorial box
+        tutorialBox.style.top = '50%';
+        tutorialBox.style.left = '50%';
+        tutorialBox.style.bottom = '';
+        tutorialBox.style.transform = 'translate(-50%, -50%)';
+    }
+
+    // Reset transform when targeting an element
+    if (targetEl) {
+        tutorialBox.style.transform = '';
+    }
+}
+
+function startTutorial() {
+    tutorialStep = 0;
+    tutorialActive = true;
+    tutorialOverlay.style.display = 'block';
+    showTutorialStep();
+}
+
+function endTutorial() {
+    tutorialActive = false;
+    tutorialOverlay.style.display = 'none';
+    shopScreen.style.display = 'none';
+    startScreen.style.display = 'flex';
+    updateStartScreen();
+}
+
+tutNextBtn.addEventListener('click', () => {
+    if (tutorialStep >= TUTORIAL_STEPS.length - 1) {
+        endTutorial();
+    } else {
+        tutorialStep++;
+        showTutorialStep();
+    }
+});
+
+tutPrevBtn.addEventListener('click', () => {
+    if (tutorialStep > 0) {
+        tutorialStep--;
+        showTutorialStep();
+    }
+});
+
+document.getElementById('tutorialBtn').addEventListener('click', startTutorial);
 </script>
 </body>
 </html>

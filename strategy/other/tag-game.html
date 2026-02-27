@@ -314,6 +314,19 @@
             pointer-events: auto;
             user-select: none;
         }
+        /* Tutorial highlight for settings sections */
+        .tutorial-highlight-section {
+            outline: 3px solid #4d96ff;
+            outline-offset: 4px;
+            border-radius: 12px;
+            animation: tutorialPulse 1.2s ease-in-out infinite;
+            position: relative;
+            z-index: 1;
+        }
+        @keyframes tutorialPulse {
+            0%, 100% { outline-color: rgba(77,150,255,0.8); }
+            50% { outline-color: rgba(77,150,255,0.3); }
+        }
     </style>
 </head>
 <body>
@@ -343,13 +356,14 @@
             <p><span style="color:#a855f7;">↔ Swap</span> — Swap position with a random bot</p>
             <p><span style="color:#34d399;">◆ Shrink</span> — Become tiny for 6s</p>
             <p class="section-title">Danger</p>
-            <p><span style="color:#dc2626;">HUNTER</span> — Always chases YOU, can't be tagged!</p>
+            <p><span style="color:#dc2626;">HUNTER</span> — Always chases YOU! Tag it to stun for 5s!</p>
             <p><span style="color:#ef4444;">Lava</span> — Makes YOU become IT! &nbsp; <span style="color:#ff8c00;">Idle 3s</span> — You're IT!</p>
         </div>
         <p class="high-score" id="startHighScore"></p>
         <button class="btn" id="startBtn">Play!</button>
         <br>
         <button class="btn-settings" id="openSettingsBtn">Settings</button>
+        <button class="btn-settings" id="openTutorialBtn" style="margin-top:6px;">Tutorial</button>
     </div>
 </div>
 
@@ -427,6 +441,42 @@
         <p class="high-score" id="endHighScore"></p>
         <button class="btn" id="playAgainBtn">Play Again</button>
     </div>
+</div>
+
+<!-- Tutorial Welcome Screen -->
+<div id="tutorialScreen" class="screen-overlay hidden">
+    <div class="panel">
+        <h1>Tutorial</h1>
+        <p style="font-size:16px; color:#666; margin-bottom:16px;">Learn how to play Tag!</p>
+        <p style="font-size:14px; color:#888;">We'll walk you through controls, arena elements, powerups, and settings.</p>
+        <button class="btn" id="tutorialStartBtn">Start Tutorial</button>
+        <br>
+        <button class="btn-settings" id="tutorialSkipBtn" style="margin-top:8px;">Skip</button>
+    </div>
+</div>
+
+<!-- Tutorial Tooltip (floating during gameplay) -->
+<div id="tutorialTooltip" style="display:none; position:fixed; z-index:15; pointer-events:auto;">
+    <div style="background:rgba(255,255,255,0.96); border:2px solid rgba(37,99,235,0.4); border-radius:14px; padding:16px 20px; max-width:340px; box-shadow:0 6px 30px rgba(0,50,150,0.18); font-family:'Segoe UI',Arial,sans-serif;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+            <span id="ttIcon" style="font-size:22px;"></span>
+            <span id="ttTitle" style="font-size:16px; font-weight:bold; color:#2d3748;"></span>
+        </div>
+        <p id="ttText" style="font-size:13px; color:#556; line-height:1.5; margin:6px 0;"></p>
+        <p id="ttHint" style="font-size:11px; color:#2563eb; font-weight:bold; margin:8px 0 4px;"></p>
+        <div id="ttProgress" style="height:4px; background:rgba(0,80,200,0.1); border-radius:2px; margin-top:10px; overflow:hidden;">
+            <div id="ttProgressBar" style="height:100%; background:linear-gradient(90deg,#6bcb77,#4d96ff); border-radius:2px; transition:width 0.3s;"></div>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:10px; justify-content:flex-end;">
+            <button id="ttSkip" style="padding:6px 14px; font-size:12px; border:1px solid rgba(0,0,0,0.15); border-radius:6px; background:#fff; color:#888; cursor:pointer; font-weight:bold;">Skip All</button>
+            <button id="ttNext" style="display:none; padding:6px 14px; font-size:12px; border:none; border-radius:6px; background:linear-gradient(135deg,#6bcb77,#4d96ff); color:#000; cursor:pointer; font-weight:bold;">Next</button>
+        </div>
+    </div>
+</div>
+
+<!-- Tutorial Highlight Overlay (for HUD/settings highlights) -->
+<div id="tutorialHighlight" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:14; pointer-events:none;">
+    <canvas id="highlightCanvas" style="width:100%; height:100%;"></canvas>
 </div>
 
 <script>
@@ -583,6 +633,9 @@ let statusBanner = { text: '', timer: 0, color: '#fff' };
 let idleTimer = 0;
 const IDLE_TIMEOUT = 3; // seconds
 
+// Hunter stun
+let hunterStunTimer = 0; // 5s countdown when hunter is tagged
+
 // --- Powerup system ---
 const POWERUP_TYPES = {
     invincible: { name: 'Invincible', color: '#ffd700', icon: '★', duration: 8, stored: false, desc: 'Cannot become IT for 8s' },
@@ -678,8 +731,10 @@ resize();
 // --- Input ---
 document.addEventListener('keydown', e => {
     keys[e.key.toLowerCase()] = true;
-    if (e.key === ' ') {
+    if (e.key === ' ' || e.key.startsWith('Arrow')) {
         e.preventDefault();
+    }
+    if (e.key === ' ') {
         dashPressed = true;
     }
     if (e.key.toLowerCase() === 'e') {
@@ -912,6 +967,9 @@ function initRound() {
     const hunter = createAI(numBots, positions, true);
     positions.push({ x: hunter.x, y: hunter.y });
     aiChars.push(hunter);
+
+    // Reset hunter stun
+    hunterStunTimer = 0;
 
     // Reset tag mode state
     tagMode = settings.tagType;
@@ -1670,8 +1728,8 @@ function updatePlayer(dt) {
         showBanner("Lava! You're IT!", '#ff4500');
     }
 
-    // IDLE PENALTY: only in classic/ball modes
-    if (tagMode === 'classic' || tagMode === 'ball') {
+    // IDLE PENALTY: only in classic/ball modes (disabled in tutorial)
+    if ((tagMode === 'classic' || tagMode === 'ball') && gameState !== 'tutorial') {
         if (inputLen > 0.1) {
             idleTimer = 0;
         } else {
@@ -1917,6 +1975,36 @@ function updateAI(ai, index, dt) {
     } else {
         let tx, ty;
 
+        // Hunter-specific behavior
+        if (ai.isHunter) {
+            if (hunterStunTimer > 0) {
+                // Stunned: wander to random position
+                if (ai.retargetTimer <= 0) {
+                    ai.targetX = randRange(80, ARENA_W - 80);
+                    ai.targetY = randRange(80, ARENA_H - 80);
+                    ai.retargetTimer = randRange(1, 2);
+                }
+                tx = ai.targetX;
+                ty = ai.targetY;
+                ai.expression = 'scared';
+            } else {
+                // Normal: chase the player
+                tx = player.x + player.vx * 0.3;
+                ty = player.y + player.vy * 0.3;
+                ai.expression = 'it';
+
+                // Dash at player when close
+                const d = dist(ai, player);
+                if (d < 140 && d > 30 && ai.dashCooldown <= 0 && Math.random() < 0.04 * difficultyMult) {
+                    const angle = Math.atan2(player.y - ai.y, player.x - ai.x);
+                    ai.isDashing = true;
+                    ai.dashTimer = DASH_DURATION;
+                    ai.dashCooldown = DASH_COOLDOWN + randRange(0, 1.5);
+                    ai.dashDirX = Math.cos(angle);
+                    ai.dashDirY = Math.sin(angle);
+                }
+            }
+        } else
         // Mode-specific AI behavior override
         if (tagMode === 'banana' && !ai.isHunter) {
             // Banana: everyone is IT — chase nearest unfrozen target, dodge nearby threats
@@ -2473,8 +2561,8 @@ function checkTagsClassic() {
     // Ball tag with balls > 0: skip contact tagging (ball handles it)
     if (tagMode === 'ball' && (settings.ballCount || 1) > 0) return;
 
-    // Hunter bot special
-    if (playerInvincible <= 0) {
+    // Hunter bot special — skip if stunned
+    if (playerInvincible <= 0 && hunterStunTimer <= 0) {
         for (let i = 0; i < aiChars.length; i++) {
             if (aiChars[i].isHunter && dist(aiChars[i], player) < TAG_DISTANCE && itIndex !== -1) {
                 if (itIndex >= 0) aiChars[itIndex].expression = 'happy';
@@ -2490,7 +2578,26 @@ function checkTagsClassic() {
 
     if (itIndex === -1) {
         for (let i = 0; i < aiChars.length; i++) {
-            if (aiChars[i].isHunter) continue;
+            // Allow tagging the hunter to stun it
+            if (aiChars[i].isHunter) {
+                if (dist(player, aiChars[i]) < TAG_DISTANCE && hunterStunTimer <= 0) {
+                    hunterStunTimer = 5;
+                    spawnTagParticles(aiChars[i].x, aiChars[i].y);
+                    showBanner('Hunter stunned!', '#ffd93d');
+                    immunityTimer = TAG_IMMUNITY_TIME;
+                    // Transfer IT to a random non-hunter bot
+                    const candidates = [];
+                    for (let j = 0; j < aiChars.length; j++) {
+                        if (!aiChars[j].isHunter) candidates.push(j);
+                    }
+                    if (candidates.length > 0) {
+                        const pick = candidates[Math.floor(Math.random() * candidates.length)];
+                        performTag(-1, pick);
+                    }
+                    return;
+                }
+                continue;
+            }
             if (dist(player, aiChars[i]) < TAG_DISTANCE) {
                 performTag(-1, i);
                 return;
@@ -3994,41 +4101,69 @@ function drawCharacter(char, isIT, isPlayer) {
 
     // Hunter special visuals — crosshair ring + danger aura
     if (char.isHunter && !isPlayer) {
-        // Rotating crosshair around the hunter
-        ctx.save();
-        ctx.translate(x, y + bounceY);
-        ctx.rotate(gameTime * 1.5);
-        ctx.strokeStyle = '#dc2626';
-        ctx.lineWidth = 2;
-        ctx.globalAlpha = 0.6 + Math.sin(gameTime * 4) * 0.2;
-        // Crosshair lines
-        const chR = r + 8;
-        ctx.beginPath(); ctx.moveTo(0, -chR); ctx.lineTo(0, -chR + 6); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(0, chR); ctx.lineTo(0, chR - 6); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(-chR, 0); ctx.lineTo(-chR + 6, 0); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(chR, 0); ctx.lineTo(chR - 6, 0); ctx.stroke();
-        // Rotating circle segments
-        for (let i = 0; i < 4; i++) {
-            const a = i * Math.PI / 2;
-            ctx.beginPath();
-            ctx.arc(0, 0, chR, a + 0.2, a + Math.PI / 2 - 0.2);
-            ctx.stroke();
-        }
-        ctx.globalAlpha = 1;
-        ctx.restore();
+        const isStunned = hunterStunTimer > 0;
 
-        // Danger warning label
+        // Stun flash — blink the hunter's opacity
+        if (isStunned) {
+            ctx.globalAlpha = 0.3 + Math.abs(Math.sin(gameTime * 8)) * 0.4;
+            // Dizzy stars around the hunter
+            ctx.save();
+            ctx.translate(x, y + bounceY);
+            for (let i = 0; i < 3; i++) {
+                const starAngle = gameTime * 3 + i * Math.PI * 2 / 3;
+                const starR = r + 14;
+                const sx = Math.cos(starAngle) * starR;
+                const sy = Math.sin(starAngle) * starR - 6;
+                ctx.font = '10px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#ffd700';
+                ctx.globalAlpha = 0.7;
+                ctx.fillText('★', sx, sy);
+            }
+            ctx.globalAlpha = 1;
+            ctx.restore();
+        }
+
+        if (!isStunned) {
+            // Rotating crosshair around the hunter (only when active)
+            ctx.save();
+            ctx.translate(x, y + bounceY);
+            ctx.rotate(gameTime * 1.5);
+            ctx.strokeStyle = '#dc2626';
+            ctx.lineWidth = 2;
+            ctx.globalAlpha = 0.6 + Math.sin(gameTime * 4) * 0.2;
+            // Crosshair lines
+            const chR = r + 8;
+            ctx.beginPath(); ctx.moveTo(0, -chR); ctx.lineTo(0, -chR + 6); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, chR); ctx.lineTo(0, chR - 6); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(-chR, 0); ctx.lineTo(-chR + 6, 0); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(chR, 0); ctx.lineTo(chR - 6, 0); ctx.stroke();
+            // Rotating circle segments
+            for (let i = 0; i < 4; i++) {
+                const a = i * Math.PI / 2;
+                ctx.beginPath();
+                ctx.arc(0, 0, chR, a + 0.2, a + Math.PI / 2 - 0.2);
+                ctx.stroke();
+            }
+            ctx.globalAlpha = 1;
+            ctx.restore();
+        }
+
+        // Label — shows STUNNED or HUNTER
         const hunterLabelY = y + bounceY - r - 18;
-        ctx.fillStyle = 'rgba(220,38,38,0.9)';
+        ctx.fillStyle = isStunned ? 'rgba(255,180,0,0.9)' : 'rgba(220,38,38,0.9)';
         ctx.font = 'bold 9px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        const hlW = 46, hlH = 13;
+        const hlLabel = isStunned ? 'STUNNED' : 'HUNTER';
+        const hlW = isStunned ? 52 : 46, hlH = 13;
         ctx.beginPath();
         drawRoundRect(x - hlW/2, hunterLabelY - hlH/2, hlW, hlH, 4);
         ctx.fill();
         ctx.fillStyle = '#fff';
-        ctx.fillText('HUNTER', x, hunterLabelY);
+        ctx.fillText(hlLabel, x, hunterLabelY);
+        ctx.globalAlpha = 1;
     }
 
     // --- Tag mode visual overlays ---
@@ -4975,6 +5110,12 @@ function drawJoystick() {
 // ============================================================
 
 function update(dt) {
+    // Tutorial state — game is paused, just tick gameTime for animations
+    if (gameState === 'tutorial') {
+        gameTime += dt;
+        return;
+    }
+
     if (gameState !== 'playing') return;
 
     gameTime += dt;
@@ -4987,6 +5128,7 @@ function update(dt) {
     }
 
     immunityTimer = Math.max(0, immunityTimer - dt);
+    hunterStunTimer = Math.max(0, hunterStunTimer - dt);
     statusBanner.timer = Math.max(0, statusBanner.timer - dt);
 
     // Banana immunity timers
@@ -5028,7 +5170,7 @@ function draw() {
     ctx.fillStyle = '#87ceeb';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    if (gameState !== 'playing') return;
+    if (gameState !== 'playing' && gameState !== 'tutorial') return;
 
     ctx.save();
 
@@ -5434,7 +5576,10 @@ function openSettings() {
 function closeSettings(save) {
     if (save) saveSettings();
     document.getElementById('settingsScreen').classList.add('hidden');
-    document.getElementById('startScreen').classList.remove('hidden');
+    // During tutorial, don't show start screen
+    if (gameState !== 'tutorial') {
+        document.getElementById('startScreen').classList.remove('hidden');
+    }
 }
 
 function startGame() {
@@ -5520,6 +5665,372 @@ function restartGame() {
     startGame();
 }
 
+// ============================================================
+// TUTORIAL SYSTEM
+// ============================================================
+
+let tutorialStep = -1;
+let tutorialActive = false;
+let tutorialPaused = false;
+let tutorialArrowTarget = null;
+let tutorialSavedSettings = null;
+
+const TUTORIAL_STEPS = [
+    // Phase: Intro
+    {
+        phase: 'intro', id: 'welcome', title: 'Welcome!', icon: '👋',
+        text: 'This tutorial will teach you everything about Tag!',
+        hint: '', manualNext: true, pauseGame: true,
+    },
+    // Phase: Controls
+    {
+        phase: 'controls', id: 'move', title: 'Movement', icon: '🏃',
+        text: 'Use WASD or Arrow keys to move around the arena.',
+        hint: '', manualNext: true, pauseGame: true,
+    },
+    {
+        phase: 'controls', id: 'dash', title: 'Dash', icon: '💨',
+        text: 'Press Space to dash! It gives you a burst of speed. 3-second cooldown.',
+        hint: '', manualNext: true, pauseGame: true,
+    },
+    {
+        phase: 'controls', id: 'tag-it', title: 'Being IT', icon: '🏷️',
+        text: 'When YOU are IT (red glow), run into a bot to tag them and pass IT along!',
+        hint: '', manualNext: true, pauseGame: true,
+    },
+    {
+        phase: 'controls', id: 'tag-notit', title: 'Not IT', icon: '🏃‍♂️',
+        text: 'When someone else is IT, run away! Your score is time spent NOT being IT.',
+        hint: '', manualNext: true, pauseGame: true,
+    },
+    {
+        phase: 'controls', id: 'stored', title: 'Stored Powerup', icon: '🛡️',
+        text: 'Some powerups are stored. Press E to activate them when you need them!',
+        hint: '', manualNext: true, pauseGame: true,
+    },
+    // Phase: HUD Tour (paused, with highlights)
+    {
+        phase: 'hud', id: 'hud-timer', title: 'Timer', icon: '⏱️',
+        text: 'This shows the round timer. Each round lasts 60 seconds, 3 rounds per game.',
+        hint: '', manualNext: true, pauseGame: true,
+        highlight() {
+            return { x: canvas.width / 2 - 70, y: 4, w: 140, h: 60 };
+        },
+    },
+    {
+        phase: 'hud', id: 'hud-score', title: 'Score', icon: '⭐',
+        text: 'Your survival score — time spent NOT being IT.',
+        hint: '', manualNext: true, pauseGame: true,
+        highlight() {
+            return { x: 10, y: 4, w: 170, h: 58 };
+        },
+    },
+    {
+        phase: 'hud', id: 'hud-dash', title: 'Dash Cooldown', icon: '💨',
+        text: 'Shows when your dash is ready or cooling down.',
+        hint: '', manualNext: true, pauseGame: true,
+        highlight() {
+            return { x: canvas.width - 148, y: 4, w: 140, h: 52 };
+        },
+    },
+    {
+        phase: 'hud', id: 'hud-minimap', title: 'Minimap', icon: '🗺️',
+        text: 'The minimap shows everyone\'s position in the arena.',
+        hint: '', manualNext: true, pauseGame: true,
+        highlight() {
+            return { x: canvas.width - 164, y: canvas.height - 164, w: 160, h: 160 };
+        },
+    },
+    // Phase: Elements
+    {
+        phase: 'elements', id: 'portal', title: 'Portal', icon: '🌀',
+        text: 'Walk into a portal to teleport to its partner portal across the arena!',
+        hint: '', manualNext: true, pauseGame: true,
+    },
+    {
+        phase: 'elements', id: 'trampoline', title: 'Trampoline', icon: '🦘',
+        text: 'Step on a trampoline to launch into the air at high speed!',
+        hint: '', manualNext: true, pauseGame: true,
+    },
+    {
+        phase: 'elements', id: 'lava', title: 'Lava Pool', icon: '🔥',
+        text: 'Lava pools slow you down. If you linger too long, you become IT!',
+        hint: '', manualNext: true, pauseGame: true,
+    },
+    {
+        phase: 'elements', id: 'speed', title: 'Speed Pad', icon: '⚡',
+        text: 'Run over a speed pad for a temporary speed boost!',
+        hint: '', manualNext: true, pauseGame: true,
+    },
+    {
+        phase: 'elements', id: 'ice', title: 'Ice Patch', icon: '🧊',
+        text: 'Ice patches make you slide — momentum carries you and steering is harder!',
+        hint: '', manualNext: true, pauseGame: true,
+    },
+    {
+        phase: 'elements', id: 'bumper', title: 'Bumper', icon: '🔴',
+        text: 'Walk into a bumper and get knocked back! Use them to escape or surprise enemies.',
+        hint: '', manualNext: true, pauseGame: true,
+    },
+    // Phase: Powerups
+    {
+        phase: 'powerups', id: 'pu-invincible', title: 'Invincible', icon: '★',
+        text: 'The gold star makes you invincible for 8 seconds — you can\'t become IT!',
+        hint: '', manualNext: true, pauseGame: true,
+    },
+    {
+        phase: 'powerups', id: 'pu-shield', title: 'Shield', icon: '🛡️',
+        text: 'The shield is stored — press E to activate it when needed! Blocks tags for 8 seconds.',
+        hint: '', manualNext: true, pauseGame: true,
+    },
+    {
+        phase: 'powerups', id: 'pu-speed', title: 'Speed Surge', icon: '⚡',
+        text: 'Speed surge gives you 3x speed for 5 seconds!',
+        hint: '', manualNext: true, pauseGame: true,
+    },
+    {
+        phase: 'powerups', id: 'pu-freeze', title: 'Freeze Blast', icon: '❄️',
+        text: 'Freeze blast freezes ALL bots in place for 3 seconds!',
+        hint: '', manualNext: true, pauseGame: true,
+    },
+    {
+        phase: 'powerups', id: 'pu-swap', title: 'Swap', icon: '↔️',
+        text: 'Swap instantly teleports you to a random bot\'s position!',
+        hint: '', manualNext: true, pauseGame: true,
+    },
+    {
+        phase: 'powerups', id: 'pu-shrink', title: 'Shrink', icon: '◆',
+        text: 'Shrink makes you tiny for 6 seconds — much harder to tag!',
+        hint: '', manualNext: true, pauseGame: true,
+    },
+    // Phase: Special
+    {
+        phase: 'special', id: 'hunter', title: 'The Hunter', icon: '🎯',
+        text: 'The HUNTER always chases you! Tag it to stun it for 5 seconds.',
+        hint: '', manualNext: true, pauseGame: true,
+    },
+    {
+        phase: 'special', id: 'idle', title: 'Idle Warning', icon: '⚠️',
+        text: 'Don\'t stand still for 3 seconds or you\'ll automatically become IT!',
+        hint: '', manualNext: true, pauseGame: true,
+    },
+    // Phase: Settings
+    {
+        phase: 'settings', id: 'set-tagtype', title: 'Tag Modes', icon: '🏷️',
+        text: 'Choose from Classic, Ball Tag, Banana, Freeze Tag, or Zombie mode!',
+        hint: '', manualNext: true, pauseGame: true,
+        highlightSelector: '.settings-section:nth-child(1)',
+    },
+    {
+        phase: 'settings', id: 'set-arena', title: 'Arena Size', icon: '📐',
+        text: 'Pick how big the arena should be — from tiny to massive!',
+        hint: '', manualNext: true, pauseGame: true,
+        highlightSelector: '.settings-section:nth-child(2)',
+    },
+    {
+        phase: 'settings', id: 'set-powerups', title: 'Powerup Toggles', icon: '⚡',
+        text: 'Enable or disable individual powerups to customize your game.',
+        hint: '', manualNext: true, pauseGame: true,
+        highlightSelector: '.settings-section:nth-child(3)',
+    },
+    {
+        phase: 'settings', id: 'set-elements', title: 'Element Toggles', icon: '🧱',
+        text: 'Toggle arena elements like portals, lava, ice, and more!',
+        hint: '', manualNext: true, pauseGame: true,
+        highlightSelector: '.settings-section:nth-child(4)',
+    },
+    // Phase: Complete
+    {
+        phase: 'complete', id: 'done', title: "You're Ready!", icon: '🎉',
+        text: 'You know everything! Go have fun playing Tag!',
+        hint: '', manualNext: true, pauseGame: true,
+        manualNextLabel: 'Finish',
+    },
+];
+
+const Tutorial = {
+    start() {
+        // Save current settings
+        tutorialSavedSettings = JSON.parse(JSON.stringify(settings));
+
+        // Set up a simple arena so HUD highlights render correctly
+        settings.arenaSize = 'tiny';
+        settings.tagType = 'classic';
+        generateArena();
+        initRound();
+        roundTimer = 60; // Show a realistic timer in HUD
+        tutorialPaused = true; // Game is always paused in non-interactive tutorial
+
+        // Hide all screens
+        document.getElementById('startScreen').classList.add('hidden');
+        document.getElementById('tutorialScreen').classList.add('hidden');
+        document.getElementById('settingsScreen').classList.add('hidden');
+        document.getElementById('roundEndScreen').classList.add('hidden');
+        document.getElementById('gameOverScreen').classList.add('hidden');
+
+        gameState = 'tutorial';
+        tutorialActive = true;
+        tutorialStep = -1;
+        tutorialArrowTarget = null;
+        gameTime = 0;
+
+        this.nextStep();
+    },
+
+    nextStep() {
+        tutorialStep++;
+        tutorialArrowTarget = null;
+        tutorialPaused = false;
+
+        // Remove any settings highlights
+        document.querySelectorAll('.tutorial-highlight-section').forEach(el => {
+            el.classList.remove('tutorial-highlight-section');
+        });
+
+        // Hide highlight overlay
+        document.getElementById('tutorialHighlight').style.display = 'none';
+
+        if (tutorialStep >= TUTORIAL_STEPS.length) {
+            this.end();
+            return;
+        }
+
+        const step = TUTORIAL_STEPS[tutorialStep];
+
+        // Handle settings phase — open settings screen
+        if (step.phase === 'settings') {
+            if (!document.getElementById('settingsScreen').classList.contains('hidden')) {
+                // Already open
+            } else {
+                buildSettingsUI();
+                document.getElementById('settingsScreen').classList.remove('hidden');
+            }
+            tutorialPaused = true;
+
+            // Highlight the section
+            if (step.highlightSelector) {
+                const panel = document.querySelector('#settingsScreen .panel');
+                if (panel) {
+                    const section = panel.querySelector(step.highlightSelector);
+                    if (section) {
+                        section.classList.add('tutorial-highlight-section');
+                        section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }
+            }
+        } else {
+            // Close settings if open
+            document.getElementById('settingsScreen').classList.add('hidden');
+        }
+
+        // Handle pause
+        if (step.pauseGame) {
+            tutorialPaused = true;
+        }
+
+        // Handle highlight rect (HUD tour)
+        if (step.highlight) {
+            this.showHighlightRect(step.highlight());
+        }
+
+        // Run setup
+        if (step.setup) {
+            step.setup();
+        }
+
+        // Show tooltip
+        this.showTooltip(step);
+    },
+
+    end() {
+        tutorialActive = false;
+        tutorialStep = -1;
+        tutorialPaused = false;
+        tutorialArrowTarget = null;
+
+        // Hide tutorial UI
+        document.getElementById('tutorialTooltip').style.display = 'none';
+        document.getElementById('tutorialHighlight').style.display = 'none';
+        document.getElementById('settingsScreen').classList.add('hidden');
+        document.querySelectorAll('.tutorial-highlight-section').forEach(el => {
+            el.classList.remove('tutorial-highlight-section');
+        });
+
+        // Restore settings
+        if (tutorialSavedSettings) {
+            settings = tutorialSavedSettings;
+            tutorialSavedSettings = null;
+            saveSettings();
+        }
+
+        // Mark tutorial as done
+        localStorage.setItem('tag-game-tutorial-done', '1');
+
+        // Return to start screen
+        gameState = 'start';
+        document.getElementById('startScreen').classList.remove('hidden');
+    },
+
+    showTooltip(step) {
+        const tt = document.getElementById('tutorialTooltip');
+        document.getElementById('ttIcon').textContent = step.icon || '';
+        document.getElementById('ttTitle').textContent = step.title || '';
+        document.getElementById('ttText').textContent = step.text || '';
+        document.getElementById('ttHint').textContent = step.hint || '';
+
+        // Progress bar
+        const progress = ((tutorialStep + 1) / TUTORIAL_STEPS.length) * 100;
+        document.getElementById('ttProgressBar').style.width = progress + '%';
+
+        // Next button
+        const nextBtn = document.getElementById('ttNext');
+        if (step.manualNext) {
+            nextBtn.style.display = 'inline-block';
+            nextBtn.textContent = step.manualNextLabel || 'Next';
+        } else {
+            nextBtn.style.display = 'none';
+        }
+
+        tt.style.display = 'block';
+
+        // Position tooltip
+        tt.style.left = '50%';
+        tt.style.transform = 'translateX(-50%)';
+        if (step.phase === 'hud' || step.phase === 'settings') {
+            // Bottom so it doesn't overlap highlights
+            tt.style.top = 'auto';
+            tt.style.bottom = '20px';
+        } else {
+            // Center of screen
+            tt.style.top = '50%';
+            tt.style.bottom = 'auto';
+        }
+    },
+
+    showHighlightRect(rect) {
+        const overlay = document.getElementById('tutorialHighlight');
+        const hCanvas = document.getElementById('highlightCanvas');
+        overlay.style.display = 'block';
+        hCanvas.width = window.innerWidth;
+        hCanvas.height = window.innerHeight;
+        const hCtx = hCanvas.getContext('2d');
+
+        // Dark overlay with cutout
+        hCtx.fillStyle = 'rgba(0,0,0,0.5)';
+        hCtx.fillRect(0, 0, hCanvas.width, hCanvas.height);
+
+        // Clear the highlight area
+        hCtx.clearRect(rect.x - 4, rect.y - 4, rect.w + 8, rect.h + 8);
+
+        // Draw pulsing border
+        hCtx.strokeStyle = '#4d96ff';
+        hCtx.lineWidth = 3;
+        hCtx.setLineDash([6, 4]);
+        hCtx.strokeRect(rect.x - 4, rect.y - 4, rect.w + 8, rect.h + 8);
+        hCtx.setLineDash([]);
+    },
+};
+
 // --- Event bindings ---
 document.getElementById('startBtn').addEventListener('click', startGame);
 document.getElementById('nextRoundBtn').addEventListener('click', nextRound);
@@ -5528,12 +6039,37 @@ document.getElementById('openSettingsBtn').addEventListener('click', openSetting
 document.getElementById('settingsBackBtn').addEventListener('click', () => closeSettings(false));
 document.getElementById('settingsSaveBtn').addEventListener('click', () => closeSettings(true));
 
+// Tutorial buttons
+document.getElementById('openTutorialBtn').addEventListener('click', () => {
+    document.getElementById('startScreen').classList.add('hidden');
+    document.getElementById('tutorialScreen').classList.remove('hidden');
+});
+document.getElementById('tutorialStartBtn').addEventListener('click', () => {
+    Tutorial.start();
+});
+document.getElementById('tutorialSkipBtn').addEventListener('click', () => {
+    document.getElementById('tutorialScreen').classList.add('hidden');
+    document.getElementById('startScreen').classList.remove('hidden');
+});
+document.getElementById('ttNext').addEventListener('click', () => {
+    Tutorial.nextStep();
+});
+document.getElementById('ttSkip').addEventListener('click', () => {
+    Tutorial.end();
+});
+
 // High score display
 function updateStartHighScore() {
     const el = document.getElementById('startHighScore');
     el.textContent = highScore > 0 ? `Best Score: ${highScore.toFixed(1)}s` : '';
 }
 updateStartHighScore();
+
+// First-time tutorial prompt
+if (!localStorage.getItem('tag-game-tutorial-done')) {
+    document.getElementById('startScreen').classList.add('hidden');
+    document.getElementById('tutorialScreen').classList.remove('hidden');
+}
 
 // --- Start ---
 lastTime = performance.now();
