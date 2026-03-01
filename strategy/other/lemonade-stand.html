@@ -1,0 +1,4184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lemonade Stand</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0e27;
+            color: #e0e0e0;
+            font-family: 'Fredoka', 'Segoe UI', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow-x: hidden;
+        }
+
+        #bg-canvas {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        #game-container {
+            width: 100%;
+            max-width: 820px;
+            min-height: 100vh;
+            padding: 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* === START SCREEN === */
+        .screen { display: none; }
+        .screen.active { display: block; }
+
+        #start-screen {
+            text-align: center;
+            padding-top: 15vh;
+        }
+        #start-screen h1 {
+            font-size: 52px;
+            font-weight: 700;
+            color: #ffd54f;
+            text-shadow: 0 0 40px rgba(255,213,79,0.5), 0 0 80px rgba(255,213,79,0.2), 0 4px 20px rgba(0,0,0,0.5);
+            margin-bottom: 8px;
+            animation: titleGlow 3s ease-in-out infinite;
+        }
+        @keyframes titleGlow {
+            0%, 100% { text-shadow: 0 0 40px rgba(255,213,79,0.5), 0 0 80px rgba(255,213,79,0.2), 0 4px 20px rgba(0,0,0,0.5); }
+            50% { text-shadow: 0 0 60px rgba(255,213,79,0.7), 0 0 120px rgba(255,213,79,0.3), 0 4px 20px rgba(0,0,0,0.5); }
+        }
+        #start-screen .subtitle {
+            color: #66bb6a;
+            font-size: 16px;
+            font-weight: 500;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 30px;
+        }
+        .how-to-play {
+            background: rgba(255,213,79,0.06);
+            border: 1px solid rgba(255,213,79,0.15);
+            border-radius: 16px;
+            padding: 20px 28px;
+            text-align: left;
+            margin: 0 auto 30px;
+            max-width: 500px;
+            font-size: 14px;
+            line-height: 1.7;
+            color: #bbb;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,213,79,0.08);
+        }
+        .how-to-play h3 {
+            color: #ffd54f;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        .how-to-play li { margin-bottom: 4px; list-style: none; }
+        .how-to-play li::before { content: "🍋 "; }
+
+        .mode-buttons { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+        .btn {
+            padding: 14px 36px;
+            font-size: 16px;
+            font-weight: 600;
+            font-family: 'Fredoka', sans-serif;
+            border: none;
+            border-radius: 14px;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.25s, filter 0.15s;
+            color: #fff;
+            letter-spacing: 1px;
+            position: relative;
+            overflow: hidden;
+        }
+        .btn::after {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+        .btn:hover::after { left: 100%; }
+        .btn:hover { transform: scale(1.05); filter: brightness(1.15); }
+        .btn:active { transform: scale(0.97); }
+        .btn-primary {
+            background: linear-gradient(135deg, #ffd54f, #ffb300);
+            color: #1a1a2e;
+            box-shadow: 0 4px 20px rgba(255,213,79,0.4), 0 0 40px rgba(255,213,79,0.15);
+        }
+        .btn-primary:hover {
+            box-shadow: 0 6px 30px rgba(255,213,79,0.6), 0 0 60px rgba(255,213,79,0.2);
+        }
+        .btn-secondary {
+            background: linear-gradient(135deg, #66bb6a, #43a047);
+            box-shadow: 0 4px 20px rgba(102,187,106,0.3), 0 0 40px rgba(102,187,106,0.1);
+        }
+        .btn-secondary:hover {
+            box-shadow: 0 6px 30px rgba(102,187,106,0.5), 0 0 60px rgba(102,187,106,0.2);
+        }
+        .btn-small {
+            padding: 10px 22px;
+            font-size: 14px;
+            border-radius: 10px;
+        }
+
+        /* === TOP BAR === */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,213,79,0.12);
+            border-radius: 14px;
+            padding: 14px 20px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 10px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+        .top-bar .stat {
+            text-align: center;
+        }
+        .stat-label {
+            font-size: 11px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .stat-value {
+            font-size: 22px;
+            font-weight: 700;
+            color: #fff;
+        }
+        .stat-value.money { color: #66bb6a; }
+        .stat-value.weather-icon { font-size: 32px; }
+
+        /* === MAIN GAME AREA === */
+        .game-sections {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            margin-bottom: 16px;
+        }
+        @media (max-width: 600px) {
+            .game-sections { grid-template-columns: 1fr; }
+        }
+
+        .card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,213,79,0.1);
+            border-radius: 14px;
+            padding: 18px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 4px 24px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.04);
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+        .card:hover {
+            border-color: rgba(255,213,79,0.2);
+            box-shadow: 0 6px 30px rgba(0,0,0,0.3), 0 0 20px rgba(255,213,79,0.05), inset 0 1px 0 rgba(255,255,255,0.06);
+        }
+        .card h3 {
+            font-size: 15px;
+            font-weight: 600;
+            color: #ffd54f;
+            margin-bottom: 12px;
+            letter-spacing: 1px;
+            text-shadow: 0 0 12px rgba(255,213,79,0.3);
+        }
+
+        /* === SUPPLY SHOP === */
+        .supply-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .supply-row:last-child { border-bottom: none; }
+        .supply-row.locked {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+        .supply-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+        }
+        .supply-emoji { font-size: 20px; }
+        .supply-name { font-size: 14px; color: #ccc; }
+        .supply-cost { font-size: 12px; color: #888; }
+        .supply-stock { font-size: 13px; color: #66bb6a; min-width: 40px; text-align: right; margin-right: 10px; }
+        .supply-controls { display: flex; align-items: center; gap: 4px; }
+        .supply-controls button {
+            width: 30px; height: 30px;
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 8px;
+            background: rgba(255,255,255,0.06);
+            color: #fff;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.15s, transform 0.1s, border-color 0.15s;
+            font-family: 'Fredoka', sans-serif;
+        }
+        .supply-controls button:hover { background: rgba(255,213,79,0.2); border-color: rgba(255,213,79,0.3); }
+        .supply-controls button:active { transform: scale(0.9); }
+        .supply-controls .qty-input {
+            width: 44px;
+            text-align: center;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 14px;
+            padding: 4px;
+            font-family: 'Fredoka', sans-serif;
+        }
+
+        /* === RECIPE === */
+        .recipe-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+        }
+        .recipe-label { font-size: 14px; color: #ccc; display: flex; align-items: center; gap: 6px; }
+        .recipe-slider {
+            -webkit-appearance: none;
+            width: 100px;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255,255,255,0.1);
+            outline: none;
+        }
+        .recipe-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px; height: 18px;
+            border-radius: 50%;
+            background: #ffd54f;
+            cursor: pointer;
+            box-shadow: 0 0 8px rgba(255,213,79,0.5);
+        }
+        .recipe-slider::-moz-range-thumb {
+            width: 18px; height: 18px;
+            border-radius: 50%;
+            background: #ffd54f;
+            cursor: pointer;
+            border: none;
+        }
+        .recipe-value {
+            font-size: 14px;
+            color: #ffd54f;
+            font-weight: 600;
+            min-width: 24px;
+            text-align: right;
+        }
+        .quality-bar {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        .quality-label { font-size: 13px; color: #888; margin-bottom: 6px; }
+        .quality-meter {
+            height: 8px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .quality-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s, background 0.3s, box-shadow 0.3s;
+            box-shadow: 0 0 8px currentColor;
+        }
+
+        /* === DRINK TYPE SELECTOR === */
+        .drink-types {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+        .drink-type-btn {
+            padding: 8px 14px;
+            border: 2px solid rgba(255,255,255,0.12);
+            border-radius: 10px;
+            background: rgba(255,255,255,0.04);
+            color: #aaa;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Fredoka', sans-serif;
+        }
+        .drink-type-btn:hover { border-color: rgba(255,213,79,0.3); color: #ddd; }
+        .drink-type-btn.active {
+            border-color: #ffd54f;
+            background: rgba(255,213,79,0.12);
+            color: #ffd54f;
+            box-shadow: 0 0 12px rgba(255,213,79,0.2);
+        }
+        .drink-type-btn.locked {
+            opacity: 0.35;
+            pointer-events: none;
+            position: relative;
+        }
+        .drink-type-btn .lock-icon {
+            font-size: 11px;
+            margin-left: 4px;
+        }
+
+        /* === SHOP SCREEN === */
+        #shop-screen { padding-top: 20px; }
+        .shop-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .shop-header h2 { color: #ffd54f; font-size: 24px; }
+        .shop-money { color: #66bb6a; font-size: 18px; font-weight: 600; }
+        .shop-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .shop-item {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 12px 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .shop-item:hover {
+            border-color: rgba(255,213,79,0.3);
+            background: rgba(255,213,79,0.06);
+            transform: translateY(-2px);
+        }
+        .shop-item.locked {
+            opacity: 0.3;
+            pointer-events: none;
+        }
+        .shop-item-emoji { font-size: 28px; margin-bottom: 4px; }
+        .shop-item-name { font-size: 13px; color: #ccc; font-weight: 500; }
+        .shop-item-cost { font-size: 11px; color: #888; margin-top: 2px; }
+        .shop-item-lock { font-size: 10px; color: #666; margin-top: 4px; }
+        .shop-item-qty {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            margin-top: 8px;
+        }
+        .shop-item-qty button {
+            width: 26px; height: 26px;
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 6px;
+            background: rgba(255,255,255,0.06);
+            color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+            font-family: 'Fredoka', sans-serif;
+            transition: background 0.15s;
+        }
+        .shop-item-qty button:hover { background: rgba(255,213,79,0.2); }
+        .shop-item-qty .shop-qty-val {
+            font-size: 14px;
+            font-weight: 600;
+            color: #ffd54f;
+            min-width: 24px;
+            text-align: center;
+        }
+        .shop-cart-bar {
+            background: rgba(255,213,79,0.08);
+            border: 1px solid rgba(255,213,79,0.15);
+            border-radius: 12px;
+            padding: 14px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .shop-cart-bar .cart-info { font-size: 14px; color: #ccc; }
+        .shop-cart-bar .cart-info span { color: #ffd54f; font-weight: 600; }
+
+        /* === INGREDIENT SLOTS === */
+        .ingredient-slots {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+        .ingredient-slot {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 10px;
+            padding: 6px 10px;
+            font-size: 13px;
+            color: #ccc;
+        }
+        .ingredient-slot .slot-emoji { font-size: 16px; }
+        .ingredient-slot .slot-count { color: #ffd54f; font-weight: 600; }
+        .ingredient-slot .slot-remove {
+            width: 20px; height: 20px;
+            border: none;
+            border-radius: 50%;
+            background: rgba(255,82,82,0.2);
+            color: #ff5252;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s;
+            font-family: 'Fredoka', sans-serif;
+            margin-left: 2px;
+        }
+        .ingredient-slot .slot-remove:hover { background: rgba(255,82,82,0.4); }
+
+        /* === PRICE === */
+        .price-display {
+            text-align: center;
+            margin: 10px 0;
+        }
+        .price-amount {
+            font-size: 42px;
+            font-weight: 700;
+            color: #66bb6a;
+            text-shadow: 0 0 20px rgba(102,187,106,0.4);
+        }
+        .price-slider {
+            width: 100%;
+            -webkit-appearance: none;
+            height: 8px;
+            border-radius: 4px;
+            background: linear-gradient(90deg, #66bb6a, #ffd54f, #ff5252);
+            outline: none;
+        }
+        .price-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 22px; height: 22px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        .price-slider::-moz-range-thumb {
+            width: 22px; height: 22px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            border: none;
+        }
+        .price-hint {
+            font-size: 12px;
+            color: #888;
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        /* === FORECAST === */
+        .forecast-card {
+            text-align: center;
+        }
+        .forecast-icon {
+            font-size: 64px;
+            margin: 10px 0;
+            animation: weatherPulse 3s ease-in-out infinite;
+            filter: drop-shadow(0 0 16px rgba(255,213,79,0.3));
+        }
+        @keyframes weatherPulse {
+            0%, 100% { transform: scale(1) rotate(0deg); }
+            25% { transform: scale(1.05) rotate(2deg); }
+            75% { transform: scale(1.05) rotate(-2deg); }
+        }
+        .forecast-temp {
+            font-size: 18px;
+            color: #fff;
+            font-weight: 600;
+        }
+        .forecast-desc {
+            font-size: 13px;
+            color: #aaa;
+            margin-top: 4px;
+        }
+        .forecast-tip {
+            font-size: 12px;
+            color: #ffd54f;
+            margin-top: 10px;
+            font-style: italic;
+        }
+
+        /* === SELL BUTTON === */
+        .sell-section {
+            text-align: center;
+            margin-bottom: 16px;
+        }
+        .sell-section .cost-preview {
+            font-size: 13px;
+            color: #aaa;
+            margin-bottom: 10px;
+        }
+        .sell-section .cost-preview span { color: #ff5252; font-weight: 600; }
+
+        /* === SELLING ANIMATION === */
+        #selling-screen {
+            text-align: center;
+            padding-top: 10vh;
+        }
+        .selling-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #ffd54f;
+            margin-bottom: 20px;
+        }
+        .stand-visual {
+            font-size: 80px;
+            margin: 20px 0;
+            position: relative;
+            animation: standBob 2s ease-in-out infinite;
+            filter: drop-shadow(0 0 20px rgba(255,213,79,0.3));
+        }
+        @keyframes standBob {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-6px); }
+        }
+        .customer-area {
+            min-height: 120px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 20px 0;
+        }
+        .customer {
+            font-size: 28px;
+            animation: customerBounce 0.5s ease-out;
+            transition: opacity 0.3s;
+        }
+        @keyframes customerBounce {
+            0% { transform: translateY(30px) scale(0); opacity: 0; }
+            60% { transform: translateY(-5px) scale(1.1); opacity: 1; }
+            100% { transform: translateY(0) scale(1); opacity: 1; }
+        }
+        .selling-stats {
+            font-size: 20px;
+            color: #66bb6a;
+            font-weight: 600;
+        }
+        .selling-progress {
+            width: 300px;
+            height: 10px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 5px;
+            margin: 20px auto;
+            overflow: hidden;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+        }
+        .selling-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ffd54f, #66bb6a);
+            border-radius: 5px;
+            transition: width 0.3s linear;
+            box-shadow: 0 0 12px rgba(255,213,79,0.4);
+            position: relative;
+        }
+        .coin-pop {
+            position: fixed;
+            font-size: 20px;
+            pointer-events: none;
+            animation: coinFloat 1s ease-out forwards;
+            z-index: 50;
+        }
+        @keyframes coinFloat {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-60px) scale(0.5); opacity: 0; }
+        }
+
+        /* === SUMMARY MODAL === */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            backdrop-filter: blur(8px);
+        }
+        .modal {
+            background: rgba(20,24,50,0.95);
+            border: 1px solid rgba(255,213,79,0.25);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 420px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 0 80px rgba(255,213,79,0.2), 0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,213,79,0.1);
+            backdrop-filter: blur(20px);
+            animation: modalPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        @keyframes modalPop {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .modal h2 {
+            font-size: 24px;
+            color: #ffd54f;
+            margin-bottom: 20px;
+        }
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            font-size: 15px;
+        }
+        .summary-row:last-child { border-bottom: none; }
+        .summary-label { color: #aaa; }
+        .summary-value { font-weight: 600; color: #fff; }
+        .summary-value.profit { color: #66bb6a; }
+        .summary-value.loss { color: #ff5252; }
+        .summary-divider {
+            height: 1px;
+            background: rgba(255,213,79,0.2);
+            margin: 12px 0;
+        }
+        .satisfaction-stars {
+            font-size: 24px;
+            margin: 10px 0;
+        }
+
+        /* === UNLOCK NOTIFICATION === */
+        .unlock-notification {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            background: linear-gradient(135deg, rgba(255,213,79,0.95), rgba(255,179,0,0.95));
+            color: #1a1a2e;
+            padding: 16px 28px;
+            border-radius: 14px;
+            font-size: 16px;
+            font-weight: 600;
+            font-family: 'Fredoka', sans-serif;
+            z-index: 200;
+            box-shadow: 0 8px 32px rgba(255,213,79,0.5), 0 0 60px rgba(255,213,79,0.2);
+            animation: unlockSlide 3s ease-in-out forwards;
+            text-align: center;
+            max-width: 90%;
+        }
+        @keyframes unlockSlide {
+            0% { transform: translateX(-50%) translateY(-100px); opacity: 0; }
+            15% { transform: translateX(-50%) translateY(0); opacity: 1; }
+            85% { transform: translateX(-50%) translateY(0); opacity: 1; }
+            100% { transform: translateX(-50%) translateY(-100px); opacity: 0; }
+        }
+
+        /* === END SCREEN === */
+        #end-screen {
+            text-align: center;
+            padding-top: 8vh;
+        }
+        #end-screen h1 {
+            font-size: 40px;
+            color: #ffd54f;
+            text-shadow: 0 0 30px rgba(255,213,79,0.5);
+            margin-bottom: 8px;
+        }
+        .final-money {
+            font-size: 52px;
+            font-weight: 700;
+            color: #66bb6a;
+            text-shadow: 0 0 30px rgba(102,187,106,0.4), 0 0 80px rgba(102,187,106,0.2);
+            margin: 10px 0;
+            animation: moneyGlow 2s ease-in-out infinite;
+        }
+        @keyframes moneyGlow {
+            0%, 100% { text-shadow: 0 0 30px rgba(102,187,106,0.4), 0 0 80px rgba(102,187,106,0.2); }
+            50% { text-shadow: 0 0 50px rgba(102,187,106,0.6), 0 0 120px rgba(102,187,106,0.3); }
+        }
+        .high-score-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #ffd54f, #ffb300);
+            color: #1a1a2e;
+            padding: 6px 18px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 700;
+            margin: 10px 0;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        .end-stats {
+            max-width: 380px;
+            margin: 20px auto;
+            text-align: left;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 14px;
+            padding: 16px 20px;
+            backdrop-filter: blur(8px);
+        }
+        .end-stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            font-size: 14px;
+        }
+        .end-stat-label { color: #888; }
+        .end-stat-value { color: #fff; font-weight: 600; }
+        .end-buttons { margin-top: 24px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+        /* === WEATHER COLORS === */
+        .weather-sunny { color: #ffd54f; }
+        .weather-hot { color: #ff7043; }
+        .weather-cloudy { color: #90a4ae; }
+        .weather-rainy { color: #42a5f5; }
+        .weather-stormy { color: #7e57c2; }
+
+        /* === ANIMATIONS === */
+        .fade-in {
+            animation: fadeIn 0.4s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .hidden { display: none !important; }
+
+        /* === TABLES MODE TOGGLE === */
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 16px;
+            font-size: 14px;
+            color: #aaa;
+        }
+        .toggle-switch {
+            position: relative;
+            width: 44px; height: 24px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .toggle-switch.on { background: #66bb6a; }
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 3px; left: 3px;
+            width: 18px; height: 18px;
+            background: #fff;
+            border-radius: 50%;
+            transition: left 0.2s;
+        }
+        .toggle-switch.on::after { left: 23px; }
+
+        /* === TABLES MODE SCREEN === */
+        #tables-screen {
+            position: relative;
+            min-height: 100vh;
+            padding: 0;
+        }
+        .tables-scene {
+            position: relative;
+            width: 100%;
+            height: 55vh;
+            min-height: 300px;
+            background: linear-gradient(180deg, #87CEEB 0%, #87CEEB 60%, #90EE90 60%, #228B22 100%);
+            border-radius: 0 0 20px 20px;
+            overflow: hidden;
+            transition: background 1s;
+        }
+        .tables-scene.rainy {
+            background: linear-gradient(180deg, #4a5568 0%, #718096 60%, #68805a 60%, #2d5016 100%);
+        }
+        .tables-scene.stormy {
+            background: linear-gradient(180deg, #2d3748 0%, #4a5568 60%, #4a5c3a 60%, #1a3a0a 100%);
+        }
+        .tables-scene.hot {
+            background: linear-gradient(180deg, #f6ad55 0%, #ed8936 30%, #87CEEB 60%, #90EE90 60%, #228B22 100%);
+        }
+        .weather-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+        .sun-icon {
+            position: absolute;
+            top: 15px; right: 30px;
+            font-size: 48px;
+            animation: sunPulse 3s ease-in-out infinite;
+        }
+        @keyframes sunPulse {
+            0%, 100% { transform: scale(1); filter: brightness(1); }
+            50% { transform: scale(1.1); filter: brightness(1.2); }
+        }
+        .raindrop {
+            position: absolute;
+            width: 2px;
+            height: 12px;
+            background: rgba(150,200,255,0.6);
+            animation: rainFall linear infinite;
+        }
+        @keyframes rainFall {
+            0% { transform: translateY(-20px); opacity: 1; }
+            100% { transform: translateY(55vh); opacity: 0.3; }
+        }
+        .cloud {
+            position: absolute;
+            font-size: 40px;
+            opacity: 0.7;
+            animation: cloudDrift 20s linear infinite;
+        }
+        @keyframes cloudDrift {
+            0% { transform: translateX(-60px); }
+            100% { transform: translateX(calc(100vw + 60px)); }
+        }
+        .table-visual {
+            position: absolute;
+            bottom: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+        }
+        .table-surface {
+            background: linear-gradient(135deg, #d4a574, #b8854a);
+            width: 280px;
+            height: 20px;
+            border-radius: 4px;
+            margin: 0 auto;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            position: relative;
+        }
+        .table-legs {
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+        }
+        .table-leg {
+            width: 8px;
+            height: 35px;
+            background: #b8854a;
+            border-radius: 0 0 3px 3px;
+        }
+        .table-cups {
+            display: flex;
+            justify-content: center;
+            gap: 4px;
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding-bottom: 4px;
+        }
+        .table-cup {
+            font-size: 22px;
+            animation: cupAppear 0.3s ease-out;
+        }
+        @keyframes cupAppear {
+            0% { transform: scale(0) translateY(10px); }
+            100% { transform: scale(1) translateY(0); }
+        }
+        .stand-sign {
+            background: linear-gradient(135deg, #ffd54f, #ffb300);
+            color: #1a1a2e;
+            padding: 6px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            display: inline-block;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        .table-customer {
+            position: absolute;
+            font-size: 32px;
+            transition: left 2s ease-in-out, bottom 1s;
+            animation: customerWalk 0.6s steps(2) infinite;
+        }
+        @keyframes customerWalk {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-3px); }
+        }
+        .table-customer.leaving {
+            opacity: 0;
+            transition: left 1.5s, opacity 0.8s;
+        }
+
+        /* Tables bottom panel */
+        .tables-panel {
+            padding: 14px 16px;
+        }
+        .tables-stats-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,213,79,0.12);
+            border-radius: 12px;
+            padding: 10px 16px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .speed-controls {
+            display: flex;
+            gap: 4px;
+            margin-right: 8px;
+        }
+        .speed-btn {
+            padding: 6px 10px;
+            border: 2px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            background: rgba(255,255,255,0.04);
+            color: #888;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-family: 'Fredoka', sans-serif;
+        }
+        .speed-btn:hover { border-color: rgba(255,213,79,0.3); color: #ccc; }
+        .speed-btn.selected {
+            border-color: #ffd54f;
+            background: rgba(255,213,79,0.15);
+            color: #ffd54f;
+        }
+        .tables-cup-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+        .tables-cup-list:empty { display: none; }
+        .cup-info-card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,213,79,0.12);
+            border-radius: 10px;
+            padding: 6px 10px;
+            font-size: 12px;
+            color: #ccc;
+            flex: 1;
+            min-width: 140px;
+            max-width: 200px;
+        }
+        .cup-info-card .cup-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 3px;
+        }
+        .cup-info-card .cup-name {
+            font-weight: 600;
+            color: #ffd54f;
+            font-size: 12px;
+        }
+        .cup-info-card .cup-cost {
+            color: #ff8a80;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        .cup-info-card .cup-ings {
+            font-size: 11px;
+            color: #999;
+            line-height: 1.4;
+        }
+        .cup-info-card .cup-quality {
+            font-size: 10px;
+            color: #66bb6a;
+            margin-top: 2px;
+        }
+        .tables-recipes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+        .tables-recipe-btn {
+            padding: 5px 10px;
+            border: 2px solid rgba(102,187,106,0.2);
+            border-radius: 10px;
+            background: rgba(102,187,106,0.06);
+            color: #aaa;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-family: 'Fredoka', sans-serif;
+        }
+        .tables-recipe-btn:hover { border-color: rgba(102,187,106,0.4); color: #ccc; }
+        .tables-recipe-btn.selected {
+            border-color: #66bb6a;
+            background: rgba(102,187,106,0.15);
+            color: #66bb6a;
+        }
+        .tables-recipe-btn.locked {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+        .tables-ingredients {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+        .tables-ing-btn {
+            padding: 6px 12px;
+            border: 2px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            background: rgba(255,255,255,0.04);
+            color: #aaa;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-family: 'Fredoka', sans-serif;
+        }
+        .tables-ing-btn:hover { border-color: rgba(255,213,79,0.3); }
+        .tables-ing-btn.selected {
+            border-color: #ffd54f;
+            background: rgba(255,213,79,0.12);
+            color: #ffd54f;
+        }
+        .tables-ing-btn .ing-stock {
+            font-size: 10px;
+            color: #888;
+            display: block;
+        }
+        .tables-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .craft-cost {
+            font-size: 12px;
+            color: #888;
+            margin-left: 8px;
+        }
+        .tables-price-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .tables-price-row label {
+            font-size: 13px;
+            color: #aaa;
+        }
+        .tables-price-row .price-val {
+            font-size: 18px;
+            font-weight: 700;
+            color: #66bb6a;
+            min-width: 60px;
+        }
+        .tables-price-row input[type=range] {
+            flex: 1;
+            -webkit-appearance: none;
+            height: 6px;
+            border-radius: 3px;
+            background: linear-gradient(90deg, #66bb6a, #ffd54f, #ff5252);
+            outline: none;
+        }
+        .tables-price-row input::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px; height: 18px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+        .sale-pop {
+            position: absolute;
+            font-size: 14px;
+            font-weight: 700;
+            color: #66bb6a;
+            pointer-events: none;
+            animation: salePop 1.2s ease-out forwards;
+            text-shadow: 0 0 8px rgba(102,187,106,0.5);
+            font-family: 'Fredoka', sans-serif;
+        }
+        @keyframes salePop {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-40px) scale(0.7); opacity: 0; }
+        }
+        /* === GROWING BUSINESS MODE === */
+        .mode-selector {
+            display: flex;
+            gap: 4px;
+            justify-content: center;
+            margin-top: 16px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 4px;
+        }
+        .mode-opt {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 10px;
+            background: transparent;
+            color: #888;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-family: 'Fredoka', sans-serif;
+        }
+        .mode-opt:hover { color: #ccc; }
+        .mode-opt.selected {
+            background: rgba(255,213,79,0.15);
+            color: #ffd54f;
+        }
+        .business-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(255,165,0,0.06);
+            border: 1px solid rgba(255,165,0,0.15);
+            border-radius: 12px;
+            padding: 8px 14px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+            font-size: 12px;
+            color: #ccc;
+        }
+        .business-bar .biz-stat {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .business-bar .biz-label { color: #888; font-size: 11px; }
+        .business-bar .biz-val { color: #ffd54f; font-weight: 600; }
+        .xp-bar-container {
+            width: 60px;
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .xp-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ffd54f, #ff9800);
+            border-radius: 4px;
+            transition: width 0.3s;
+        }
+        .table-selector {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 8px;
+            font-size: 12px;
+            color: #aaa;
+        }
+        .table-sel-btn {
+            padding: 4px 10px;
+            border: 2px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            background: rgba(255,255,255,0.04);
+            color: #888;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-family: 'Fredoka', sans-serif;
+        }
+        .table-sel-btn:hover { border-color: rgba(255,213,79,0.3); }
+        .table-sel-btn.selected {
+            border-color: #ffd54f;
+            background: rgba(255,213,79,0.15);
+            color: #ffd54f;
+        }
+        .ad-bar {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            display: flex;
+            gap: 6px;
+            z-index: 5;
+        }
+        .ad-indicator {
+            background: rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,213,79,0.2);
+            border-radius: 8px;
+            padding: 3px 8px;
+            font-size: 11px;
+            color: #ffd54f;
+            backdrop-filter: blur(4px);
+        }
+        .upgrades-tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 16px;
+        }
+        .upgrades-tab {
+            padding: 6px 14px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.05);
+            color: #888;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-family: 'Fredoka', sans-serif;
+            flex: 1;
+        }
+        .upgrades-tab:hover { color: #ccc; }
+        .upgrades-tab.active {
+            background: rgba(255,213,79,0.15);
+            color: #ffd54f;
+        }
+        .upgrade-section {
+            text-align: left;
+        }
+        .upgrade-item {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            padding: 10px 14px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .upgrade-item .upgrade-info {
+            flex: 1;
+            min-width: 120px;
+        }
+        .upgrade-item .upgrade-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #eee;
+        }
+        .upgrade-item .upgrade-desc {
+            font-size: 11px;
+            color: #888;
+            margin-top: 2px;
+        }
+        .upgrade-item .upgrade-cost {
+            font-size: 12px;
+            color: #66bb6a;
+            font-weight: 600;
+        }
+        .upgrade-item.locked {
+            opacity: 0.4;
+        }
+        .btn-upgrade {
+            padding: 5px 14px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #66bb6a, #43a047);
+            color: #fff;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'Fredoka', sans-serif;
+            transition: all 0.15s;
+        }
+        .btn-upgrade:hover { filter: brightness(1.15); }
+        .btn-upgrade:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            filter: none;
+        }
+        .btn-fire {
+            padding: 4px 10px;
+            border: none;
+            border-radius: 6px;
+            background: rgba(255,82,82,0.2);
+            color: #ff5252;
+            font-size: 11px;
+            cursor: pointer;
+            font-family: 'Fredoka', sans-serif;
+        }
+        .worker-assignment {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            margin-top: 4px;
+            font-size: 11px;
+            color: #aaa;
+        }
+        .worker-assignment select {
+            padding: 3px 6px;
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 6px;
+            background: rgba(255,255,255,0.08);
+            color: #eee;
+            font-size: 11px;
+            font-family: 'Fredoka', sans-serif;
+        }
+        .multi-table-container {
+            position: absolute;
+            bottom: 5%;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding: 0 10px;
+        }
+        .mini-table {
+            text-align: center;
+            transform: scale(0.75);
+            transform-origin: bottom center;
+        }
+        .mini-table .mini-sign {
+            background: linear-gradient(135deg, #ffd54f, #ffb300);
+            color: #1a1a2e;
+            padding: 3px 10px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 700;
+            margin-bottom: 4px;
+            display: inline-block;
+        }
+        .mini-table .mini-surface {
+            background: linear-gradient(135deg, #d4a574, #b8854a);
+            width: 120px;
+            height: 14px;
+            border-radius: 3px;
+            margin: 0 auto;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+        }
+        .mini-table .mini-legs {
+            display: flex;
+            justify-content: space-between;
+            padding: 0 12px;
+            width: 120px;
+            margin: 0 auto;
+        }
+        .mini-table .mini-leg {
+            width: 6px;
+            height: 20px;
+            background: #b8854a;
+            border-radius: 0 0 2px 2px;
+        }
+        .mini-table .mini-cups {
+            display: flex;
+            justify-content: center;
+            gap: 2px;
+            margin-bottom: 2px;
+            min-height: 18px;
+        }
+        .mini-table .mini-cups span {
+            font-size: 14px;
+        }
+        .mini-table .mini-worker {
+            font-size: 16px;
+            position: absolute;
+            bottom: -18px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        .mini-table-wrapper {
+            position: relative;
+        }
+        .table-num-badge {
+            font-size: 10px;
+            color: #ffd54f;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="bg-canvas"></canvas>
+    <div id="game-container">
+
+        <!-- START SCREEN -->
+        <div id="start-screen" class="screen active">
+            <h1>🍋 Lemonade Stand</h1>
+            <div class="subtitle">Business Tycoon</div>
+            <div class="how-to-play">
+                <h3>How to Play</h3>
+                <ul>
+                    <li>Buy supplies: lemons, sugar, ice, and cups</li>
+                    <li>Adjust your recipe for the perfect lemonade</li>
+                    <li>Set your price to attract customers</li>
+                    <li>Watch the weather — hot days mean thirsty people!</li>
+                    <li>Ice melts overnight, so don't overbuy!</li>
+                    <li>Unlock new ingredients and premium drinks as you grow!</li>
+                    <li>Maximize your profit over the season!</li>
+                </ul>
+            </div>
+            <div class="mode-buttons">
+                <button class="btn btn-primary" onclick="startWithMode(14)">14-Day Season</button>
+                <button class="btn btn-secondary" onclick="startWithMode(0)">Endless Mode</button>
+                <button class="btn btn-small" onclick="startWithMode(0, true)" style="background: linear-gradient(135deg, #ab47bc, #7b1fa2); box-shadow: 0 4px 20px rgba(171,71,188,0.3);">🧪 Experiment Mode</button>
+            </div>
+            <div class="mode-selector" id="play-mode-selector">
+                <button class="mode-opt selected" onclick="selectPlayMode('classic')">Classic</button>
+                <button class="mode-opt" onclick="selectPlayMode('tables')">Tables</button>
+                <button class="mode-opt" onclick="selectPlayMode('growing')">Growing Business</button>
+            </div>
+            <div style="margin-top: 12px; font-size: 13px; color: #666;">
+                High Score: $<span id="high-score-display">0.00</span>
+            </div>
+        </div>
+
+        <!-- GAME SCREEN -->
+        <div id="game-screen" class="screen">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <div class="stat">
+                    <div class="stat-label">Day</div>
+                    <div class="stat-value" id="day-number">1</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Money</div>
+                    <div class="stat-value money" id="money-display">$20.00</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Forecast</div>
+                    <div class="stat-value weather-icon" id="weather-icon">☀️</div>
+                </div>
+                <div class="stat" id="day-limit-stat">
+                    <div class="stat-label">Season</div>
+                    <div class="stat-value" id="days-left">14</div>
+                </div>
+                <button class="btn btn-small" onclick="openShop()" style="background: linear-gradient(135deg, #42a5f5, #1e88e5); padding: 8px 18px;">🛒 Shop</button>
+            </div>
+
+            <!-- Drink Type Selector -->
+            <div class="card" id="drink-menu-card" style="margin-bottom: 16px;">
+                <h3>🥤 Drink Menu</h3>
+                <div class="drink-types" id="drink-type-selector"></div>
+                <div id="drink-desc" style="font-size: 12px; color: #aaa; text-align: center;"></div>
+            </div>
+
+            <!-- Ingredient Slots -->
+            <div class="card" style="margin-bottom: 16px;">
+                <h3>📦 Your Ingredients <span style="font-size: 12px; font-weight: 400; color: #888;">(tap 🛒 Shop to buy more)</span></h3>
+                <div class="ingredient-slots" id="ingredient-slots"></div>
+            </div>
+
+            <!-- Game Sections -->
+            <div class="game-sections">
+                <!-- Weather Forecast -->
+                <div class="card forecast-card">
+                    <h3>🌤️ Weather Forecast</h3>
+                    <div class="forecast-icon" id="forecast-icon">☀️</div>
+                    <div class="forecast-temp" id="forecast-temp">85°F</div>
+                    <div class="forecast-desc" id="forecast-desc">Clear skies, perfect lemonade weather!</div>
+                    <div class="forecast-tip" id="forecast-tip">Tip: Hot weather brings lots of customers!</div>
+                </div>
+
+                <!-- Price -->
+                <div class="card">
+                    <h3>💰 Set Price</h3>
+                    <div class="price-display">
+                        <div class="price-amount" id="price-display">$1.00</div>
+                    </div>
+                    <input type="range" class="price-slider" id="price-slider" min="25" max="500" value="100" step="5">
+                    <div class="price-hint" id="price-hint">Fair price for the quality</div>
+                </div>
+
+                <!-- Recipe -->
+                <div class="card">
+                    <h3>📝 Recipe (per cup)</h3>
+                    <div id="recipe-section"></div>
+                    <div class="quality-bar">
+                        <div class="quality-label">Quality: <span id="quality-text">Good</span></div>
+                        <div class="quality-meter">
+                            <div class="quality-fill" id="quality-fill" style="width: 60%; background: #ffd54f;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stats Preview -->
+                <div class="card">
+                    <h3>📊 Preview</h3>
+                    <div style="font-size: 14px; color: #ccc; line-height: 2;">
+                        Cost per cup: <span id="cost-per-cup" style="color: #ff5252; font-weight: 600;">$0.00</span><br>
+                        Can make: <span id="can-make" style="color: #ffd54f; font-weight: 600;">0 cups</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sell Button -->
+            <div class="sell-section">
+                <button class="btn btn-primary" onclick="startSelling()" id="sell-btn">🍋 Start Selling!</button>
+                <button class="btn btn-small" onclick="skipDay()" style="background: rgba(255,255,255,0.08); margin-top: 8px;">Skip Day (save supplies)</button>
+                <button class="btn btn-small hidden" id="end-endless-btn" onclick="endGame()" style="background: rgba(255,82,82,0.2); margin-top: 8px; color: #ff5252;">End Season</button>
+            </div>
+        </div>
+
+        <!-- SHOP SCREEN -->
+        <div id="shop-screen" class="screen">
+            <div class="shop-header">
+                <h2>🛒 Ingredient Shop</h2>
+                <div class="shop-money">$<span id="shop-money-display">20.00</span></div>
+            </div>
+            <div class="shop-grid" id="shop-grid"></div>
+            <div class="shop-cart-bar">
+                <div class="cart-info">Cart: <span id="shop-cart-total">$0.00</span></div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-small" onclick="cancelShop()" style="background: rgba(255,255,255,0.1);">Cancel</button>
+                    <button class="btn btn-small" onclick="confirmShop()" style="background: linear-gradient(135deg, #66bb6a, #43a047);">Buy & Back</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SELLING SCREEN -->
+        <div id="selling-screen" class="screen">
+            <div class="selling-title" id="selling-title">Day 1 — Open for Business!</div>
+            <div class="stand-visual">
+                <div style="font-size: 28px; margin-bottom: -8px;" id="stand-emoji-top">🍋🍋🍋</div>
+                <div>🏪</div>
+                <div style="font-size: 16px; color: #ffd54f; margin-top: -4px;" id="stand-label">LEMONADE</div>
+            </div>
+            <div class="customer-area" id="customer-area"></div>
+            <div class="selling-progress">
+                <div class="selling-progress-fill" id="selling-progress-fill" style="width: 0%;"></div>
+            </div>
+            <div class="selling-stats" id="selling-stats">Cups sold: 0</div>
+            <div id="selling-weather" style="margin-top: 16px; font-size: 36px; opacity: 0.3;"></div>
+        </div>
+
+        <!-- SUMMARY MODAL (hidden by default) -->
+        <div id="summary-modal" class="modal-overlay hidden">
+            <div class="modal fade-in">
+                <h2 id="summary-title">Day 1 Summary</h2>
+                <div id="summary-content"></div>
+                <div style="margin-top: 20px;">
+                    <button class="btn btn-primary" onclick="nextDay()" id="next-day-btn">Next Day</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- TABLES MODE SCREEN -->
+        <div id="tables-screen" class="screen">
+            <div class="tables-scene" id="tables-scene">
+                <div class="weather-overlay" id="tables-weather-overlay"></div>
+                <div class="table-visual">
+                    <div class="stand-sign" id="tables-sign">LEMONADE</div>
+                    <div style="position: relative;">
+                        <div class="table-cups" id="tables-cups"></div>
+                        <div class="table-surface"></div>
+                        <div class="table-legs">
+                            <div class="table-leg"></div>
+                            <div class="table-leg"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="tables-panel">
+                <div class="tables-stats-bar">
+                    <div class="stat">
+                        <div class="stat-label">Money</div>
+                        <div class="stat-value money" id="tables-money">$30.00</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Cups on Table</div>
+                        <div class="stat-value" id="tables-cup-count" style="color: #ffd54f;">0</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Sold</div>
+                        <div class="stat-value" id="tables-sold" style="color: #66bb6a;">0</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Weather</div>
+                        <div class="stat-value" id="tables-weather-icon" style="font-size: 28px;">☀️</div>
+                    </div>
+                </div>
+                <div class="business-bar" id="business-bar" style="display:none;">
+                    <div class="biz-stat"><span class="biz-label">Level:</span> <span class="biz-val" id="biz-level-label">1</span></div>
+                    <div class="biz-stat"><span class="biz-label">XP:</span> <span class="biz-val" id="biz-xp-label">0/50</span>
+                        <div class="xp-bar-container"><div class="xp-bar-fill" id="biz-xp-fill" style="width:0%"></div></div>
+                    </div>
+                    <div class="biz-stat"><span class="biz-label">Workers:</span> <span class="biz-val" id="biz-workers-label">0</span></div>
+                    <div class="biz-stat"><span class="biz-label">Ads:</span> <span class="biz-val" id="biz-ad-label">1.0x</span></div>
+                    <button class="btn btn-small" onclick="openUpgradesPanel()" style="background: linear-gradient(135deg, #ffd54f, #ff9800); padding: 4px 12px; font-size: 11px; color: #1a1a2e;">📈 Manage</button>
+                </div>
+                <div class="tables-cup-list" id="tables-cup-list"></div>
+                <div class="table-selector" id="table-selector" style="display:none;">
+                    Craft to: <span id="table-select-btns"></span>
+                </div>
+                <div style="margin: 10px 0 6px; font-size: 13px; color: #ffd54f; font-weight: 500;">Quick Recipe:</div>
+                <div class="tables-recipes" id="tables-recipes"></div>
+                <div style="margin: 6px 0 6px; font-size: 13px; color: #aaa; font-weight: 500;">Ingredients:</div>
+                <div class="tables-ingredients" id="tables-ingredients"></div>
+                <div class="tables-price-row">
+                    <label>Price:</label>
+                    <span class="price-val" id="tables-price-val">$1.00</span>
+                    <input type="range" min="25" max="500" value="100" step="5" id="tables-price-slider"
+                        oninput="tablesState.price = this.value/100; document.getElementById('tables-price-val').textContent = '$'+(this.value/100).toFixed(2);">
+                </div>
+                <div class="tables-actions">
+                    <button class="btn btn-primary btn-small" onclick="tablesCraft()" id="tables-craft-btn">🍋 Craft Cup</button>
+                    <span class="craft-cost" id="tables-craft-cost"></span>
+                    <div style="flex: 1;"></div>
+                    <div class="speed-controls">
+                        <button class="speed-btn selected" onclick="setTablesSpeed(1)" id="speed-1">1x</button>
+                        <button class="speed-btn" onclick="setTablesSpeed(2)" id="speed-2">2x</button>
+                        <button class="speed-btn" onclick="setTablesSpeed(3)" id="speed-3">3x</button>
+                        <button class="speed-btn" onclick="setTablesSpeed(5)" id="speed-5">5x</button>
+                    </div>
+                    <button class="btn btn-small" onclick="openTablesShop()" style="background: linear-gradient(135deg, #42a5f5, #1e88e5);">🛒 Shop</button>
+                    <button class="btn btn-small" onclick="closeTablesShop()" style="background: rgba(255,82,82,0.2); color: #ff5252;">Close Shop</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- UPGRADES MODAL -->
+        <div id="upgrades-modal" class="modal-overlay hidden">
+            <div class="modal fade-in" style="max-width: 520px; text-align: left;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px;">
+                    <h2 style="color: #ffd54f; margin-bottom: 0;">📈 Business Manager</h2>
+                    <button class="btn btn-small" onclick="closeUpgradesPanel()" style="background:rgba(255,255,255,0.1);">✕</button>
+                </div>
+                <div class="upgrades-tabs" id="upgrades-tabs"></div>
+                <div class="upgrades-content" id="upgrades-content"></div>
+            </div>
+        </div>
+
+        <!-- END SCREEN -->
+        <div id="end-screen" class="screen">
+            <h1>🍋 Season Over!</h1>
+            <div class="final-money" id="final-money">$0.00</div>
+            <div id="new-high-score" class="hidden">
+                <div class="high-score-badge">New High Score!</div>
+            </div>
+            <div class="end-stats" id="end-stats"></div>
+            <div class="end-buttons">
+                <button class="btn btn-primary" onclick="startGame(14)">Play Again (14 Days)</button>
+                <button class="btn btn-secondary" onclick="startGame(0)">Endless Mode</button>
+                <button class="btn btn-small" onclick="showScreen('start-screen')" style="background: rgba(255,255,255,0.1);">Main Menu</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ===== ANIMATED BACKGROUND =====
+    (function() {
+        const canvas = document.getElementById('bg-canvas');
+        const ctx = canvas.getContext('2d');
+        let W, H;
+        const particles = [];
+        const PARTICLE_COUNT = 50;
+
+        function resize() {
+            W = canvas.width = window.innerWidth;
+            H = canvas.height = window.innerHeight;
+        }
+        resize();
+        window.addEventListener('resize', resize);
+
+        class Particle {
+            constructor() { this.reset(); }
+            reset() {
+                this.x = Math.random() * W;
+                this.y = Math.random() * H;
+                this.size = Math.random() * 3 + 1;
+                this.speedX = (Math.random() - 0.5) * 0.3;
+                this.speedY = -Math.random() * 0.4 - 0.1;
+                this.opacity = Math.random() * 0.3 + 0.05;
+                this.hue = Math.random() > 0.5 ? 45 : 120;
+            }
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                if (this.y < -10 || this.x < -10 || this.x > W + 10) this.reset();
+                if (this.y < -10) { this.y = H + 10; }
+            }
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = `hsla(${this.hue}, 70%, 60%, ${this.opacity})`;
+                ctx.fill();
+            }
+        }
+
+        for (let i = 0; i < PARTICLE_COUNT; i++) particles.push(new Particle());
+
+        const orbs = [
+            { x: 0.2, y: 0.3, r: 250, color: 'rgba(255,213,79,0.03)' },
+            { x: 0.8, y: 0.7, r: 300, color: 'rgba(102,187,106,0.03)' },
+            { x: 0.5, y: 0.9, r: 200, color: 'rgba(255,213,79,0.02)' },
+        ];
+
+        function drawBg() {
+            ctx.clearRect(0, 0, W, H);
+            orbs.forEach(o => {
+                const grd = ctx.createRadialGradient(o.x * W, o.y * H, 0, o.x * W, o.y * H, o.r);
+                grd.addColorStop(0, o.color);
+                grd.addColorStop(1, 'transparent');
+                ctx.fillStyle = grd;
+                ctx.fillRect(0, 0, W, H);
+            });
+            particles.forEach(p => { p.update(); p.draw(); });
+            requestAnimationFrame(drawBg);
+        }
+        drawBg();
+    })();
+
+    // ===== COIN POP EFFECT =====
+    function spawnCoinPop(x, y) {
+        const coin = document.createElement('div');
+        coin.className = 'coin-pop';
+        coin.textContent = '💰';
+        coin.style.left = x + 'px';
+        coin.style.top = y + 'px';
+        document.body.appendChild(coin);
+        setTimeout(() => coin.remove(), 1000);
+    }
+
+    // ===== UNLOCK NOTIFICATION =====
+    function showUnlock(text) {
+        const el = document.createElement('div');
+        el.className = 'unlock-notification';
+        el.textContent = text;
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 3200);
+    }
+
+    // ===== ALL INGREDIENTS (some locked initially) =====
+    const ALL_SUPPLIES = [
+        // Base ingredients (always available)
+        { id: 'lemons',      name: 'Lemons',       emoji: '🍋', cost: 0.50, unit: 'ea',    unlockAt: 0 },
+        { id: 'sugar',       name: 'Sugar',         emoji: '🍚', cost: 0.05, unit: 'tbsp',  unlockAt: 0 },
+        { id: 'ice',         name: 'Ice',           emoji: '🧊', cost: 0.03, unit: 'cube',  unlockAt: 0 },
+        { id: 'cups',        name: 'Cups',          emoji: '🥤', cost: 0.15, unit: 'ea',    unlockAt: 0 },
+        // Unlockable ingredients
+        { id: 'honey',       name: 'Honey',         emoji: '🍯', cost: 0.40, unit: 'tbsp',  unlockAt: 30 },
+        { id: 'strawberries', name: 'Strawberries', emoji: '🍓', cost: 0.60, unit: 'ea',    unlockAt: 50 },
+        { id: 'mint',        name: 'Mint',          emoji: '🌿', cost: 0.30, unit: 'sprig', unlockAt: 75 },
+        { id: 'blueberries', name: 'Blueberries',   emoji: '🫐', cost: 0.55, unit: 'ea',    unlockAt: 100 },
+        { id: 'mango',       name: 'Mango',         emoji: '🥭', cost: 0.75, unit: 'ea',    unlockAt: 150 },
+        { id: 'ginger',      name: 'Ginger',        emoji: '🫚', cost: 0.45, unit: 'slice', unlockAt: 200 },
+        { id: 'coconut',     name: 'Coconut Milk',  emoji: '🥥', cost: 0.65, unit: 'oz',    unlockAt: 300 },
+        // Experiment-only ingredients
+        { id: 'cinnamon',    name: 'Cinnamon',      emoji: '🫙', cost: 0.20, unit: 'tsp',   unlockAt: 9999, experimentOnly: true },
+        { id: 'vanilla',     name: 'Vanilla',       emoji: '🤍', cost: 0.50, unit: 'tsp',   unlockAt: 9999, experimentOnly: true },
+        { id: 'lavender',    name: 'Lavender',      emoji: '💜', cost: 0.45, unit: 'sprig', unlockAt: 9999, experimentOnly: true },
+        { id: 'watermelon',  name: 'Watermelon',    emoji: '🍉', cost: 0.55, unit: 'slice', unlockAt: 9999, experimentOnly: true },
+        { id: 'peach',       name: 'Peach',         emoji: '🍑', cost: 0.65, unit: 'ea',    unlockAt: 9999, experimentOnly: true },
+        { id: 'raspberry',   name: 'Raspberry',     emoji: '🫐', cost: 0.50, unit: 'handful', unlockAt: 9999, experimentOnly: true },
+        { id: 'passionfruit', name: 'Passionfruit', emoji: '🟡', cost: 0.80, unit: 'ea',    unlockAt: 9999, experimentOnly: true },
+        { id: 'lime',        name: 'Lime',          emoji: '🟢', cost: 0.35, unit: 'ea',    unlockAt: 9999, experimentOnly: true },
+        { id: 'rosemary',    name: 'Rosemary',      emoji: '🌱', cost: 0.35, unit: 'sprig', unlockAt: 9999, experimentOnly: true },
+        { id: 'chili',       name: 'Chili Flakes',  emoji: '🌶️', cost: 0.25, unit: 'pinch', unlockAt: 9999, experimentOnly: true },
+        { id: 'matcha',      name: 'Matcha',        emoji: '🍵', cost: 0.70, unit: 'tsp',   unlockAt: 9999, experimentOnly: true },
+        { id: 'pineapple',   name: 'Pineapple',     emoji: '🍍', cost: 0.60, unit: 'slice', unlockAt: 9999, experimentOnly: true },
+        { id: 'cherry',      name: 'Cherry',        emoji: '🍒', cost: 0.55, unit: 'ea',    unlockAt: 9999, experimentOnly: true },
+        { id: 'basil',       name: 'Basil',         emoji: '🪴', cost: 0.30, unit: 'leaf',  unlockAt: 9999, experimentOnly: true },
+        { id: 'orange',      name: 'Orange',        emoji: '🍊', cost: 0.45, unit: 'ea',    unlockAt: 9999, experimentOnly: true },
+        { id: 'grape',       name: 'Grape',         emoji: '🍇', cost: 0.40, unit: 'bunch', unlockAt: 9999, experimentOnly: true },
+        { id: 'kiwi',        name: 'Kiwi',          emoji: '🥝', cost: 0.50, unit: 'ea',    unlockAt: 9999, experimentOnly: true },
+        { id: 'banana',      name: 'Banana',        emoji: '🍌', cost: 0.30, unit: 'ea',    unlockAt: 9999, experimentOnly: true },
+        { id: 'cardamom',    name: 'Cardamom',      emoji: '🟤', cost: 0.55, unit: 'pod',   unlockAt: 9999, experimentOnly: true },
+        { id: 'turmeric',    name: 'Turmeric',      emoji: '🟨', cost: 0.35, unit: 'tsp',   unlockAt: 9999, experimentOnly: true },
+        { id: 'agave',       name: 'Agave Syrup',   emoji: '🌵', cost: 0.45, unit: 'tbsp',  unlockAt: 9999, experimentOnly: true },
+        { id: 'rosewater',   name: 'Rose Water',    emoji: '🌹', cost: 0.60, unit: 'tsp',   unlockAt: 9999, experimentOnly: true },
+        { id: 'tapioca',     name: 'Boba Pearls',   emoji: '⚫', cost: 0.40, unit: 'tbsp',  unlockAt: 9999, experimentOnly: true },
+    ];
+
+    // ===== DRINK TYPES =====
+    // Lemons are decimal (0.1–1.0 per cup), sugar in tbsp (1–10), ice in cubes (1–10)
+    const DRINK_TYPES = [
+        {
+            id: 'classic',
+            name: '🍋 Classic',
+            desc: 'The original lemonade — lemons, sugar, ice.',
+            unlockAt: 0,
+            priceMult: 1.0,
+            ingredients: ['lemons', 'sugar', 'ice'],
+            recipe: { lemons: 0.4, sugar: 4, ice: 4 },
+            recipeRanges: { lemons: [0.1, 1.0, 0.1], sugar: [1, 10, 1], ice: [1, 10, 1] },
+            qualityTarget: { lemons: 0.5, sugar: 5, ice: 5 },
+            standEmoji: '🍋🍋🍋',
+            standLabel: 'LEMONADE',
+        },
+        {
+            id: 'honey',
+            name: '🍯 Honey Lemon',
+            desc: 'Smooth & sweet — honey replaces sugar for a richer taste.',
+            unlockAt: 30,
+            priceMult: 1.4,
+            ingredients: ['lemons', 'honey', 'ice'],
+            recipe: { lemons: 0.4, honey: 3, ice: 4 },
+            recipeRanges: { lemons: [0.1, 1.0, 0.1], honey: [1, 8, 1], ice: [1, 10, 1] },
+            qualityTarget: { lemons: 0.5, honey: 4, ice: 5 },
+            standEmoji: '🍯🍋🍯',
+            standLabel: 'HONEY LEMON',
+        },
+        {
+            id: 'strawberry',
+            name: '🍓 Strawberry',
+            desc: 'Fruity & fresh — strawberries add a berry twist.',
+            unlockAt: 50,
+            priceMult: 1.6,
+            ingredients: ['lemons', 'sugar', 'strawberries', 'ice'],
+            recipe: { lemons: 0.3, sugar: 3, strawberries: 2, ice: 4 },
+            recipeRanges: { lemons: [0.1, 0.8, 0.1], sugar: [1, 8, 1], strawberries: [1, 5, 1], ice: [1, 10, 1] },
+            qualityTarget: { lemons: 0.3, sugar: 4, strawberries: 3, ice: 5 },
+            standEmoji: '🍓🍋🍓',
+            standLabel: 'STRAWBERRY LMND',
+        },
+        {
+            id: 'mintade',
+            name: '🌿 Mint Lemonade',
+            desc: 'Cool & refreshing — perfect for hot summer days.',
+            unlockAt: 75,
+            priceMult: 1.5,
+            ingredients: ['lemons', 'sugar', 'mint', 'ice'],
+            recipe: { lemons: 0.4, sugar: 4, mint: 2, ice: 5 },
+            recipeRanges: { lemons: [0.1, 1.0, 0.1], sugar: [1, 8, 1], mint: [1, 5, 1], ice: [1, 10, 1] },
+            qualityTarget: { lemons: 0.5, sugar: 4, mint: 3, ice: 6 },
+            standEmoji: '🌿🍋🌿',
+            standLabel: 'MINT LEMONADE',
+        },
+        {
+            id: 'blueberry',
+            name: '🫐 Blueberry',
+            desc: 'Bold & vibrant — blueberries add an antioxidant punch.',
+            unlockAt: 100,
+            priceMult: 1.8,
+            ingredients: ['lemons', 'sugar', 'blueberries', 'ice'],
+            recipe: { lemons: 0.3, sugar: 3, blueberries: 3, ice: 4 },
+            recipeRanges: { lemons: [0.1, 0.8, 0.1], sugar: [1, 8, 1], blueberries: [1, 6, 1], ice: [1, 10, 1] },
+            qualityTarget: { lemons: 0.3, sugar: 4, blueberries: 4, ice: 5 },
+            standEmoji: '🫐🍋🫐',
+            standLabel: 'BLUEBERRY LMND',
+        },
+        {
+            id: 'tropical',
+            name: '🥭 Tropical Mango',
+            desc: 'Exotic & lush — a tropical island in a cup.',
+            unlockAt: 150,
+            priceMult: 2.0,
+            ingredients: ['lemons', 'sugar', 'mango', 'ice'],
+            recipe: { lemons: 0.3, sugar: 3, mango: 2, ice: 4 },
+            recipeRanges: { lemons: [0.1, 0.8, 0.1], sugar: [1, 8, 1], mango: [1, 5, 1], ice: [1, 10, 1] },
+            qualityTarget: { lemons: 0.3, sugar: 4, mango: 3, ice: 5 },
+            standEmoji: '🥭🍋🥭',
+            standLabel: 'MANGO LEMONADE',
+        },
+        {
+            id: 'gingerade',
+            name: '🫚 Ginger Zing',
+            desc: 'Spicy & bold — ginger adds a fiery kick.',
+            unlockAt: 200,
+            priceMult: 2.2,
+            ingredients: ['lemons', 'honey', 'ginger', 'ice'],
+            recipe: { lemons: 0.4, honey: 3, ginger: 2, ice: 4 },
+            recipeRanges: { lemons: [0.1, 1.0, 0.1], honey: [1, 8, 1], ginger: [1, 5, 1], ice: [1, 10, 1] },
+            qualityTarget: { lemons: 0.5, honey: 4, ginger: 2, ice: 5 },
+            standEmoji: '🫚🍋🫚',
+            standLabel: 'GINGER LEMONADE',
+        },
+        {
+            id: 'paradise',
+            name: '🥥 Coconut Paradise',
+            desc: 'Creamy & dreamy — the ultimate premium lemonade.',
+            unlockAt: 300,
+            priceMult: 2.8,
+            ingredients: ['lemons', 'sugar', 'mango', 'coconut', 'ice'],
+            recipe: { lemons: 0.2, sugar: 3, mango: 2, coconut: 2, ice: 4 },
+            recipeRanges: { lemons: [0.1, 0.6, 0.1], sugar: [1, 8, 1], mango: [1, 5, 1], coconut: [1, 5, 1], ice: [1, 10, 1] },
+            qualityTarget: { lemons: 0.3, sugar: 3, mango: 3, coconut: 3, ice: 5 },
+            standEmoji: '🥥🍋🥥',
+            standLabel: 'COCONUT PARADISE',
+        },
+    ];
+
+    const WEATHER = [
+        { id: 'sunny',  icon: '☀️',  name: 'Sunny',  temp: [75, 88],  demandMult: 1.0,  desc: 'Clear skies, perfect lemonade weather!', tip: 'Good demand — price confidently!' },
+        { id: 'hot',    icon: '🔥',  name: 'Hot',    temp: [90, 105], demandMult: 1.5,  desc: 'Scorching heat — everyone\'s thirsty!', tip: 'High demand — you can charge more!' },
+        { id: 'cloudy', icon: '🌤️', name: 'Cloudy', temp: [65, 78],  demandMult: 0.7,  desc: 'Overcast skies, mild temperature.', tip: 'Lower demand — keep prices modest.' },
+        { id: 'rainy',  icon: '🌧️', name: 'Rainy',  temp: [55, 68],  demandMult: 0.3,  desc: 'Rain showers all day long.', tip: 'Few customers — sell cheap or save supplies.' },
+        { id: 'stormy', icon: '⛈️',  name: 'Stormy', temp: [50, 62],  demandMult: 0.1,  desc: 'Thunderstorms! Most people stay home.', tip: 'Almost no one will come — consider skipping.' },
+    ];
+
+    const CUSTOMER_EMOJIS = ['🧑', '👩', '👨', '👧', '👦', '🧔', '👵', '👴', '🧑‍🦱', '👩‍🦰'];
+
+    // ===== GROWING BUSINESS CONSTANTS =====
+    const TABLE_COSTS = [0, 15, 30, 60, 120, 200];
+
+    const BUSINESS_LEVELS = [
+        { level: 1, name: 'Lemonade Stand', emoji: '🏪', xp: 0, cost: 0, maxTables: 1, maxWorkers: 0, recipes: ['classic','honey'] },
+        { level: 2, name: 'Double Stand', emoji: '🏪🏪', xp: 50, cost: 25, maxTables: 3, maxWorkers: 1, recipes: ['classic','honey','strawberry','mintade'] },
+        { level: 3, name: 'Small Shop', emoji: '🏬', xp: 200, cost: 100, maxTables: 4, maxWorkers: 2, recipes: ['classic','honey','strawberry','mintade','blueberry','tropical'] },
+        { level: 4, name: 'Juice Bar', emoji: '🧃', xp: 500, cost: 300, maxTables: 6, maxWorkers: 4, recipes: DRINK_TYPES.map(d => d.id) },
+        { level: 5, name: 'Juice Empire', emoji: '🏢', xp: 1200, cost: 800, maxTables: 6, maxWorkers: 6, recipes: DRINK_TYPES.map(d => d.id) },
+    ];
+
+    const AD_TYPES = [
+        { id: 'flyer', name: 'Flyer', emoji: '📄', cost: 5, multiplier: 1.3, duration: 60, unlockLevel: 2 },
+        { id: 'sign', name: 'Sidewalk Sign', emoji: '🪧', cost: 15, multiplier: 1.6, duration: 90, unlockLevel: 3 },
+        { id: 'social', name: 'Social Media', emoji: '📱', cost: 40, multiplier: 2.0, duration: 120, unlockLevel: 3 },
+        { id: 'tv', name: 'TV Ad', emoji: '📺', cost: 100, multiplier: 3.0, duration: 180, unlockLevel: 4 },
+        { id: 'billboard', name: 'Billboard', emoji: '🏙️', cost: 250, multiplier: 4.0, duration: 300, unlockLevel: 5 },
+    ];
+
+    const WORKER_TYPES = [
+        { tier: 'basic', name: 'Basic', emoji: '🧑‍🍳', cost: 10, wage: 0.50, craftSpeed: 4000, budget: 50 },
+        { tier: 'skilled', name: 'Skilled', emoji: '🧑‍🏭', cost: 25, wage: 1.00, craftSpeed: 3000, budget: 80 },
+        { tier: 'expert', name: 'Expert', emoji: '🧑‍💼', cost: 50, wage: 2.00, craftSpeed: 2000, unlockLevel: 4, budget: 110 },
+    ];
+
+    const WORKER_NAMES = ['Alex','Sam','Jordan','Riley','Casey','Morgan','Taylor','Quinn','Avery','Drew'];
+
+    let selectedPlayMode = 'classic';
+    function selectPlayMode(mode) {
+        selectedPlayMode = mode;
+        document.querySelectorAll('.mode-opt').forEach(b => b.classList.remove('selected'));
+        event.target.classList.add('selected');
+    }
+
+    let state = {};
+
+    function getUnlockedSupplies() {
+        return ALL_SUPPLIES.filter(s => state.totalCupsSold >= s.unlockAt);
+    }
+
+    function getUnlockedDrinks() {
+        return DRINK_TYPES.filter(d => state.totalCupsSold >= d.unlockAt);
+    }
+
+    // The experiment mode "drink" — built dynamically from whatever ingredients the player uses
+    function getExperimentDrink() {
+        const allIngs = ALL_SUPPLIES.filter(s => s.id !== 'cups').map(s => s.id);
+        const ranges = {};
+        const recipe = {};
+        const target = {};
+        allIngs.forEach(id => {
+            if (id === 'lemons' || id === 'lime' || id === 'orange') {
+                ranges[id] = [0, 1.0, 0.1];
+                recipe[id] = state.recipe[id] || 0;
+                target[id] = 0.4;
+            } else if (id === 'sugar' || id === 'agave') {
+                ranges[id] = [0, 10, 1];
+                recipe[id] = state.recipe[id] || 0;
+                target[id] = 5;
+            } else if (id === 'ice') {
+                ranges[id] = [0, 10, 1];
+                recipe[id] = state.recipe[id] || 0;
+                target[id] = 5;
+            } else {
+                ranges[id] = [0, 6, 1];
+                recipe[id] = state.recipe[id] || 0;
+                target[id] = 2;
+            }
+        });
+        // Dynamic price mult: more premium ingredients = higher price customers will pay
+        const usedPremium = allIngs.filter(id => {
+            if (['lemons','sugar','ice'].includes(id)) return false;
+            return (state.recipe[id] || 0) > 0;
+        }).length;
+        const priceMult = 1.0 + usedPremium * 0.25;
+
+        return {
+            id: 'experiment',
+            name: '🧪 Custom Blend',
+            desc: 'Mix anything you want — find the perfect recipe!',
+            unlockAt: 0,
+            priceMult: priceMult,
+            ingredients: allIngs,
+            recipe: recipe,
+            recipeRanges: ranges,
+            qualityTarget: target,
+            standEmoji: '🧪🍋🧪',
+            standLabel: 'EXPERIMENTAL',
+        };
+    }
+
+    function getCurrentDrink() {
+        if (state.experimentMode) return getExperimentDrink();
+        return DRINK_TYPES.find(d => d.id === state.currentDrink) || DRINK_TYPES[0];
+    }
+
+    function initState(maxDays, experimentMode) {
+        state = {
+            day: 1,
+            maxDays: maxDays,
+            money: experimentMode ? 30.00 : 20.00,
+            inventory: {},
+            cart: {},
+            recipe: {},
+            price: 1.00,
+            weather: null,
+            currentDrink: experimentMode ? 'experiment' : 'classic',
+            experimentMode: !!experimentMode,
+            // Stats
+            totalRevenue: 0,
+            totalCosts: 0,
+            totalCupsSold: 0,
+            totalCustomers: 0,
+            bestDay: 0,
+            worstDay: Infinity,
+            dayProfits: [],
+            daySpending: 0,
+            // Track what we've already notified about
+            unlockedNotified: new Set(),
+        };
+        // Initialize inventory and cart for all possible supplies
+        ALL_SUPPLIES.forEach(s => {
+            state.inventory[s.id] = 0;
+            state.cart[s.id] = 0;
+        });
+        if (experimentMode) {
+            // Experiment mode: default recipe is just lemons + sugar + ice
+            state.recipe = { lemons: 0.4, sugar: 4, ice: 4 };
+        } else {
+            // Set default recipe from classic
+            const classic = DRINK_TYPES[0];
+            classic.ingredients.forEach(ing => {
+                state.recipe[ing] = classic.recipe[ing];
+            });
+        }
+    }
+
+    // ===== SCREENS =====
+    function showScreen(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+    }
+
+    // ===== START =====
+    function loadHighScore() {
+        return parseFloat(localStorage.getItem('lemonadeStandHighScore') || '0');
+    }
+    function saveHighScore(score) {
+        const current = loadHighScore();
+        if (score > current) {
+            localStorage.setItem('lemonadeStandHighScore', score.toFixed(2));
+            return true;
+        }
+        return false;
+    }
+
+    document.getElementById('high-score-display').textContent = loadHighScore().toFixed(2);
+
+    function startGame(maxDays, experimentMode) {
+        initState(maxDays, experimentMode);
+        generateWeather();
+        buildDrinkSelector();
+        buildIngredientSlots();
+        buildRecipeSection();
+        updateUI();
+        showScreen('game-screen');
+
+        // Show/hide quality bar based on mode
+        document.querySelector('.quality-bar').style.display = state.experimentMode ? 'none' : '';
+
+        // Show/hide drink selector based on mode
+        document.getElementById('drink-menu-card').style.display = state.experimentMode ? 'none' : '';
+
+        if (maxDays === 0) {
+            document.getElementById('day-limit-stat').classList.add('hidden');
+            document.getElementById('end-endless-btn').classList.remove('hidden');
+        } else {
+            document.getElementById('day-limit-stat').classList.remove('hidden');
+            document.getElementById('end-endless-btn').classList.add('hidden');
+        }
+    }
+
+    // ===== WEATHER =====
+    function generateWeather() {
+        const weights = [30, 20, 25, 15, 10];
+        const total = weights.reduce((a, b) => a + b, 0);
+        let r = Math.random() * total;
+        let idx = 0;
+        for (let i = 0; i < weights.length; i++) {
+            r -= weights[i];
+            if (r <= 0) { idx = i; break; }
+        }
+        const w = WEATHER[idx];
+        const temp = Math.floor(w.temp[0] + Math.random() * (w.temp[1] - w.temp[0]));
+        state.weather = { ...w, actualTemp: temp };
+    }
+
+    // ===== DRINK TYPE SELECTOR =====
+    function buildDrinkSelector() {
+        const container = document.getElementById('drink-type-selector');
+        container.innerHTML = '';
+        DRINK_TYPES.forEach(d => {
+            const btn = document.createElement('button');
+            btn.className = 'drink-type-btn';
+            const unlocked = state.totalCupsSold >= d.unlockAt;
+            if (!unlocked) {
+                btn.classList.add('locked');
+                btn.innerHTML = `${d.name} <span class="lock-icon">🔒 ${d.unlockAt} cups</span>`;
+            } else {
+                btn.textContent = d.name;
+                if (d.id === state.currentDrink) btn.classList.add('active');
+                btn.onclick = () => selectDrink(d.id);
+            }
+            container.appendChild(btn);
+        });
+        updateDrinkDesc();
+    }
+
+    function selectDrink(drinkId) {
+        state.currentDrink = drinkId;
+        const drink = getCurrentDrink();
+        // Reset recipe to drink defaults
+        state.recipe = {};
+        drink.ingredients.forEach(ing => {
+            state.recipe[ing] = drink.recipe[ing];
+        });
+        buildDrinkSelector();
+        buildIngredientSlots();
+        buildRecipeSection();
+        updateUI();
+    }
+
+    function updateDrinkDesc() {
+        const drink = getCurrentDrink();
+        const el = document.getElementById('drink-desc');
+        if (state.experimentMode) {
+            const usedCount = drink.ingredients.filter(id => (state.recipe[id] || 0) > 0).length;
+            el.innerHTML = `<strong>🧪 Experiment Mode</strong> — ${usedCount} ingredient${usedCount !== 1 ? 's' : ''} in your blend. No quality hints — taste is a mystery!`;
+            return;
+        }
+        const mult = drink.priceMult;
+        el.innerHTML = `<strong>${drink.name}</strong> — ${drink.desc}` +
+            (mult > 1 ? ` <span style="color: #66bb6a;">(${mult}x price premium!)</span>` : '');
+    }
+
+    // ===== SHOP SCREEN =====
+    function openShop() {
+        // Reset cart
+        ALL_SUPPLIES.forEach(s => { state.cart[s.id] = 0; });
+        buildShopGrid();
+        updateShopCartTotal();
+        document.getElementById('shop-money-display').textContent = state.money.toFixed(2);
+        showScreen('shop-screen');
+    }
+
+    function buildShopGrid() {
+        const grid = document.getElementById('shop-grid');
+        grid.innerHTML = '';
+        const drink = getCurrentDrink();
+        const drinkIngredients = drink.ingredients;
+
+        ALL_SUPPLIES.forEach(s => {
+            // In experiment mode: show everything
+            // In normal mode: show drink ingredients + cups, and upcoming locked ones
+            if (!state.experimentMode) {
+                if (s.experimentOnly) return;
+                const unlocked = state.totalCupsSold >= s.unlockAt;
+                const neededForDrink = drinkIngredients.includes(s.id) || s.id === 'cups';
+                const showLocked = !unlocked && s.unlockAt <= Math.max(state.totalCupsSold * 2, 30);
+                if (!neededForDrink && unlocked && !drinkIngredients.includes(s.id) && s.id !== 'cups') return;
+                if (!unlocked && !showLocked) return;
+
+                if (!unlocked) {
+                    const item = document.createElement('div');
+                    item.className = 'shop-item locked';
+                    item.innerHTML = `
+                        <div class="shop-item-emoji">${s.emoji}</div>
+                        <div class="shop-item-name">${s.name}</div>
+                        <div class="shop-item-lock">🔒 ${s.unlockAt} cups</div>
+                    `;
+                    grid.appendChild(item);
+                    return;
+                }
+            }
+
+            const item = document.createElement('div');
+            item.className = 'shop-item';
+            const stock = state.inventory[s.id] || 0;
+            item.innerHTML = `
+                <div class="shop-item-emoji">${s.emoji}</div>
+                <div class="shop-item-name">${s.name}</div>
+                <div class="shop-item-cost">$${s.cost.toFixed(2)}/${s.unit}</div>
+                ${stock > 0 ? `<div style="font-size: 10px; color: #66bb6a; margin-top: 2px;">Have: ${formatInv(stock)}</div>` : ''}
+                <div class="shop-item-qty">
+                    <button onclick="shopAdjust('${s.id}', -5)">-5</button>
+                    <button onclick="shopAdjust('${s.id}', -1)">-</button>
+                    <span class="shop-qty-val" id="shop-qty-${s.id}">0</span>
+                    <button onclick="shopAdjust('${s.id}', 1)">+</button>
+                    <button onclick="shopAdjust('${s.id}', 5)">+5</button>
+                </div>
+            `;
+            grid.appendChild(item);
+        });
+    }
+
+    function shopAdjust(id, delta) {
+        state.cart[id] = Math.max(0, (state.cart[id] || 0) + delta);
+        if (getCartTotal() > state.money) {
+            state.cart[id] = Math.max(0, state.cart[id] - delta);
+            return;
+        }
+        const el = document.getElementById(`shop-qty-${id}`);
+        if (el) el.textContent = state.cart[id];
+        updateShopCartTotal();
+    }
+
+    function getCartTotal() {
+        let total = 0;
+        ALL_SUPPLIES.forEach(s => { total += (state.cart[s.id] || 0) * s.cost; });
+        return total;
+    }
+
+    function updateShopCartTotal() {
+        document.getElementById('shop-cart-total').textContent = '$' + getCartTotal().toFixed(2);
+    }
+
+    function confirmShop() {
+        const cartCost = getCartTotal();
+        if (cartCost > state.money) {
+            alert('Not enough money!');
+            return;
+        }
+        state.money -= cartCost;
+        state.totalCosts += cartCost;
+        state.daySpending = (state.daySpending || 0) + cartCost;
+        ALL_SUPPLIES.forEach(s => {
+            state.inventory[s.id] = (state.inventory[s.id] || 0) + (state.cart[s.id] || 0);
+            state.cart[s.id] = 0;
+        });
+        buildIngredientSlots();
+        buildRecipeSection();
+        updateUI();
+        showScreen('game-screen');
+    }
+
+    function cancelShop() {
+        ALL_SUPPLIES.forEach(s => { state.cart[s.id] = 0; });
+        showScreen('game-screen');
+    }
+
+    // ===== INGREDIENT SLOTS =====
+    function buildIngredientSlots() {
+        const container = document.getElementById('ingredient-slots');
+        container.innerHTML = '';
+        ALL_SUPPLIES.forEach(s => {
+            const stock = state.inventory[s.id] || 0;
+            if (stock <= 0) return;
+            const slot = document.createElement('div');
+            slot.className = 'ingredient-slot';
+            slot.innerHTML = `
+                <span class="slot-emoji">${s.emoji}</span>
+                <span class="slot-count">${formatInv(stock)}</span>
+                <span style="color: #888;">${s.name}</span>
+                ${s.id !== 'cups' ? `<button class="slot-remove" onclick="removeIngredient('${s.id}')" title="Discard">✕</button>` : ''}
+            `;
+            container.appendChild(slot);
+        });
+        if (container.children.length === 0) {
+            container.innerHTML = '<div style="font-size: 13px; color: #666; padding: 8px 0;">No ingredients yet — visit the 🛒 Shop!</div>';
+        }
+    }
+
+    function removeIngredient(id) {
+        state.inventory[id] = 0;
+        state.recipe[id] = 0;
+        buildIngredientSlots();
+        buildRecipeSection();
+        updateCostPreview();
+    }
+
+    // ===== RECIPE =====
+    function buildRecipeSection() {
+        const sec = document.getElementById('recipe-section');
+        sec.innerHTML = '';
+        const drink = getCurrentDrink();
+
+        // Only show recipe sliders for ingredients the player actually has
+        const activeIngredients = drink.ingredients.filter(ingId => {
+            if (ingId === 'cups') return false;
+            return (state.inventory[ingId] || 0) > 0;
+        });
+
+        // Zero out recipe for ingredients the player doesn't have
+        drink.ingredients.forEach(ingId => {
+            if (ingId === 'cups') return;
+            if ((state.inventory[ingId] || 0) <= 0) {
+                state.recipe[ingId] = 0;
+            }
+        });
+
+        if (activeIngredients.length === 0) {
+            sec.innerHTML = '<div style="font-size: 13px; color: #666; padding: 8px 0;">Buy ingredients from the 🛒 Shop to set your recipe!</div>';
+            updateQuality();
+            return;
+        }
+
+        activeIngredients.forEach(ingId => {
+            const supply = ALL_SUPPLIES.find(s => s.id === ingId);
+            const range = drink.recipeRanges[ingId]; // [min, max, step]
+            const step = range[2] || 1;
+            // If recipe value is not set or is 0, set to a reasonable default
+            if (!state.recipe[ingId]) {
+                state.recipe[ingId] = drink.recipe[ingId] || (step < 1 ? step : 1);
+            }
+            const currentVal = state.recipe[ingId];
+            const displayVal = step < 1 ? currentVal.toFixed(1) : currentVal;
+            const row = document.createElement('div');
+            row.className = 'recipe-row';
+            row.innerHTML = `
+                <div class="recipe-label">${supply.emoji} ${supply.name}</div>
+                <input type="range" class="recipe-slider" id="recipe-${ingId}" min="${range[0]}" max="${range[1]}" step="${step}" value="${currentVal}"
+                    oninput="updateRecipe('${ingId}', this.value)">
+                <div class="recipe-value" id="recipe-val-${ingId}">${displayVal}</div>
+            `;
+            sec.appendChild(row);
+        });
+        updateQuality();
+    }
+
+    function updateRecipe(id, val) {
+        const v = parseFloat(val);
+        state.recipe[id] = Math.round(v * 100) / 100; // avoid floating point drift
+        const drink = getCurrentDrink();
+        const range = drink.recipeRanges[id];
+        const step = range ? range[2] || 1 : 1;
+        document.getElementById(`recipe-val-${id}`).textContent = step < 1 ? state.recipe[id].toFixed(1) : state.recipe[id];
+        updateQuality();
+        updateCostPreview();
+    }
+
+    function getQuality() {
+        const drink = getCurrentDrink();
+
+        if (state.experimentMode) {
+            // Experiment mode: quality is hidden but still calculated
+            // Based on: having lemons, having sweetener, having ice, variety bonus, not overdoing anything
+            let score = 0;
+            const r = state.recipe;
+            const usedIngredients = drink.ingredients.filter(id => (r[id] || 0) > 0);
+
+            // Must have lemons or lime (base acid)
+            const hasAcid = (r.lemons || 0) > 0 || (r.lime || 0) > 0;
+            if (hasAcid) score += 20;
+
+            // Must have sweetener (sugar or honey)
+            const sweetness = (r.sugar || 0) + (r.honey || 0) * 2;
+            if (sweetness > 0) score += Math.min(15, sweetness * 3);
+
+            // Ice bonus
+            const iceAmt = r.ice || 0;
+            if (iceAmt > 0) score += Math.min(10, iceAmt * 2);
+
+            // Variety bonus (2-5 ingredients is ideal)
+            const numUsed = usedIngredients.length;
+            if (numUsed >= 2 && numUsed <= 5) score += 15 + (numUsed - 2) * 5;
+            else if (numUsed > 5) score += Math.max(5, 30 - (numUsed - 5) * 5); // too many = muddy
+            else if (numUsed === 1) score += 5;
+
+            // Penalty for extreme amounts of anything
+            usedIngredients.forEach(id => {
+                const range = drink.recipeRanges[id];
+                const normalized = ((r[id] || 0) - range[0]) / (range[1] - range[0]);
+                if (normalized > 0.8) score -= 3; // overdoing it
+            });
+
+            // Flavor harmony bonuses (certain combos)
+            if ((r.mint || 0) > 0 && (r.lemons || 0) > 0) score += 5;
+            if ((r.ginger || 0) > 0 && (r.honey || 0) > 0) score += 5;
+            if ((r.strawberries || 0) > 0 && (r.basil || 0) > 0) score += 5;
+            if ((r.mango || 0) > 0 && (r.chili || 0) > 0) score += 5;
+            if ((r.lavender || 0) > 0 && (r.lemons || 0) > 0) score += 5;
+            if ((r.coconut || 0) > 0 && (r.pineapple || 0) > 0) score += 5;
+            if ((r.peach || 0) > 0 && (r.rosemary || 0) > 0) score += 5;
+            if ((r.matcha || 0) > 0 && (r.vanilla || 0) > 0) score += 5;
+            if ((r.blueberries || 0) > 0 && (r.lavender || 0) > 0) score += 5;
+            if ((r.watermelon || 0) > 0 && (r.mint || 0) > 0) score += 5;
+            if ((r.cherry || 0) > 0 && (r.vanilla || 0) > 0) score += 5;
+            if ((r.lime || 0) > 0 && (r.coconut || 0) > 0) score += 5;
+            if ((r.cinnamon || 0) > 0 && (r.honey || 0) > 0) score += 5;
+            if ((r.passionfruit || 0) > 0 && (r.mango || 0) > 0) score += 5;
+            if ((r.raspberry || 0) > 0 && (r.lemons || 0) > 0) score += 5;
+            if ((r.orange || 0) > 0 && (r.cinnamon || 0) > 0) score += 5;
+            if ((r.kiwi || 0) > 0 && (r.strawberries || 0) > 0) score += 5;
+            if ((r.banana || 0) > 0 && (r.coconut || 0) > 0) score += 5;
+            if ((r.grape || 0) > 0 && (r.lime || 0) > 0) score += 5;
+            if ((r.cardamom || 0) > 0 && (r.vanilla || 0) > 0) score += 5;
+            if ((r.turmeric || 0) > 0 && (r.ginger || 0) > 0) score += 5;
+            if ((r.agave || 0) > 0 && (r.lime || 0) > 0) score += 5;
+            if ((r.rosewater || 0) > 0 && (r.cardamom || 0) > 0) score += 5;
+            if ((r.tapioca || 0) > 0 && (r.mango || 0) > 0) score += 5;
+            if ((r.peach || 0) > 0 && (r.vanilla || 0) > 0) score += 5;
+            if ((r.pineapple || 0) > 0 && (r.coconut || 0) > 0) score += 5;
+            if ((r.watermelon || 0) > 0 && (r.lime || 0) > 0) score += 5;
+
+            // Clashing combos penalty
+            if ((r.matcha || 0) > 0 && (r.chili || 0) > 0) score -= 8;
+            if ((r.cinnamon || 0) > 0 && (r.mint || 0) > 0) score -= 5;
+            if ((r.lavender || 0) > 0 && (r.ginger || 0) > 0) score -= 5;
+            if ((r.turmeric || 0) > 0 && (r.cherry || 0) > 0) score -= 5;
+            if ((r.rosewater || 0) > 0 && (r.chili || 0) > 0) score -= 8;
+            if ((r.banana || 0) > 0 && (r.rosemary || 0) > 0) score -= 5;
+
+            return Math.min(100, Math.max(5, Math.round(score)));
+        }
+
+        // Normal mode
+        const target = drink.qualityTarget;
+        let score = 0;
+        let maxScore = 0;
+
+        drink.ingredients.forEach(ingId => {
+            const current = state.recipe[ingId] || 0;
+            const ideal = target[ingId] || 2;
+            const range = drink.recipeRanges[ingId];
+            const rangeSpan = range[1] - range[0];
+            const normalizedDiff = Math.abs(current - ideal) / rangeSpan;
+            const itemMax = 25;
+            maxScore += itemMax;
+            score += Math.max(0, itemMax * (1 - normalizedDiff * 2.5));
+        });
+
+        // Bonus for balanced ratios (normalize all values to 0-1 range first)
+        const normalizedVals = drink.ingredients.map(id => {
+            const range = drink.recipeRanges[id];
+            return ((state.recipe[id] || range[0]) - range[0]) / (range[1] - range[0]);
+        });
+        const avg = normalizedVals.reduce((a,b) => a+b, 0) / normalizedVals.length;
+        const variance = normalizedVals.reduce((a,v) => a + Math.pow(v - avg, 2), 0) / normalizedVals.length;
+        const balanceBonus = Math.max(0, 15 * (1 - variance * 8));
+        score += balanceBonus;
+        maxScore += 15;
+
+        return Math.min(100, Math.max(5, Math.round((score / maxScore) * 100)));
+    }
+
+    function updateQuality() {
+        const q = getQuality();
+        const fill = document.getElementById('quality-fill');
+        const text = document.getElementById('quality-text');
+        fill.style.width = q + '%';
+
+        if (q >= 80) {
+            fill.style.background = '#66bb6a';
+            text.textContent = 'Excellent!';
+            text.style.color = '#66bb6a';
+        } else if (q >= 60) {
+            fill.style.background = '#ffd54f';
+            text.textContent = 'Good';
+            text.style.color = '#ffd54f';
+        } else if (q >= 40) {
+            fill.style.background = '#ffa726';
+            text.textContent = 'Okay';
+            text.style.color = '#ffa726';
+        } else {
+            fill.style.background = '#ff5252';
+            text.textContent = 'Poor';
+            text.style.color = '#ff5252';
+        }
+    }
+
+    // ===== PRICE =====
+    document.getElementById('price-slider').addEventListener('input', function() {
+        state.price = this.value / 100;
+        document.getElementById('price-display').textContent = '$' + state.price.toFixed(2);
+        updatePriceHint();
+        updateCostPreview();
+    });
+
+    function updatePriceHint() {
+        const costPerCup = getCostPerCup();
+        const drink = getCurrentDrink();
+        const hint = document.getElementById('price-hint');
+        const effectivePrice = state.price;
+        if (effectivePrice < costPerCup) {
+            hint.textContent = 'Selling below cost! You\'ll lose money.';
+            hint.style.color = '#ff5252';
+        } else if (effectivePrice < costPerCup * 1.5) {
+            hint.textContent = 'Thin margins — low profit per cup.';
+            hint.style.color = '#ffa726';
+        } else if (effectivePrice <= 2.50 * drink.priceMult) {
+            hint.textContent = 'Fair price for the quality.';
+            hint.style.color = '#66bb6a';
+        } else if (effectivePrice <= 4.00 * drink.priceMult) {
+            hint.textContent = 'Getting pricey — fewer customers.';
+            hint.style.color = '#ffa726';
+        } else {
+            hint.textContent = 'Very expensive — only if quality is top-notch!';
+            hint.style.color = '#ff5252';
+        }
+    }
+
+    // ===== INVENTORY DISPLAY =====
+    function formatInv(val) {
+        if (val === 0) return '0';
+        if (val % 1 === 0) return val.toString();
+        return val.toFixed(1);
+    }
+
+    // ===== COST PREVIEW =====
+    function getCostPerCup() {
+        const drink = getCurrentDrink();
+        let cost = 0;
+        drink.ingredients.forEach(ingId => {
+            const supply = ALL_SUPPLIES.find(s => s.id === ingId);
+            cost += (state.recipe[ingId] || 0) * supply.cost;
+        });
+        cost += 0.15; // cups
+        return cost;
+    }
+
+    function getMaxCups() {
+        const drink = getCurrentDrink();
+        const mins = [];
+        drink.ingredients.forEach(ingId => {
+            const amt = state.recipe[ingId] || 0;
+            if (amt <= 0) return; // skip unused ingredients
+            const stock = (state.inventory[ingId] || 0) + (state.cart[ingId] || 0);
+            mins.push(Math.floor(stock / amt));
+        });
+        // Also check cups
+        mins.push((state.inventory.cups || 0) + (state.cart.cups || 0));
+        if (mins.length === 0) return 0;
+        return Math.min(...mins);
+    }
+
+    function updateCostPreview() {
+        document.getElementById('cost-per-cup').textContent = '$' + getCostPerCup().toFixed(2);
+        document.getElementById('can-make').textContent = getMaxCups() + ' cups';
+    }
+
+    // ===== CHECK UNLOCKS =====
+    function checkUnlocks() {
+        let newUnlocks = false;
+
+        ALL_SUPPLIES.forEach(s => {
+            if (s.unlockAt > 0 && state.totalCupsSold >= s.unlockAt && !state.unlockedNotified.has('supply-' + s.id)) {
+                state.unlockedNotified.add('supply-' + s.id);
+                showUnlock(`${s.emoji} New ingredient unlocked: ${s.name}!`);
+                newUnlocks = true;
+            }
+        });
+
+        DRINK_TYPES.forEach(d => {
+            if (d.unlockAt > 0 && state.totalCupsSold >= d.unlockAt && !state.unlockedNotified.has('drink-' + d.id)) {
+                state.unlockedNotified.add('drink-' + d.id);
+                setTimeout(() => {
+                    showUnlock(`${d.name} unlocked! Premium drink sells for ${d.priceMult}x!`);
+                }, newUnlocks ? 3500 : 0);
+                newUnlocks = true;
+            }
+        });
+
+        if (newUnlocks) {
+            buildDrinkSelector();
+            buildIngredientSlots();
+        }
+    }
+
+    // ===== UPDATE UI =====
+    function updateUI() {
+        const w = state.weather;
+        document.getElementById('day-number').textContent = state.day;
+        document.getElementById('money-display').textContent = '$' + state.money.toFixed(2);
+        document.getElementById('weather-icon').textContent = w.icon;
+        if (state.maxDays > 0) {
+            document.getElementById('days-left').textContent = (state.maxDays - state.day + 1) + ' left';
+        }
+
+        document.getElementById('forecast-icon').textContent = w.icon;
+        document.getElementById('forecast-temp').textContent = w.actualTemp + '°F';
+        document.getElementById('forecast-desc').textContent = w.desc;
+        document.getElementById('forecast-tip').textContent = 'Tip: ' + w.tip;
+
+        updateQuality();
+        updatePriceHint();
+        updateCostPreview();
+        updateDrinkDesc();
+    }
+
+    // ===== SELLING =====
+    function startSelling() {
+        // Check we can make at least something
+        const maxCups = getMaxCupsFromInventory();
+        if (maxCups === 0) {
+            alert('You can\'t make any lemonade! Buy supplies from the Shop first.');
+            return;
+        }
+
+        const supplyCost = state.daySpending || 0; // costs paid at shop this day
+        const drink = getCurrentDrink();
+
+        // Calculate demand
+        const weather = state.weather;
+        const quality = getQuality();
+        const price = state.price;
+
+        let baseDemand = 25 + Math.random() * 15;
+        baseDemand *= weather.demandMult;
+
+        if (weather.actualTemp > 90) baseDemand *= 1.2;
+        else if (weather.actualTemp > 80) baseDemand *= 1.05;
+        else if (weather.actualTemp < 60) baseDemand *= 0.8;
+
+        baseDemand *= 0.3 + (quality / 100) * 1.2;
+
+        // Premium drinks have slightly lower base demand but much higher revenue
+        const drinkDemandMult = 1 / Math.sqrt(drink.priceMult); // e.g., 2x price -> 0.71x demand
+        baseDemand *= drinkDemandMult;
+
+        // Fair price factors in the drink premium
+        const fairPrice = (0.50 + (quality / 100) * 2.00) * drink.priceMult;
+        const priceRatio = price / fairPrice;
+        if (priceRatio > 1) {
+            baseDemand *= Math.max(0.1, 1 - (priceRatio - 1) * 0.7);
+        } else {
+            baseDemand *= Math.min(1.5, 1 + (1 - priceRatio) * 0.5);
+        }
+
+        let potentialCustomers = Math.max(0, Math.round(baseDemand));
+        let cupsSold = Math.min(potentialCustomers, maxCups);
+
+        // Deduct supplies (round to avoid floating point drift)
+        const r = state.recipe;
+        drink.ingredients.forEach(ingId => {
+            state.inventory[ingId] = Math.round((state.inventory[ingId] - cupsSold * (r[ingId] || 0)) * 100) / 100;
+            if (state.inventory[ingId] < 0.001) state.inventory[ingId] = 0;
+        });
+        state.inventory.cups -= cupsSold;
+
+        const revenue = cupsSold * price;
+        const profit = revenue - supplyCost;
+
+        const satisfaction = Math.min(5, Math.round((quality / 20) * (price < fairPrice * 1.3 ? 1 : 0.6)));
+
+        // Update stand visual
+        document.getElementById('stand-emoji-top').textContent = drink.standEmoji;
+        document.getElementById('stand-label').textContent = drink.standLabel;
+
+        // Run selling animation
+        showScreen('selling-screen');
+        document.getElementById('selling-title').textContent = `Day ${state.day} — Open for Business!`;
+        document.getElementById('customer-area').innerHTML = '';
+        document.getElementById('selling-progress-fill').style.width = '0%';
+        document.getElementById('selling-stats').textContent = 'Cups sold: 0';
+        document.getElementById('selling-weather').textContent = weather.icon + ' ' + weather.actualTemp + '°F';
+
+        let shown = 0;
+        const totalSteps = Math.max(potentialCustomers, 1);
+        const interval = Math.max(60, Math.min(300, 3000 / totalSteps));
+
+        const timer = setInterval(() => {
+            shown++;
+            const progress = Math.min(100, (shown / totalSteps) * 100);
+            document.getElementById('selling-progress-fill').style.width = progress + '%';
+
+            if (shown <= cupsSold) {
+                const emoji = CUSTOMER_EMOJIS[Math.floor(Math.random() * CUSTOMER_EMOJIS.length)];
+                const el = document.createElement('span');
+                el.className = 'customer';
+                el.textContent = emoji;
+                const area = document.getElementById('customer-area');
+                area.appendChild(el);
+                const rect = el.getBoundingClientRect();
+                spawnCoinPop(rect.left + rect.width / 2, rect.top);
+                document.getElementById('selling-stats').textContent = `Cups sold: ${shown} | Revenue: $${(shown * price).toFixed(2)}`;
+            } else if (shown <= potentialCustomers) {
+                const el = document.createElement('span');
+                el.className = 'customer';
+                el.textContent = '😔';
+                el.style.opacity = '0.4';
+                document.getElementById('customer-area').appendChild(el);
+            }
+
+            if (shown >= totalSteps) {
+                clearInterval(timer);
+                setTimeout(() => showSummary(cupsSold, potentialCustomers, revenue, supplyCost, profit, satisfaction, drink), 600);
+            }
+        }, interval);
+
+        // Update stats
+        state.totalRevenue += revenue;
+        state.totalCupsSold += cupsSold;
+        state.totalCustomers += potentialCustomers;
+        state.bestDay = Math.max(state.bestDay, profit);
+        state.worstDay = Math.min(state.worstDay, profit);
+        state.dayProfits.push(profit);
+        state.money += revenue;
+
+        // Check for unlocks after selling
+        checkUnlocks();
+    }
+
+    function getMaxCupsFromInventory() {
+        const drink = getCurrentDrink();
+        const r = state.recipe;
+        const inv = state.inventory;
+        const mins = [];
+        drink.ingredients.forEach(ingId => {
+            const amt = r[ingId] || 0;
+            if (amt <= 0) return; // skip unused ingredients
+            mins.push(Math.floor((inv[ingId] || 0) / amt));
+        });
+        mins.push(inv.cups || 0);
+        if (mins.length === 0) return 0;
+        return Math.min(...mins);
+    }
+
+    // ===== SUMMARY =====
+    function showSummary(cupsSold, potentialCustomers, revenue, costs, profit, satisfaction, drink) {
+        const modal = document.getElementById('summary-modal');
+        document.getElementById('summary-title').textContent = `Day ${state.day} Summary`;
+
+        const missedCustomers = potentialCustomers - cupsSold;
+        const stars = '⭐'.repeat(satisfaction) + '☆'.repeat(5 - satisfaction);
+
+        let html = `
+            <div class="summary-row">
+                <span class="summary-label">Drink</span>
+                <span class="summary-value">${drink.name}</span>
+            </div>
+            <div class="summary-row">
+                <span class="summary-label">Customers</span>
+                <span class="summary-value">${potentialCustomers}</span>
+            </div>
+            <div class="summary-row">
+                <span class="summary-label">Cups Sold</span>
+                <span class="summary-value">${cupsSold}</span>
+            </div>
+            ${missedCustomers > 0 ? `<div class="summary-row">
+                <span class="summary-label">Turned Away (no stock)</span>
+                <span class="summary-value" style="color: #ff5252;">${missedCustomers}</span>
+            </div>` : ''}
+            <div class="summary-row">
+                <span class="summary-label">Revenue</span>
+                <span class="summary-value profit">+$${revenue.toFixed(2)}</span>
+            </div>
+            <div class="summary-row">
+                <span class="summary-label">Supply Costs</span>
+                <span class="summary-value loss">-$${costs.toFixed(2)}</span>
+            </div>
+            <div class="summary-divider"></div>
+            <div class="summary-row">
+                <span class="summary-label" style="font-weight: 600; color: #fff;">Profit</span>
+                <span class="summary-value ${profit >= 0 ? 'profit' : 'loss'}">${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}</span>
+            </div>
+            <div class="summary-divider"></div>
+            <div class="summary-row">
+                <span class="summary-label">Satisfaction</span>
+                <span class="satisfaction-stars">${stars}</span>
+            </div>
+            <div class="summary-row">
+                <span class="summary-label">Total Cups Sold</span>
+                <span class="summary-value" style="color: #ffd54f;">${state.totalCupsSold}</span>
+            </div>
+            <div class="summary-row">
+                <span class="summary-label">Balance</span>
+                <span class="summary-value money">$${state.money.toFixed(2)}</span>
+            </div>
+        `;
+
+        // Show next unlock hint
+        const nextDrink = DRINK_TYPES.find(d => d.unlockAt > state.totalCupsSold);
+        const nextSupply = ALL_SUPPLIES.find(s => s.unlockAt > state.totalCupsSold);
+        const nextUnlock = [nextDrink, nextSupply].filter(Boolean).sort((a,b) => a.unlockAt - b.unlockAt)[0];
+        if (nextUnlock) {
+            const remaining = nextUnlock.unlockAt - state.totalCupsSold;
+            html += `
+                <div class="summary-divider"></div>
+                <div style="font-size: 12px; color: #ffd54f; text-align: center; padding: 4px 0;">
+                    Next unlock in ${remaining} more cup${remaining !== 1 ? 's' : ''} sold!
+                </div>
+            `;
+        }
+
+        document.getElementById('summary-content').innerHTML = html;
+
+        const isLastDay = state.maxDays > 0 && state.day >= state.maxDays;
+        const btn = document.getElementById('next-day-btn');
+        if (isLastDay) {
+            btn.textContent = 'See Final Results';
+            btn.onclick = endGame;
+        } else {
+            btn.textContent = 'Next Day';
+            btn.onclick = nextDay;
+        }
+
+        modal.classList.remove('hidden');
+    }
+
+    // ===== SKIP DAY =====
+    function skipDay() {
+        state.inventory.ice = 0;
+        state.daySpending = 0;
+        state.dayProfits.push(0);
+        state.day++;
+        if (state.maxDays > 0 && state.day > state.maxDays) {
+            endGame();
+            return;
+        }
+        generateWeather();
+        buildDrinkSelector();
+        buildIngredientSlots();
+        buildRecipeSection();
+        updateUI();
+    }
+
+    // ===== NEXT DAY =====
+    function nextDay() {
+        document.getElementById('summary-modal').classList.add('hidden');
+
+        // Ice melts overnight
+        state.inventory.ice = 0;
+        state.daySpending = 0;
+
+        state.day++;
+        generateWeather();
+        buildDrinkSelector();
+        buildIngredientSlots();
+        buildRecipeSection();
+        updateUI();
+        showScreen('game-screen');
+    }
+
+    // ===== END GAME =====
+    function endGame() {
+        document.getElementById('summary-modal').classList.add('hidden');
+
+        const finalMoney = state.money;
+        const isNewHigh = saveHighScore(finalMoney);
+
+        document.getElementById('final-money').textContent = '$' + finalMoney.toFixed(2);
+
+        if (isNewHigh) {
+            document.getElementById('new-high-score').classList.remove('hidden');
+        } else {
+            document.getElementById('new-high-score').classList.add('hidden');
+        }
+
+        const avgProfit = state.dayProfits.length > 0
+            ? state.dayProfits.reduce((a, b) => a + b, 0) / state.dayProfits.length
+            : 0;
+
+        const drinksUnlocked = DRINK_TYPES.filter(d => state.totalCupsSold >= d.unlockAt).length;
+
+        const statsHtml = `
+            <div class="end-stat-row">
+                <span class="end-stat-label">Days Played</span>
+                <span class="end-stat-value">${state.day}</span>
+            </div>
+            <div class="end-stat-row">
+                <span class="end-stat-label">Total Revenue</span>
+                <span class="end-stat-value" style="color: #66bb6a;">$${state.totalRevenue.toFixed(2)}</span>
+            </div>
+            <div class="end-stat-row">
+                <span class="end-stat-label">Total Costs</span>
+                <span class="end-stat-value" style="color: #ff5252;">$${state.totalCosts.toFixed(2)}</span>
+            </div>
+            <div class="end-stat-row">
+                <span class="end-stat-label">Total Profit</span>
+                <span class="end-stat-value" style="color: ${(state.totalRevenue - state.totalCosts) >= 0 ? '#66bb6a' : '#ff5252'};">$${(state.totalRevenue - state.totalCosts).toFixed(2)}</span>
+            </div>
+            <div class="end-stat-row">
+                <span class="end-stat-label">Total Cups Sold</span>
+                <span class="end-stat-value">${state.totalCupsSold}</span>
+            </div>
+            <div class="end-stat-row">
+                <span class="end-stat-label">Drinks Unlocked</span>
+                <span class="end-stat-value" style="color: #ffd54f;">${drinksUnlocked} / ${DRINK_TYPES.length}</span>
+            </div>
+            <div class="end-stat-row">
+                <span class="end-stat-label">Avg Profit / Day</span>
+                <span class="end-stat-value">$${avgProfit.toFixed(2)}</span>
+            </div>
+            <div class="end-stat-row">
+                <span class="end-stat-label">Best Day</span>
+                <span class="end-stat-value" style="color: #66bb6a;">$${state.bestDay.toFixed(2)}</span>
+            </div>
+            <div class="end-stat-row">
+                <span class="end-stat-label">Worst Day</span>
+                <span class="end-stat-value" style="color: #ff5252;">$${state.worstDay === Infinity ? '0.00' : state.worstDay.toFixed(2)}</span>
+            </div>
+            <div class="end-stat-row">
+                <span class="end-stat-label">High Score</span>
+                <span class="end-stat-value" style="color: #ffd54f;">$${loadHighScore().toFixed(2)}</span>
+            </div>
+        `;
+        document.getElementById('end-stats').innerHTML = statsHtml;
+        document.getElementById('high-score-display').textContent = loadHighScore().toFixed(2);
+
+        showScreen('end-screen');
+    }
+
+    // ===== MODE DISPATCHER =====
+    function startWithMode(maxDays, experimentMode) {
+        if (selectedPlayMode === 'tables') {
+            startTablesMode(experimentMode, false);
+        } else if (selectedPlayMode === 'growing') {
+            startTablesMode(experimentMode, true);
+        } else {
+            startGame(maxDays, experimentMode);
+        }
+    }
+
+    // ===== TABLES MODE =====
+    let tablesState = {
+        money: 30, price: 1.00, cupsOnTable: [], selectedIngredients: {}, selectedRecipe: null,
+        weather: null, weatherTimer: null, customerTimer: null, sold: 0,
+        totalRevenue: 0, totalCosts: 0, experimentMode: false, inventory: {}, running: false, speed: 1,
+        // Growing Business
+        growingBusiness: false, tableCount: 1, cupsOnTables: [[]], selectedTable: 0,
+        workers: [], workerTimer: null, wageTimer: null,
+        activeAds: [], adMultiplier: 1.0,
+        businessLevel: 1, businessXP: 0, totalWagesPaid: 0,
+    };
+
+    function startTablesMode(experimentMode, growingBusiness) {
+        const startMoney = growingBusiness ? 25 : (experimentMode ? 30 : 20);
+        tablesState = {
+            money: startMoney, price: 1.00, cupsOnTable: [], selectedIngredients: {}, selectedRecipe: null,
+            weather: null, weatherTimer: null, customerTimer: null, sold: 0,
+            totalRevenue: 0, totalCosts: 0, experimentMode: !!experimentMode, inventory: {}, running: true, speed: 1,
+            growingBusiness: !!growingBusiness, tableCount: 1, cupsOnTables: [[]], selectedTable: 0,
+            workers: [], workerTimer: null, wageTimer: null,
+            activeAds: [], adMultiplier: 1.0,
+            businessLevel: 1, businessXP: 0, totalWagesPaid: 0,
+        };
+        ALL_SUPPLIES.forEach(s => { tablesState.inventory[s.id] = 0; });
+
+        tablesChangeWeather();
+        tablesUpdateStats();
+        tablesUpdateRecipes();
+        tablesUpdateIngredients();
+        tablesUpdateCups();
+        tablesUpdateCraftCost();
+
+        // Show/hide GB UI
+        document.getElementById('business-bar').style.display = growingBusiness ? 'flex' : 'none';
+        document.getElementById('table-selector').style.display = growingBusiness ? 'flex' : 'none';
+        if (growingBusiness) {
+            gbUpdateBusinessBar();
+            gbUpdateTableSelector();
+            gbUpdateScene();
+        } else {
+            // Restore single table visual
+            const scene = document.getElementById('tables-scene');
+            const existing = scene.querySelector('.multi-table-container');
+            if (existing) existing.remove();
+            let tv = scene.querySelector('.table-visual');
+            if (!tv) {
+                tv = document.createElement('div');
+                tv.className = 'table-visual';
+                tv.innerHTML = '<div class="stand-sign" id="tables-sign">LEMONADE</div><div style="position:relative;"><div class="table-cups" id="tables-cups"></div><div class="table-surface"></div><div class="table-legs"><div class="table-leg"></div><div class="table-leg"></div></div></div>';
+                scene.appendChild(tv);
+            }
+            tv.style.display = '';
+        }
+
+        document.getElementById('tables-price-slider').value = 100;
+        document.getElementById('tables-price-val').textContent = '$1.00';
+
+        showScreen('tables-screen');
+
+        tablesState.weatherTimer = setInterval(() => { tablesChangeWeather(); }, 30000 + Math.random() * 30000);
+        tablesState.customerTimer = setInterval(() => { tablesSpawnCustomer(); }, 1200);
+
+        if (growingBusiness) {
+            tablesState.workerTimer = setInterval(() => { gbWorkerTick(); }, 500);
+            tablesState.wageTimer = setInterval(() => { gbWageTick(); }, 5000);
+        }
+    }
+
+    function tablesChangeWeather() {
+        const weights = [30, 20, 25, 15, 10];
+        const total = weights.reduce((a, b) => a + b, 0);
+        let r = Math.random() * total;
+        let idx = 0;
+        for (let i = 0; i < weights.length; i++) {
+            r -= weights[i];
+            if (r <= 0) { idx = i; break; }
+        }
+        const w = WEATHER[idx];
+        const temp = Math.floor(w.temp[0] + Math.random() * (w.temp[1] - w.temp[0]));
+        tablesState.weather = { ...w, actualTemp: temp };
+
+        // Update weather icon
+        document.getElementById('tables-weather-icon').textContent = w.icon;
+
+        // Update scene background
+        const scene = document.getElementById('tables-scene');
+        scene.className = 'tables-scene';
+        if (w.id === 'rainy' || w.id === 'stormy') scene.classList.add('rainy');
+        if (w.id === 'stormy') scene.classList.add('stormy');
+        if (w.id === 'hot') scene.classList.add('hot');
+
+        // Update weather overlay
+        tablesUpdateWeatherEffects();
+    }
+
+    function tablesUpdateWeatherEffects() {
+        const overlay = document.getElementById('tables-weather-overlay');
+        overlay.innerHTML = '';
+        const w = tablesState.weather;
+        if (!w) return;
+
+        if (w.id === 'sunny' || w.id === 'hot') {
+            const sun = document.createElement('div');
+            sun.className = 'sun-icon';
+            sun.textContent = w.id === 'hot' ? '🔥' : '☀️';
+            overlay.appendChild(sun);
+        }
+
+        if (w.id === 'cloudy') {
+            for (let i = 0; i < 3; i++) {
+                const cloud = document.createElement('div');
+                cloud.className = 'cloud';
+                cloud.textContent = '☁️';
+                cloud.style.top = (10 + Math.random() * 25) + '%';
+                cloud.style.animationDelay = (i * 7) + 's';
+                overlay.appendChild(cloud);
+            }
+            const sun = document.createElement('div');
+            sun.className = 'sun-icon';
+            sun.textContent = '🌤️';
+            overlay.appendChild(sun);
+        }
+
+        if (w.id === 'rainy' || w.id === 'stormy') {
+            // Rain drops
+            const dropCount = w.id === 'stormy' ? 40 : 20;
+            for (let i = 0; i < dropCount; i++) {
+                const drop = document.createElement('div');
+                drop.className = 'raindrop';
+                drop.style.left = Math.random() * 100 + '%';
+                drop.style.animationDuration = (0.5 + Math.random() * 0.5) + 's';
+                drop.style.animationDelay = Math.random() * 2 + 's';
+                overlay.appendChild(drop);
+            }
+            // Clouds
+            for (let i = 0; i < 4; i++) {
+                const cloud = document.createElement('div');
+                cloud.className = 'cloud';
+                cloud.textContent = '🌧️';
+                cloud.style.top = (5 + Math.random() * 15) + '%';
+                cloud.style.animationDelay = (i * 5) + 's';
+                overlay.appendChild(cloud);
+            }
+        }
+    }
+
+    function tablesUpdateStats() {
+        document.getElementById('tables-money').textContent = '$' + tablesState.money.toFixed(2);
+        if (tablesState.growingBusiness) {
+            const totalCups = tablesState.cupsOnTables.reduce((sum, t) => sum + t.length, 0);
+            document.getElementById('tables-cup-count').textContent = totalCups;
+        } else {
+            document.getElementById('tables-cup-count').textContent = tablesState.cupsOnTable.length;
+        }
+        document.getElementById('tables-sold').textContent = tablesState.sold;
+    }
+
+    function tablesUpdateRecipes() {
+        const container = document.getElementById('tables-recipes');
+        container.innerHTML = '';
+
+        DRINK_TYPES.forEach(drink => {
+            let unlocked;
+            if (tablesState.growingBusiness) {
+                const lvl = BUSINESS_LEVELS.find(l => l.level === tablesState.businessLevel);
+                unlocked = lvl && lvl.recipes.includes(drink.id);
+            } else {
+                unlocked = tablesState.sold >= drink.unlockAt;
+            }
+            const btn = document.createElement('button');
+            btn.className = 'tables-recipe-btn';
+            if (!unlocked) btn.classList.add('locked');
+            if (tablesState.selectedRecipe === drink.id) btn.classList.add('selected');
+            btn.textContent = drink.name;
+            if (!unlocked) {
+                btn.title = `Sell ${drink.unlockAt} cups to unlock`;
+            } else {
+                btn.title = drink.desc + ' | Ingredients: ' + drink.ingredients.map(id => {
+                    const s = ALL_SUPPLIES.find(s => s.id === id);
+                    return s ? s.emoji + ' ' + s.name : id;
+                }).join(', ');
+            }
+            btn.onclick = () => {
+                if (!unlocked) return;
+                if (tablesState.selectedRecipe === drink.id) {
+                    // Deselect recipe
+                    tablesState.selectedRecipe = null;
+                    tablesState.selectedIngredients = {};
+                } else {
+                    // Select recipe — auto-select its ingredients
+                    tablesState.selectedRecipe = drink.id;
+                    tablesState.selectedIngredients = {};
+                    drink.ingredients.forEach(id => {
+                        tablesState.selectedIngredients[id] = true;
+                    });
+                }
+                tablesUpdateRecipes();
+                tablesUpdateIngredients();
+                tablesUpdateCraftCost();
+            };
+            container.appendChild(btn);
+        });
+    }
+
+    function tablesUpdateIngredients() {
+        const container = document.getElementById('tables-ingredients');
+        container.innerHTML = '';
+
+        const supplies = tablesState.experimentMode
+            ? ALL_SUPPLIES.filter(s => s.id !== 'cups')
+            : ALL_SUPPLIES.filter(s => s.id !== 'cups' && !s.experimentOnly);
+
+        supplies.forEach(s => {
+            const stock = tablesState.inventory[s.id] || 0;
+            if (stock <= 0) return;
+            const btn = document.createElement('button');
+            btn.className = 'tables-ing-btn';
+            if (tablesState.selectedIngredients[s.id]) btn.classList.add('selected');
+            btn.innerHTML = `${s.emoji} ${s.name}<span class="ing-stock">${formatInv(stock)}</span>`;
+            btn.onclick = () => {
+                tablesState.selectedIngredients[s.id] = !tablesState.selectedIngredients[s.id];
+                tablesState.selectedRecipe = null; // clear recipe when manually toggling
+                tablesUpdateRecipes();
+                tablesUpdateIngredients();
+                tablesUpdateCraftCost();
+            };
+            container.appendChild(btn);
+        });
+
+        if (container.children.length === 0) {
+            container.innerHTML = '<div style="font-size: 13px; color: #666; padding: 6px 0;">No ingredients — visit the Shop!</div>';
+        }
+    }
+
+    function tablesGetCraftCost() {
+        let cost = 0.15; // cup cost
+        const selected = tablesState.selectedIngredients;
+        Object.keys(selected).forEach(id => {
+            if (!selected[id]) return;
+            const supply = ALL_SUPPLIES.find(s => s.id === id);
+            if (supply) cost += supply.cost;
+        });
+        return cost;
+    }
+
+    function tablesUpdateCraftCost() {
+        const cost = tablesGetCraftCost();
+        const selectedIds = Object.keys(tablesState.selectedIngredients).filter(id => tablesState.selectedIngredients[id]);
+        document.getElementById('tables-craft-cost').textContent =
+            selectedIds.length > 0
+                ? `Cost: $${cost.toFixed(2)} per cup`
+                : 'Select ingredients first';
+    }
+
+    function tablesCraft() {
+        const selectedIds = Object.keys(tablesState.selectedIngredients).filter(id => tablesState.selectedIngredients[id]);
+
+        if (selectedIds.length === 0) {
+            alert('Select at least one ingredient to craft!');
+            return;
+        }
+
+        // Check cups
+        if ((tablesState.inventory.cups || 0) < 1) {
+            alert('No cups! Buy some from the Shop.');
+            return;
+        }
+
+        // Check ingredients
+        for (const id of selectedIds) {
+            if ((tablesState.inventory[id] || 0) < 1) {
+                const supply = ALL_SUPPLIES.find(s => s.id === id);
+                alert(`Not enough ${supply.name}!`);
+                return;
+            }
+        }
+
+        // Max 8 cups on table
+        if (tablesState.growingBusiness) {
+            if (tablesState.cupsOnTables[tablesState.selectedTable].length >= 8) {
+                alert('Table ' + (tablesState.selectedTable + 1) + ' is full! Select another table or wait.');
+                return;
+            }
+        } else {
+            if (tablesState.cupsOnTable.length >= 8) {
+                alert('Table is full! Wait for customers to buy.');
+                return;
+            }
+        }
+
+        // Deduct ingredients (1 of each selected per cup)
+        selectedIds.forEach(id => {
+            tablesState.inventory[id] = Math.round((tablesState.inventory[id] - 1) * 100) / 100;
+            if (tablesState.inventory[id] < 0.001) tablesState.inventory[id] = 0;
+        });
+        tablesState.inventory.cups -= 1;
+
+        // Calculate quality of this cup
+        const quality = tablesGetCupQuality(selectedIds);
+
+        // Use recipe priceMult if a recipe is selected, otherwise calculate from ingredients
+        const recipe = tablesState.selectedRecipe ? DRINK_TYPES.find(d => d.id === tablesState.selectedRecipe) : null;
+        const priceMult = recipe ? recipe.priceMult : 1 + (selectedIds.filter(id => !['lemons','sugar','ice'].includes(id)).length) * 0.2;
+
+        // Update stand sign if using a recipe
+        if (recipe) {
+            document.getElementById('tables-sign').textContent = recipe.standLabel || 'LEMONADE';
+        }
+
+        // Add to table
+        const craftCost = tablesGetCraftCost();
+        const newCup = {
+            ingredients: [...selectedIds],
+            quality: quality,
+            priceMult: priceMult,
+            cost: craftCost,
+            recipeName: recipe ? recipe.name : 'Custom',
+        };
+        if (tablesState.growingBusiness) {
+            tablesState.cupsOnTables[tablesState.selectedTable].push(newCup);
+        } else {
+            tablesState.cupsOnTable.push(newCup);
+        }
+
+        tablesUpdateCups();
+        tablesUpdateIngredients();
+        tablesUpdateStats();
+        tablesUpdateCraftCost();
+    }
+
+    function tablesGetCupQuality(ingredientIds) {
+        let score = 20; // base
+
+        // Has acid (lemons/lime)?
+        if (ingredientIds.includes('lemons') || ingredientIds.includes('lime')) score += 20;
+
+        // Has sweetener?
+        if (ingredientIds.includes('sugar') || ingredientIds.includes('honey') || ingredientIds.includes('agave')) score += 15;
+
+        // Has ice?
+        if (ingredientIds.includes('ice')) score += 10;
+
+        // Variety bonus
+        const count = ingredientIds.length;
+        if (count >= 2 && count <= 5) score += 10 + (count - 2) * 5;
+        else if (count > 5) score += Math.max(0, 25 - (count - 5) * 5);
+
+        // Harmony bonuses (same as experiment mode)
+        const has = id => ingredientIds.includes(id);
+        if (has('mint') && has('lemons')) score += 5;
+        if (has('ginger') && has('honey')) score += 5;
+        if (has('strawberries') && has('basil')) score += 5;
+        if (has('mango') && has('chili')) score += 5;
+        if (has('coconut') && has('pineapple')) score += 5;
+        if (has('watermelon') && has('mint')) score += 5;
+        if (has('cherry') && has('vanilla')) score += 5;
+        if (has('lime') && has('coconut')) score += 5;
+        if (has('peach') && has('vanilla')) score += 5;
+        if (has('matcha') && has('vanilla')) score += 5;
+
+        // Clash penalties
+        if (has('matcha') && has('chili')) score -= 8;
+        if (has('cinnamon') && has('mint')) score -= 5;
+        if (has('rosewater') && has('chili')) score -= 8;
+
+        return Math.min(100, Math.max(5, score));
+    }
+
+    function tablesUpdateCups() {
+        if (tablesState.growingBusiness) {
+            // Update scene is handled by gbUpdateScene
+            gbUpdateScene();
+            // Update cup list panel
+            const list = document.getElementById('tables-cup-list');
+            list.innerHTML = '';
+            tablesState.cupsOnTables.forEach((cups, tIdx) => {
+                cups.forEach((cup) => {
+                    const ings = cup.ingredients.map(id => {
+                        const s = ALL_SUPPLIES.find(s => s.id === id);
+                        return s ? s.emoji + ' ' + s.name : id;
+                    }).join(', ');
+                    const card = document.createElement('div');
+                    card.className = 'cup-info-card';
+                    card.innerHTML = `
+                        <div class="cup-header">
+                            <span class="cup-name">🥤 T${tIdx+1}: ${cup.recipeName || 'Custom'}</span>
+                            <span class="cup-cost">-$${cup.cost.toFixed(2)}</span>
+                        </div>
+                        <div class="cup-ings">${ings}</div>
+                        <div class="cup-quality">Quality: ${cup.quality}/100</div>
+                    `;
+                    list.appendChild(card);
+                });
+            });
+            return;
+        }
+        // Original single-table mode
+        const container = document.getElementById('tables-cups');
+        container.innerHTML = '';
+        tablesState.cupsOnTable.forEach((cup, i) => {
+            const el = document.createElement('span');
+            el.className = 'table-cup';
+            el.textContent = '🥤';
+            container.appendChild(el);
+        });
+        const list = document.getElementById('tables-cup-list');
+        list.innerHTML = '';
+        tablesState.cupsOnTable.forEach((cup, i) => {
+            const ings = cup.ingredients.map(id => {
+                const s = ALL_SUPPLIES.find(s => s.id === id);
+                return s ? s.emoji + ' ' + s.name : id;
+            }).join(', ');
+            const card = document.createElement('div');
+            card.className = 'cup-info-card';
+            card.innerHTML = `
+                <div class="cup-header">
+                    <span class="cup-name">🥤 ${cup.recipeName || 'Custom'}</span>
+                    <span class="cup-cost">-$${cup.cost.toFixed(2)}</span>
+                </div>
+                <div class="cup-ings">${ings}</div>
+                <div class="cup-quality">Quality: ${cup.quality}/100</div>
+            `;
+            list.appendChild(card);
+        });
+    }
+
+    function tablesSpawnCustomer() {
+        if (!tablesState.running) return;
+
+        // Check if any cups available
+        let hasCups;
+        if (tablesState.growingBusiness) {
+            hasCups = tablesState.cupsOnTables.some(t => t.length > 0);
+        } else {
+            hasCups = tablesState.cupsOnTable.length > 0;
+        }
+        if (!hasCups) return;
+
+        const w = tablesState.weather;
+        if (!w) return;
+
+        // Update ad multiplier
+        if (tablesState.growingBusiness) gbComputeAdMultiplier();
+
+        // Guaranteed minimum customers per tick based on weather
+        const minCustomers = { hot: 4, sunny: 2, cloudy: 1, rainy: 0, stormy: 0 };
+        const extraChance = { hot: 0.6, sunny: 0.5, cloudy: 0.3, rainy: 0.4, stormy: 0.15 };
+
+        let count = minCustomers[w.id] || 0;
+        if (Math.random() < (extraChance[w.id] || 0)) count++;
+        if (w.id === 'rainy' && Math.random() < 0.4) count = 1;
+        if (w.id === 'stormy' && Math.random() < 0.15) count = 1;
+
+        // Ad multiplier boosts count
+        if (tablesState.growingBusiness && tablesState.adMultiplier > 1) {
+            count = Math.floor(count * tablesState.adMultiplier);
+        }
+
+        // Can't serve more customers than cups available
+        if (tablesState.growingBusiness) {
+            const totalCups = tablesState.cupsOnTables.reduce((sum, t) => sum + t.length, 0);
+            count = Math.min(count, totalCups);
+        } else {
+            count = Math.min(count, tablesState.cupsOnTable.length);
+        }
+        if (count <= 0) return;
+
+        for (let c = 0; c < count; c++) {
+            let cupArr, bestIdx, cup, tableIdx = 0;
+            if (tablesState.growingBusiness) {
+                // Pick a random table with cups
+                const available = tablesState.cupsOnTables
+                    .map((cups, idx) => ({idx, cups}))
+                    .filter(t => t.cups.length > 0);
+                if (available.length === 0) break;
+                const table = available[Math.floor(Math.random() * available.length)];
+                tableIdx = table.idx;
+                cupArr = table.cups;
+            } else {
+                if (tablesState.cupsOnTable.length === 0) break;
+                cupArr = tablesState.cupsOnTable;
+            }
+            bestIdx = cupArr.reduce((best, c, i) => c.quality > cupArr[best].quality ? i : best, 0);
+            cup = cupArr[bestIdx];
+
+            // Will the customer buy at this price?
+            const fairPrice = (0.50 + (cup.quality / 100) * 2.00) * cup.priceMult;
+            const willBuy = tablesState.price <= fairPrice * 1.3;
+
+            if (!willBuy) continue;
+
+            // Sell the cup
+            cupArr.splice(bestIdx, 1);
+            tablesState.sold++;
+            tablesState.money = Math.round((tablesState.money + tablesState.price) * 100) / 100;
+            tablesState.totalRevenue += tablesState.price;
+            if (tablesState.growingBusiness) {
+                tablesState.businessXP += 1 + Math.floor(cup.quality / 25);
+            }
+
+            // Spawn customer visual (stagger them, speed up animations)
+            const spd = tablesState.speed;
+            const delay = c * (400 / spd);
+            ((d) => {
+                setTimeout(() => {
+                    const scene = document.getElementById('tables-scene');
+                    const emoji = CUSTOMER_EMOJIS[Math.floor(Math.random() * CUSTOMER_EMOJIS.length)];
+                    const customer = document.createElement('div');
+                    customer.className = 'table-customer';
+                    customer.textContent = emoji;
+                    customer.style.bottom = (8 + Math.random() * 8) + '%';
+                    customer.style.transition = `left ${2 / spd}s ease-in-out, bottom 1s`;
+                    const startSide = Math.random() > 0.5;
+                    customer.style.left = startSide ? '-40px' : 'calc(100% + 40px)';
+                    scene.appendChild(customer);
+
+                    setTimeout(() => {
+                        customer.style.left = (40 + Math.random() * 20) + '%';
+                    }, 50);
+
+                    setTimeout(() => {
+                        const pop = document.createElement('div');
+                        pop.className = 'sale-pop';
+                        pop.textContent = `+$${tablesState.price.toFixed(2)}`;
+                        pop.style.left = (40 + Math.random() * 20) + '%';
+                        pop.style.bottom = '35%';
+                        scene.appendChild(pop);
+                        setTimeout(() => pop.remove(), 1200 / spd);
+                    }, 2000 / spd);
+
+                    setTimeout(() => {
+                        customer.classList.add('leaving');
+                        customer.style.left = startSide ? 'calc(100% + 40px)' : '-40px';
+                    }, 3000 / spd);
+
+                    setTimeout(() => { customer.remove(); }, 4500 / spd);
+                }, d);
+            })(delay);
+        }
+
+        tablesUpdateCups();
+        tablesUpdateStats();
+        tablesUpdateRecipes();
+        if (tablesState.growingBusiness) {
+            gbUpdateBusinessBar();
+            gbUpdateTableSelector();
+        }
+    }
+
+    function setTablesSpeed(speed) {
+        tablesState.speed = speed;
+
+        // Update button states
+        document.querySelectorAll('.speed-btn').forEach(btn => btn.classList.remove('selected'));
+        const btn = document.getElementById('speed-' + speed);
+        if (btn) btn.classList.add('selected');
+
+        // Restart timers with new speed
+        if (tablesState.customerTimer) clearInterval(tablesState.customerTimer);
+        if (tablesState.weatherTimer) clearInterval(tablesState.weatherTimer);
+
+        if (tablesState.running) {
+            tablesState.customerTimer = setInterval(() => {
+                tablesSpawnCustomer();
+            }, 1200 / speed);
+
+            tablesState.weatherTimer = setInterval(() => {
+                tablesChangeWeather();
+            }, (30000 + Math.random() * 30000) / speed);
+        }
+        if (tablesState.growingBusiness && tablesState.running) {
+            if (tablesState.workerTimer) clearInterval(tablesState.workerTimer);
+            if (tablesState.wageTimer) clearInterval(tablesState.wageTimer);
+            tablesState.workerTimer = setInterval(() => { gbWorkerTick(); }, 500 / speed);
+            tablesState.wageTimer = setInterval(() => { gbWageTick(); }, 5000 / speed);
+        }
+    }
+
+    // ===== GROWING BUSINESS FUNCTIONS =====
+
+    function gbUpdateBusinessBar() {
+        if (!tablesState.growingBusiness) return;
+        const lvl = BUSINESS_LEVELS.find(l => l.level === tablesState.businessLevel);
+        const nextLvl = BUSINESS_LEVELS.find(l => l.level === tablesState.businessLevel + 1);
+        document.getElementById('biz-level-label').textContent = lvl.emoji + ' Lv.' + lvl.level;
+        if (nextLvl) {
+            const pct = Math.min(100, Math.floor((tablesState.businessXP / nextLvl.xp) * 100));
+            document.getElementById('biz-xp-label').textContent = tablesState.businessXP + '/' + nextLvl.xp;
+            document.getElementById('biz-xp-fill').style.width = pct + '%';
+        } else {
+            document.getElementById('biz-xp-label').textContent = 'MAX';
+            document.getElementById('biz-xp-fill').style.width = '100%';
+        }
+        document.getElementById('biz-workers-label').textContent = tablesState.workers.length;
+        document.getElementById('biz-ad-label').textContent = tablesState.adMultiplier.toFixed(1) + 'x';
+    }
+
+    function gbUpdateTableSelector() {
+        if (!tablesState.growingBusiness) return;
+        const container = document.getElementById('table-select-btns');
+        container.innerHTML = '';
+        for (let i = 0; i < tablesState.tableCount; i++) {
+            const btn = document.createElement('button');
+            btn.className = 'table-sel-btn';
+            if (i === tablesState.selectedTable) btn.classList.add('selected');
+            btn.textContent = 'T' + (i + 1) + ' (' + tablesState.cupsOnTables[i].length + '/8)';
+            btn.onclick = () => { tablesState.selectedTable = i; gbUpdateTableSelector(); };
+            container.appendChild(btn);
+        }
+    }
+
+    function gbUpdateScene() {
+        const scene = document.getElementById('tables-scene');
+        // Hide single table visual
+        const singleTable = scene.querySelector('.table-visual');
+        if (singleTable) singleTable.style.display = 'none';
+        // Remove old multi-table container
+        let container = scene.querySelector('.multi-table-container');
+        if (container) container.remove();
+        // Remove old ad bar
+        let adBar = scene.querySelector('.ad-bar');
+        if (adBar) adBar.remove();
+
+        // Build multi-table container
+        container = document.createElement('div');
+        container.className = 'multi-table-container';
+
+        for (let i = 0; i < tablesState.tableCount; i++) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'mini-table-wrapper';
+            const table = document.createElement('div');
+            table.className = 'mini-table';
+
+            // Table number
+            const numBadge = document.createElement('div');
+            numBadge.className = 'table-num-badge';
+            numBadge.textContent = 'Table ' + (i + 1);
+            table.appendChild(numBadge);
+
+            // Cups
+            const cups = document.createElement('div');
+            cups.className = 'mini-cups';
+            tablesState.cupsOnTables[i].forEach(() => {
+                const c = document.createElement('span');
+                c.textContent = '🥤';
+                cups.appendChild(c);
+            });
+            table.appendChild(cups);
+
+            // Sign
+            const sign = document.createElement('div');
+            sign.className = 'mini-sign';
+            // Show worker's recipe if assigned
+            const worker = tablesState.workers.find(w => w.assignedTable === i);
+            if (worker) {
+                const recipe = DRINK_TYPES.find(d => d.id === worker.assignedRecipe);
+                sign.textContent = recipe ? recipe.name.replace(/^.+\s/, '') : 'LEMONADE';
+            } else {
+                sign.textContent = 'LEMONADE';
+            }
+            table.appendChild(sign);
+
+            // Surface and legs
+            const surface = document.createElement('div');
+            surface.className = 'mini-surface';
+            table.appendChild(surface);
+            const legs = document.createElement('div');
+            legs.className = 'mini-legs';
+            legs.innerHTML = '<div class="mini-leg"></div><div class="mini-leg"></div>';
+            table.appendChild(legs);
+
+            wrapper.appendChild(table);
+
+            // Worker emoji below table
+            if (worker) {
+                const wEmoji = document.createElement('div');
+                wEmoji.className = 'mini-worker';
+                wEmoji.textContent = worker.emoji;
+                wEmoji.title = worker.name + ' ($' + worker.budget.toFixed(0) + ' left)';
+                wrapper.appendChild(wEmoji);
+            }
+
+            container.appendChild(wrapper);
+        }
+
+        scene.appendChild(container);
+
+        // Ad bar
+        if (tablesState.activeAds.length > 0) {
+            adBar = document.createElement('div');
+            adBar.className = 'ad-bar';
+            const now = Date.now();
+            tablesState.activeAds.forEach(ad => {
+                const remaining = Math.max(0, Math.ceil(ad.duration - (now - ad.startTime) / 1000 * tablesState.speed));
+                const el = document.createElement('div');
+                el.className = 'ad-indicator';
+                el.textContent = ad.emoji + ' ' + remaining + 's';
+                adBar.appendChild(el);
+            });
+            scene.appendChild(adBar);
+        }
+    }
+
+    function gbComputeAdMultiplier() {
+        const now = Date.now();
+        tablesState.activeAds = tablesState.activeAds.filter(a =>
+            (now - a.startTime) / 1000 * tablesState.speed < a.duration
+        );
+        if (tablesState.activeAds.length === 0) {
+            tablesState.adMultiplier = 1.0;
+            return;
+        }
+        const sorted = [...tablesState.activeAds].sort((a, b) => b.multiplier - a.multiplier);
+        let mult = sorted[0].multiplier;
+        for (let i = 1; i < sorted.length; i++) {
+            mult += (sorted[i].multiplier - 1) * 0.3;
+        }
+        tablesState.adMultiplier = mult;
+    }
+
+    function gbWorkerTick() {
+        if (!tablesState.running || !tablesState.growingBusiness) return;
+        const now = Date.now();
+        tablesState.workers.forEach(w => {
+            if (w.assignedTable === null || !w.assignedRecipe) return;
+            w._lastCraft = w._lastCraft || now;
+            const elapsed = (now - w._lastCraft) * tablesState.speed;
+            if (elapsed >= w.craftSpeed) {
+                w._lastCraft = now;
+                const recipe = DRINK_TYPES.find(d => d.id === w.assignedRecipe);
+                if (!recipe) return;
+                const tIdx = w.assignedTable;
+                if (tIdx >= tablesState.cupsOnTables.length) return;
+                if (tablesState.cupsOnTables[tIdx].length >= 8) return;
+                const ingredientIds = recipe.ingredients;
+                const canCraft = ingredientIds.every(id => (tablesState.inventory[id] || 0) >= 1)
+                    && (tablesState.inventory.cups || 0) >= 1;
+
+                // If no ingredients in inventory, worker tries to auto-buy them
+                if (!canCraft) {
+                    // Calculate cost to buy missing ingredients
+                    let buyTotal = 0;
+                    const toBuy = {};
+                    ingredientIds.forEach(id => {
+                        if ((tablesState.inventory[id] || 0) < 1) {
+                            const s = ALL_SUPPLIES.find(s => s.id === id);
+                            if (s) { toBuy[id] = 5; buyTotal += s.cost * 5; }
+                        }
+                    });
+                    if ((tablesState.inventory.cups || 0) < 1) {
+                        toBuy['cups'] = 10;
+                        buyTotal += 0.15 * 10;
+                    }
+                    // Try worker budget first, then player money
+                    if (w.budget >= buyTotal) {
+                        w.budget = Math.round((w.budget - buyTotal) * 100) / 100;
+                        Object.keys(toBuy).forEach(id => {
+                            tablesState.inventory[id] = (tablesState.inventory[id] || 0) + toBuy[id];
+                        });
+                    } else if (w.budget + tablesState.money >= buyTotal) {
+                        // Use remaining budget + player money
+                        const fromPlayer = buyTotal - w.budget;
+                        w.budget = 0;
+                        tablesState.money = Math.round((tablesState.money - fromPlayer) * 100) / 100;
+                        tablesState.totalCosts += fromPlayer;
+                        Object.keys(toBuy).forEach(id => {
+                            tablesState.inventory[id] = (tablesState.inventory[id] || 0) + toBuy[id];
+                        });
+                    } else {
+                        return; // Can't afford ingredients at all
+                    }
+                }
+
+                // Deduct ingredients
+                ingredientIds.forEach(id => {
+                    tablesState.inventory[id] = Math.round((tablesState.inventory[id] - 1) * 100) / 100;
+                    if (tablesState.inventory[id] < 0.001) tablesState.inventory[id] = 0;
+                });
+                tablesState.inventory.cups -= 1;
+
+                // Workers craft at 95% quality (they're trained!)
+                const quality = Math.round(tablesGetCupQuality(ingredientIds) * 0.95);
+                const craftCost = ingredientIds.reduce((sum, id) => {
+                    const s = ALL_SUPPLIES.find(s => s.id === id);
+                    return sum + (s ? s.cost : 0);
+                }, 0) + 0.15;
+                tablesState.cupsOnTables[tIdx].push({
+                    ingredients: [...ingredientIds], quality, priceMult: recipe.priceMult,
+                    cost: craftCost, recipeName: recipe.name,
+                });
+                tablesUpdateCups();
+                tablesUpdateIngredients();
+                tablesUpdateStats();
+            }
+        });
+    }
+
+    function gbWageTick() {
+        if (!tablesState.running || !tablesState.growingBusiness) return;
+        tablesState.workers.forEach(w => {
+            const cost = Math.round(((w.wage * 5) / 60) * 100) / 100;
+            tablesState.money = Math.round((tablesState.money - cost) * 100) / 100;
+            tablesState.totalWagesPaid += cost;
+            tablesState.totalCosts += cost;
+        });
+        if (tablesState.money < 0) tablesState.money = 0;
+        tablesUpdateStats();
+        gbUpdateBusinessBar();
+    }
+
+    function gbBuyTable() {
+        const nextIdx = tablesState.tableCount;
+        if (nextIdx >= 6) return;
+        const lvl = BUSINESS_LEVELS.find(l => l.level === tablesState.businessLevel);
+        if (tablesState.tableCount >= lvl.maxTables) return;
+        const cost = TABLE_COSTS[nextIdx];
+        if (tablesState.money < cost) return;
+        tablesState.money -= cost;
+        tablesState.totalCosts += cost;
+        tablesState.tableCount++;
+        tablesState.cupsOnTables.push([]);
+        tablesUpdateStats();
+        gbUpdateTableSelector();
+        gbUpdateScene();
+        gbUpdateBusinessBar();
+        if (document.getElementById('upgrades-modal').classList.contains('hidden') === false) {
+            gbRenderUpgradesTab('tables');
+        }
+    }
+
+    function gbHireWorker(tierIdx) {
+        const wType = WORKER_TYPES[tierIdx];
+        const lvl = BUSINESS_LEVELS.find(l => l.level === tablesState.businessLevel);
+        if (tablesState.workers.length >= lvl.maxWorkers) return;
+        if (wType.unlockLevel && tablesState.businessLevel < wType.unlockLevel) return;
+        if (tablesState.money < wType.cost) return;
+        tablesState.money -= wType.cost;
+        tablesState.totalCosts += wType.cost;
+        const usedNames = tablesState.workers.map(w => w.name);
+        const name = WORKER_NAMES.find(n => !usedNames.includes(n)) || 'Worker ' + (tablesState.workers.length + 1);
+        tablesState.workers.push({
+            id: Date.now(), name, emoji: wType.emoji, wage: wType.wage,
+            craftSpeed: wType.craftSpeed, tier: wType.tier,
+            assignedTable: 0, assignedRecipe: 'classic', _lastCraft: null,
+            budget: wType.budget, maxBudget: wType.budget,
+        });
+        tablesUpdateStats();
+        gbUpdateBusinessBar();
+        gbUpdateScene();
+        if (!document.getElementById('upgrades-modal').classList.contains('hidden')) {
+            gbRenderUpgradesTab('workers');
+        }
+    }
+
+    function gbFireWorker(id) {
+        tablesState.workers = tablesState.workers.filter(w => w.id !== id);
+        tablesUpdateStats();
+        gbUpdateBusinessBar();
+        gbUpdateScene();
+        if (!document.getElementById('upgrades-modal').classList.contains('hidden')) {
+            gbRenderUpgradesTab('workers');
+        }
+    }
+
+    function gbAssignWorker(id, field, value) {
+        const w = tablesState.workers.find(w => w.id === id);
+        if (!w) return;
+        if (field === 'table') w.assignedTable = parseInt(value);
+        if (field === 'recipe') w.assignedRecipe = value;
+        w._lastCraft = null;
+        gbUpdateScene();
+    }
+
+    function gbBuyAd(adId) {
+        const ad = AD_TYPES.find(a => a.id === adId);
+        if (!ad) return;
+        if (ad.unlockLevel && tablesState.businessLevel < ad.unlockLevel) return;
+        if (tablesState.money < ad.cost) return;
+        tablesState.money -= ad.cost;
+        tablesState.totalCosts += ad.cost;
+        tablesState.activeAds.push({
+            ...ad, startTime: Date.now(),
+        });
+        gbComputeAdMultiplier();
+        tablesUpdateStats();
+        gbUpdateBusinessBar();
+        gbUpdateScene();
+        if (!document.getElementById('upgrades-modal').classList.contains('hidden')) {
+            gbRenderUpgradesTab('advertising');
+        }
+    }
+
+    function gbUpgradeLevel() {
+        const nextLvl = BUSINESS_LEVELS.find(l => l.level === tablesState.businessLevel + 1);
+        if (!nextLvl) return;
+        if (tablesState.businessXP < nextLvl.xp || tablesState.money < nextLvl.cost) return;
+        tablesState.money -= nextLvl.cost;
+        tablesState.totalCosts += nextLvl.cost;
+        tablesState.businessLevel = nextLvl.level;
+        gbUpdateBusinessBar();
+        gbUpdateTableSelector();
+        gbUpdateScene();
+        tablesUpdateRecipes();
+        if (!document.getElementById('upgrades-modal').classList.contains('hidden')) {
+            gbRenderUpgradesTab('business');
+        }
+    }
+
+    // ===== UPGRADES PANEL =====
+    let currentUpgradeTab = 'business';
+
+    function openUpgradesPanel() {
+        document.getElementById('upgrades-modal').classList.remove('hidden');
+        gbRenderUpgradesTabs();
+        gbRenderUpgradesTab(currentUpgradeTab);
+    }
+
+    function closeUpgradesPanel() {
+        document.getElementById('upgrades-modal').classList.add('hidden');
+    }
+
+    function gbRenderUpgradesTabs() {
+        const tabs = document.getElementById('upgrades-tabs');
+        tabs.innerHTML = '';
+        ['business', 'tables', 'workers', 'advertising'].forEach(t => {
+            const btn = document.createElement('button');
+            btn.className = 'upgrades-tab';
+            if (t === currentUpgradeTab) btn.classList.add('active');
+            btn.textContent = { business: '📈 Business', tables: '🪑 Tables', workers: '👷 Workers', advertising: '📣 Ads' }[t];
+            btn.onclick = () => { currentUpgradeTab = t; gbRenderUpgradesTabs(); gbRenderUpgradesTab(t); };
+            tabs.appendChild(btn);
+        });
+    }
+
+    function gbRenderUpgradesTab(tab) {
+        const content = document.getElementById('upgrades-content');
+        content.innerHTML = '';
+
+        if (tab === 'business') {
+            const lvl = BUSINESS_LEVELS.find(l => l.level === tablesState.businessLevel);
+            const nextLvl = BUSINESS_LEVELS.find(l => l.level === tablesState.businessLevel + 1);
+
+            let html = '<div class="upgrade-section">';
+            html += '<div class="upgrade-item"><div class="upgrade-info">';
+            html += '<div class="upgrade-name">' + lvl.emoji + ' ' + lvl.name + ' (Level ' + lvl.level + ')</div>';
+            html += '<div class="upgrade-desc">Tables: ' + lvl.maxTables + ' | Workers: ' + lvl.maxWorkers + ' | Recipes: ' + lvl.recipes.length + '</div>';
+            html += '</div></div>';
+
+            if (nextLvl) {
+                const hasXP = tablesState.businessXP >= nextLvl.xp;
+                const hasMoney = tablesState.money >= nextLvl.cost;
+                const canUpgrade = hasXP && hasMoney;
+                html += '<div class="upgrade-item">';
+                html += '<div class="upgrade-info">';
+                html += '<div class="upgrade-name">Next: ' + nextLvl.emoji + ' ' + nextLvl.name + '</div>';
+                html += '<div class="upgrade-desc">Requires: ' + nextLvl.xp + ' XP' + (hasXP ? ' ✓' : ' (need ' + (nextLvl.xp - tablesState.businessXP) + ' more)');
+                html += ' + $' + nextLvl.cost.toFixed(0) + (hasMoney ? ' ✓' : '') + '</div>';
+                html += '<div class="upgrade-desc">Unlocks: ' + nextLvl.maxTables + ' tables, ' + nextLvl.maxWorkers + ' workers, ' + nextLvl.recipes.length + ' recipes</div>';
+                html += '</div>';
+                html += '<button class="btn-upgrade" onclick="gbUpgradeLevel()" ' + (canUpgrade ? '' : 'disabled') + '>Upgrade $' + nextLvl.cost + '</button>';
+                html += '</div>';
+            } else {
+                html += '<div class="upgrade-item"><div class="upgrade-info"><div class="upgrade-name" style="color:#ffd54f;">🎉 Max Level Reached!</div></div></div>';
+            }
+
+            html += '<div class="upgrade-item"><div class="upgrade-info">';
+            html += '<div class="upgrade-name">Business XP: ' + tablesState.businessXP + '</div>';
+            const pct = nextLvl ? Math.min(100, Math.floor((tablesState.businessXP / nextLvl.xp) * 100)) : 100;
+            html += '<div style="margin-top:6px;"><div class="xp-bar-container" style="width:100%;"><div class="xp-bar-fill" style="width:' + pct + '%"></div></div></div>';
+            html += '</div></div>';
+            html += '</div>';
+            content.innerHTML = html;
+        }
+
+        if (tab === 'tables') {
+            const lvl = BUSINESS_LEVELS.find(l => l.level === tablesState.businessLevel);
+            let html = '<div class="upgrade-section">';
+            html += '<div style="font-size:12px;color:#888;margin-bottom:10px;">Tables: ' + tablesState.tableCount + ' / ' + lvl.maxTables + ' max at Level ' + lvl.level + '</div>';
+            for (let i = 0; i < Math.min(6, lvl.maxTables); i++) {
+                if (i < tablesState.tableCount) {
+                    const cups = tablesState.cupsOnTables[i].length;
+                    html += '<div class="upgrade-item">';
+                    html += '<div class="upgrade-info"><div class="upgrade-name">🪑 Table ' + (i+1) + '</div>';
+                    html += '<div class="upgrade-desc">' + cups + '/8 cups</div></div>';
+                    if (i === tablesState.selectedTable) {
+                        html += '<span style="color:#66bb6a;font-size:12px;font-weight:600;">Selected ✓</span>';
+                    } else {
+                        html += '<button class="btn-upgrade" onclick="tablesState.selectedTable=' + i + ';gbUpdateTableSelector();gbRenderUpgradesTab(\'tables\');">Select</button>';
+                    }
+                    html += '</div>';
+                } else {
+                    const cost = TABLE_COSTS[i];
+                    const canBuy = tablesState.money >= cost && i < lvl.maxTables;
+                    html += '<div class="upgrade-item">';
+                    html += '<div class="upgrade-info"><div class="upgrade-name">🔒 Table ' + (i+1) + '</div>';
+                    html += '<div class="upgrade-desc">$' + cost + '</div></div>';
+                    html += '<button class="btn-upgrade" onclick="gbBuyTable()" ' + (canBuy ? '' : 'disabled') + '>Buy $' + cost + '</button>';
+                    html += '</div>';
+                    break; // Only show next purchasable table
+                }
+            }
+            html += '</div>';
+            content.innerHTML = html;
+        }
+
+        if (tab === 'workers') {
+            const lvl = BUSINESS_LEVELS.find(l => l.level === tablesState.businessLevel);
+            let html = '<div class="upgrade-section">';
+            html += '<div style="font-size:12px;color:#888;margin-bottom:10px;">Workers: ' + tablesState.workers.length + ' / ' + lvl.maxWorkers + ' max at Level ' + lvl.level + '</div>';
+
+            // Existing workers
+            tablesState.workers.forEach(w => {
+                html += '<div class="upgrade-item" style="flex-direction:column;align-items:stretch;">';
+                html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+                const budgetColor = w.budget > 0 ? '#66bb6a' : '#ff8a80';
+                html += '<div class="upgrade-name">' + w.emoji + ' ' + w.name + ' <span style="color:#888;font-size:11px;">($' + w.wage.toFixed(2) + '/min)</span></div>';
+                html += '<div style="font-size:11px;color:' + budgetColor + ';">Budget: $' + w.budget.toFixed(2) + ' / $' + w.maxBudget.toFixed(2) + (w.budget <= 0 ? ' (using yours)' : '') + '</div>';
+                html += '<button class="btn-fire" onclick="gbFireWorker(' + w.id + ')">Fire</button>';
+                html += '</div>';
+                html += '<div class="worker-assignment">';
+                html += 'Table: <select onchange="gbAssignWorker(' + w.id + ',\'table\',this.value)">';
+                for (let t = 0; t < tablesState.tableCount; t++) {
+                    html += '<option value="' + t + '"' + (w.assignedTable === t ? ' selected' : '') + '>T' + (t+1) + '</option>';
+                }
+                html += '</select>';
+                html += ' Recipe: <select onchange="gbAssignWorker(' + w.id + ',\'recipe\',this.value)">';
+                const availRecipes = DRINK_TYPES.filter(d => lvl.recipes.includes(d.id));
+                availRecipes.forEach(d => {
+                    html += '<option value="' + d.id + '"' + (w.assignedRecipe === d.id ? ' selected' : '') + '>' + d.name + '</option>';
+                });
+                html += '</select>';
+                html += '</div></div>';
+            });
+
+            // Hire section
+            if (tablesState.workers.length < lvl.maxWorkers) {
+                html += '<div style="font-size:12px;color:#ffd54f;margin:12px 0 6px;font-weight:500;">Hire New Worker:</div>';
+                WORKER_TYPES.forEach((wt, i) => {
+                    const locked = wt.unlockLevel && tablesState.businessLevel < wt.unlockLevel;
+                    const canAfford = tablesState.money >= wt.cost;
+                    html += '<div class="upgrade-item' + (locked ? ' locked' : '') + '">';
+                    html += '<div class="upgrade-info"><div class="upgrade-name">' + wt.emoji + ' ' + wt.name + '</div>';
+                    html += '<div class="upgrade-desc">$' + wt.wage.toFixed(2) + '/min wage | 1 cup/' + (wt.craftSpeed/1000) + 's | Brings $' + wt.budget + ' for ingredients</div></div>';
+                    if (locked) {
+                        html += '<span style="font-size:11px;color:#888;">🔒 Level ' + wt.unlockLevel + '</span>';
+                    } else {
+                        html += '<button class="btn-upgrade" onclick="gbHireWorker(' + i + ')" ' + (canAfford ? '' : 'disabled') + '>Hire $' + wt.cost + '</button>';
+                    }
+                    html += '</div>';
+                });
+            } else if (lvl.maxWorkers === 0) {
+                html += '<div style="font-size:12px;color:#888;margin-top:10px;">Upgrade to Level 2 to unlock workers!</div>';
+            } else {
+                html += '<div style="font-size:12px;color:#888;margin-top:10px;">Max workers for current level.</div>';
+            }
+
+            html += '</div>';
+            content.innerHTML = html;
+        }
+
+        if (tab === 'advertising') {
+            gbComputeAdMultiplier();
+            let html = '<div class="upgrade-section">';
+            html += '<div style="font-size:12px;color:#888;margin-bottom:10px;">Customer multiplier: <span style="color:#ffd54f;font-weight:600;">' + tablesState.adMultiplier.toFixed(1) + 'x</span></div>';
+
+            // Active ads
+            if (tablesState.activeAds.length > 0) {
+                html += '<div style="font-size:12px;color:#66bb6a;margin-bottom:6px;font-weight:500;">Active:</div>';
+                const now = Date.now();
+                tablesState.activeAds.forEach(ad => {
+                    const remaining = Math.max(0, Math.ceil(ad.duration - (now - ad.startTime) / 1000 * tablesState.speed));
+                    html += '<div class="upgrade-item"><div class="upgrade-info">';
+                    html += '<div class="upgrade-name">' + ad.emoji + ' ' + ad.name + '</div>';
+                    html += '<div class="upgrade-desc">' + ad.multiplier + 'x | ' + remaining + 's remaining</div>';
+                    html += '</div></div>';
+                });
+            }
+
+            // Available ads
+            html += '<div style="font-size:12px;color:#ffd54f;margin:12px 0 6px;font-weight:500;">Purchase Ad:</div>';
+            AD_TYPES.forEach(ad => {
+                const locked = tablesState.businessLevel < ad.unlockLevel;
+                const canAfford = tablesState.money >= ad.cost;
+                html += '<div class="upgrade-item' + (locked ? ' locked' : '') + '">';
+                html += '<div class="upgrade-info"><div class="upgrade-name">' + ad.emoji + ' ' + ad.name + '</div>';
+                html += '<div class="upgrade-desc">' + ad.multiplier + 'x customers for ' + ad.duration + 's</div></div>';
+                if (locked) {
+                    html += '<span style="font-size:11px;color:#888;">🔒 Level ' + ad.unlockLevel + '</span>';
+                } else {
+                    html += '<button class="btn-upgrade" onclick="gbBuyAd(\'' + ad.id + '\')" ' + (canAfford ? '' : 'disabled') + '>$' + ad.cost + '</button>';
+                }
+                html += '</div>';
+            });
+
+            html += '</div>';
+            content.innerHTML = html;
+        }
+    }
+
+    function openTablesShop() {
+        // Use the existing shop screen but redirect back to tables
+        ALL_SUPPLIES.forEach(s => {
+            state.cart = state.cart || {};
+            state.cart[s.id] = 0;
+        });
+
+        // Sync state for shop compatibility
+        state.money = tablesState.money;
+        state.inventory = tablesState.inventory;
+        state.experimentMode = tablesState.experimentMode;
+        state.totalCupsSold = tablesState.sold;
+        state.currentDrink = tablesState.selectedRecipe || 'classic';
+        state.recipe = state.recipe || {};
+        state.cart = {};
+        ALL_SUPPLIES.forEach(s => { state.cart[s.id] = 0; });
+
+        buildShopGrid();
+        updateShopCartTotal();
+        document.getElementById('shop-money-display').textContent = tablesState.money.toFixed(2);
+
+        // Override shop buttons for tables mode
+        showScreen('shop-screen');
+        tablesState._shopMode = true;
+    }
+
+    // Override confirmShop and cancelShop to handle tables mode
+    const _origConfirmShop = confirmShop;
+    confirmShop = function() {
+        if (tablesState._shopMode) {
+            const cartCost = getCartTotal();
+            if (cartCost > tablesState.money) {
+                alert('Not enough money!');
+                return;
+            }
+            tablesState.money -= cartCost;
+            tablesState.totalCosts += cartCost;
+            ALL_SUPPLIES.forEach(s => {
+                tablesState.inventory[s.id] = (tablesState.inventory[s.id] || 0) + (state.cart[s.id] || 0);
+                state.cart[s.id] = 0;
+            });
+            tablesState._shopMode = false;
+            tablesUpdateRecipes();
+            tablesUpdateIngredients();
+            tablesUpdateStats();
+            tablesUpdateCraftCost();
+            if (tablesState.growingBusiness) {
+                gbUpdateBusinessBar();
+                gbUpdateTableSelector();
+                gbUpdateScene();
+            }
+            showScreen('tables-screen');
+            return;
+        }
+        _origConfirmShop();
+    };
+
+    const _origCancelShop = cancelShop;
+    cancelShop = function() {
+        if (tablesState._shopMode) {
+            ALL_SUPPLIES.forEach(s => { state.cart[s.id] = 0; });
+            tablesState._shopMode = false;
+            showScreen('tables-screen');
+            return;
+        }
+        _origCancelShop();
+    };
+
+    function closeTablesShop() {
+        // Stop all timers
+        tablesState.running = false;
+        if (tablesState.weatherTimer) clearInterval(tablesState.weatherTimer);
+        if (tablesState.customerTimer) clearInterval(tablesState.customerTimer);
+        if (tablesState.workerTimer) clearInterval(tablesState.workerTimer);
+        if (tablesState.wageTimer) clearInterval(tablesState.wageTimer);
+
+        // Show end summary
+        const profit = tablesState.totalRevenue - tablesState.totalCosts;
+
+        // Save high score
+        const finalMoney = tablesState.money;
+        const isNewHigh = saveHighScore(finalMoney);
+
+        document.getElementById('final-money').textContent = '$' + finalMoney.toFixed(2);
+        if (isNewHigh) {
+            document.getElementById('new-high-score').classList.remove('hidden');
+        } else {
+            document.getElementById('new-high-score').classList.add('hidden');
+        }
+
+        let statsHtml = `
+            <div class="end-stat-row">
+                <span class="end-stat-label">Mode</span>
+                <span class="end-stat-value">${tablesState.growingBusiness ? 'Growing Business' : 'Tables Mode'}</span>
+            </div>
+            <div class="end-stat-row">
+                <span class="end-stat-label">Total Revenue</span>
+                <span class="end-stat-value" style="color: #66bb6a;">$${tablesState.totalRevenue.toFixed(2)}</span>
+            </div>
+            <div class="end-stat-row">
+                <span class="end-stat-label">Total Costs</span>
+                <span class="end-stat-value" style="color: #ff5252;">$${tablesState.totalCosts.toFixed(2)}</span>
+            </div>
+            <div class="end-stat-row">
+                <span class="end-stat-label">Total Profit</span>
+                <span class="end-stat-value" style="color: ${profit >= 0 ? '#66bb6a' : '#ff5252'};">$${profit.toFixed(2)}</span>
+            </div>
+            <div class="end-stat-row">
+                <span class="end-stat-label">Cups Sold</span>
+                <span class="end-stat-value">${tablesState.sold}</span>
+            </div>
+        `;
+        if (tablesState.growingBusiness) {
+            statsHtml += `
+                <div class="end-stat-row">
+                    <span class="end-stat-label">Business Level</span>
+                    <span class="end-stat-value" style="color: #ffd54f;">${BUSINESS_LEVELS.find(l => l.level === tablesState.businessLevel).name} ${BUSINESS_LEVELS.find(l => l.level === tablesState.businessLevel).emoji}</span>
+                </div>
+                <div class="end-stat-row">
+                    <span class="end-stat-label">Tables Owned</span>
+                    <span class="end-stat-value">${tablesState.tableCount}</span>
+                </div>
+                <div class="end-stat-row">
+                    <span class="end-stat-label">Workers Hired</span>
+                    <span class="end-stat-value">${tablesState.workers.length}</span>
+                </div>
+                <div class="end-stat-row">
+                    <span class="end-stat-label">Total Wages Paid</span>
+                    <span class="end-stat-value" style="color: #ff8a80;">$${tablesState.totalWagesPaid.toFixed(2)}</span>
+                </div>
+            `;
+        }
+        statsHtml += `
+            <div class="end-stat-row">
+                <span class="end-stat-label">High Score</span>
+                <span class="end-stat-value" style="color: #ffd54f;">$${loadHighScore().toFixed(2)}</span>
+            </div>
+        `;
+        document.getElementById('end-stats').innerHTML = statsHtml;
+        document.getElementById('high-score-display').textContent = loadHighScore().toFixed(2);
+
+        showScreen('end-screen');
+    }
+    </script>
+</body>
+</html>

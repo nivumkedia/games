@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Net Smash</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #87CEEB;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Orbitron', 'Segoe UI', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        canvas { display: block; cursor: crosshair; }
+        #ui-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            display: flex; justify-content: center; align-items: center;
+            pointer-events: none; z-index: 10;
+        }
+        .panel {
+            background: rgba(255, 255, 255, 0.92);
+            border: 1px solid rgba(0, 150, 80, 0.3);
+            border-radius: 20px;
+            padding: 28px 36px;
+            text-align: center;
+            pointer-events: all;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+        }
+        .hidden { display: none !important; }
+        h1 {
+            color: #2a5a3a; font-size: 34px; margin-bottom: 2px; font-weight: 900;
+            letter-spacing: 4px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .subtitle { color: rgba(40, 120, 60, 0.7); font-size: 11px; letter-spacing: 6px; margin-bottom: 20px; }
+        .btn {
+            display: inline-block; padding: 12px 32px; margin: 8px;
+            background: linear-gradient(135deg, #4CAF50, #388E3C);
+            border: 1px solid rgba(0, 150, 80, 0.4);
+            border-radius: 10px; color: #fff; font-family: 'Orbitron', sans-serif;
+            font-size: 14px; cursor: pointer; letter-spacing: 2px;
+            transition: all 0.3s;
+        }
+        .btn:hover {
+            background: linear-gradient(135deg, #66BB6A, #43A047);
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
+            transform: translateY(-2px);
+        }
+        #scoreboard {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 5; display: flex; gap: 40px; align-items: center;
+        }
+        .score-item {
+            color: #fff; font-family: 'Orbitron', sans-serif; text-align: center;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        .score-label { font-size: 10px; letter-spacing: 3px; opacity: 0.8; }
+        .score-value { font-size: 36px; font-weight: 900; }
+        .score-divider { color: rgba(255,255,255,0.6); font-size: 24px; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+        #message {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            z-index: 5; color: #fff; font-family: 'Orbitron', sans-serif;
+            font-size: 28px; font-weight: 900; letter-spacing: 4px;
+            text-shadow: 0 3px 6px rgba(0, 0, 0, 0.4);
+            opacity: 0; transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        #instructions {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 5; color: rgba(255,255,255,0.7); font-family: 'Orbitron', sans-serif;
+            font-size: 10px; letter-spacing: 2px; pointer-events: none;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="ui-overlay">
+        <div class="panel" id="menuPanel">
+            <h1>NET SMASH</h1>
+            <div class="subtitle">3D COURT SHOWDOWN</div>
+            <p style="color: rgba(0,0,0,0.5); font-size: 11px; margin-bottom: 20px; line-height: 1.8;">
+                Click on the ball to smash it over the net.<br>
+                Aim with your mouse position.<br>
+                First to 11 points wins!
+            </p>
+            <div>
+                <button class="btn" onclick="startGame('easy')">EASY</button>
+                <button class="btn" onclick="startGame('medium')">MEDIUM</button>
+                <button class="btn" onclick="startGame('hard')">HARD</button>
+            </div>
+        </div>
+        <div class="panel hidden" id="gameOverPanel">
+            <h1 id="gameOverTitle">GAME OVER</h1>
+            <p id="gameOverScore" style="color: rgba(40,120,60,0.9); font-size: 16px; margin: 16px 0;"></p>
+            <button class="btn" onclick="showMenu()">PLAY AGAIN</button>
+        </div>
+    </div>
+
+    <div id="scoreboard" class="hidden">
+        <div class="score-item">
+            <div class="score-label">YOU</div>
+            <div class="score-value" id="playerScore" style="color: #00ccff;">0</div>
+        </div>
+        <div class="score-divider">|</div>
+        <div class="score-item">
+            <div class="score-label">BOT</div>
+            <div class="score-value" id="botScore" style="color: #ff4466;">0</div>
+        </div>
+    </div>
+
+    <div id="message"></div>
+    <div id="instructions" class="hidden">CLICK THE BALL TO HIT IT OVER</div>
+
+    <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // --- Sizing ---
+    let W, H;
+    function resize() {
+        W = canvas.width = window.innerWidth;
+        H = canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // --- 3D Projection ---
+    // Court is in 3D space: x is left-right, y is up, z is depth (towards screen = 0, away = far)
+    const CAM_HEIGHT = 160;
+    const CAM_DIST = 400;
+    const FOV = 450;
+
+    // Court dimensions (3D units)
+    const COURT_WIDTH = 400;
+    const COURT_DEPTH = 600;
+    const NET_HEIGHT = 120;
+    const NET_Y = 0; // net sits on ground
+
+    function project(x, y, z) {
+        const cz = z + CAM_DIST;
+        if (cz <= 1) return { sx: W / 2, sy: H / 2, scale: 0.01 };
+        const scale = FOV / cz;
+        const sx = W / 2 + x * scale;
+        const sy = H / 2 + (CAM_HEIGHT - y) * scale;
+        return { sx, sy, scale };
+    }
+
+    // --- Game State ---
+    let gameState = 'menu'; // menu, serving, playing, scored, gameover
+    let difficulty = 'medium';
+    let playerScore = 0;
+    let botScore = 0;
+    let mouseX = W / 2;
+    let mouseY = H / 2;
+    let messageTimer = 0;
+
+    // Ball
+    let ball = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, radius: 12 };
+    // Player (near side, z ~ 0)
+    let player = { x: 0, z: 50, side: 'near' };
+    // Bot (far side, z ~ COURT_DEPTH)
+    let bot = { x: 0, z: COURT_DEPTH - 50, side: 'far', targetX: 0 };
+
+    // Difficulty settings
+    const DIFF = {
+        easy:   { botSpeed: 2.5, botReact: 0.6, botHitAccuracy: 0.6, botMissChance: 0.15 },
+        medium: { botSpeed: 4, botReact: 0.8, botHitAccuracy: 0.75, botMissChance: 0.05 },
+        hard:   { botSpeed: 5.5, botReact: 0.95, botHitAccuracy: 0.9, botMissChance: 0.01 },
+    };
+
+    let serveSide = 'player'; // who serves
+    let hitCooldown = 0;
+    let ballShadow = true;
+    let rallyCount = 0;
+    let lastHitter = null;
+    let canHit = true;
+    let ballLanded = false;
+
+    // Particles
+    let particles = [];
+
+    function spawnParticles(x, y, z, color, count) {
+        for (let i = 0; i < count; i++) {
+            particles.push({
+                x, y, z,
+                vx: (Math.random() - 0.5) * 8,
+                vy: Math.random() * 6 + 2,
+                vz: (Math.random() - 0.5) * 8,
+                life: 1,
+                color,
+                size: Math.random() * 4 + 2
+            });
+        }
+    }
+
+    // --- Input ---
+    canvas.addEventListener('mousemove', e => {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+    });
+
+    canvas.addEventListener('click', e => {
+        if (gameState === 'serving' && serveSide === 'player') {
+            serveBall('player');
+        } else if (gameState === 'playing' && canHit) {
+            tryHitBall();
+        }
+    });
+
+    // --- Game Logic ---
+    function startGame(diff) {
+        difficulty = diff;
+        playerScore = 0;
+        botScore = 0;
+        serveSide = 'player';
+        document.getElementById('menuPanel').classList.add('hidden');
+        document.getElementById('gameOverPanel').classList.add('hidden');
+        document.getElementById('scoreboard').classList.remove('hidden');
+        document.getElementById('instructions').classList.remove('hidden');
+        updateScoreboard();
+        gameState = 'serving';
+        resetBall();
+        showMessage('YOUR SERVE - CLICK!');
+    }
+
+    function showMenu() {
+        gameState = 'menu';
+        document.getElementById('menuPanel').classList.remove('hidden');
+        document.getElementById('gameOverPanel').classList.add('hidden');
+        document.getElementById('scoreboard').classList.add('hidden');
+        document.getElementById('instructions').classList.add('hidden');
+    }
+
+    function resetBall() {
+        ballLanded = false;
+        canHit = true;
+        rallyCount = 0;
+        lastHitter = null;
+        hitCooldown = 0;
+
+        if (serveSide === 'player') {
+            ball.x = 0;
+            ball.y = 80;
+            ball.z = 80;
+        } else {
+            ball.x = 0;
+            ball.y = 80;
+            ball.z = COURT_DEPTH - 80;
+        }
+        ball.vx = 0;
+        ball.vy = 0;
+        ball.vz = 0;
+    }
+
+    function serveBall(side) {
+        if (side === 'player') {
+            // Player serve — aim toward far side
+            const aimX = ((mouseX - W / 2) / W) * COURT_WIDTH * 0.6;
+            ball.vx = aimX * 0.03;
+            ball.vy = 10;
+            ball.vz = 8;
+            lastHitter = 'player';
+        } else {
+            // Bot serve
+            const aimX = (Math.random() - 0.5) * COURT_WIDTH * 0.4;
+            ball.vx = aimX * 0.025;
+            ball.vy = 9;
+            ball.vz = -7;
+            lastHitter = 'bot';
+        }
+        gameState = 'playing';
+        rallyCount = 0;
+        showMessage('');
+        spawnParticles(ball.x, ball.y, ball.z, '#00ccff', 8);
+    }
+
+    function tryHitBall() {
+        // Click on the ball in screen space to hit it
+        const bp = project(ball.x, ball.y, ball.z);
+        const dx = mouseX - bp.sx;
+        const dy = mouseY - bp.sy;
+        const screenDist = Math.sqrt(dx * dx + dy * dy);
+        const hitRadius = Math.max(40, ball.radius * bp.scale * 4); // generous click area
+
+        if (screenDist < hitRadius && ball.z < COURT_DEPTH / 2 + 30) {
+            hitBall('player');
+        }
+    }
+
+    function hitBall(who) {
+        if (hitCooldown > 0) return;
+        hitCooldown = 15;
+
+        if (who === 'player') {
+            // Aim based on mouse position
+            const aimX = ((mouseX - W / 2) / W) * COURT_WIDTH * 0.8;
+            const aimPower = Math.max(0.3, Math.min(1, (H - mouseY) / H * 1.5));
+
+            ball.vx = (aimX - ball.x) * 0.04;
+            ball.vy = 7 + aimPower * 5;
+            ball.vz = 5 + aimPower * 5;
+            lastHitter = 'player';
+            rallyCount++;
+            spawnParticles(ball.x, ball.y, ball.z, '#00ccff', 12);
+            canHit = false; // Can't hit again until ball comes back
+        } else {
+            // Bot hit
+            const d = DIFF[difficulty];
+            const targetX = (Math.random() - 0.5) * COURT_WIDTH * d.botHitAccuracy;
+            const power = 0.6 + Math.random() * 0.4;
+
+            // Sometimes the bot intentionally misaims
+            if (Math.random() < d.botMissChance) {
+                ball.vx = (Math.random() - 0.5) * 15;
+                ball.vy = 4 + Math.random() * 3;
+                ball.vz = -(3 + Math.random() * 3);
+            } else {
+                ball.vx = (targetX - ball.x) * 0.035;
+                ball.vy = 6 + power * 5;
+                ball.vz = -(5 + power * 5);
+            }
+            lastHitter = 'bot';
+            rallyCount++;
+            spawnParticles(ball.x, ball.y, ball.z, '#ff4466', 12);
+        }
+    }
+
+    function scorePoint(winner) {
+        if (gameState !== 'playing') return;
+        gameState = 'scored';
+
+        if (winner === 'player') {
+            playerScore++;
+            showMessage('YOUR POINT!');
+            spawnParticles(ball.x, ball.y, ball.z, '#00ff88', 25);
+            serveSide = 'player';
+        } else {
+            botScore++;
+            showMessage('BOT SCORES!');
+            spawnParticles(ball.x, ball.y, ball.z, '#ff4466', 25);
+            serveSide = 'bot';
+        }
+        updateScoreboard();
+
+        if (playerScore >= 11 || botScore >= 11) {
+            setTimeout(() => {
+                gameState = 'gameover';
+                const won = playerScore > botScore;
+                document.getElementById('gameOverTitle').textContent = won ? 'YOU WIN!' : 'YOU LOSE!';
+                document.getElementById('gameOverTitle').style.color = won ? '#00ff88' : '#ff4466';
+                document.getElementById('gameOverScore').textContent = `${playerScore} - ${botScore}`;
+                document.getElementById('gameOverPanel').classList.remove('hidden');
+            }, 1500);
+        } else {
+            setTimeout(() => {
+                gameState = 'serving';
+                resetBall();
+                if (serveSide === 'player') {
+                    showMessage('YOUR SERVE - CLICK!');
+                } else {
+                    showMessage('BOT SERVING...');
+                    setTimeout(() => serveBall('bot'), 800);
+                }
+            }, 1200);
+        }
+    }
+
+    function showMessage(text) {
+        const el = document.getElementById('message');
+        el.textContent = text;
+        el.style.opacity = text ? 1 : 0;
+        if (text) {
+            messageTimer = 120;
+        }
+    }
+
+    function updateScoreboard() {
+        document.getElementById('playerScore').textContent = playerScore;
+        document.getElementById('botScore').textContent = botScore;
+    }
+
+    // --- Update ---
+    const GRAVITY = -0.25;
+
+    function update() {
+        if (hitCooldown > 0) hitCooldown--;
+        if (messageTimer > 0) {
+            messageTimer--;
+            if (messageTimer <= 0) {
+                document.getElementById('message').style.opacity = 0;
+            }
+        }
+
+        if (gameState !== 'playing') {
+            // Paddle follows ball x or stays centered
+            player.x += (0 - player.x) * 0.05;
+            return;
+        }
+
+        // Player paddle auto-tracks toward ball when on player's side
+        let padTarget = 0;
+        if (ball.z < COURT_DEPTH / 2 + 30) {
+            padTarget = ball.x;
+        }
+        player.x += (padTarget - player.x) * 0.12;
+        player.x = Math.max(-COURT_WIDTH / 2, Math.min(COURT_WIDTH / 2, player.x));
+
+        // Ball physics
+        ball.x += ball.vx;
+        ball.vy += GRAVITY;
+        ball.y += ball.vy;
+        ball.z += ball.vz;
+
+        // Air resistance
+        ball.vx *= 0.995;
+        ball.vz *= 0.995;
+
+        // Ball hit ground
+        if (ball.y <= ball.radius) {
+            ball.y = ball.radius;
+            ballLanded = true;
+
+            // Determine which side it landed on
+            if (ball.z < COURT_DEPTH / 2) {
+                // Landed on player side — bot scores
+                scorePoint('bot');
+            } else {
+                // Landed on bot side — player scores
+                scorePoint('player');
+            }
+            return;
+        }
+
+        // Ball out of bounds (sides)
+        if (Math.abs(ball.x) > COURT_WIDTH / 2 + 30) {
+            if (lastHitter === 'player') {
+                scorePoint('bot');
+            } else {
+                scorePoint('player');
+            }
+            return;
+        }
+
+        // Ball went too far past court
+        if (ball.z < -50 || ball.z > COURT_DEPTH + 50) {
+            if (lastHitter === 'player') {
+                scorePoint('bot');
+            } else {
+                scorePoint('player');
+            }
+            return;
+        }
+
+        // Net collision
+        if (ball.z > COURT_DEPTH / 2 - 10 && ball.z < COURT_DEPTH / 2 + 10) {
+            if (ball.y < NET_HEIGHT) {
+                // Ball hits the net
+                ball.vz *= -0.3;
+                ball.vy *= 0.5;
+                ball.z = ball.vz > 0 ? COURT_DEPTH / 2 + 11 : COURT_DEPTH / 2 - 11;
+                spawnParticles(ball.x, ball.y, ball.z, '#ffaa00', 8);
+            }
+        }
+
+        // Allow player to hit again once ball is on their side
+        if (ball.z < COURT_DEPTH / 2 && lastHitter === 'bot') {
+            canHit = true;
+        }
+
+        // --- Bot AI ---
+        const d = DIFF[difficulty];
+
+        // Bot tracks ball when it's heading toward them
+        if (ball.z > COURT_DEPTH / 2 - 50 || ball.vz > 0) {
+            // Predict where ball will be
+            if (Math.random() < d.botReact) {
+                bot.targetX = ball.x + ball.vx * 10;
+            }
+        } else {
+            // Return to center
+            bot.targetX *= 0.95;
+        }
+
+        bot.x += (bot.targetX - bot.x) * (d.botSpeed / 30);
+        bot.x = Math.max(-COURT_WIDTH / 2, Math.min(COURT_WIDTH / 2, bot.x));
+
+        // Bot tries to hit ball
+        if (ball.z > COURT_DEPTH / 2 && lastHitter !== 'bot') {
+            const bdx = ball.x - bot.x;
+            const bdz = ball.z - bot.z;
+            const bDist = Math.sqrt(bdx * bdx + bdz * bdz);
+
+            if (bDist < 110 && ball.y < 180 && ball.y > 10) {
+                hitBall('bot');
+            }
+        }
+
+        // Update particles
+        particles = particles.filter(p => {
+            p.x += p.vx;
+            p.y += p.vy;
+            p.z += p.vz;
+            p.vy -= 0.15;
+            p.life -= 0.025;
+            return p.life > 0;
+        });
+    }
+
+    // --- Render ---
+    function drawCourt() {
+        // Sand/court ground plane
+        const corners = [
+            project(-COURT_WIDTH / 2, 0, 0),
+            project(COURT_WIDTH / 2, 0, 0),
+            project(COURT_WIDTH / 2, 0, COURT_DEPTH),
+            project(-COURT_WIDTH / 2, 0, COURT_DEPTH),
+        ];
+
+        // Court surface with warm sand color
+        ctx.beginPath();
+        ctx.moveTo(corners[0].sx, corners[0].sy);
+        for (let i = 1; i < 4; i++) ctx.lineTo(corners[i].sx, corners[i].sy);
+        ctx.closePath();
+        ctx.fillStyle = '#D4A55A';
+        ctx.fill();
+
+        // Subtle sand texture lines
+        ctx.strokeStyle = 'rgba(180, 140, 70, 0.3)';
+        ctx.lineWidth = 1;
+        for (let z = 0; z <= COURT_DEPTH; z += COURT_DEPTH / 12) {
+            const l = project(-COURT_WIDTH / 2, 0, z);
+            const r = project(COURT_WIDTH / 2, 0, z);
+            ctx.beginPath();
+            ctx.moveTo(l.sx, l.sy);
+            ctx.lineTo(r.sx, r.sy);
+            ctx.stroke();
+        }
+
+        // Court boundary lines — bold white
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(corners[0].sx, corners[0].sy);
+        for (let i = 1; i < 4; i++) ctx.lineTo(corners[i].sx, corners[i].sy);
+        ctx.closePath();
+        ctx.stroke();
+
+        // Center line
+        const cl = project(-COURT_WIDTH / 2, 0, COURT_DEPTH / 2);
+        const cr = project(COURT_WIDTH / 2, 0, COURT_DEPTH / 2);
+        ctx.beginPath();
+        ctx.moveTo(cl.sx, cl.sy);
+        ctx.lineTo(cr.sx, cr.sy);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+
+    function drawNet() {
+        const netLeft = -COURT_WIDTH / 2 - 20;
+        const netRight = COURT_WIDTH / 2 + 20;
+        const netZ = COURT_DEPTH / 2;
+
+        // Net poles — metallic silver
+        for (const x of [netLeft, netRight]) {
+            const bottom = project(x, 0, netZ);
+            const top = project(x, NET_HEIGHT + 20, netZ);
+            ctx.beginPath();
+            ctx.moveTo(bottom.sx, bottom.sy);
+            ctx.lineTo(top.sx, top.sy);
+            ctx.strokeStyle = '#888';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+            // Pole cap
+            ctx.beginPath();
+            ctx.arc(top.sx, top.sy, 4 * top.scale, 0, Math.PI * 2);
+            ctx.fillStyle = '#aaa';
+            ctx.fill();
+        }
+
+        const topLeft = project(netLeft, NET_HEIGHT, netZ);
+        const topRight = project(netRight, NET_HEIGHT, netZ);
+        const bottomLeft = project(netLeft, 0, netZ);
+        const bottomRight = project(netRight, 0, netZ);
+
+        // Net fill — light semi-transparent
+        ctx.beginPath();
+        ctx.moveTo(topLeft.sx, topLeft.sy);
+        ctx.lineTo(topRight.sx, topRight.sy);
+        ctx.lineTo(bottomRight.sx, bottomRight.sy);
+        ctx.lineTo(bottomLeft.sx, bottomLeft.sy);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.fill();
+
+        // White tape at top
+        ctx.beginPath();
+        ctx.moveTo(topLeft.sx, topLeft.sy);
+        ctx.lineTo(topRight.sx, topRight.sy);
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        // Horizontal net lines
+        for (let y = 20; y < NET_HEIGHT; y += 20) {
+            const l = project(netLeft, y, netZ);
+            const r = project(netRight, y, netZ);
+            ctx.beginPath();
+            ctx.moveTo(l.sx, l.sy);
+            ctx.lineTo(r.sx, r.sy);
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.12)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+
+        // Vertical net lines
+        for (let x = netLeft; x <= netRight; x += 25) {
+            const t = project(x, NET_HEIGHT, netZ);
+            const b = project(x, 0, netZ);
+            ctx.beginPath();
+            ctx.moveTo(t.sx, t.sy);
+            ctx.lineTo(b.sx, b.sy);
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+    }
+
+    function drawPlayer() {
+        const p = project(player.x, 0, player.z);
+        const bodyScale = p.scale;
+
+        // Shadow on ground
+        ctx.beginPath();
+        ctx.ellipse(p.sx, p.sy, 35 * bodyScale, 12 * bodyScale, 0, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+        ctx.fill();
+
+        // Paddle base
+        const padBottom = project(player.x, 20, player.z);
+        const padTop = project(player.x, 80, player.z);
+        const padW = 50 * bodyScale;
+        const padH = padBottom.sy - padTop.sy;
+
+        // Paddle body (rounded rectangle shape)
+        const padGrad = ctx.createLinearGradient(padTop.sx - padW/2, padTop.sy, padTop.sx + padW/2, padTop.sy);
+        padGrad.addColorStop(0, '#0088CC');
+        padGrad.addColorStop(0.5, '#00AAEE');
+        padGrad.addColorStop(1, '#0088CC');
+        ctx.beginPath();
+        ctx.roundRect(padTop.sx - padW/2, padTop.sy, padW, padH, 8 * bodyScale);
+        ctx.fillStyle = padGrad;
+        ctx.fill();
+        ctx.strokeStyle = '#006699';
+        ctx.lineWidth = 2 * bodyScale;
+        ctx.stroke();
+
+        // Paddle shine
+        ctx.beginPath();
+        ctx.roundRect(padTop.sx - padW/2 + 4*bodyScale, padTop.sy + 3*bodyScale, padW * 0.3, padH * 0.6, 4 * bodyScale);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.fill();
+    }
+
+    function drawBot() {
+        const p = project(bot.x, 0, bot.z);
+        const bodyScale = p.scale;
+
+        // Shadow on ground
+        ctx.beginPath();
+        ctx.ellipse(p.sx, p.sy, 35 * bodyScale, 12 * bodyScale, 0, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+        ctx.fill();
+
+        // Paddle
+        const padBottom = project(bot.x, 20, bot.z);
+        const padTop = project(bot.x, 80, bot.z);
+        const padW = 50 * bodyScale;
+        const padH = padBottom.sy - padTop.sy;
+
+        const padGrad = ctx.createLinearGradient(padTop.sx - padW/2, padTop.sy, padTop.sx + padW/2, padTop.sy);
+        padGrad.addColorStop(0, '#CC2244');
+        padGrad.addColorStop(0.5, '#EE3355');
+        padGrad.addColorStop(1, '#CC2244');
+        ctx.beginPath();
+        ctx.roundRect(padTop.sx - padW/2, padTop.sy, padW, padH, 8 * bodyScale);
+        ctx.fillStyle = padGrad;
+        ctx.fill();
+        ctx.strokeStyle = '#991133';
+        ctx.lineWidth = 2 * bodyScale;
+        ctx.stroke();
+
+        // Paddle shine
+        ctx.beginPath();
+        ctx.roundRect(padTop.sx - padW/2 + 4*bodyScale, padTop.sy + 3*bodyScale, padW * 0.3, padH * 0.6, 4 * bodyScale);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.fill();
+    }
+
+    function drawBall() {
+        // Ball shadow on ground
+        const shadowP = project(ball.x, 0, ball.z);
+        const shadowSize = Math.max(3, 15 - ball.y * 0.04);
+        ctx.beginPath();
+        ctx.ellipse(shadowP.sx, shadowP.sy, shadowSize * shadowP.scale, shadowSize * shadowP.scale * 0.4, 0, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(0, 0, 0, ${Math.max(0.05, 0.3 - ball.y * 0.001)})`;
+        ctx.fill();
+
+        // Ball
+        const bp = project(ball.x, ball.y, ball.z);
+        const ballSize = ball.radius * bp.scale;
+
+        // Main ball — bright white with slight yellow tint
+        const ballGrad = ctx.createRadialGradient(bp.sx - ballSize * 0.3, bp.sy - ballSize * 0.3, 0, bp.sx, bp.sy, ballSize);
+        ballGrad.addColorStop(0, '#ffffff');
+        ballGrad.addColorStop(0.4, '#fffde0');
+        ballGrad.addColorStop(1, '#e8e0a0');
+        ctx.beginPath();
+        ctx.arc(bp.sx, bp.sy, ballSize, 0, Math.PI * 2);
+        ctx.fillStyle = ballGrad;
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(180, 160, 80, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Ball highlight
+        ctx.beginPath();
+        ctx.arc(bp.sx - ballSize * 0.25, bp.sy - ballSize * 0.25, ballSize * 0.35, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.fill();
+
+        // Click target indicator when ball is hittable
+        if (gameState === 'playing' && canHit && ball.z < COURT_DEPTH / 2 + 30) {
+            const pulse = Math.sin(frameCount * 0.1) * 0.15 + 0.35;
+            ctx.beginPath();
+            ctx.arc(bp.sx, bp.sy, ballSize * 3, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(0, 180, 255, ${pulse})`;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 4]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+    }
+
+    function drawParticles() {
+        for (const p of particles) {
+            const pp = project(p.x, p.y, p.z);
+            ctx.beginPath();
+            ctx.arc(pp.sx, pp.sy, p.size * pp.scale, 0, Math.PI * 2);
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = p.life;
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    let frameCount = 0;
+
+    function drawBackground() {
+        // Bright sky gradient
+        const grad = ctx.createLinearGradient(0, 0, 0, H);
+        grad.addColorStop(0, '#4A90D9');
+        grad.addColorStop(0.3, '#87CEEB');
+        grad.addColorStop(0.6, '#B0E0F0');
+        grad.addColorStop(1, '#d4efc7');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, W, H);
+
+        // Sun
+        const sunX = W * 0.8;
+        const sunY = H * 0.12;
+        const sunGlow = ctx.createRadialGradient(sunX, sunY, 10, sunX, sunY, 120);
+        sunGlow.addColorStop(0, 'rgba(255, 255, 200, 1)');
+        sunGlow.addColorStop(0.2, 'rgba(255, 240, 150, 0.8)');
+        sunGlow.addColorStop(0.5, 'rgba(255, 220, 100, 0.2)');
+        sunGlow.addColorStop(1, 'rgba(255, 220, 100, 0)');
+        ctx.beginPath();
+        ctx.arc(sunX, sunY, 120, 0, Math.PI * 2);
+        ctx.fillStyle = sunGlow;
+        ctx.fill();
+
+        // Sun core
+        ctx.beginPath();
+        ctx.arc(sunX, sunY, 25, 0, Math.PI * 2);
+        ctx.fillStyle = '#FFF8DC';
+        ctx.fill();
+
+        // Clouds (slowly drifting)
+        const drift = frameCount * 0.15;
+        drawCloud((drift + 100) % (W + 300) - 150, H * 0.08, 1.2);
+        drawCloud((drift * 0.7 + 400) % (W + 300) - 150, H * 0.15, 0.8);
+        drawCloud((drift * 0.5 + 700) % (W + 300) - 150, H * 0.05, 1.0);
+        drawCloud((drift * 0.9 + 250) % (W + 300) - 150, H * 0.2, 0.6);
+
+        // Distant hills / grass horizon
+        const horizonY = H * 0.55;
+        ctx.beginPath();
+        ctx.moveTo(0, horizonY);
+        for (let x = 0; x <= W; x += 20) {
+            const hillY = horizonY - Math.sin(x * 0.005) * 15 - Math.sin(x * 0.012 + 1) * 8;
+            ctx.lineTo(x, hillY);
+        }
+        ctx.lineTo(W, H);
+        ctx.lineTo(0, H);
+        ctx.closePath();
+        const grassGrad = ctx.createLinearGradient(0, horizonY - 20, 0, H);
+        grassGrad.addColorStop(0, '#7CB342');
+        grassGrad.addColorStop(0.3, '#66A032');
+        grassGrad.addColorStop(1, '#4E8B28');
+        ctx.fillStyle = grassGrad;
+        ctx.fill();
+    }
+
+    function drawCloud(cx, cy, scale) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+        const r = 25 * scale;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.arc(cx + r * 1.2, cy - r * 0.3, r * 1.1, 0, Math.PI * 2);
+        ctx.arc(cx + r * 2.2, cy, r * 0.9, 0, Math.PI * 2);
+        ctx.arc(cx + r * 0.6, cy - r * 0.6, r * 0.8, 0, Math.PI * 2);
+        ctx.arc(cx + r * 1.6, cy - r * 0.5, r * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // --- Main Loop ---
+    function gameLoop() {
+        frameCount++;
+        update();
+
+        drawBackground();
+        drawCourt();
+
+        // Draw things in z-order (far to near)
+        drawBot();
+        drawNet();
+        drawBall();
+        drawPlayer();
+        drawParticles();
+
+        requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+    </script>
+</body>
+</html>

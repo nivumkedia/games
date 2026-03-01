@@ -1,0 +1,2137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Wood Carving Studio</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            width: 100%; height: 100%; overflow: hidden;
+            background: #1a1108;
+            font-family: 'Cinzel', 'Georgia', serif;
+            color: #e8d5b8;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .hidden { display: none !important; }
+
+        /* ===== Gallery Screen ===== */
+        #galleryScreen {
+            width: 100%; height: 100%;
+            display: flex; flex-direction: column;
+            background: linear-gradient(180deg, #2a1f14 0%, #1a1108 100%);
+        }
+        #galleryHeader {
+            text-align: center; padding: 30px 20px 10px;
+        }
+        #galleryHeader h1 {
+            font-size: 36px; font-weight: 700; color: #f5e6c8;
+            text-shadow: 0 2px 20px rgba(255,180,60,0.4), 0 0 60px rgba(200,120,20,0.15);
+            letter-spacing: 4px;
+        }
+        #galleryHeader .subtitle {
+            color: rgba(200,170,120,0.6); font-size: 12px; letter-spacing: 3px;
+            text-transform: uppercase; margin-top: 4px;
+        }
+        #galleryGrid {
+            flex: 1; overflow-y: auto; padding: 20px;
+            display: flex; flex-wrap: wrap; gap: 16px;
+            justify-content: center; align-content: flex-start;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(200,150,80,0.3) transparent;
+        }
+        #galleryGrid::-webkit-scrollbar { width: 6px; }
+        #galleryGrid::-webkit-scrollbar-thumb { background: rgba(200,150,80,0.3); border-radius: 3px; }
+
+        .project-card {
+            width: 200px; background: rgba(60,40,20,0.6);
+            border: 1px solid rgba(200,150,80,0.2); border-radius: 12px;
+            overflow: hidden; cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.3s, border-color 0.3s;
+        }
+        .project-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(200,140,40,0.2);
+            border-color: rgba(200,150,80,0.5);
+        }
+        .project-card .thumb {
+            width: 100%; height: 140px; background: #2a1f14;
+            display: flex; align-items: center; justify-content: center;
+            overflow: hidden;
+        }
+        .project-card .thumb img {
+            width: 100%; height: 100%; object-fit: cover;
+        }
+        .project-card .thumb .no-thumb {
+            color: rgba(200,170,120,0.3); font-size: 40px;
+        }
+        .project-card .info {
+            padding: 10px 12px;
+        }
+        .project-card .info .name {
+            font-size: 14px; font-weight: 600; color: #f0dbb8;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .project-card .info .meta {
+            font-size: 10px; color: rgba(200,170,120,0.5); margin-top: 2px;
+            letter-spacing: 1px;
+        }
+        .project-card .actions {
+            display: flex; gap: 4px; padding: 0 12px 10px;
+        }
+        .card-btn {
+            flex: 1; padding: 6px; font-size: 10px; font-family: 'Cinzel', serif;
+            border: 1px solid rgba(200,150,80,0.2); border-radius: 6px;
+            cursor: pointer; letter-spacing: 1px; text-transform: uppercase;
+            transition: all 0.15s;
+        }
+        .card-btn-edit {
+            background: rgba(200,150,80,0.15); color: #e8c888;
+        }
+        .card-btn-edit:hover { background: rgba(200,150,80,0.3); }
+        .card-btn-delete {
+            background: rgba(180,60,40,0.15); color: #d08070;
+        }
+        .card-btn-delete:hover { background: rgba(180,60,40,0.3); }
+
+        .new-project-card {
+            width: 200px; height: 220px;
+            background: rgba(60,40,20,0.3);
+            border: 2px dashed rgba(200,150,80,0.25);
+            border-radius: 12px; cursor: pointer;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            gap: 10px; transition: all 0.2s;
+        }
+        .new-project-card:hover {
+            background: rgba(60,40,20,0.5);
+            border-color: rgba(200,150,80,0.5);
+        }
+        .new-project-card .plus {
+            font-size: 48px; color: rgba(200,150,80,0.4);
+            line-height: 1;
+        }
+        .new-project-card .label {
+            font-size: 12px; color: rgba(200,150,80,0.5);
+            letter-spacing: 2px; text-transform: uppercase;
+        }
+
+        /* ===== New Project Screen ===== */
+        #newProjectScreen {
+            width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center;
+            background: linear-gradient(180deg, #2a1f14 0%, #1a1108 100%);
+        }
+        .np-panel {
+            background: rgba(40,28,16,0.95);
+            border: 1px solid rgba(200,150,80,0.2);
+            border-radius: 16px; padding: 30px 40px;
+            max-width: 440px; width: 90%;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 0 60px rgba(200,140,40,0.08);
+        }
+        .np-panel h2 {
+            text-align: center; font-size: 22px; color: #f5e6c8;
+            margin-bottom: 20px; letter-spacing: 3px;
+            text-shadow: 0 0 20px rgba(255,180,60,0.3);
+        }
+        .np-label {
+            font-size: 10px; color: rgba(200,170,120,0.5); letter-spacing: 2px;
+            text-transform: uppercase; margin: 14px 0 6px;
+        }
+        .np-input {
+            width: 100%; padding: 10px 14px; font-size: 14px;
+            font-family: 'Cinzel', serif; color: #f0dbb8;
+            background: rgba(0,0,0,0.3); border: 1px solid rgba(200,150,80,0.2);
+            border-radius: 8px; outline: none;
+            transition: border-color 0.2s;
+        }
+        .np-input:focus { border-color: rgba(200,150,80,0.5); }
+        .np-input::placeholder { color: rgba(200,170,120,0.3); }
+
+        .wood-options, .size-options {
+            display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;
+        }
+        .wood-opt, .size-opt {
+            padding: 8px 14px; font-size: 11px; font-family: 'Cinzel', serif;
+            border: 1px solid rgba(200,150,80,0.2); border-radius: 8px;
+            cursor: pointer; letter-spacing: 1px;
+            background: rgba(255,255,255,0.03);
+            color: #c8a878; transition: all 0.15s;
+        }
+        .wood-opt:hover, .size-opt:hover {
+            background: rgba(200,150,80,0.15);
+        }
+        .wood-opt.selected, .size-opt.selected {
+            background: rgba(200,150,80,0.25);
+            border-color: rgba(200,150,80,0.6);
+            color: #f0dbb8;
+            box-shadow: 0 0 12px rgba(200,150,80,0.15);
+        }
+        .wood-opt .swatch {
+            display: inline-block; width: 12px; height: 12px;
+            border-radius: 3px; vertical-align: middle; margin-right: 6px;
+            border: 1px solid rgba(255,255,255,0.15);
+        }
+
+        .np-btn-row {
+            display: flex; gap: 10px; margin-top: 22px;
+        }
+        .np-btn {
+            flex: 1; padding: 12px; font-size: 13px; font-weight: 600;
+            font-family: 'Cinzel', serif; border: none; border-radius: 10px;
+            cursor: pointer; letter-spacing: 2px; text-transform: uppercase;
+            transition: transform 0.15s, filter 0.2s;
+        }
+        .np-btn:hover { transform: scale(1.03); filter: brightness(1.1); }
+        .np-btn:active { transform: scale(0.97); }
+        .np-btn-create {
+            background: linear-gradient(135deg, #c8923a, #a06820);
+            color: #fff; box-shadow: 0 4px 20px rgba(200,140,40,0.3);
+        }
+        .np-btn-back {
+            background: rgba(100,80,50,0.3); color: #c8a878;
+            border: 1px solid rgba(200,150,80,0.2);
+        }
+
+        /* ===== Workspace Screen ===== */
+        #workspaceScreen {
+            width: 100%; height: 100%;
+            display: flex; flex-direction: column;
+            background: #1a1108;
+        }
+        #wsTopBar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 6px 14px;
+            background: linear-gradient(180deg, rgba(40,28,16,0.95), rgba(30,20,10,0.9));
+            border-bottom: 1px solid rgba(200,150,80,0.15);
+            z-index: 10; min-height: 38px;
+        }
+        #wsTopBar .project-title {
+            font-size: 14px; font-weight: 600; color: #f0dbb8;
+            letter-spacing: 2px;
+        }
+        #wsTopBar .top-btns { display: flex; gap: 6px; }
+        .ws-btn {
+            padding: 5px 12px; font-size: 9px; font-family: 'Cinzel', serif;
+            background: rgba(200,150,80,0.1); border: 1px solid rgba(200,150,80,0.2);
+            border-radius: 6px; color: #c8a878; cursor: pointer;
+            letter-spacing: 1px; text-transform: uppercase;
+            transition: all 0.15s;
+        }
+        .ws-btn:hover { background: rgba(200,150,80,0.25); border-color: rgba(200,150,80,0.4); }
+        .ws-btn.active { background: rgba(200,150,80,0.3); border-color: rgba(200,150,80,0.5); }
+
+        #wsMain {
+            flex: 1; display: flex; overflow: hidden; position: relative;
+        }
+
+        /* Tool Palette */
+        #toolPalette {
+            width: 180px; min-width: 180px;
+            background: linear-gradient(180deg, rgba(40,28,16,0.95), rgba(25,16,8,0.95));
+            border-right: 1px solid rgba(200,150,80,0.12);
+            overflow-y: auto; padding: 8px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(200,150,80,0.2) transparent;
+            z-index: 5;
+        }
+        #toolPalette::-webkit-scrollbar { width: 4px; }
+        #toolPalette::-webkit-scrollbar-thumb { background: rgba(200,150,80,0.2); border-radius: 2px; }
+
+        .tool-section-label {
+            font-size: 8px; color: rgba(200,170,120,0.4); letter-spacing: 2px;
+            text-transform: uppercase; margin: 10px 0 4px 4px;
+        }
+        .tool-btn {
+            display: flex; align-items: center; gap: 8px;
+            width: 100%; padding: 7px 10px; margin: 2px 0;
+            font-size: 11px; font-family: 'Cinzel', serif;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid transparent; border-radius: 6px;
+            color: #b89868; cursor: pointer;
+            transition: all 0.12s; text-align: left;
+        }
+        .tool-btn:hover {
+            background: rgba(200,150,80,0.1);
+            border-color: rgba(200,150,80,0.15);
+        }
+        .tool-btn.selected {
+            background: rgba(200,150,80,0.2);
+            border-color: rgba(200,150,80,0.4);
+            color: #f0dbb8;
+            box-shadow: inset 0 0 12px rgba(200,150,80,0.08);
+        }
+        .tool-btn .tool-icon {
+            font-size: 16px; width: 22px; text-align: center;
+        }
+        .tool-btn .tool-name {
+            flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+
+        /* Sliders */
+        .slider-group {
+            margin: 8px 4px; padding: 8px;
+            background: rgba(0,0,0,0.15); border-radius: 8px;
+        }
+        .slider-label {
+            display: flex; justify-content: space-between;
+            font-size: 9px; color: rgba(200,170,120,0.5);
+            letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px;
+        }
+        .slider-label .val { color: #c8a878; }
+        input[type="range"] {
+            width: 100%; height: 4px; -webkit-appearance: none;
+            appearance: none; background: rgba(200,150,80,0.15);
+            border-radius: 2px; outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 14px; height: 14px;
+            background: linear-gradient(135deg, #c8923a, #a06820);
+            border-radius: 50%; cursor: pointer;
+            box-shadow: 0 0 6px rgba(200,140,40,0.4);
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 14px; height: 14px;
+            background: linear-gradient(135deg, #c8923a, #a06820);
+            border-radius: 50%; cursor: pointer; border: none;
+        }
+
+        /* Canvas Area */
+        #canvasWrap {
+            flex: 1; position: relative; overflow: hidden;
+            background: radial-gradient(ellipse at center, #2a1f14 0%, #1a1108 70%, #0d0804 100%);
+        }
+        #glCanvas {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        }
+        #particleCanvas {
+            position: absolute; top: 0; left: 0;
+            pointer-events: none;
+            width: 100%; height: 100%;
+        }
+
+        /* Info Panel */
+        #infoPanel {
+            width: 160px; min-width: 160px;
+            background: linear-gradient(180deg, rgba(40,28,16,0.95), rgba(25,16,8,0.95));
+            border-left: 1px solid rgba(200,150,80,0.12);
+            padding: 12px 10px; overflow-y: auto; z-index: 5;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(200,150,80,0.2) transparent;
+        }
+        .info-section {
+            margin-bottom: 14px;
+        }
+        .info-label {
+            font-size: 8px; color: rgba(200,170,120,0.4); letter-spacing: 2px;
+            text-transform: uppercase; margin-bottom: 4px;
+        }
+        .info-value {
+            font-size: 12px; color: #c8a878;
+        }
+        .info-value.small { font-size: 10px; }
+
+        /* Bottom Status */
+        #wsBottomBar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 4px 14px;
+            background: rgba(30,20,10,0.9);
+            border-top: 1px solid rgba(200,150,80,0.1);
+            font-size: 9px; color: rgba(200,170,120,0.4);
+            letter-spacing: 1px; z-index: 10;
+        }
+
+        /* Confirm Delete Modal */
+        #deleteModal {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7); z-index: 100;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .modal-box {
+            background: rgba(40,28,16,0.98);
+            border: 1px solid rgba(200,150,80,0.3);
+            border-radius: 14px; padding: 24px 30px;
+            text-align: center; max-width: 340px;
+            backdrop-filter: blur(20px);
+        }
+        .modal-box p { font-size: 14px; margin-bottom: 16px; color: #e8d5b8; }
+        .modal-btns { display: flex; gap: 10px; justify-content: center; }
+        .modal-btn {
+            padding: 10px 24px; font-size: 11px; font-family: 'Cinzel', serif;
+            border: none; border-radius: 8px; cursor: pointer;
+            letter-spacing: 1px; text-transform: uppercase;
+            transition: transform 0.15s, filter 0.2s;
+        }
+        .modal-btn:hover { transform: scale(1.05); filter: brightness(1.1); }
+        .modal-btn-yes {
+            background: linear-gradient(135deg, #b04030, #802820);
+            color: #fff;
+        }
+        .modal-btn-no {
+            background: rgba(100,80,50,0.3); color: #c8a878;
+            border: 1px solid rgba(200,150,80,0.2);
+        }
+
+        /* Toast */
+        #toast {
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+            background: rgba(40,28,16,0.95); border: 1px solid rgba(200,150,80,0.3);
+            border-radius: 8px; padding: 10px 20px; color: #e8c888;
+            font-size: 12px; letter-spacing: 1px; z-index: 200;
+            opacity: 0; transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        #toast.show { opacity: 1; }
+
+        /* Mobile */
+        @media (max-width: 700px) {
+            #toolPalette { width: 50px; min-width: 50px; padding: 4px; }
+            .tool-btn .tool-name { display: none; }
+            .tool-btn { justify-content: center; padding: 8px 4px; }
+            .tool-btn .tool-icon { width: auto; font-size: 18px; }
+            .tool-section-label { display: none; }
+            .slider-group { display: none; }
+            #infoPanel { width: 0; min-width: 0; padding: 0; overflow: hidden; }
+            #galleryHeader h1 { font-size: 24px; }
+            .project-card { width: 150px; }
+            .project-card .thumb { height: 100px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- ===== Gallery Screen ===== -->
+    <div id="galleryScreen">
+        <div id="galleryHeader">
+            <h1>WOOD CARVING STUDIO</h1>
+            <div class="subtitle">3D Voxel Carving Experience</div>
+        </div>
+        <div id="galleryGrid"></div>
+    </div>
+
+    <!-- ===== New Project Screen ===== -->
+    <div id="newProjectScreen" class="hidden">
+        <div class="np-panel">
+            <h2>NEW PROJECT</h2>
+            <div class="np-label">Project Name</div>
+            <input type="text" id="npName" class="np-input" placeholder="My Carving" maxlength="40">
+            <div class="np-label">Wood Type</div>
+            <div class="wood-options" id="woodOptions"></div>
+            <div class="np-label">Block Size</div>
+            <div class="size-options" id="sizeOptions"></div>
+            <div class="np-btn-row">
+                <button class="np-btn np-btn-back" onclick="showGallery()">Back</button>
+                <button class="np-btn np-btn-create" onclick="createProject()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== Workspace Screen ===== -->
+    <div id="workspaceScreen" class="hidden">
+        <div id="wsTopBar">
+            <span class="project-title" id="wsTitle">Untitled</span>
+            <div class="top-btns">
+                <button class="ws-btn" id="undoBtn" onclick="doUndo()">Undo</button>
+                <button class="ws-btn" id="redoBtn" onclick="doRedo()">Redo</button>
+                <button class="ws-btn" onclick="saveCurrentProject()">Save</button>
+                <button class="ws-btn" onclick="closeWorkspace()">Gallery</button>
+            </div>
+        </div>
+        <div id="wsMain">
+            <div id="toolPalette"></div>
+            <div id="canvasWrap">
+                <canvas id="glCanvas"></canvas>
+                <canvas id="particleCanvas"></canvas>
+            </div>
+            <div id="infoPanel">
+                <div class="info-section">
+                    <div class="info-label">Wood Type</div>
+                    <div class="info-value" id="infoWood">-</div>
+                </div>
+                <div class="info-section">
+                    <div class="info-label">Block Size</div>
+                    <div class="info-value" id="infoSize">-</div>
+                </div>
+                <div class="info-section">
+                    <div class="info-label">Material</div>
+                    <div class="info-value" id="infoMaterial">100%</div>
+                </div>
+                <div class="info-section">
+                    <div class="info-label">Tool</div>
+                    <div class="info-value" id="infoTool">-</div>
+                </div>
+                <div class="info-section">
+                    <div class="info-label">Camera</div>
+                    <div class="info-value" id="infoZoom">1.0x</div>
+                </div>
+                <div class="info-section">
+                    <div class="info-label">Position</div>
+                    <div class="info-value small" id="infoPos">-</div>
+                </div>
+            </div>
+        </div>
+        <div id="wsBottomBar">
+            <span id="statusLeft">Ready</span>
+            <span id="statusRight">RMB: orbit | MMB: pan | Scroll: zoom</span>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="hidden">
+        <div class="modal-box">
+            <p>Delete this project? This cannot be undone.</p>
+            <div class="modal-btns">
+                <button class="modal-btn modal-btn-no" onclick="cancelDelete()">Cancel</button>
+                <button class="modal-btn modal-btn-yes" onclick="confirmDelete()">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast"></div>
+
+<script>
+// ============================================================
+// CONSTANTS & CONFIG
+// ============================================================
+const STORAGE_INDEX_KEY = 'woodcarving_index';
+const STORAGE_PREFIX = 'woodcarving_project_';
+const AUTO_SAVE_INTERVAL = 30000;
+const MAX_UNDO = 30;
+const CHUNK_SIZE = 16;
+
+const WOOD_TYPES = [
+    { id: 'pine',   name: 'Pine',   baseColor: [210,180,140], grainColor: [185,155,115], knotColor: [160,120,70],  darkShade: [140,110,75] },
+    { id: 'oak',    name: 'Oak',    baseColor: [180,145,95],  grainColor: [155,120,70],  knotColor: [120,85,45],   darkShade: [110,80,45] },
+    { id: 'walnut', name: 'Walnut', baseColor: [105,75,55],   grainColor: [85,58,38],    knotColor: [65,40,25],    darkShade: [55,35,22] },
+    { id: 'cherry', name: 'Cherry', baseColor: [180,110,80],  grainColor: [155,88,60],   knotColor: [130,65,40],   darkShade: [120,60,38] },
+    { id: 'maple',  name: 'Maple',  baseColor: [225,200,160], grainColor: [200,175,135], knotColor: [175,145,100], darkShade: [165,135,95] },
+];
+
+const SIZE_PRESETS = [
+    { id: 'small',  name: 'Small',  w: 40, h: 30, d: 20 },
+    { id: 'medium', name: 'Medium', w: 60, h: 45, d: 30 },
+    { id: 'large',  name: 'Large',  w: 80, h: 60, d: 40 },
+    { id: 'wide',   name: 'Wide',   w: 80, h: 40, d: 25 },
+    { id: 'tall',   name: 'Tall',   w: 40, h: 80, d: 25 },
+];
+
+const TOOLS = [
+    { id: 'chisel_s',   name: 'Small Chisel',    icon: '\u{1F528}', category: 'chisels',   shape: 'square', radius: 1, depth: 3,  rough: false },
+    { id: 'chisel_m',   name: 'Med Chisel',      icon: '\u{1F528}', category: 'chisels',   shape: 'square', radius: 2, depth: 4,  rough: false },
+    { id: 'chisel_l',   name: 'Large Chisel',    icon: '\u{1F528}', category: 'chisels',   shape: 'square', radius: 4, depth: 5,  rough: false },
+    { id: 'gouge_s',    name: 'Small Gouge',      icon: '\u{1FAA3}', category: 'gouges',    shape: 'circle', radius: 2, depth: 3,  rough: false },
+    { id: 'gouge_m',    name: 'Med Gouge',        icon: '\u{1FAA3}', category: 'gouges',    shape: 'circle', radius: 3, depth: 4,  rough: false },
+    { id: 'gouge_l',    name: 'Large Gouge',      icon: '\u{1FAA3}', category: 'gouges',    shape: 'circle', radius: 5, depth: 5,  rough: false },
+    { id: 'knife',      name: 'Carving Knife',    icon: '\u{1F52A}', category: 'detail',    shape: 'circle', radius: 1, depth: 2,  rough: false },
+    { id: 'vtool',      name: 'V-Tool',           icon: '\u{2711}',  category: 'detail',    shape: 'vtool',  radius: 2, depth: 4,  rough: false },
+    { id: 'saw',        name: 'Saw',              icon: '\u{1FA9A}', category: 'heavy',     shape: 'square', radius: 1, depth: 999, rough: true },
+    { id: 'drill_s',    name: 'Small Drill',      icon: '\u{1FA9B}', category: 'heavy',     shape: 'circle', radius: 2, depth: 999, rough: false },
+    { id: 'drill_l',    name: 'Large Drill',      icon: '\u{1FA9B}', category: 'heavy',     shape: 'circle', radius: 4, depth: 999, rough: false },
+    { id: 'rasp',       name: 'Rasp',             icon: '\u{1F9F1}', category: 'heavy',     shape: 'square', radius: 3, depth: 6,  rough: true },
+    { id: 'adze',       name: 'Adze',             icon: '\u{1FA93}', category: 'heavy',     shape: 'circle', radius: 6, depth: 7,  rough: true },
+    { id: 'sand_fine',  name: 'Fine Sandpaper',   icon: '\u{1F9FD}', category: 'finishing', shape: 'circle', radius: 3, depth: 0,  rough: false, smooth: true, smoothStrength: 0.3 },
+    { id: 'sand_coarse',name: 'Coarse Sandpaper', icon: '\u{1F9FD}', category: 'finishing', shape: 'circle', radius: 5, depth: 0,  rough: false, smooth: true, smoothStrength: 0.6 },
+    { id: 'burn',       name: 'Burn Pen',         icon: '\u{1F525}', category: 'special',   shape: 'circle', radius: 2, depth: 0,  rough: false, burn: true },
+];
+
+const CATEGORY_NAMES = {
+    chisels: 'Chisels', gouges: 'Gouges', detail: 'Detail',
+    heavy: 'Heavy', finishing: 'Finishing', special: 'Special'
+};
+
+// ============================================================
+// STATE
+// ============================================================
+let currentScreen = 'gallery';
+let projectIndex = [];
+let currentProject = null;
+let selectedWoodType = 'pine';
+let selectedSize = 'medium';
+let selectedToolId = 'chisel_m';
+let toolSizeMultiplier = 1.0;
+let toolStrength = 1.0;
+
+// 3D Voxel grid
+let sizeX = 0, sizeY = 0, sizeZ = 0;
+let voxels = null;      // Uint8Array: 0=air, 1=solid
+let burnGrid3D = null;  // Uint8Array: 0=none, 255=max burn
+let grainSeed = 0;
+let woodKnots3D = [];
+
+// Three.js
+let renderer, scene, camera;
+let voxelGroup;
+let chunkMeshes = {};  // key: "cx,cy,cz" -> THREE.Mesh
+let dirtyChunks = new Set();
+let allChunksDirty = true;
+
+// Highlight
+let highlightMesh = null;
+let hoveredFace = null; // { voxel: {x,y,z}, normal: {x,y,z} }
+
+// Camera orbit
+let orbitTheta = Math.PI / 4;
+let orbitPhi = Math.PI / 3;
+let orbitDistance = 100;
+let orbitTarget = new THREE.Vector3(0, 0, 0);
+let isOrbiting = false;
+let isPanning = false;
+let orbitStartX = 0, orbitStartY = 0;
+let orbitStartTheta = 0, orbitStartPhi = 0;
+let panStartTarget = new THREE.Vector3();
+
+// Raycasting
+let raycaster = new THREE.Raycaster();
+let mouse = new THREE.Vector2();
+// Face lookup: for each chunk mesh, store array of {vx, vy, vz, nx, ny, nz} per face (2 triangles = 1 face)
+let faceLookup = {};
+
+// Input
+let isCarving = false;
+let lastCarveVoxel = null;
+
+// Undo/redo
+let undoStack = [];
+let redoStack = [];
+
+// Particles (2D overlay)
+let particleCanvas, particleCtx;
+let particles = [];
+let dustMotes = [];
+let screenShake = { x: 0, y: 0, timer: 0 };
+
+// Auto-save
+let autoSaveTimer = null;
+let pendingDeleteId = null;
+let animFrameId = null;
+
+// ============================================================
+// UTILITY
+// ============================================================
+function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+function generateId() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+function mulberry32(a) {
+    return function() {
+        a |= 0; a = a + 0x6D2B79F5 | 0;
+        let t = Math.imul(a ^ a >>> 15, 1 | a);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+}
+
+function escHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+function vIdx(x, y, z) {
+    return z * sizeX * sizeY + y * sizeX + x;
+}
+
+function inBounds(x, y, z) {
+    return x >= 0 && x < sizeX && y >= 0 && y < sizeY && z >= 0 && z < sizeZ;
+}
+
+// ============================================================
+// RLE COMPRESSION (for binary 0/1 data - works great)
+// ============================================================
+function compressGrid(arr) {
+    const runs = [];
+    let i = 0;
+    while (i < arr.length) {
+        const val = arr[i];
+        let count = 1;
+        while (i + count < arr.length && arr[i + count] === val && count < 255) count++;
+        runs.push(count, val);
+        i += count;
+    }
+    const bytes = new Uint8Array(runs);
+    let binary = '';
+    for (let j = 0; j < bytes.length; j++) binary += String.fromCharCode(bytes[j]);
+    return btoa(binary);
+}
+
+function decompressGrid(b64, expectedLen) {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const result = new Uint8Array(expectedLen);
+    let pos = 0;
+    for (let i = 0; i < bytes.length; i += 2) {
+        const count = bytes[i];
+        const val = bytes[i + 1];
+        for (let j = 0; j < count && pos < expectedLen; j++) result[pos++] = val;
+    }
+    return result;
+}
+
+// ============================================================
+// PROJECT STORAGE
+// ============================================================
+function loadIndex() {
+    try {
+        const raw = localStorage.getItem(STORAGE_INDEX_KEY);
+        projectIndex = raw ? JSON.parse(raw) : [];
+    } catch { projectIndex = []; }
+}
+
+function saveIndex() {
+    localStorage.setItem(STORAGE_INDEX_KEY, JSON.stringify(projectIndex));
+}
+
+function loadProjectData(id) {
+    try {
+        const raw = localStorage.getItem(STORAGE_PREFIX + id);
+        return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+}
+
+function saveProjectData(id, data) {
+    localStorage.setItem(STORAGE_PREFIX + id, JSON.stringify(data));
+}
+
+function deleteProjectData(id) {
+    localStorage.removeItem(STORAGE_PREFIX + id);
+}
+
+function generateThumbnail() {
+    if (!renderer) return null;
+    renderer.render(scene, camera);
+    return renderer.domElement.toDataURL('image/jpeg', 0.6);
+}
+
+// ============================================================
+// 3D WOOD GRAIN
+// ============================================================
+function initWoodGrain3D(sx, sy, sz, seed) {
+    grainSeed = seed;
+    woodKnots3D = [];
+    const rng = mulberry32(seed);
+    const numKnots = Math.floor(rng() * 5) + 3;
+    for (let i = 0; i < numKnots; i++) {
+        woodKnots3D.push({
+            x: rng() * sx,
+            y: rng() * sy,
+            z: rng() * sz,
+            r: rng() * 8 + 4
+        });
+    }
+}
+
+function getWoodColor3D(x, y, z, burnVal, wood) {
+    const base = wood.baseColor;
+    const grain = wood.grainColor;
+    const knotCol = wood.knotColor;
+
+    // 3D grain: rings along Y axis (like tree rings viewed from the side)
+    const dx = x - sizeX * 0.5;
+    const dz = z - sizeZ * 0.5;
+    const ringDist = Math.sqrt(dx * dx + dz * dz);
+    const grainVal = Math.sin(ringDist * 0.5 + y * 0.08 + grainSeed) * 0.5 +
+                     Math.sin(y * 0.2 + x * 0.05 + grainSeed * 2.3) * 0.3 +
+                     Math.sin(z * 0.12 + grainSeed * 0.7) * 0.2;
+    const gf = (grainVal + 1) * 0.5;
+
+    // Knot proximity
+    let knotFactor = 0;
+    for (const knot of woodKnots3D) {
+        const kdx = x - knot.x, kdy = y - knot.y, kdz = z - knot.z;
+        const dist = Math.sqrt(kdx * kdx + kdy * kdy + kdz * kdz);
+        if (dist < knot.r) {
+            const ring = Math.sin(dist * 1.5) * 0.5 + 0.5;
+            knotFactor = Math.max(knotFactor, (1 - dist / knot.r) * ring);
+        }
+    }
+
+    let r = base[0] * (1 - gf) + grain[0] * gf;
+    let g = base[1] * (1 - gf) + grain[1] * gf;
+    let b = base[2] * (1 - gf) + grain[2] * gf;
+
+    if (knotFactor > 0) {
+        r = r * (1 - knotFactor) + knotCol[0] * knotFactor;
+        g = g * (1 - knotFactor) + knotCol[1] * knotFactor;
+        b = b * (1 - knotFactor) + knotCol[2] * knotFactor;
+    }
+
+    // Burn
+    if (burnVal > 0) {
+        const burnF = burnVal / 255;
+        const burnMul = 1 - burnF * 0.7;
+        r = r * burnMul + 30 * burnF;
+        g = g * burnMul + 15 * burnF;
+        b = b * burnMul + 5 * burnF;
+    }
+
+    return [r / 255, g / 255, b / 255];
+}
+
+// ============================================================
+// THREE.JS SCENE SETUP
+// ============================================================
+function initThreeJS() {
+    const wrap = document.getElementById('canvasWrap');
+    const glCanvas = document.getElementById('glCanvas');
+    const w = wrap.clientWidth, h = wrap.clientHeight;
+
+    renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: true, preserveDrawingBuffer: true });
+    renderer.setSize(w, h);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x1a1108, 1);
+
+    scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x1a1108, 0.003);
+
+    camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 1000);
+
+    // Lights - warm workshop feel
+    const ambient = new THREE.AmbientLight(0xd4a574, 0.5);
+    scene.add(ambient);
+
+    const dirLight = new THREE.DirectionalLight(0xffeedd, 0.8);
+    dirLight.position.set(50, 80, 60);
+    scene.add(dirLight);
+
+    const pointLight = new THREE.PointLight(0xffaa44, 0.6, 200);
+    pointLight.position.set(-30, 60, 40);
+    scene.add(pointLight);
+
+    const backLight = new THREE.DirectionalLight(0x886644, 0.3);
+    backLight.position.set(-40, -20, -50);
+    scene.add(backLight);
+
+    // Voxel group (centered at origin)
+    voxelGroup = new THREE.Group();
+    scene.add(voxelGroup);
+
+    // Highlight quad
+    const hlGeo = new THREE.PlaneGeometry(1.02, 1.02);
+    const hlMat = new THREE.MeshBasicMaterial({
+        color: 0xffcc66, transparent: true, opacity: 0.3,
+        side: THREE.DoubleSide, depthTest: true
+    });
+    highlightMesh = new THREE.Mesh(hlGeo, hlMat);
+    highlightMesh.visible = false;
+    scene.add(highlightMesh);
+
+    // Floor grid
+    const gridSize = 120;
+    const gridHelper = new THREE.GridHelper(gridSize, 20, 0x3a2a18, 0x2a1a0a);
+    gridHelper.position.y = -0.01;
+    scene.add(gridHelper);
+}
+
+function updateCamera() {
+    // Clamp phi
+    orbitPhi = Math.max(0.1, Math.min(Math.PI - 0.1, orbitPhi));
+    orbitDistance = Math.max(10, Math.min(400, orbitDistance));
+
+    const x = orbitDistance * Math.sin(orbitPhi) * Math.cos(orbitTheta);
+    const y = orbitDistance * Math.cos(orbitPhi);
+    const z = orbitDistance * Math.sin(orbitPhi) * Math.sin(orbitTheta);
+
+    camera.position.set(
+        orbitTarget.x + x,
+        orbitTarget.y + y,
+        orbitTarget.z + z
+    );
+    camera.lookAt(orbitTarget);
+}
+
+function resetCameraForBlock() {
+    orbitTarget.set(0, 0, 0);
+    const maxDim = Math.max(sizeX, sizeY, sizeZ);
+    orbitDistance = maxDim * 2;
+    orbitTheta = Math.PI / 4;
+    orbitPhi = Math.PI / 3;
+    updateCamera();
+}
+
+// ============================================================
+// VOXEL MESH GENERATION (face-culled, chunked)
+// ============================================================
+function getChunkKey(cx, cy, cz) {
+    return cx + ',' + cy + ',' + cz;
+}
+
+function markChunkDirty(vx, vy, vz) {
+    const cx = Math.floor(vx / CHUNK_SIZE);
+    const cy = Math.floor(vy / CHUNK_SIZE);
+    const cz = Math.floor(vz / CHUNK_SIZE);
+    dirtyChunks.add(getChunkKey(cx, cy, cz));
+    // Also mark adjacent chunks if on boundary
+    if (vx % CHUNK_SIZE === 0 && cx > 0) dirtyChunks.add(getChunkKey(cx - 1, cy, cz));
+    if (vy % CHUNK_SIZE === 0 && cy > 0) dirtyChunks.add(getChunkKey(cx, cy - 1, cz));
+    if (vz % CHUNK_SIZE === 0 && cz > 0) dirtyChunks.add(getChunkKey(cx, cy, cz - 1));
+    if ((vx + 1) % CHUNK_SIZE === 0) dirtyChunks.add(getChunkKey(cx + 1, cy, cz));
+    if ((vy + 1) % CHUNK_SIZE === 0) dirtyChunks.add(getChunkKey(cx, cy + 1, cz));
+    if ((vz + 1) % CHUNK_SIZE === 0) dirtyChunks.add(getChunkKey(cx, cy, cz + 1));
+}
+
+function markAllChunksDirty() {
+    allChunksDirty = true;
+    dirtyChunks.clear();
+}
+
+// Face definitions: [axis, dir, vertices (4 corners), normal]
+const FACES = [
+    // +X face
+    { axis: 0, dir: 1, nx: 1, ny: 0, nz: 0,
+      verts: (x,y,z) => [
+        [x+1,y,z], [x+1,y+1,z], [x+1,y+1,z+1], [x+1,y,z+1]
+      ]},
+    // -X face
+    { axis: 0, dir: -1, nx: -1, ny: 0, nz: 0,
+      verts: (x,y,z) => [
+        [x,y,z+1], [x,y+1,z+1], [x,y+1,z], [x,y,z]
+      ]},
+    // +Y face
+    { axis: 1, dir: 1, nx: 0, ny: 1, nz: 0,
+      verts: (x,y,z) => [
+        [x,y+1,z], [x,y+1,z+1], [x+1,y+1,z+1], [x+1,y+1,z]
+      ]},
+    // -Y face
+    { axis: 1, dir: -1, nx: 0, ny: -1, nz: 0,
+      verts: (x,y,z) => [
+        [x,y,z+1], [x,y,z], [x+1,y,z], [x+1,y,z+1]
+      ]},
+    // +Z face
+    { axis: 2, dir: 1, nx: 0, ny: 0, nz: 1,
+      verts: (x,y,z) => [
+        [x,y,z+1], [x,y+1,z+1], [x+1,y+1,z+1], [x+1,y,z+1]
+      ]},
+    // -Z face
+    { axis: 2, dir: -1, nx: 0, ny: 0, nz: -1,
+      verts: (x,y,z) => [
+        [x+1,y,z], [x+1,y+1,z], [x,y+1,z], [x,y,z]
+      ]},
+];
+
+function buildChunkMesh(cx, cy, cz) {
+    const key = getChunkKey(cx, cy, cz);
+    const wood = WOOD_TYPES.find(w => w.id === currentProject.woodType) || WOOD_TYPES[0];
+
+    // Offset for centering
+    const offX = -sizeX / 2;
+    const offY = -sizeY / 2;
+    const offZ = -sizeZ / 2;
+
+    const startX = cx * CHUNK_SIZE;
+    const startY = cy * CHUNK_SIZE;
+    const startZ = cz * CHUNK_SIZE;
+    const endX = Math.min(startX + CHUNK_SIZE, sizeX);
+    const endY = Math.min(startY + CHUNK_SIZE, sizeY);
+    const endZ = Math.min(startZ + CHUNK_SIZE, sizeZ);
+
+    const positions = [];
+    const normals = [];
+    const colors = [];
+    const indices = [];
+    const faceData = []; // For raycasting: {vx, vy, vz, nx, ny, nz} per quad
+
+    let vertCount = 0;
+
+    for (let z = startZ; z < endZ; z++) {
+        for (let y = startY; y < endY; y++) {
+            for (let x = startX; x < endX; x++) {
+                if (voxels[vIdx(x, y, z)] === 0) continue;
+
+                const burnVal = burnGrid3D[vIdx(x, y, z)];
+
+                for (const face of FACES) {
+                    const adjX = x + face.nx;
+                    const adjY = y + face.ny;
+                    const adjZ = z + face.nz;
+
+                    // Emit face if adjacent is air or out of bounds
+                    const isExposed = !inBounds(adjX, adjY, adjZ) || voxels[vIdx(adjX, adjY, adjZ)] === 0;
+                    if (!isExposed) continue;
+
+                    const col = getWoodColor3D(x, y, z, burnVal, wood);
+
+                    // Shade faces by normal for visual depth
+                    let shade = 1.0;
+                    if (face.ny === 1) shade = 1.1;
+                    else if (face.ny === -1) shade = 0.7;
+                    else if (face.nx !== 0) shade = 0.9;
+                    else if (face.nz !== 0) shade = 0.85;
+
+                    const cr = Math.min(1, col[0] * shade);
+                    const cg = Math.min(1, col[1] * shade);
+                    const cb = Math.min(1, col[2] * shade);
+
+                    const verts = face.verts(x, y, z);
+                    for (const v of verts) {
+                        positions.push(v[0] + offX, v[1] + offY, v[2] + offZ);
+                        normals.push(face.nx, face.ny, face.nz);
+                        colors.push(cr, cg, cb);
+                    }
+
+                    // Two triangles per quad
+                    indices.push(
+                        vertCount, vertCount + 1, vertCount + 2,
+                        vertCount, vertCount + 2, vertCount + 3
+                    );
+                    vertCount += 4;
+
+                    faceData.push({ vx: x, vy: y, vz: z, nx: face.nx, ny: face.ny, nz: face.nz });
+                }
+            }
+        }
+    }
+
+    // Remove old mesh
+    if (chunkMeshes[key]) {
+        voxelGroup.remove(chunkMeshes[key]);
+        chunkMeshes[key].geometry.dispose();
+        delete chunkMeshes[key];
+    }
+    delete faceLookup[key];
+
+    if (positions.length === 0) return;
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geometry.setIndex(indices);
+
+    const material = new THREE.MeshLambertMaterial({ vertexColors: true });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.userData.chunkKey = key;
+
+    voxelGroup.add(mesh);
+    chunkMeshes[key] = mesh;
+    faceLookup[key] = faceData;
+}
+
+function rebuildDirtyChunks() {
+    if (allChunksDirty) {
+        allChunksDirty = false;
+        dirtyChunks.clear();
+        // Remove all chunk meshes
+        for (const key in chunkMeshes) {
+            voxelGroup.remove(chunkMeshes[key]);
+            chunkMeshes[key].geometry.dispose();
+        }
+        chunkMeshes = {};
+        faceLookup = {};
+
+        const cx_max = Math.ceil(sizeX / CHUNK_SIZE);
+        const cy_max = Math.ceil(sizeY / CHUNK_SIZE);
+        const cz_max = Math.ceil(sizeZ / CHUNK_SIZE);
+        for (let cz = 0; cz < cz_max; cz++) {
+            for (let cy = 0; cy < cy_max; cy++) {
+                for (let cx = 0; cx < cx_max; cx++) {
+                    buildChunkMesh(cx, cy, cz);
+                }
+            }
+        }
+    } else if (dirtyChunks.size > 0) {
+        for (const key of dirtyChunks) {
+            const parts = key.split(',').map(Number);
+            buildChunkMesh(parts[0], parts[1], parts[2]);
+        }
+        dirtyChunks.clear();
+    }
+}
+
+// ============================================================
+// RAYCASTING
+// ============================================================
+function updateMouseFromEvent(e) {
+    const wrap = document.getElementById('canvasWrap');
+    const rect = wrap.getBoundingClientRect();
+    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+}
+
+function raycastVoxel() {
+    raycaster.setFromCamera(mouse, camera);
+
+    // Collect all chunk meshes
+    const meshes = Object.values(chunkMeshes);
+    if (meshes.length === 0) return null;
+
+    const intersects = raycaster.intersectObjects(meshes);
+    if (intersects.length === 0) return null;
+
+    const hit = intersects[0];
+    const key = hit.object.userData.chunkKey;
+    const faceArr = faceLookup[key];
+    if (!faceArr) return null;
+
+    // Each face = 2 triangles = 6 indices. faceIndex is the triangle index.
+    const quadIndex = Math.floor(hit.faceIndex / 2);
+    if (quadIndex >= faceArr.length) return null;
+
+    const fd = faceArr[quadIndex];
+    return {
+        voxel: { x: fd.vx, y: fd.vy, z: fd.vz },
+        normal: { x: fd.nx, y: fd.ny, z: fd.nz },
+        point: hit.point
+    };
+}
+
+function updateHighlight() {
+    const hit = raycastVoxel();
+    hoveredFace = hit;
+
+    if (hit) {
+        const offX = -sizeX / 2;
+        const offY = -sizeY / 2;
+        const offZ = -sizeZ / 2;
+
+        // Position the highlight quad on the face
+        const cx = hit.voxel.x + 0.5 + hit.normal.x * 0.501 + offX;
+        const cy = hit.voxel.y + 0.5 + hit.normal.y * 0.501 + offY;
+        const cz = hit.voxel.z + 0.5 + hit.normal.z * 0.501 + offZ;
+
+        highlightMesh.position.set(cx, cy, cz);
+
+        // Orient the quad to face the normal
+        if (hit.normal.y === 1) highlightMesh.rotation.set(-Math.PI / 2, 0, 0);
+        else if (hit.normal.y === -1) highlightMesh.rotation.set(Math.PI / 2, 0, 0);
+        else if (hit.normal.x === 1) highlightMesh.rotation.set(0, Math.PI / 2, 0);
+        else if (hit.normal.x === -1) highlightMesh.rotation.set(0, -Math.PI / 2, 0);
+        else if (hit.normal.z === 1) highlightMesh.rotation.set(0, 0, 0);
+        else if (hit.normal.z === -1) highlightMesh.rotation.set(0, Math.PI, 0);
+
+        highlightMesh.visible = true;
+
+        // Show tool preview (larger highlight for tool radius)
+        const tool = getSelectedTool();
+        const r = Math.max(1, Math.round(tool.radius * toolSizeMultiplier));
+        const scale = r * 2 + 1;
+        highlightMesh.scale.set(Math.min(scale, 15), Math.min(scale, 15), 1);
+
+        document.getElementById('infoPos').textContent =
+            `${hit.voxel.x}, ${hit.voxel.y}, ${hit.voxel.z}`;
+    } else {
+        highlightMesh.visible = false;
+        document.getElementById('infoPos').textContent = '-';
+    }
+}
+
+// ============================================================
+// 3D CARVING LOGIC
+// ============================================================
+function applyTool3D(hitVoxel, hitNormal) {
+    const tool = getSelectedTool();
+    const r = Math.max(1, Math.round(tool.radius * toolSizeMultiplier));
+    const strength = toolStrength;
+    let changed = false;
+
+    // Determine the tangent axes perpendicular to the normal
+    const n = hitNormal;
+    let t1, t2;
+    if (Math.abs(n.x) === 1) {
+        // Normal along X, tangent plane is YZ
+        t1 = { x: 0, y: 1, z: 0 };
+        t2 = { x: 0, y: 0, z: 1 };
+    } else if (Math.abs(n.y) === 1) {
+        // Normal along Y, tangent plane is XZ
+        t1 = { x: 1, y: 0, z: 0 };
+        t2 = { x: 0, y: 0, z: 1 };
+    } else {
+        // Normal along Z, tangent plane is XY
+        t1 = { x: 1, y: 0, z: 0 };
+        t2 = { x: 0, y: 1, z: 0 };
+    }
+
+    // Depth goes inward (opposite to normal)
+    const depthDir = { x: -n.x, y: -n.y, z: -n.z };
+
+    // Compute actual depth for the tool
+    let maxDepth = Math.round(tool.depth * strength);
+    if (tool.depth >= 999) maxDepth = Math.max(sizeX, sizeY, sizeZ); // Drill/saw: through entire block
+
+    for (let d1 = -r; d1 <= r; d1++) {
+        for (let d2 = -r; d2 <= r; d2++) {
+            let inShape = false;
+            let localDepth = maxDepth;
+
+            if (tool.shape === 'square') {
+                inShape = true;
+            } else if (tool.shape === 'circle') {
+                const dist = Math.sqrt(d1 * d1 + d2 * d2);
+                if (dist <= r) {
+                    inShape = true;
+                    if (tool.category === 'gouges') {
+                        localDepth = Math.round(localDepth * (1 - (dist / r) * 0.6));
+                    }
+                }
+            } else if (tool.shape === 'vtool') {
+                const absD1 = Math.abs(d1);
+                const absD2 = Math.abs(d2);
+                if (absD1 <= 1 || absD2 <= 1 || Math.abs(absD1 - absD2) <= 1) {
+                    inShape = true;
+                    const dist = Math.sqrt(d1 * d1 + d2 * d2);
+                    localDepth = Math.round(localDepth * Math.max(0.3, 1 - dist / (r + 1)));
+                }
+            }
+
+            if (!inShape) continue;
+
+            // The surface voxel for this tangent position
+            const sx = hitVoxel.x + d1 * t1.x + d2 * t2.x;
+            const sy = hitVoxel.y + d1 * t1.y + d2 * t2.y;
+            const sz = hitVoxel.z + d1 * t1.z + d2 * t2.z;
+
+            if (tool.burn) {
+                // Burn: only affect surface voxel
+                if (inBounds(sx, sy, sz) && voxels[vIdx(sx, sy, sz)] === 1) {
+                    const idx = vIdx(sx, sy, sz);
+                    const newBurn = Math.min(255, burnGrid3D[idx] + Math.round(60 * strength));
+                    if (newBurn !== burnGrid3D[idx]) {
+                        burnGrid3D[idx] = newBurn;
+                        markChunkDirty(sx, sy, sz);
+                        changed = true;
+                    }
+                }
+            } else if (tool.smooth) {
+                // Sandpaper: remove isolated protruding voxels (4+ empty neighbors)
+                if (inBounds(sx, sy, sz) && voxels[vIdx(sx, sy, sz)] === 1) {
+                    let emptyNeighbors = 0;
+                    const dirs = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+                    for (const dir of dirs) {
+                        const nx = sx + dir[0], ny = sy + dir[1], nz = sz + dir[2];
+                        if (!inBounds(nx, ny, nz) || voxels[vIdx(nx, ny, nz)] === 0) emptyNeighbors++;
+                    }
+                    if (emptyNeighbors >= Math.round(4 * strength)) {
+                        voxels[vIdx(sx, sy, sz)] = 0;
+                        markChunkDirty(sx, sy, sz);
+                        changed = true;
+                    }
+                }
+            } else {
+                // Normal carving: remove voxels along depth direction
+                for (let dd = 0; dd < localDepth; dd++) {
+                    const vx = sx + depthDir.x * dd;
+                    const vy = sy + depthDir.y * dd;
+                    const vz = sz + depthDir.z * dd;
+
+                    if (!inBounds(vx, vy, vz)) break;
+                    if (voxels[vIdx(vx, vy, vz)] === 1) {
+                        voxels[vIdx(vx, vy, vz)] = 0;
+                        markChunkDirty(vx, vy, vz);
+                        changed = true;
+                    }
+                }
+            }
+        }
+    }
+
+    if (changed) {
+        // Spawn particles
+        if (!tool.smooth && !tool.burn) {
+            spawnShavings3D(hitVoxel);
+        }
+        if (tool.burn) {
+            spawnBurnSparks3D(hitVoxel);
+        }
+        if (tool.rough && tool.radius >= 3) {
+            screenShake.timer = 4;
+            screenShake.x = (Math.random() - 0.5) * 4;
+            screenShake.y = (Math.random() - 0.5) * 4;
+        }
+    }
+
+    return changed;
+}
+
+// ============================================================
+// UNDO / REDO
+// ============================================================
+function pushUndoSnapshot() {
+    undoStack.push({
+        voxels: new Uint8Array(voxels),
+        burn: new Uint8Array(burnGrid3D)
+    });
+    if (undoStack.length > MAX_UNDO) undoStack.shift();
+    redoStack = [];
+}
+
+function doUndo() {
+    if (undoStack.length <= 1) return;
+    redoStack.push(undoStack.pop());
+    const snap = undoStack[undoStack.length - 1];
+    voxels.set(snap.voxels);
+    burnGrid3D.set(snap.burn);
+    markAllChunksDirty();
+    updateInfoPanel();
+    showToast('Undo');
+}
+
+function doRedo() {
+    if (redoStack.length === 0) return;
+    const snap = redoStack.pop();
+    undoStack.push(snap);
+    voxels.set(snap.voxels);
+    burnGrid3D.set(snap.burn);
+    markAllChunksDirty();
+    updateInfoPanel();
+    showToast('Redo');
+}
+
+// ============================================================
+// PARTICLES (2D overlay)
+// ============================================================
+function project3DToScreen(worldPos) {
+    const v = new THREE.Vector3(worldPos.x, worldPos.y, worldPos.z);
+    v.project(camera);
+    const wrap = document.getElementById('canvasWrap');
+    return {
+        x: (v.x * 0.5 + 0.5) * wrap.clientWidth,
+        y: (-v.y * 0.5 + 0.5) * wrap.clientHeight
+    };
+}
+
+function spawnShavings3D(hitVoxel) {
+    const wood = WOOD_TYPES.find(w => w.id === currentProject.woodType) || WOOD_TYPES[0];
+    const offX = -sizeX / 2;
+    const offY = -sizeY / 2;
+    const offZ = -sizeZ / 2;
+    const wp = {
+        x: hitVoxel.x + 0.5 + offX,
+        y: hitVoxel.y + 0.5 + offY,
+        z: hitVoxel.z + 0.5 + offZ
+    };
+    const sp = project3DToScreen(wp);
+    const tool = getSelectedTool();
+    const count = tool.rough ? 6 : 3;
+
+    for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 40 + Math.random() * 80;
+        const c = wood.baseColor;
+        const shade = 0.6 + Math.random() * 0.4;
+        particles.push({
+            x: sp.x, y: sp.y,
+            vx: Math.cos(angle) * speed * (0.5 + Math.random()),
+            vy: Math.sin(angle) * speed * (0.5 + Math.random()) - 30,
+            life: 0.5 + Math.random() * 0.8,
+            maxLife: 0.5 + Math.random() * 0.8,
+            size: tool.rough ? 2 + Math.random() * 3 : 1 + Math.random() * 2,
+            color: `rgb(${Math.round(c[0]*shade)},${Math.round(c[1]*shade)},${Math.round(c[2]*shade)})`,
+            rotation: Math.random() * Math.PI * 2,
+            rotSpeed: (Math.random() - 0.5) * 8,
+            curly: !tool.rough
+        });
+    }
+}
+
+function spawnBurnSparks3D(hitVoxel) {
+    const offX = -sizeX / 2;
+    const offY = -sizeY / 2;
+    const offZ = -sizeZ / 2;
+    const wp = {
+        x: hitVoxel.x + 0.5 + offX,
+        y: hitVoxel.y + 0.5 + offY,
+        z: hitVoxel.z + 0.5 + offZ
+    };
+    const sp = project3DToScreen(wp);
+    for (let i = 0; i < 2; i++) {
+        particles.push({
+            x: sp.x, y: sp.y,
+            vx: (Math.random() - 0.5) * 40,
+            vy: -20 - Math.random() * 50,
+            life: 0.3 + Math.random() * 0.4,
+            maxLife: 0.3 + Math.random() * 0.4,
+            size: 1 + Math.random(),
+            color: `rgb(${200 + Math.floor(Math.random()*55)},${100 + Math.floor(Math.random()*80)},${20 + Math.floor(Math.random()*30)})`,
+            rotation: 0, rotSpeed: 0, curly: false,
+            spark: true
+        });
+    }
+}
+
+function initDustMotes() {
+    dustMotes = [];
+    const wrap = document.getElementById('canvasWrap');
+    for (let i = 0; i < 30; i++) {
+        dustMotes.push({
+            x: Math.random() * (wrap ? wrap.clientWidth : 800),
+            y: Math.random() * (wrap ? wrap.clientHeight : 600),
+            size: 0.5 + Math.random() * 1.5,
+            speed: 3 + Math.random() * 8,
+            phase: Math.random() * Math.PI * 2,
+            alpha: 0.1 + Math.random() * 0.2
+        });
+    }
+}
+
+function updateParticles(dt) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.life -= dt;
+        if (p.life <= 0) { particles.splice(i, 1); continue; }
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vy += 120 * dt;
+        p.rotation += p.rotSpeed * dt;
+        if (p.curly) p.vx *= 0.97;
+    }
+
+    if (screenShake.timer > 0) {
+        screenShake.timer -= dt * 60;
+        if (screenShake.timer <= 0) {
+            screenShake.x = 0;
+            screenShake.y = 0;
+        } else {
+            screenShake.x *= 0.8;
+            screenShake.y *= 0.8;
+        }
+    }
+}
+
+function renderParticles() {
+    const w = particleCanvas.width, h = particleCanvas.height;
+    particleCtx.clearRect(0, 0, w, h);
+
+    // Dust motes
+    const time = Date.now() * 0.001;
+    for (const d of dustMotes) {
+        const x = d.x + Math.sin(time * 0.3 + d.phase) * 15;
+        const y = d.y + Math.cos(time * 0.2 + d.phase * 1.5) * 10;
+        particleCtx.beginPath();
+        particleCtx.arc(x, y, d.size, 0, Math.PI * 2);
+        particleCtx.fillStyle = `rgba(255,220,160,${d.alpha})`;
+        particleCtx.fill();
+    }
+
+    // Tool particles
+    for (const p of particles) {
+        const alpha = p.life / p.maxLife;
+        particleCtx.save();
+        particleCtx.globalAlpha = alpha;
+        particleCtx.translate(p.x + screenShake.x, p.y + screenShake.y);
+        particleCtx.rotate(p.rotation);
+
+        if (p.spark) {
+            particleCtx.beginPath();
+            particleCtx.arc(0, 0, p.size, 0, Math.PI * 2);
+            particleCtx.fillStyle = p.color;
+            particleCtx.fill();
+        } else if (p.curly) {
+            particleCtx.beginPath();
+            particleCtx.moveTo(-p.size, 0);
+            particleCtx.quadraticCurveTo(0, -p.size * 1.5, p.size, 0);
+            particleCtx.strokeStyle = p.color;
+            particleCtx.lineWidth = 1.5;
+            particleCtx.stroke();
+        } else {
+            particleCtx.fillStyle = p.color;
+            particleCtx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+        }
+        particleCtx.restore();
+    }
+}
+
+// ============================================================
+// GALLERY SCREEN
+// ============================================================
+function showGallery() {
+    document.getElementById('galleryScreen').classList.remove('hidden');
+    document.getElementById('newProjectScreen').classList.add('hidden');
+    document.getElementById('workspaceScreen').classList.add('hidden');
+    currentScreen = 'gallery';
+    if (autoSaveTimer) { clearInterval(autoSaveTimer); autoSaveTimer = null; }
+    if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null; }
+    renderGallery();
+}
+
+function renderGallery() {
+    const grid = document.getElementById('galleryGrid');
+    grid.innerHTML = '';
+
+    const newCard = document.createElement('div');
+    newCard.className = 'new-project-card';
+    newCard.onclick = showNewProject;
+    newCard.innerHTML = '<div class="plus">+</div><div class="label">New Project</div>';
+    grid.appendChild(newCard);
+
+    for (const proj of projectIndex) {
+        const card = document.createElement('div');
+        card.className = 'project-card';
+
+        const thumb = document.createElement('div');
+        thumb.className = 'thumb';
+        if (proj.thumbnail) {
+            const img = document.createElement('img');
+            img.src = proj.thumbnail;
+            img.alt = proj.name;
+            thumb.appendChild(img);
+        } else {
+            thumb.innerHTML = '<div class="no-thumb">\u{1FAB5}</div>';
+        }
+        thumb.onclick = () => openProject(proj.id);
+
+        const info = document.createElement('div');
+        info.className = 'info';
+        const dims = proj.version === 2 ? `${proj.sizeX}\u00d7${proj.sizeY}\u00d7${proj.sizeZ}` : `${proj.width}\u00d7${proj.height}`;
+        info.innerHTML = `<div class="name">${escHtml(proj.name)}</div>
+            <div class="meta">${proj.woodType || 'pine'} \u2022 ${dims}</div>`;
+        info.onclick = () => openProject(proj.id);
+
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        const editBtn = document.createElement('button');
+        editBtn.className = 'card-btn card-btn-edit';
+        editBtn.textContent = 'Open';
+        editBtn.onclick = (e) => { e.stopPropagation(); openProject(proj.id); };
+        const delBtn = document.createElement('button');
+        delBtn.className = 'card-btn card-btn-delete';
+        delBtn.textContent = 'Delete';
+        delBtn.onclick = (e) => { e.stopPropagation(); promptDelete(proj.id); };
+        actions.appendChild(editBtn);
+        actions.appendChild(delBtn);
+
+        card.appendChild(thumb);
+        card.appendChild(info);
+        card.appendChild(actions);
+        grid.appendChild(card);
+    }
+}
+
+// ============================================================
+// DELETE PROJECT
+// ============================================================
+function promptDelete(id) {
+    pendingDeleteId = id;
+    document.getElementById('deleteModal').classList.remove('hidden');
+}
+
+function cancelDelete() {
+    pendingDeleteId = null;
+    document.getElementById('deleteModal').classList.add('hidden');
+}
+
+function confirmDelete() {
+    if (pendingDeleteId) {
+        deleteProjectData(pendingDeleteId);
+        projectIndex = projectIndex.filter(p => p.id !== pendingDeleteId);
+        saveIndex();
+        pendingDeleteId = null;
+        document.getElementById('deleteModal').classList.add('hidden');
+        renderGallery();
+        showToast('Project deleted');
+    }
+}
+
+// ============================================================
+// NEW PROJECT SCREEN
+// ============================================================
+function showNewProject() {
+    document.getElementById('galleryScreen').classList.add('hidden');
+    document.getElementById('newProjectScreen').classList.remove('hidden');
+    document.getElementById('workspaceScreen').classList.add('hidden');
+    currentScreen = 'newProject';
+    document.getElementById('npName').value = '';
+    renderWoodOptions();
+    renderSizeOptions();
+}
+
+function renderWoodOptions() {
+    const container = document.getElementById('woodOptions');
+    container.innerHTML = '';
+    for (const w of WOOD_TYPES) {
+        const btn = document.createElement('div');
+        btn.className = 'wood-opt' + (w.id === selectedWoodType ? ' selected' : '');
+        const c = w.baseColor;
+        btn.innerHTML = `<span class="swatch" style="background:rgb(${c[0]},${c[1]},${c[2]})"></span>${w.name}`;
+        btn.onclick = () => {
+            selectedWoodType = w.id;
+            renderWoodOptions();
+        };
+        container.appendChild(btn);
+    }
+}
+
+function renderSizeOptions() {
+    const container = document.getElementById('sizeOptions');
+    container.innerHTML = '';
+    for (const s of SIZE_PRESETS) {
+        const btn = document.createElement('div');
+        btn.className = 'size-opt' + (s.id === selectedSize ? ' selected' : '');
+        btn.textContent = `${s.name} (${s.w}\u00d7${s.h}\u00d7${s.d})`;
+        btn.onclick = () => {
+            selectedSize = s.id;
+            renderSizeOptions();
+        };
+        container.appendChild(btn);
+    }
+}
+
+function createProject() {
+    const name = document.getElementById('npName').value.trim() || 'Untitled';
+    const size = SIZE_PRESETS.find(s => s.id === selectedSize) || SIZE_PRESETS[1];
+    const id = generateId();
+    const seed = Math.floor(Math.random() * 100000);
+
+    const sx = size.w, sy = size.h, sz = size.d;
+    const totalVoxels = sx * sy * sz;
+    const gridData = new Uint8Array(totalVoxels);
+    gridData.fill(1);
+    const burnData = new Uint8Array(totalVoxels);
+
+    const projMeta = {
+        id, name, woodType: selectedWoodType,
+        sizeX: sx, sizeY: sy, sizeZ: sz, seed,
+        version: 2,
+        created: Date.now(), modified: Date.now(),
+        thumbnail: null
+    };
+
+    const projData = {
+        grid: compressGrid(gridData),
+        burn: compressGrid(burnData)
+    };
+
+    projectIndex.push(projMeta);
+    saveIndex();
+    saveProjectData(id, projData);
+
+    openProject(id);
+}
+
+// ============================================================
+// OPEN PROJECT / WORKSPACE
+// ============================================================
+function openProject(id) {
+    const meta = projectIndex.find(p => p.id === id);
+    if (!meta) { showToast('Project not found'); return; }
+    const data = loadProjectData(id);
+    if (!data) { showToast('Project data missing'); return; }
+
+    currentProject = { ...meta };
+
+    if (meta.version === 2) {
+        sizeX = meta.sizeX;
+        sizeY = meta.sizeY;
+        sizeZ = meta.sizeZ;
+    } else {
+        // Convert old 2D project - treat as thin 3D block
+        sizeX = meta.width || 60;
+        sizeY = meta.height || 45;
+        sizeZ = 5;
+        currentProject.version = 2;
+        currentProject.sizeX = sizeX;
+        currentProject.sizeY = sizeY;
+        currentProject.sizeZ = sizeZ;
+    }
+
+    const totalVoxels = sizeX * sizeY * sizeZ;
+
+    if (meta.version === 2) {
+        voxels = decompressGrid(data.grid, totalVoxels);
+        burnGrid3D = data.burn ? decompressGrid(data.burn, totalVoxels) : new Uint8Array(totalVoxels);
+    } else {
+        // Convert old 2D depth map to 3D voxels
+        const oldGrid = decompressGrid(data.grid, sizeX * sizeY);
+        voxels = new Uint8Array(totalVoxels);
+        voxels.fill(1);
+        burnGrid3D = new Uint8Array(totalVoxels);
+        // Map: old depth 0-255 → how many Z layers to keep (255=full, 0=empty)
+        for (let y = 0; y < sizeY; y++) {
+            for (let x = 0; x < sizeX; x++) {
+                const oldVal = oldGrid[y * sizeX + x];
+                const layersToKeep = Math.round((oldVal / 255) * sizeZ);
+                for (let z = layersToKeep; z < sizeZ; z++) {
+                    voxels[vIdx(x, y, z)] = 0;
+                }
+            }
+        }
+    }
+
+    initWoodGrain3D(sizeX, sizeY, sizeZ, meta.seed);
+
+    // Show workspace
+    document.getElementById('galleryScreen').classList.add('hidden');
+    document.getElementById('newProjectScreen').classList.add('hidden');
+    document.getElementById('workspaceScreen').classList.remove('hidden');
+    currentScreen = 'workspace';
+
+    initWorkspace();
+
+    // Reset undo
+    undoStack = [];
+    redoStack = [];
+    pushUndoSnapshot();
+
+    // Auto-save
+    if (autoSaveTimer) clearInterval(autoSaveTimer);
+    autoSaveTimer = setInterval(() => saveCurrentProject(true), AUTO_SAVE_INTERVAL);
+
+    markAllChunksDirty();
+    updateInfoPanel();
+    startRenderLoop();
+}
+
+function closeWorkspace() {
+    saveCurrentProject();
+    if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null; }
+    showGallery();
+}
+
+function saveCurrentProject(silent) {
+    if (!currentProject || !voxels) return;
+    const data = {
+        grid: compressGrid(voxels),
+        burn: compressGrid(burnGrid3D)
+    };
+    saveProjectData(currentProject.id, data);
+    currentProject.modified = Date.now();
+    currentProject.thumbnail = generateThumbnail();
+
+    const idx = projectIndex.findIndex(p => p.id === currentProject.id);
+    if (idx >= 0) {
+        projectIndex[idx] = { ...currentProject };
+    }
+    saveIndex();
+    if (!silent) showToast('Project saved');
+}
+
+// ============================================================
+// WORKSPACE INIT
+// ============================================================
+function initWorkspace() {
+    document.getElementById('wsTitle').textContent = currentProject.name;
+
+    // Init Three.js if needed
+    if (!renderer) {
+        initThreeJS();
+    }
+
+    // Resize
+    resizeRenderer();
+
+    // Reset camera
+    resetCameraForBlock();
+
+    // Build tool palette
+    buildToolPalette();
+
+    // Particle canvas
+    particleCanvas = document.getElementById('particleCanvas');
+    particleCtx = particleCanvas.getContext('2d');
+    resizeParticleCanvas();
+
+    particles = [];
+    dustMotes = [];
+    initDustMotes();
+
+    // Clean up old chunk meshes
+    for (const key in chunkMeshes) {
+        voxelGroup.remove(chunkMeshes[key]);
+        chunkMeshes[key].geometry.dispose();
+    }
+    chunkMeshes = {};
+    faceLookup = {};
+
+    // Setup input handlers
+    setupInputHandlers();
+}
+
+function resizeRenderer() {
+    const wrap = document.getElementById('canvasWrap');
+    const w = wrap.clientWidth, h = wrap.clientHeight;
+    if (renderer) {
+        renderer.setSize(w, h);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+    }
+}
+
+function resizeParticleCanvas() {
+    const wrap = document.getElementById('canvasWrap');
+    particleCanvas.width = wrap.clientWidth;
+    particleCanvas.height = wrap.clientHeight;
+}
+
+// ============================================================
+// TOOL PALETTE
+// ============================================================
+function buildToolPalette() {
+    const palette = document.getElementById('toolPalette');
+    palette.innerHTML = '';
+
+    let lastCategory = '';
+    for (const tool of TOOLS) {
+        if (tool.category !== lastCategory) {
+            lastCategory = tool.category;
+            const label = document.createElement('div');
+            label.className = 'tool-section-label';
+            label.textContent = CATEGORY_NAMES[tool.category] || tool.category;
+            palette.appendChild(label);
+        }
+        const btn = document.createElement('div');
+        btn.className = 'tool-btn' + (tool.id === selectedToolId ? ' selected' : '');
+        btn.dataset.toolId = tool.id;
+        btn.innerHTML = `<span class="tool-icon">${tool.icon}</span><span class="tool-name">${tool.name}</span>`;
+        btn.onclick = () => selectTool(tool.id);
+        palette.appendChild(btn);
+    }
+
+    const sizeSlider = document.createElement('div');
+    sizeSlider.className = 'slider-group';
+    sizeSlider.innerHTML = `
+        <div class="slider-label"><span>Size</span><span class="val" id="sizeVal">${toolSizeMultiplier.toFixed(1)}x</span></div>
+        <input type="range" id="sizeSlider" min="0.5" max="3" step="0.1" value="${toolSizeMultiplier}">
+    `;
+    palette.appendChild(sizeSlider);
+
+    const strengthSlider = document.createElement('div');
+    strengthSlider.className = 'slider-group';
+    strengthSlider.innerHTML = `
+        <div class="slider-label"><span>Strength</span><span class="val" id="strengthVal">${Math.round(toolStrength * 100)}%</span></div>
+        <input type="range" id="strengthSlider" min="0.25" max="1" step="0.05" value="${toolStrength}">
+    `;
+    palette.appendChild(strengthSlider);
+
+    document.getElementById('sizeSlider').addEventListener('input', (e) => {
+        toolSizeMultiplier = parseFloat(e.target.value);
+        document.getElementById('sizeVal').textContent = toolSizeMultiplier.toFixed(1) + 'x';
+    });
+    document.getElementById('strengthSlider').addEventListener('input', (e) => {
+        toolStrength = parseFloat(e.target.value);
+        document.getElementById('strengthVal').textContent = Math.round(toolStrength * 100) + '%';
+    });
+}
+
+function selectTool(id) {
+    selectedToolId = id;
+    document.querySelectorAll('.tool-btn').forEach(b => {
+        b.classList.toggle('selected', b.dataset.toolId === id);
+    });
+    updateInfoPanel();
+}
+
+function getSelectedTool() {
+    return TOOLS.find(t => t.id === selectedToolId) || TOOLS[1];
+}
+
+// ============================================================
+// INFO PANEL
+// ============================================================
+function updateInfoPanel() {
+    if (!currentProject) return;
+    const wood = WOOD_TYPES.find(w => w.id === currentProject.woodType) || WOOD_TYPES[0];
+    document.getElementById('infoWood').textContent = wood.name;
+    document.getElementById('infoSize').textContent = `${sizeX}\u00d7${sizeY}\u00d7${sizeZ}`;
+    document.getElementById('infoTool').textContent = getSelectedTool().name;
+    document.getElementById('infoZoom').textContent = orbitDistance.toFixed(0) + ' dist';
+
+    // Material percentage
+    let total = 0;
+    for (let i = 0; i < voxels.length; i++) total += voxels[i];
+    const pct = (total / voxels.length * 100).toFixed(1);
+    document.getElementById('infoMaterial').textContent = pct + '%';
+}
+
+// ============================================================
+// INPUT HANDLING
+// ============================================================
+let inputHandlersSetup = false;
+
+function setupInputHandlers() {
+    if (inputHandlersSetup) return;
+    inputHandlersSetup = true;
+
+    const wrap = document.getElementById('canvasWrap');
+
+    // Prevent context menu on canvas
+    wrap.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // Mouse down
+    wrap.addEventListener('mousedown', (e) => {
+        updateMouseFromEvent(e);
+
+        if (e.button === 2) {
+            // Right click: orbit
+            isOrbiting = true;
+            orbitStartX = e.clientX;
+            orbitStartY = e.clientY;
+            orbitStartTheta = orbitTheta;
+            orbitStartPhi = orbitPhi;
+            e.preventDefault();
+        } else if (e.button === 1) {
+            // Middle click: pan
+            isPanning = true;
+            orbitStartX = e.clientX;
+            orbitStartY = e.clientY;
+            panStartTarget.copy(orbitTarget);
+            e.preventDefault();
+        } else if (e.button === 0) {
+            // Left click: carve
+            const hit = raycastVoxel();
+            if (hit) {
+                pushUndoSnapshot();
+                isCarving = true;
+                lastCarveVoxel = hit;
+                applyTool3D(hit.voxel, hit.normal);
+                updateInfoPanel();
+            }
+        }
+    });
+
+    // Mouse move
+    wrap.addEventListener('mousemove', (e) => {
+        updateMouseFromEvent(e);
+
+        if (isOrbiting) {
+            const dx = e.clientX - orbitStartX;
+            const dy = e.clientY - orbitStartY;
+            orbitTheta = orbitStartTheta - dx * 0.01;
+            orbitPhi = orbitStartPhi - dy * 0.01;
+            updateCamera();
+        } else if (isPanning) {
+            const dx = e.clientX - orbitStartX;
+            const dy = e.clientY - orbitStartY;
+
+            // Pan in camera's local XY plane
+            const right = new THREE.Vector3();
+            const up = new THREE.Vector3();
+            camera.getWorldDirection(new THREE.Vector3());
+            right.setFromMatrixColumn(camera.matrixWorld, 0);
+            up.setFromMatrixColumn(camera.matrixWorld, 1);
+
+            const panSpeed = orbitDistance * 0.002;
+            orbitTarget.copy(panStartTarget)
+                .add(right.multiplyScalar(-dx * panSpeed))
+                .add(up.multiplyScalar(dy * panSpeed));
+            updateCamera();
+        } else if (isCarving) {
+            // Continue carving while dragging
+            const hit = raycastVoxel();
+            if (hit) {
+                applyTool3D(hit.voxel, hit.normal);
+                lastCarveVoxel = hit;
+            }
+        }
+    });
+
+    // Mouse up
+    window.addEventListener('mouseup', (e) => {
+        if (isOrbiting) isOrbiting = false;
+        if (isPanning) isPanning = false;
+        if (isCarving) {
+            isCarving = false;
+            lastCarveVoxel = null;
+            updateInfoPanel();
+        }
+    });
+
+    // Scroll: zoom
+    wrap.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        orbitDistance += e.deltaY * 0.1;
+        orbitDistance = Math.max(10, Math.min(400, orbitDistance));
+        updateCamera();
+        updateInfoPanel();
+    }, { passive: false });
+
+    // Touch support
+    let touches = {};
+    let lastTouchDist = 0;
+    let touchStartOrbitTheta = 0, touchStartOrbitPhi = 0;
+    let touchMode = ''; // 'carve', 'orbit', 'pinch'
+
+    wrap.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const t = e.changedTouches;
+        for (let i = 0; i < t.length; i++) {
+            touches[t[i].identifier] = { x: t[i].clientX, y: t[i].clientY };
+        }
+
+        const touchCount = Object.keys(touches).length;
+        if (touchCount === 1) {
+            // Single finger: check if hitting wood
+            const touch = t[0];
+            updateMouseFromEvent(touch);
+            const hit = raycastVoxel();
+            if (hit) {
+                pushUndoSnapshot();
+                isCarving = true;
+                touchMode = 'carve';
+                lastCarveVoxel = hit;
+                applyTool3D(hit.voxel, hit.normal);
+                updateInfoPanel();
+            } else {
+                touchMode = 'orbit';
+                touchStartOrbitTheta = orbitTheta;
+                touchStartOrbitPhi = orbitPhi;
+                orbitStartX = touch.clientX;
+                orbitStartY = touch.clientY;
+            }
+        } else if (touchCount >= 2) {
+            // Two fingers: orbit + pinch zoom
+            isCarving = false;
+            touchMode = 'pinch';
+            const keys = Object.keys(touches);
+            const t1 = touches[keys[0]], t2 = touches[keys[1]];
+            lastTouchDist = Math.hypot(t1.x - t2.x, t1.y - t2.y);
+            touchStartOrbitTheta = orbitTheta;
+            touchStartOrbitPhi = orbitPhi;
+            orbitStartX = (t1.x + t2.x) / 2;
+            orbitStartY = (t1.y + t2.y) / 2;
+        }
+    }, { passive: false });
+
+    wrap.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        const t = e.changedTouches;
+        for (let i = 0; i < t.length; i++) {
+            touches[t[i].identifier] = { x: t[i].clientX, y: t[i].clientY };
+        }
+
+        if (touchMode === 'carve') {
+            const touch = t[0];
+            updateMouseFromEvent(touch);
+            const hit = raycastVoxel();
+            if (hit) {
+                applyTool3D(hit.voxel, hit.normal);
+                lastCarveVoxel = hit;
+            }
+        } else if (touchMode === 'orbit') {
+            const touch = t[0];
+            const dx = touch.clientX - orbitStartX;
+            const dy = touch.clientY - orbitStartY;
+            orbitTheta = touchStartOrbitTheta - dx * 0.01;
+            orbitPhi = touchStartOrbitPhi - dy * 0.01;
+            updateCamera();
+        } else if (touchMode === 'pinch') {
+            const keys = Object.keys(touches);
+            if (keys.length >= 2) {
+                const t1 = touches[keys[0]], t2 = touches[keys[1]];
+                const dist = Math.hypot(t1.x - t2.x, t1.y - t2.y);
+                const midX = (t1.x + t2.x) / 2;
+                const midY = (t1.y + t2.y) / 2;
+
+                // Zoom
+                if (lastTouchDist > 0) {
+                    const scale = lastTouchDist / dist;
+                    orbitDistance *= scale;
+                    orbitDistance = Math.max(10, Math.min(400, orbitDistance));
+                }
+                lastTouchDist = dist;
+
+                // Rotate
+                const dx = midX - orbitStartX;
+                const dy = midY - orbitStartY;
+                orbitTheta = touchStartOrbitTheta - dx * 0.005;
+                orbitPhi = touchStartOrbitPhi - dy * 0.005;
+
+                updateCamera();
+                updateInfoPanel();
+            }
+        }
+    }, { passive: false });
+
+    wrap.addEventListener('touchend', (e) => {
+        const t = e.changedTouches;
+        for (let i = 0; i < t.length; i++) {
+            delete touches[t[i].identifier];
+        }
+        if (Object.keys(touches).length === 0) {
+            if (isCarving) {
+                isCarving = false;
+                lastCarveVoxel = null;
+                updateInfoPanel();
+            }
+            touchMode = '';
+        }
+    });
+
+    // Keyboard shortcuts
+    window.addEventListener('keydown', (e) => {
+        if (currentScreen !== 'workspace') return;
+
+        if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+            e.preventDefault();
+            if (e.shiftKey) doRedo();
+            else doUndo();
+        } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+            e.preventDefault();
+            doRedo();
+        } else if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            e.preventDefault();
+            saveCurrentProject();
+        } else if (e.key === 'r' && !e.ctrlKey && !e.metaKey) {
+            resetCameraForBlock();
+        }
+
+        // Number keys for tools
+        const num = parseInt(e.key);
+        if (num >= 1 && num <= 9 && !e.ctrlKey && !e.metaKey) {
+            if (num <= TOOLS.length) {
+                selectTool(TOOLS[num - 1].id);
+            }
+        }
+    });
+
+    // Resize
+    window.addEventListener('resize', () => {
+        if (currentScreen === 'workspace') {
+            resizeRenderer();
+            resizeParticleCanvas();
+            initDustMotes();
+        }
+    });
+}
+
+// ============================================================
+// RENDER LOOP
+// ============================================================
+let lastFrameTime = 0;
+
+function startRenderLoop() {
+    if (animFrameId) cancelAnimationFrame(animFrameId);
+    lastFrameTime = performance.now();
+    renderLoop(lastFrameTime);
+}
+
+function renderLoop(now) {
+    animFrameId = requestAnimationFrame(renderLoop);
+    if (currentScreen !== 'workspace') return;
+
+    const dt = Math.min((now - lastFrameTime) / 1000, 0.05);
+    lastFrameTime = now;
+
+    // Rebuild dirty chunks
+    rebuildDirtyChunks();
+
+    // Update highlight (only when not dragging)
+    if (!isOrbiting && !isPanning) {
+        updateHighlight();
+    }
+
+    // Render 3D
+    renderer.render(scene, camera);
+
+    // Update and render particles
+    updateParticles(dt);
+    renderParticles();
+}
+
+// ============================================================
+// INIT
+// ============================================================
+loadIndex();
+showGallery();
+</script>
+</body>
+</html>
