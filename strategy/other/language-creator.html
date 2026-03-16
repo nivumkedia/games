@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Language Creator</title>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'IBM Plex Sans', sans-serif;
+            min-height: 100vh;
+            background: #08090c;
+            color: #c0ccd0;
+            overflow-x: hidden;
+        }
+        body::before {
+            content: ''; position: fixed; inset: 0;
+            background: radial-gradient(ellipse at 50% 40%, transparent 20%, rgba(0,0,0,0.7) 100%);
+            pointer-events: none; z-index: 2;
+        }
+        body::after {
+            content: ''; position: fixed; bottom: 0; left: 0; right: 0; height: 300px;
+            background:
+                radial-gradient(ellipse at 30% 100%, rgba(100,60,220,0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 70% 100%, rgba(60,180,200,0.06) 0%, transparent 50%);
+            pointer-events: none; z-index: 2;
+        }
+        .bg-glyphs { position: fixed; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+        .bg-glyph {
+            position: absolute; font-family: 'Share Tech Mono', monospace; font-size: 1.4em;
+            color: rgba(167, 139, 250, 0.06); animation: floatGlyph 20s linear infinite;
+        }
+        @keyframes floatGlyph {
+            0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+            10% { opacity: 1; } 90% { opacity: 1; }
+            100% { transform: translateY(-10vh) rotate(360deg); opacity: 0; }
+        }
+        .theme-toggle {
+            position: fixed; top: 16px; right: 20px; z-index: 10;
+            background: #1a1d2a; border: 1px solid #2a2e3a; border-radius: 50%;
+            width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; font-size: 1.2em; transition: all 0.3s; color: #a78bfa;
+        }
+        .theme-toggle:hover { border-color: #a78bfa; transform: scale(1.1); }
+
+        .container { max-width: 1100px; margin: 0 auto; padding: 24px 20px; position: relative; z-index: 3; }
+
+        h1 {
+            text-align: center; font-size: 2.2em; font-weight: 800; margin-bottom: 4px;
+            background: linear-gradient(135deg, #a78bfa, #60d5e8);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .subtitle { text-align: center; color: #667; font-size: 0.95em; margin-bottom: 18px; }
+
+        /* Top settings row */
+        .top-settings { display: flex; justify-content: center; align-items: flex-start; gap: 24px; margin-bottom: 18px; flex-wrap: wrap; }
+        .top-settings label { font-weight: 600; font-size: 1.05em; color: #8b9fc0; display: block; margin-bottom: 6px; text-align: center; }
+        .lang-name-input {
+            display: block; margin: 0 auto; background: #12141a; border: 1px solid #2a2e3a;
+            color: #e0e8f0; font-family: 'IBM Plex Sans', sans-serif; font-size: 1.2em; font-weight: 700;
+            padding: 10px 18px; border-radius: 10px; text-align: center; width: 280px; max-width: 100%;
+            outline: none; transition: border-color 0.2s;
+        }
+        .lang-name-input:focus { border-color: #a78bfa; }
+        .separator-input {
+            display: block; margin: 0 auto; background: #12141a; border: 1px solid #2a2e3a;
+            color: #60d5e8; font-family: 'Share Tech Mono', monospace; font-size: 1.1em; font-weight: 700;
+            padding: 8px 14px; border-radius: 10px; text-align: center; width: 100px; outline: none;
+            transition: border-color 0.2s;
+        }
+        .separator-input:focus { border-color: #a78bfa; }
+        .separator-hint { display: block; color: #445; font-size: 0.75em; margin-top: 3px; text-align: center; }
+
+        /* Mode toggle (Regular / Full Create) */
+        .mode-toggle {
+            display: flex; gap: 4px; background: #10121a; border-radius: 12px; padding: 4px;
+            border: 1px solid #1e2230; margin-bottom: 18px; max-width: 320px; margin-left: auto; margin-right: auto;
+        }
+        .mode-btn {
+            flex: 1; padding: 10px 16px; text-align: center; font-weight: 700; font-size: 0.9em;
+            border-radius: 9px; cursor: pointer; color: #667; transition: all 0.2s;
+            border: none; background: none; font-family: inherit;
+        }
+        .mode-btn:hover { color: #99a; }
+        .mode-btn.active { background: #1a1d2a; color: #a78bfa; box-shadow: 0 2px 8px rgba(100,60,220,0.15); }
+
+        /* Tabs */
+        .tabs {
+            display: flex; gap: 4px; margin-bottom: 20px; background: #10121a;
+            border-radius: 12px; padding: 4px; border: 1px solid #1e2230;
+        }
+        .tab {
+            flex: 1; padding: 10px; text-align: center; font-weight: 600; font-size: 0.9em;
+            border-radius: 9px; cursor: pointer; color: #667; transition: all 0.2s;
+            border: none; background: none; font-family: inherit;
+        }
+        .tab:hover { color: #99a; }
+        .tab.active { background: #1a1d2a; color: #a78bfa; box-shadow: 0 2px 8px rgba(100,60,220,0.15); }
+
+        /* Panels */
+        .panel { display: none; }
+        .panel.active { display: block; }
+
+        /* Alphabet grid (Regular mode) */
+        .letter-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 5px; }
+        .letter-row {
+            display: flex; align-items: center; gap: 10px; background: #12141a;
+            border: 1px solid #1e2230; border-radius: 7px; padding: 7px 12px; transition: border-color 0.2s;
+        }
+        .letter-row:hover { border-color: #2a3050; }
+        .letter-row.has-value { border-color: #2a2e5a; background: #131520; }
+        .original-letter {
+            font-family: 'Share Tech Mono', monospace; font-size: 1.15em; font-weight: 700;
+            color: #a78bfa; width: 24px; text-align: center; flex-shrink: 0;
+        }
+        .original-letter img { width: 28px; height: 28px; object-fit: contain; }
+        .arrow { color: #334; font-size: 0.85em; flex-shrink: 0; }
+        .letter-input {
+            flex: 1; min-width: 0; background: #0c0e14; border: 1px solid #1e2230; color: #e0e8f0;
+            font-family: 'Share Tech Mono', monospace; font-size: 0.95em; padding: 5px 8px;
+            border-radius: 5px; outline: none; transition: border-color 0.2s;
+        }
+        .letter-input:focus { border-color: #a78bfa; }
+        .letter-input::placeholder { color: #334; }
+        .section-label {
+            grid-column: 1 / -1; font-weight: 700; font-size: 0.8em; text-transform: uppercase;
+            letter-spacing: 1.5px; color: #556; margin-top: 6px; padding-left: 2px;
+        }
+        .delete-custom {
+            flex-shrink: 0; background: none; border: none; color: #445; cursor: pointer;
+            font-size: 0.85em; padding: 2px 4px; border-radius: 4px; transition: color 0.2s;
+        }
+        .delete-custom:hover { color: #f87171; }
+        .add-char-btn {
+            display: flex; align-items: center; justify-content: center; background: #12141a;
+            border: 2px dashed #2a2e3a; border-radius: 7px; padding: 7px 12px; cursor: pointer;
+            color: #556; font-size: 1.3em; font-weight: 700; transition: all 0.2s; min-height: 42px;
+        }
+        .add-char-btn:hover { border-color: #a78bfa; color: #a78bfa; }
+
+        /* Full Create grid */
+        .fc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+        .fc-card {
+            background: #12141a; border: 1px solid #1e2230; border-radius: 10px;
+            padding: 10px; text-align: center; cursor: pointer; transition: border-color 0.2s;
+        }
+        .fc-card:hover { border-color: #a78bfa; }
+        .fc-card .fc-letter {
+            font-family: 'Share Tech Mono', monospace; font-size: 1.1em; font-weight: 700;
+            color: #a78bfa; margin-bottom: 4px;
+        }
+        .fc-card .fc-drawing {
+            width: 64px; height: 64px; margin: 0 auto 6px; border: 1px dashed #2a2e3a;
+            border-radius: 6px; display: flex; align-items: center; justify-content: center;
+            color: #334; font-size: 0.8em;
+        }
+        .fc-card .fc-drawing img { width: 100%; height: 100%; object-fit: contain; }
+        .fc-card.has-drawing .fc-drawing { border-style: solid; border-color: #2a2e5a; }
+        .fc-card .fc-pronun-input {
+            width: 100%; background: #0c0e14; border: 1px solid #1e2230; color: #60d5e8;
+            font-family: 'Share Tech Mono', monospace; font-size: 0.85em; padding: 4px 6px;
+            border-radius: 5px; outline: none; text-align: center;
+        }
+        .fc-card .fc-pronun-input:focus { border-color: #a78bfa; }
+        .fc-card .fc-pronun-input::placeholder { color: #334; }
+        .fc-pronun-label { font-size: 0.7em; color: #556; margin-bottom: 2px; }
+
+        /* Translator */
+        .translator-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+        @media (max-width: 600px) { .translator-row { grid-template-columns: 1fr; } }
+        .translator-box { display: flex; flex-direction: column; gap: 6px; }
+        .translator-box label { font-weight: 600; font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; color: #667; }
+        .translator-box textarea {
+            background: #12141a; border: 1px solid #1e2230; color: #e0e8f0;
+            font-family: 'Share Tech Mono', monospace; font-size: 1.05em; padding: 14px;
+            border-radius: 10px; outline: none; resize: vertical; min-height: 160px;
+            line-height: 1.6; transition: border-color 0.2s;
+        }
+        .translator-box textarea:focus { border-color: #a78bfa; }
+        .translator-box textarea::placeholder { color: #334; }
+        .translated-output {
+            background: #12141a; border: 1px solid #1e2230; border-radius: 10px; padding: 14px;
+            min-height: 160px; font-family: 'Share Tech Mono', monospace; font-size: 1.05em;
+            line-height: 1.6; color: #60d5e8; white-space: pre-wrap; word-break: break-word;
+        }
+        .translated-output img { height: 1.8em; vertical-align: middle; margin: 1px; }
+        .direction-toggle, .output-mode-toggle {
+            display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 12px;
+        }
+        .direction-btn, .output-mode-btn {
+            padding: 8px 18px; border-radius: 8px; border: 1px solid #2a2e3a; background: #12141a;
+            color: #8b9fc0; font-family: inherit; font-weight: 600; font-size: 0.85em;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .direction-btn.active, .output-mode-btn.active { background: #1a1d2a; border-color: #a78bfa; color: #a78bfa; }
+
+        /* Cheat sheet */
+        .cheat-sheet-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+        .cheat-card { background: #12141a; border: 1px solid #1e2230; border-radius: 10px; padding: 12px; text-align: center; flex: 1 0 100px; }
+        .cheat-card .orig { font-family: 'Share Tech Mono', monospace; font-size: 1.3em; color: #a78bfa; font-weight: 700; }
+        .cheat-card .orig img { width: 36px; height: 36px; object-fit: contain; }
+        .cheat-card .mapped {
+            font-family: 'Share Tech Mono', monospace; font-size: 1.1em; color: #60d5e8;
+            margin-top: 4px; white-space: nowrap;
+        }
+        .cheat-card .mapped img { width: 32px; height: 32px; object-fit: contain; }
+        .cheat-card .unmapped { color: #334; font-style: italic; font-size: 0.85em; margin-top: 4px; }
+
+        /* Saved */
+        .saved-list { display: flex; flex-direction: column; gap: 8px; }
+        .saved-item {
+            display: flex; align-items: center; justify-content: space-between; background: #12141a;
+            border: 1px solid #1e2230; border-radius: 10px; padding: 14px 18px; transition: border-color 0.2s;
+        }
+        .saved-item:hover { border-color: #2a3050; }
+        .saved-item-name { font-weight: 700; font-size: 1.05em; color: #e0e8f0; }
+        .saved-item-count { font-size: 0.85em; color: #556; margin-top: 2px; }
+        .saved-item-actions { display: flex; gap: 8px; }
+        .empty-state { text-align: center; color: #445; padding: 40px 20px; font-size: 0.95em; }
+
+        /* Buttons */
+        .btn {
+            padding: 8px 16px; border-radius: 8px; border: 1px solid #2a2e3a; background: #1a1d2a;
+            color: #8b9fc0; font-family: inherit; font-weight: 600; font-size: 0.82em;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .btn:hover { border-color: #a78bfa; color: #a78bfa; }
+        .btn.danger:hover { border-color: #f87171; color: #f87171; }
+        .btn.primary { background: linear-gradient(135deg, #7c3aed, #4f8feb); border: none; color: #fff; }
+        .btn.primary:hover { opacity: 0.9; }
+        .actions-bar { display: flex; justify-content: center; gap: 10px; margin-top: 20px; }
+
+        /* Drawing modal */
+        .draw-modal-overlay {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+            z-index: 100; align-items: center; justify-content: center;
+        }
+        .draw-modal-overlay.active { display: flex; }
+        .draw-modal {
+            background: #12141a; border: 1px solid #2a2e3a; border-radius: 16px;
+            padding: 24px; width: 340px; max-width: 90vw; text-align: center;
+        }
+        .draw-modal h3 { margin-bottom: 4px; font-size: 1.1em; color: #a78bfa; }
+        .draw-hint { font-size: 0.75em; color: #556; margin-bottom: 10px; }
+        .draw-canvas-wrap { border: 2px solid #2a2e3a; border-radius: 10px; overflow: hidden; margin-bottom: 14px; display: inline-block; }
+        .draw-canvas { display: block; cursor: crosshair; background: #08090c; }
+        .draw-modal-actions { display: flex; gap: 10px; justify-content: center; }
+
+        /* ===== LIGHT THEME ===== */
+        body.light { background: #f0f2f5; color: #2a2e3a; }
+        body.light::before { background: radial-gradient(ellipse at 50% 40%, transparent 40%, rgba(255,255,255,0.3) 100%); }
+        body.light .theme-toggle { background: #fff; border-color: #d0d5e0; color: #f59e0b; }
+        body.light .lang-name-input, body.light .letter-input, body.light .separator-input,
+        body.light .translator-box textarea, body.light .translated-output, body.light .cheat-card,
+        body.light .fc-card, body.light .fc-card .fc-pronun-input { background: #fff; border-color: #d0d5e0; color: #1a1d2a; }
+        body.light .letter-row, body.light .saved-item { background: #fff; border-color: #d0d5e0; }
+        body.light .letter-row.has-value { background: #f5f0ff; border-color: #c4b5fd; }
+        body.light .tabs, body.light .mode-toggle { background: #e8eaf0; border-color: #d0d5e0; }
+        body.light .tab, body.light .mode-btn { color: #888; }
+        body.light .tab.active, body.light .mode-btn.active { background: #fff; color: #7c3aed; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+        body.light .section-label { color: #8b9fc0; }
+        body.light .original-letter, body.light .fc-card .fc-letter, body.light .cheat-card .orig { color: #7c3aed; }
+        body.light .arrow { color: #bbb; }
+        body.light .btn { background: #fff; border-color: #d0d5e0; color: #555; }
+        body.light .btn:hover { border-color: #7c3aed; color: #7c3aed; }
+        body.light .translated-output, body.light .separator-input, body.light .fc-card .fc-pronun-input { color: #0891b2; }
+        body.light .subtitle, body.light .separator-hint { color: #999; }
+        body.light .direction-btn, body.light .output-mode-btn { background: #fff; border-color: #d0d5e0; color: #666; }
+        body.light .direction-btn.active, body.light .output-mode-btn.active { border-color: #7c3aed; color: #7c3aed; background: #f5f0ff; }
+        body.light .cheat-card .mapped { color: #0891b2; }
+        body.light .add-char-btn { background: #fff; border-color: #d0d5e0; }
+        body.light .add-char-btn:hover { border-color: #7c3aed; color: #7c3aed; }
+        body.light .draw-modal { background: #fff; border-color: #d0d5e0; }
+        body.light .draw-modal h3 { color: #7c3aed; }
+        body.light .draw-canvas-wrap { border-color: #d0d5e0; }
+        body.light .draw-canvas { background: #fff; }
+        body.light .fc-card .fc-drawing { border-color: #d0d5e0; }
+        body.light .fc-card.has-drawing .fc-drawing { border-color: #c4b5fd; }
+        body.light .bg-glyph { color: rgba(124, 58, 237, 0.06); }
+    </style>
+</head>
+<body>
+    <div class="bg-glyphs" id="bgGlyphs"></div>
+    <button class="theme-toggle" id="themeToggle" title="Toggle day/night">&#9790;</button>
+    <div class="container">
+        <h1>Language Creator</h1>
+        <p class="subtitle">Design your own alphabet and translate text</p>
+
+        <div class="top-settings">
+            <div>
+                <label>Language Name</label>
+                <input type="text" class="lang-name-input" id="langName" placeholder="My Language" spellcheck="false">
+            </div>
+            <div>
+                <label>Letter Separator</label>
+                <input type="text" class="separator-input" id="separatorInput" placeholder="e.g. -" spellcheck="false">
+                <span class="separator-hint">Between letters</span>
+            </div>
+        </div>
+
+        <!-- Mode toggle -->
+        <div class="mode-toggle">
+            <button class="mode-btn active" id="modeRegular">Regular</button>
+            <button class="mode-btn" id="modeFullCreate">Full Create</button>
+        </div>
+
+        <div class="tabs" id="tabBar">
+            <button class="tab active" data-tab="alphabet">Alphabet</button>
+            <button class="tab" data-tab="translator">Translator</button>
+            <button class="tab" data-tab="cheatsheet">Cheat Sheet</button>
+            <button class="tab" data-tab="saved">Saved</button>
+        </div>
+
+        <!-- Regular: Alphabet -->
+        <div class="panel active" id="panel-alphabet">
+            <div class="letter-grid" id="letterGrid"></div>
+        </div>
+
+        <!-- Full Create: Draw grid -->
+        <div class="panel" id="panel-fullcreate-alphabet">
+            <p style="text-align:center;color:#667;margin-bottom:14px;font-size:0.9em">Click any box to draw its symbol. Type pronunciation below each.</p>
+            <div class="fc-grid" id="fullCreateGrid"></div>
+        </div>
+
+        <!-- Translator (shared, but output changes by mode) -->
+        <div class="panel" id="panel-translator">
+            <div class="direction-toggle">
+                <button class="direction-btn active" id="dirEnglish">English &rarr; Your Language</button>
+                <button class="direction-btn" id="dirCustom">Your Language &rarr; English</button>
+            </div>
+            <!-- Output mode toggle (only visible in Full Create) -->
+            <div class="output-mode-toggle" id="outputModeToggle" style="display:none">
+                <button class="output-mode-btn active" id="outSymbols">Symbols</button>
+                <button class="output-mode-btn" id="outPronunciation">Pronunciation</button>
+            </div>
+            <div class="translator-row">
+                <div class="translator-box">
+                    <label id="inputLabel">English</label>
+                    <textarea id="translatorInput" placeholder="Type something here..."></textarea>
+                </div>
+                <div class="translator-box">
+                    <label id="outputLabel">Your Language</label>
+                    <div class="translated-output" id="translatorOutput"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cheat Sheet -->
+        <div class="panel" id="panel-cheatsheet">
+            <div class="cheat-sheet-grid" id="cheatGrid"></div>
+        </div>
+
+        <!-- Saved -->
+        <div class="panel" id="panel-saved">
+            <div class="saved-list" id="savedList"></div>
+        </div>
+
+        <div class="actions-bar">
+            <button class="btn primary" onclick="saveLanguage()">Save Language</button>
+            <button class="btn" onclick="newLanguage()">New Language</button>
+            <button class="btn" onclick="exportLanguage()">Export</button>
+        </div>
+    </div>
+
+    <!-- Drawing modal -->
+    <div class="draw-modal-overlay" id="drawOverlay">
+        <div class="draw-modal">
+            <h3 id="drawTitle">Draw Your Symbol</h3>
+            <div class="draw-hint">Hold at the end to snap to a line or shape</div>
+            <div class="draw-canvas-wrap">
+                <canvas class="draw-canvas" id="drawCanvas" width="260" height="260"></canvas>
+            </div>
+            <div class="draw-modal-actions">
+                <button class="btn primary" id="drawDone">Done</button>
+                <button class="btn" id="drawClear">Clear</button>
+                <button class="btn danger" id="drawCancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+        const DIGITS = '0123456789'.split('');
+        const PUNCTUATION = ['.', ',', '!', '?', ';', ':', "'", '"'];
+        const SPECIAL = [' ', '\n'];
+        const ALL_BUILTIN = [...LETTERS, ...DIGITS, ...PUNCTUATION, ...SPECIAL];
+        const DISPLAY_NAMES = { ' ': 'SPACE', '\n': 'NEWLINE' };
+        const PUNCT_AND_SPECIAL = new Set([...PUNCTUATION, ...SPECIAL]);
+
+        let mappings = {};           // Regular mode: letter -> text
+        let pronunciations = {};     // Full Create: letter -> pronunciation text
+        let drawnSymbols = {};       // Full Create: letter -> dataURL
+        let customChars = { Letters: [], Numbers: [], Punctuation: [], Special: [] };
+        let direction = 'english';
+        let outputMode = 'symbols';  // 'symbols' or 'pronunciation'
+        let currentId = null;
+        let mode = 'regular';        // 'regular' or 'fullcreate'
+        let drawTarget = null;       // { type: 'fullcreate', char: 'A' } or { type: 'custom', category: 'Letters' }
+
+        // ===== MODE SWITCHING =====
+        const modeRegBtn = document.getElementById('modeRegular');
+        const modeFCBtn = document.getElementById('modeFullCreate');
+
+        function setMode(m) {
+            mode = m;
+            modeRegBtn.classList.toggle('active', m === 'regular');
+            modeFCBtn.classList.toggle('active', m === 'fullcreate');
+            document.getElementById('outputModeToggle').style.display = m === 'fullcreate' ? 'flex' : 'none';
+            // Switch to alphabet tab
+            switchTab('alphabet');
+        }
+        modeRegBtn.addEventListener('click', () => setMode('regular'));
+        modeFCBtn.addEventListener('click', () => setMode('fullcreate'));
+
+        // ===== TABS =====
+        let currentTab = 'alphabet';
+        function switchTab(id) {
+            currentTab = id;
+            document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === id));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+
+            if (id === 'alphabet') {
+                if (mode === 'regular') {
+                    document.getElementById('panel-alphabet').classList.add('active');
+                    buildGrid();
+                } else {
+                    document.getElementById('panel-fullcreate-alphabet').classList.add('active');
+                    buildFullCreateGrid();
+                }
+            } else {
+                document.getElementById('panel-' + id).classList.add('active');
+                if (id === 'cheatsheet') buildCheatSheet();
+                if (id === 'saved') renderSaved();
+                if (id === 'translator') translate();
+            }
+        }
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+        });
+
+        // ===== REGULAR MODE: ALPHABET GRID =====
+        function buildGrid() {
+            const grid = document.getElementById('letterGrid');
+            grid.innerHTML = '';
+
+            const addCharRow = (ch, isCustom, category) => {
+                const row = document.createElement('div');
+                row.className = 'letter-row';
+                const isDrawn = ch.startsWith('data:');
+                const displayName = DISPLAY_NAMES[ch] || ch;
+                const escaped = (mappings[ch] || '').replace(/"/g, '&quot;');
+                let letterHTML;
+                if (isDrawn) letterHTML = `<span class="original-letter"><img src="${ch}" alt="custom"></span>`;
+                else if (DISPLAY_NAMES[ch]) letterHTML = `<span class="original-letter" style="font-size:0.7em;letter-spacing:0.5px">${displayName}</span>`;
+                else letterHTML = `<span class="original-letter">${displayName}</span>`;
+
+                row.innerHTML = `${letterHTML}<span class="arrow">&rarr;</span>
+                    <input class="letter-input" type="text" placeholder="..." spellcheck="false" value="${escaped}">
+                    ${isCustom ? '<button class="delete-custom" title="Remove">✕</button>' : ''}`;
+                const input = row.querySelector('input');
+                if (mappings[ch]) row.classList.add('has-value');
+                input.addEventListener('input', () => { mappings[ch] = input.value; row.classList.toggle('has-value', !!input.value); autoSave(); });
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); const all = [...grid.querySelectorAll('.letter-input')]; const i = all.indexOf(input); if (i < all.length - 1) all[i+1].focus(); }
+                });
+                if (isCustom) {
+                    row.querySelector('.delete-custom').addEventListener('click', () => {
+                        const arr = customChars[category]; const ci = arr.indexOf(ch); if (ci !== -1) arr.splice(ci, 1);
+                        delete mappings[ch]; autoSave(); buildGrid();
+                    });
+                }
+                grid.appendChild(row);
+            };
+
+            const addSection = (label, builtinChars) => {
+                const lbl = document.createElement('div'); lbl.className = 'section-label'; lbl.textContent = label; grid.appendChild(lbl);
+                builtinChars.forEach(ch => addCharRow(ch, false, label));
+                (customChars[label] || []).forEach(ch => addCharRow(ch, true, label));
+                const addBtn = document.createElement('div'); addBtn.className = 'add-char-btn'; addBtn.textContent = '+';
+                addBtn.addEventListener('click', () => openDraw({ type: 'custom', category: label }));
+                grid.appendChild(addBtn);
+            };
+            addSection('Letters', LETTERS);
+            addSection('Numbers', DIGITS);
+            addSection('Punctuation', PUNCTUATION);
+            addSection('Special', SPECIAL);
+        }
+
+        // ===== FULL CREATE: DRAW GRID =====
+        function buildFullCreateGrid() {
+            const grid = document.getElementById('fullCreateGrid');
+            grid.innerHTML = '';
+            ALL_BUILTIN.forEach(ch => {
+                const card = document.createElement('div');
+                card.className = 'fc-card';
+                const displayName = DISPLAY_NAMES[ch] || ch;
+                const drawn = drawnSymbols[ch];
+                if (drawn) card.classList.add('has-drawing');
+                const pronunVal = (pronunciations[ch] || '').replace(/"/g, '&quot;');
+                card.innerHTML = `
+                    <div class="fc-letter" ${DISPLAY_NAMES[ch] ? 'style="font-size:0.75em"' : ''}>${displayName}</div>
+                    <div class="fc-drawing">${drawn ? `<img src="${drawn}" alt="${displayName}">` : 'draw'}</div>
+                    <div class="fc-pronun-label">pronunciation</div>
+                    <input class="fc-pronun-input" type="text" placeholder="..." spellcheck="false" value="${pronunVal}">
+                `;
+                card.querySelector('.fc-drawing').addEventListener('click', () => openDraw({ type: 'fullcreate', char: ch }));
+                const pronInput = card.querySelector('.fc-pronun-input');
+                pronInput.addEventListener('input', () => { pronunciations[ch] = pronInput.value; autoSave(); });
+                pronInput.addEventListener('click', (e) => e.stopPropagation());
+                grid.appendChild(card);
+            });
+        }
+
+        // ===== DRAWING MODAL =====
+        const drawOverlay = document.getElementById('drawOverlay');
+        const drawCanvas = document.getElementById('drawCanvas');
+        const drawCtx = drawCanvas.getContext('2d');
+        let isDrawing = false;
+        let drawPoints = [];       // points for current stroke
+        let allStrokes = [];       // array of previous strokes (each is an ImageData snapshot)
+        let holdTimer = null;
+        const HOLD_MS = 400;       // hold this long to snap
+
+        function getDrawStyle() {
+            return { color: darkMode ? '#e0e8f0' : '#1a1d2a', width: 3 };
+        }
+
+        function openDraw(target) {
+            drawTarget = target;
+            drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+            allStrokes = [];
+            drawPoints = [];
+            if (target.type === 'fullcreate') {
+                const dn = DISPLAY_NAMES[target.char] || target.char;
+                document.getElementById('drawTitle').textContent = `Draw symbol for "${dn}"`;
+            } else {
+                document.getElementById('drawTitle').textContent = 'Draw Your Symbol';
+            }
+            drawOverlay.classList.add('active');
+        }
+        function closeDraw() { drawOverlay.classList.remove('active'); drawTarget = null; clearHoldTimer(); }
+
+        function clearHoldTimer() { if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; } }
+
+        function startHoldTimer() {
+            clearHoldTimer();
+            holdTimer = setTimeout(() => snapShape(), HOLD_MS);
+        }
+
+        // ---- Shape snapping ----
+        function dist(a, b) { return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2); }
+
+        function snapShape() {
+            if (drawPoints.length < 2) return;
+            const pts = drawPoints;
+            const first = pts[0], last = pts[pts.length - 1];
+            const pathLen = totalPathLength(pts);
+            const closedThreshold = pathLen * 0.15;
+            const isClosed = dist(first, last) < closedThreshold;
+
+            // Restore canvas to state before this stroke
+            if (allStrokes.length > 0) {
+                drawCtx.putImageData(allStrokes[allStrokes.length - 1], 0, 0);
+            } else {
+                drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+            }
+
+            const s = getDrawStyle();
+            drawCtx.strokeStyle = s.color;
+            drawCtx.lineWidth = s.width;
+            drawCtx.lineCap = 'round';
+            drawCtx.lineJoin = 'round';
+
+            if (isClosed) {
+                // Check circle vs polygon
+                const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+                const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+                const avgR = pts.reduce((s, p) => s + dist(p, { x: cx, y: cy }), 0) / pts.length;
+                const maxDev = pts.reduce((m, p) => Math.max(m, Math.abs(dist(p, { x: cx, y: cy }) - avgR)), 0);
+
+                if (maxDev / avgR < 0.25) {
+                    // It's a circle
+                    drawCtx.beginPath();
+                    drawCtx.arc(cx, cy, avgR, 0, Math.PI * 2);
+                    drawCtx.stroke();
+                } else {
+                    // Try to detect rectangle or triangle using corners
+                    const corners = detectCorners(pts);
+                    if (corners.length >= 3 && corners.length <= 6) {
+                        drawCtx.beginPath();
+                        drawCtx.moveTo(corners[0].x, corners[0].y);
+                        for (let i = 1; i < corners.length; i++) drawCtx.lineTo(corners[i].x, corners[i].y);
+                        drawCtx.closePath();
+                        drawCtx.stroke();
+                    } else {
+                        // Fallback: just close the freehand shape smoothly
+                        redrawFreehand(pts);
+                    }
+                }
+            } else {
+                // Open shape: snap to straight line
+                const straightDist = dist(first, last);
+                const maxDeviation = maxPerpendicularDist(pts, first, last);
+                if (maxDeviation / straightDist < 0.15) {
+                    // Straight line
+                    drawCtx.beginPath();
+                    drawCtx.moveTo(first.x, first.y);
+                    drawCtx.lineTo(last.x, last.y);
+                    drawCtx.stroke();
+                } else {
+                    // Not a line, keep freehand
+                    redrawFreehand(pts);
+                }
+            }
+
+            // Save this snapped stroke
+            allStrokes.push(drawCtx.getImageData(0, 0, drawCanvas.width, drawCanvas.height));
+            drawPoints = [];
+            isDrawing = false;
+        }
+
+        function redrawFreehand(pts) {
+            const s = getDrawStyle();
+            drawCtx.strokeStyle = s.color; drawCtx.lineWidth = s.width;
+            drawCtx.lineCap = 'round'; drawCtx.lineJoin = 'round';
+            drawCtx.beginPath();
+            drawCtx.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1; i < pts.length; i++) drawCtx.lineTo(pts[i].x, pts[i].y);
+            drawCtx.stroke();
+        }
+
+        function totalPathLength(pts) {
+            let len = 0;
+            for (let i = 1; i < pts.length; i++) len += dist(pts[i - 1], pts[i]);
+            return len;
+        }
+
+        function maxPerpendicularDist(pts, a, b) {
+            const dx = b.x - a.x, dy = b.y - a.y;
+            const lenSq = dx * dx + dy * dy;
+            if (lenSq === 0) return 0;
+            let maxD = 0;
+            for (const p of pts) {
+                const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq));
+                const proj = { x: a.x + t * dx, y: a.y + t * dy };
+                maxD = Math.max(maxD, dist(p, proj));
+            }
+            return maxD;
+        }
+
+        function detectCorners(pts) {
+            // Ramer-Douglas-Peucker simplification
+            const epsilon = totalPathLength(pts) * 0.04;
+            return rdp(pts, epsilon);
+        }
+
+        function rdp(pts, epsilon) {
+            if (pts.length <= 2) return pts;
+            const first = pts[0], last = pts[pts.length - 1];
+            let maxD = 0, maxI = 0;
+            for (let i = 1; i < pts.length - 1; i++) {
+                const d = pointToLineDist(pts[i], first, last);
+                if (d > maxD) { maxD = d; maxI = i; }
+            }
+            if (maxD > epsilon) {
+                const left = rdp(pts.slice(0, maxI + 1), epsilon);
+                const right = rdp(pts.slice(maxI), epsilon);
+                return [...left.slice(0, -1), ...right];
+            }
+            return [first, last];
+        }
+
+        function pointToLineDist(p, a, b) {
+            const dx = b.x - a.x, dy = b.y - a.y;
+            const lenSq = dx * dx + dy * dy;
+            if (lenSq === 0) return dist(p, a);
+            const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq));
+            return dist(p, { x: a.x + t * dx, y: a.y + t * dy });
+        }
+
+        // ---- Drawing event handlers ----
+        function drawStart(x, y) {
+            isDrawing = true;
+            // Save canvas state before this stroke
+            if (allStrokes.length === 0 && drawPoints.length === 0) {
+                // first stroke — snapshot is blank
+                allStrokes = [];
+            }
+            // Snapshot before starting
+            const snap = drawCtx.getImageData(0, 0, drawCanvas.width, drawCanvas.height);
+            // Store as the "before" for this stroke (we'll use allStrokes for undo-to)
+            if (drawPoints.length === 0) {
+                // Save pre-stroke state so snap can restore
+                allStrokes.push(snap);
+            }
+            drawPoints = [{ x, y }];
+            drawCtx.beginPath();
+            drawCtx.moveTo(x, y);
+            clearHoldTimer();
+        }
+
+        function drawMove(x, y) {
+            if (!isDrawing) return;
+            const s = getDrawStyle();
+            drawCtx.strokeStyle = s.color; drawCtx.lineWidth = s.width;
+            drawCtx.lineCap = 'round'; drawCtx.lineJoin = 'round';
+            drawCtx.lineTo(x, y);
+            drawCtx.stroke();
+            drawPoints.push({ x, y });
+            clearHoldTimer();
+            startHoldTimer();
+        }
+
+        function drawEnd() {
+            if (!isDrawing) return;
+            clearHoldTimer();
+            isDrawing = false;
+            // Normal end without hold — keep freehand, save stroke
+            if (drawPoints.length > 0) {
+                allStrokes.push(drawCtx.getImageData(0, 0, drawCanvas.width, drawCanvas.height));
+                drawPoints = [];
+            }
+        }
+
+        drawCanvas.addEventListener('mousedown', (e) => { const r = drawCanvas.getBoundingClientRect(); drawStart(e.clientX - r.left, e.clientY - r.top); });
+        drawCanvas.addEventListener('mousemove', (e) => { const r = drawCanvas.getBoundingClientRect(); drawMove(e.clientX - r.left, e.clientY - r.top); });
+        drawCanvas.addEventListener('mouseup', drawEnd);
+        drawCanvas.addEventListener('mouseleave', drawEnd);
+        drawCanvas.addEventListener('touchstart', (e) => { e.preventDefault(); const r = drawCanvas.getBoundingClientRect(); const t = e.touches[0]; drawStart(t.clientX - r.left, t.clientY - r.top); });
+        drawCanvas.addEventListener('touchmove', (e) => { e.preventDefault(); const r = drawCanvas.getBoundingClientRect(); const t = e.touches[0]; drawMove(t.clientX - r.left, t.clientY - r.top); });
+        drawCanvas.addEventListener('touchend', (e) => { e.preventDefault(); drawEnd(); });
+
+        document.getElementById('drawDone').addEventListener('click', () => {
+            if (!drawTarget) return;
+            const blank = document.createElement('canvas'); blank.width = drawCanvas.width; blank.height = drawCanvas.height;
+            if (drawCanvas.toDataURL() === blank.toDataURL()) { closeDraw(); return; }
+            const dataUrl = drawCanvas.toDataURL('image/png');
+            if (drawTarget.type === 'fullcreate') {
+                drawnSymbols[drawTarget.char] = dataUrl;
+                closeDraw(); buildFullCreateGrid(); autoSave();
+            } else if (drawTarget.type === 'custom') {
+                if (!customChars[drawTarget.category]) customChars[drawTarget.category] = [];
+                customChars[drawTarget.category].push(dataUrl);
+                closeDraw(); buildGrid(); autoSave();
+            }
+        });
+        document.getElementById('drawClear').addEventListener('click', () => { drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height); allStrokes = []; drawPoints = []; });
+        document.getElementById('drawCancel').addEventListener('click', closeDraw);
+        drawOverlay.addEventListener('click', (e) => { if (e.target === drawOverlay) closeDraw(); });
+
+        // ===== TRANSLATOR =====
+        document.getElementById('translatorInput').addEventListener('input', translate);
+        document.getElementById('separatorInput').addEventListener('input', () => { translate(); autoSave(); });
+
+        document.getElementById('dirEnglish').addEventListener('click', () => setDirection('english'));
+        document.getElementById('dirCustom').addEventListener('click', () => setDirection('custom'));
+        document.getElementById('outSymbols').addEventListener('click', () => setOutputMode('symbols'));
+        document.getElementById('outPronunciation').addEventListener('click', () => setOutputMode('pronunciation'));
+
+        function setDirection(dir) {
+            direction = dir;
+            document.getElementById('dirEnglish').classList.toggle('active', dir === 'english');
+            document.getElementById('dirCustom').classList.toggle('active', dir === 'custom');
+            const name = getLangName();
+            document.getElementById('inputLabel').textContent = dir === 'english' ? 'English' : name;
+            document.getElementById('outputLabel').textContent = dir === 'english' ? name : 'English';
+            translate();
+        }
+        function setOutputMode(m) {
+            outputMode = m;
+            document.getElementById('outSymbols').classList.toggle('active', m === 'symbols');
+            document.getElementById('outPronunciation').classList.toggle('active', m === 'pronunciation');
+            translate();
+        }
+        function getLangName() { return document.getElementById('langName').value.trim() || 'Your Language'; }
+        function getSeparator() { return document.getElementById('separatorInput').value; }
+
+        function translate() {
+            const input = document.getElementById('translatorInput').value;
+            const output = document.getElementById('translatorOutput');
+            const sep = getSeparator();
+
+            if (direction === 'english') {
+                let parts = [];
+                let types = []; // 'letter', 'punct'
+
+                for (const ch of input) {
+                    const isSpace = (ch === ' ');
+                    const isPunct = PUNCT_AND_SPECIAL.has(ch);
+                    const upper = ch.toUpperCase();
+
+                    if (mode === 'fullcreate') {
+                        if (outputMode === 'symbols' && drawnSymbols[upper]) {
+                            // Show drawn symbol
+                            if (isSpace && drawnSymbols[' ']) {
+                                parts.push({ html: `<img src="${drawnSymbols[' ']}" alt="space">`, text: '' });
+                                types.push('punct');
+                            } else if (ch === '\n' && drawnSymbols['\n']) {
+                                parts.push({ html: `<img src="${drawnSymbols['\n']}" alt="newline">`, text: '' });
+                                types.push('punct');
+                            } else {
+                                parts.push({ html: `<img src="${drawnSymbols[upper]}" alt="${upper}">`, text: '' });
+                                types.push('letter');
+                            }
+                        } else if (outputMode === 'pronunciation' && pronunciations[upper]) {
+                            const p = pronunciations[upper];
+                            if (isSpace && pronunciations[' ']) {
+                                parts.push({ html: null, text: ' ' + pronunciations[' '] + ' ' });
+                                types.push('punct');
+                            } else {
+                                const val = (ch === ch.toLowerCase() && ch !== ch.toUpperCase()) ? p.toLowerCase() : p;
+                                parts.push({ html: null, text: val });
+                                types.push(isPunct ? 'punct' : 'letter');
+                            }
+                        } else if (isPunct || isSpace) {
+                            // Check regular mappings too
+                            if (mappings[ch] !== undefined && mappings[ch] !== '') {
+                                parts.push({ html: null, text: isSpace ? ' ' + mappings[ch] + ' ' : mappings[ch] });
+                            } else {
+                                parts.push({ html: null, text: ch });
+                            }
+                            types.push('punct');
+                        } else {
+                            parts.push({ html: null, text: ch });
+                            types.push('letter');
+                        }
+                    } else {
+                        // Regular mode
+                        if (mappings[ch] !== undefined && mappings[ch] !== '') {
+                            parts.push({ html: null, text: isSpace ? ' ' + mappings[ch] + ' ' : mappings[ch] });
+                            types.push(isPunct ? 'punct' : 'letter');
+                        } else if (mappings[upper]) {
+                            const mapped = mappings[upper];
+                            const val = (ch === ch.toLowerCase() && ch !== ch.toUpperCase()) ? mapped.toLowerCase() : mapped;
+                            parts.push({ html: null, text: val });
+                            types.push('letter');
+                        } else {
+                            parts.push({ html: null, text: ch });
+                            types.push(isPunct ? 'punct' : 'letter');
+                        }
+                    }
+                }
+
+                // Build output
+                let hasHTML = parts.some(p => p.html);
+                if (hasHTML || mode === 'fullcreate') {
+                    let html = '';
+                    for (let i = 0; i < parts.length; i++) {
+                        if (i > 0 && sep && types[i] === 'letter' && types[i-1] === 'letter') {
+                            html += ' ' + sep.replace(/</g, '&lt;') + ' ';
+                        }
+                        if (parts[i].html) html += parts[i].html;
+                        else html += parts[i].text.replace(/</g, '&lt;');
+                    }
+                    output.innerHTML = html;
+                } else {
+                    let result = '';
+                    for (let i = 0; i < parts.length; i++) {
+                        if (i > 0 && sep && types[i] === 'letter' && types[i-1] === 'letter') {
+                            result += ' ' + sep + ' ';
+                        }
+                        result += parts[i].text;
+                    }
+                    output.textContent = result;
+                }
+            } else {
+                // Reverse translate
+                const entries = Object.entries(mappings).filter(([k, v]) => v.length > 0);
+                const reverseMap = {};
+                for (const [original, mapped] of entries) {
+                    reverseMap[mapped] = original;
+                    reverseMap[mapped.toLowerCase()] = original.toLowerCase();
+                }
+                // Also add pronunciations as reverse
+                if (mode === 'fullcreate') {
+                    for (const [original, pron] of Object.entries(pronunciations)) {
+                        if (pron) { reverseMap[pron] = original; reverseMap[pron.toLowerCase()] = original.toLowerCase(); }
+                    }
+                }
+
+                let result = '';
+                if (sep) {
+                    const tokens = input.split(' ' + sep + ' ');
+                    for (const token of tokens) {
+                        result += reverseMap[token] !== undefined ? reverseMap[token] : token;
+                    }
+                } else {
+                    entries.sort((a, b) => b[1].length - a[1].length);
+                    let i = 0;
+                    while (i < input.length) {
+                        let matched = false;
+                        for (const [original, mapped] of entries) {
+                            const chunk = input.substring(i, i + mapped.length);
+                            if (chunk === mapped) { result += original; i += mapped.length; matched = true; break; }
+                            if (chunk.toLowerCase() === mapped.toLowerCase()) { result += original.toLowerCase(); i += mapped.length; matched = true; break; }
+                        }
+                        if (!matched) { result += input[i]; i++; }
+                    }
+                }
+                output.textContent = result;
+            }
+        }
+
+        // ===== CHEAT SHEET =====
+        function getAllChars() {
+            const all = [...ALL_BUILTIN];
+            for (const cat of Object.values(customChars)) all.push(...cat);
+            return all;
+        }
+        function buildCheatSheet() {
+            const grid = document.getElementById('cheatGrid');
+            grid.innerHTML = '';
+            getAllChars().forEach(ch => {
+                const card = document.createElement('div');
+                card.className = 'cheat-card';
+                const isCustomDrawn = ch.startsWith('data:');
+                const displayName = DISPLAY_NAMES[ch] || ch;
+                const origHTML = isCustomDrawn
+                    ? `<div class="orig"><img src="${ch}" alt="custom"></div>`
+                    : `<div class="orig">${displayName}</div>`;
+
+                let mappedHTML;
+                if (mode === 'fullcreate' && drawnSymbols[ch]) {
+                    mappedHTML = `<div class="mapped"><img src="${drawnSymbols[ch]}" alt="drawn"></div>`;
+                    if (pronunciations[ch]) mappedHTML += `<div class="mapped" style="font-size:0.85em;margin-top:2px">${pronunciations[ch]}</div>`;
+                } else if (mappings[ch]) {
+                    mappedHTML = `<div class="mapped">${mappings[ch]}</div>`;
+                } else {
+                    mappedHTML = '<div class="unmapped">—</div>';
+                }
+                card.innerHTML = origHTML + mappedHTML;
+                grid.appendChild(card);
+            });
+        }
+
+        // ===== SAVE / LOAD =====
+        function getSavedLanguages() { return JSON.parse(localStorage.getItem('langCreator_languages') || '{}'); }
+        function setSavedLanguages(langs) { localStorage.setItem('langCreator_languages', JSON.stringify(langs)); }
+
+        function saveLanguage() {
+            const name = getLangName();
+            if (name === 'Your Language') {
+                document.getElementById('langName').focus();
+                document.getElementById('langName').style.borderColor = '#f87171';
+                setTimeout(() => document.getElementById('langName').style.borderColor = '', 1500);
+                return;
+            }
+            const id = currentId || 'lang_' + Date.now();
+            currentId = id;
+            const langs = getSavedLanguages();
+            const definedCount = Object.values(mappings).filter(v => v.length > 0).length + Object.keys(drawnSymbols).length;
+            langs[id] = {
+                name, mode, mappings: { ...mappings }, pronunciations: { ...pronunciations },
+                drawnSymbols: { ...drawnSymbols }, customChars: JSON.parse(JSON.stringify(customChars)),
+                separator: getSeparator(), definedCount, updatedAt: Date.now()
+            };
+            setSavedLanguages(langs);
+            const btn = document.querySelector('.btn.primary');
+            const orig = btn.textContent; btn.textContent = 'Saved!';
+            setTimeout(() => btn.textContent = orig, 1200);
+        }
+
+        function autoSave() {
+            if (!currentId) return;
+            const langs = getSavedLanguages();
+            if (!langs[currentId]) return;
+            const definedCount = Object.values(mappings).filter(v => v.length > 0).length + Object.keys(drawnSymbols).length;
+            Object.assign(langs[currentId], {
+                mappings: { ...mappings }, pronunciations: { ...pronunciations },
+                drawnSymbols: { ...drawnSymbols }, customChars: JSON.parse(JSON.stringify(customChars)),
+                separator: getSeparator(), name: getLangName(), mode, definedCount, updatedAt: Date.now()
+            });
+            setSavedLanguages(langs);
+        }
+
+        function loadLanguage(id) {
+            const langs = getSavedLanguages();
+            const lang = langs[id];
+            if (!lang) return;
+            currentId = id;
+            mappings = { ...lang.mappings };
+            pronunciations = lang.pronunciations ? { ...lang.pronunciations } : {};
+            drawnSymbols = lang.drawnSymbols ? { ...lang.drawnSymbols } : {};
+            customChars = lang.customChars ? JSON.parse(JSON.stringify(lang.customChars)) : { Letters: [], Numbers: [], Punctuation: [], Special: [] };
+            document.getElementById('langName').value = lang.name;
+            document.getElementById('separatorInput').value = lang.separator || '';
+            setMode(lang.mode || 'regular');
+            switchTab('alphabet');
+        }
+
+        function deleteLanguage(id) {
+            const langs = getSavedLanguages(); delete langs[id]; setSavedLanguages(langs);
+            if (currentId === id) currentId = null;
+            renderSaved();
+        }
+
+        function newLanguage() {
+            currentId = null; mappings = {}; pronunciations = {}; drawnSymbols = {};
+            customChars = { Letters: [], Numbers: [], Punctuation: [], Special: [] };
+            document.getElementById('langName').value = '';
+            document.getElementById('separatorInput').value = '';
+            document.getElementById('translatorInput').value = '';
+            document.getElementById('translatorOutput').textContent = '';
+            switchTab('alphabet');
+        }
+
+        function renderSaved() {
+            const list = document.getElementById('savedList');
+            const langs = getSavedLanguages();
+            const entries = Object.entries(langs).sort((a, b) => (b[1].updatedAt || 0) - (a[1].updatedAt || 0));
+            if (entries.length === 0) { list.innerHTML = '<div class="empty-state">No saved languages yet.</div>'; return; }
+            list.innerHTML = entries.map(([id, lang]) => `
+                <div class="saved-item">
+                    <div>
+                        <div class="saved-item-name">${lang.name} <span style="font-size:0.75em;color:#667">${(lang.mode || 'regular') === 'fullcreate' ? '(Full Create)' : ''}</span></div>
+                        <div class="saved-item-count">${lang.definedCount || 0} characters defined</div>
+                    </div>
+                    <div class="saved-item-actions">
+                        <button class="btn" onclick="loadLanguage('${id}')">Load</button>
+                        <button class="btn danger" onclick="deleteLanguage('${id}')">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function exportLanguage() {
+            const name = getLangName();
+            const sep = getSeparator();
+            const light = !darkMode;
+
+            // Theme colors
+            const t = light
+                ? { bg: '#f0f2f5', cardBg: '#fff', border: '#d0d5e0', text: '#2a2e3a', accent: '#7c3aed', mapped: '#0891b2', dim: '#999', faint: '#ccc', footBorder: '#e0e0e0' }
+                : { bg: '#08090c', cardBg: '#12141a', border: '#1e2230', text: '#c0ccd0', accent: '#a78bfa', mapped: '#60d5e8', dim: '#556', faint: '#334', footBorder: '#1e2230' };
+
+            // Build cheat sheet cards
+            let cardsHTML = '';
+            const allChars = getAllChars();
+            for (const ch of allChars) {
+                const isCustomDrawn = ch.startsWith('data:');
+                const displayName = DISPLAY_NAMES[ch] || ch;
+                let origHTML = isCustomDrawn
+                    ? `<img src="${ch}" style="width:28px;height:28px;object-fit:contain">`
+                    : displayName;
+                let mappedHTML = '';
+                if (mode === 'fullcreate') {
+                    if (drawnSymbols[ch]) mappedHTML += `<img src="${drawnSymbols[ch]}" style="width:30px;height:30px;object-fit:contain;display:block;margin:4px auto 0">`;
+                    if (pronunciations[ch]) mappedHTML += `<div style="color:${t.mapped};margin-top:3px;font-size:10px">${pronunciations[ch]}</div>`;
+                    if (!drawnSymbols[ch] && !pronunciations[ch]) mappedHTML = `<div style="color:${t.faint};font-style:italic;font-size:9px;margin-top:4px">—</div>`;
+                } else {
+                    if (mappings[ch]) mappedHTML = `<div style="color:${t.mapped};margin-top:4px;font-size:11px;white-space:nowrap">${mappings[ch]}</div>`;
+                    else mappedHTML = `<div style="color:${t.faint};font-style:italic;font-size:9px;margin-top:4px">—</div>`;
+                }
+                cardsHTML += `<div style="background:${t.cardBg};border:1px solid ${t.border};border-radius:8px;padding:8px 6px;text-align:center;flex:1 0 70px;white-space:nowrap">
+                    <div style="font-family:monospace;font-size:14px;font-weight:700;color:${t.accent}">${origHTML}</div>
+                    ${mappedHTML}
+                </div>`;
+            }
+
+            // Info items
+            const infoStyle = `background:${t.cardBg};border:1px solid ${t.border};border-radius:8px;padding:6px 14px;text-align:center`;
+            let infoHTML = `<div style="${infoStyle}">
+                <div style="font-size:8px;text-transform:uppercase;letter-spacing:1px;color:${t.dim}">Mode</div>
+                <div style="font-size:13px;font-weight:700;color:${t.accent};font-family:monospace">${mode === 'fullcreate' ? 'Full Create' : 'Regular'}</div>
+            </div>
+            <div style="${infoStyle}">
+                <div style="font-size:8px;text-transform:uppercase;letter-spacing:1px;color:${t.dim}">Separator</div>
+                <div style="font-size:13px;font-weight:700;color:${t.mapped};font-family:monospace">${sep ? `&quot;${sep}&quot;` : '(none)'}</div>
+            </div>`;
+            if (sep) {
+                infoHTML += `<div style="${infoStyle}">
+                    <div style="font-size:8px;text-transform:uppercase;letter-spacing:1px;color:${t.dim}">Example</div>
+                    <div style="font-size:12px;font-weight:700;color:${t.mapped};font-family:monospace">A ${sep} B ${sep} C</div>
+                </div>`;
+            }
+            infoHTML += `<div style="${infoStyle}">
+                <div style="font-size:8px;text-transform:uppercase;letter-spacing:1px;color:${t.dim}">Characters</div>
+                <div style="font-size:13px;font-weight:700;color:${t.accent};font-family:monospace">${Object.values(mode === 'fullcreate' ? drawnSymbols : mappings).filter(v => v).length}</div>
+            </div>`;
+
+            const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${name}</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+@page { size: auto; margin: 10mm; }
+@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'IBM Plex Sans',sans-serif; background:${t.bg}; color:${t.text}; padding:20px; max-width:800px; margin:0 auto; }
+</style></head><body>
+<div style="text-align:center;margin-bottom:12px">
+    <h1 style="font-size:24px;font-weight:800;background:linear-gradient(135deg,${t.accent},${t.mapped});-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:3px">${name}</h1>
+    <div style="color:${t.dim};font-size:11px">Language Creator</div>
+</div>
+<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:16px">
+    ${infoHTML}
+</div>
+<div style="font-weight:700;font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:${t.dim};margin-bottom:8px">Alphabet</div>
+<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:16px">
+    ${cardsHTML}
+</div>
+<div style="text-align:center;padding-top:10px;border-top:1px solid ${t.footBorder};font-size:9px;color:${t.faint}">Created with Language Creator</div>
+<script>window.onload=()=>window.print();<\/script>
+</body></html>`;
+
+            const w = window.open('', '_blank');
+            w.document.write(html);
+            w.document.close();
+        }
+
+        // Update translator labels when language name changes
+        document.getElementById('langName').addEventListener('input', () => { setDirection(direction); autoSave(); });
+
+        // ===== THEME =====
+        const themeBtn = document.getElementById('themeToggle');
+        let darkMode = localStorage.getItem('langCreator_theme') !== 'light';
+        function applyTheme() {
+            document.body.classList.toggle('light', !darkMode);
+            themeBtn.innerHTML = darkMode ? '&#9790;' : '&#9788;';
+            localStorage.setItem('langCreator_theme', darkMode ? 'dark' : 'light');
+        }
+        applyTheme();
+        themeBtn.addEventListener('click', () => { darkMode = !darkMode; applyTheme(); });
+
+        // ===== FLOATING GLYPHS =====
+        const glyphChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'.split('');
+        const bgEl = document.getElementById('bgGlyphs');
+        function spawnGlyph() {
+            const el = document.createElement('span'); el.className = 'bg-glyph';
+            el.textContent = glyphChars[Math.floor(Math.random() * glyphChars.length)];
+            el.style.left = Math.random() * 100 + '%';
+            el.style.animationDuration = (15 + Math.random() * 20) + 's';
+            el.style.fontSize = (1 + Math.random() * 1.5) + 'em';
+            bgEl.appendChild(el);
+            el.addEventListener('animationend', () => el.remove());
+        }
+        for (let i = 0; i < 15; i++) setTimeout(spawnGlyph, Math.random() * 8000);
+        setInterval(spawnGlyph, 1500);
+
+        // Init
+        buildGrid();
+    </script>
+</body>
+</html>
