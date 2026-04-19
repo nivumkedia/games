@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Hackers</title>
-<script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
 <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -644,19 +643,18 @@ const ONE_HOUR = 60 * 60 * 1000;
 
 const statusBar = document.getElementById('status-bar');
 
-// ── Gun.js — game list only ───────────────────────────────────
-const gun = Gun({ peers: ['https://peer.wallie.io/gun'] });
-const gamesDb = gun.get('hackers-v5').get('games');
-
-// ── MQTT — cross-device presence ─────────────────────────────
+// ── MQTT — game list + cross-device presence ──────────────────
 const mq = mqtt.connect('wss://broker.emqx.io:8084/mqtt', {
     clientId: 'hkrs_' + myId + '_' + Math.random().toString(36).substr(2,4),
     clean: true,
     reconnectPeriod: 3000,
     keepalive: 30
 });
-mq.on('connect', () => statusBar.textContent = 'SYS://ONLINE');
-mq.on('error',   () => statusBar.textContent = 'SYS://OFFLINE — same-device only');
+mq.on('connect', () => {
+    statusBar.textContent = 'SYS://ONLINE';
+    mq.subscribe('hkrs5/games/+');
+});
+mq.on('error', () => statusBar.textContent = 'SYS://OFFLINE — same-device only');
 
 // ── BroadcastChannel — instant same-device sync ───────────────
 const bc = new BroadcastChannel('hkrs_presence');
@@ -675,6 +673,13 @@ function handlePresence(gameId, pid, alive) {
 mq.on('message', (topic, payload) => {
     const parts = topic.split('/');
     if (parts.length < 3 || parts[0] !== 'hkrs5') return;
+    if (parts[1] === 'games') {
+        const gameId = parts[2], str = payload.toString();
+        if (!str) { gamesMap.delete(gameId); }
+        else { try { const g = JSON.parse(str); if (!isExpired(g)) gamesMap.set(gameId, g); else gamesMap.delete(gameId); } catch(e) {} }
+        renderGameList();
+        return;
+    }
     const gameId = parts[1], key = parts[2];
     if (key === 'ctrl') handleCtrl(gameId, payload.toString());
     else handlePresence(gameId, key, payload.toString() !== '0');
@@ -756,16 +761,6 @@ function isExpired(g) { return g.deleted || (g.created && Date.now() - g.created
 
 const gamesMap = new Map();
 
-gamesDb.map().on((game, id) => {
-    if (!game || !game.name || isExpired(game)) gamesMap.delete(id);
-    else gamesMap.set(id, game);
-    renderGameList();
-});
-setInterval(() => gamesDb.map().once((game, id) => {
-    if (!game || !game.name || isExpired(game)) gamesMap.delete(id);
-    else gamesMap.set(id, game);
-    renderGameList();
-}), 3000);
 
 function renderGameList() {
     const list = document.getElementById('game-list');
@@ -800,7 +795,7 @@ function createGame() {
     const gameId = 'g' + Date.now();
     currentGameId = gameId;
     isHost = true;
-    gamesDb.get(gameId).put({ name, host: myId, created: Date.now() });
+    mq.publish('hkrs5/games/' + gameId, JSON.stringify({ name, host: myId, created: Date.now() }), { retain: true, qos: 1 });
     document.getElementById('host-game-name-display').textContent = name;
     goTo('host-waiting');
     input.value = '';
@@ -825,7 +820,7 @@ function deleteGame() {
     mq.publish('hkrs5/' + gid + '/ctrl', 'delete', { qos: 1 });
     bc.postMessage({ type: 'ctrl', gameId: gid, cmd: 'delete' });
     mq.publish('hkrs5/' + gid + '/' + myId, '0', { qos: 0 });
-    gamesDb.get(gid).put({ deleted: Date.now() });
+    mq.publish('hkrs5/games/' + gid, '', { retain: true, qos: 1 });
     gamesMap.delete(gid);
     renderGameList();
     currentGameId = null;
@@ -907,7 +902,7 @@ setInterval(() => {
             if (now - ts > 9000) w.presenceMap.delete(pid);
         }
         if (w.presenceMap.size === 0) {
-            gamesDb.get(gameId).put({ deleted: Date.now() });
+            mq.publish('hkrs5/games/' + gameId, '', { retain: true, qos: 1 });
             gamesMap.delete(gameId);
             renderGameList();
         }
@@ -921,7 +916,7 @@ window.addEventListener('beforeunload', () => {
     if (isHost) {
         mq.publish('hkrs5/' + currentGameId + '/ctrl', 'delete', { qos: 0 });
         bc.postMessage({ type: 'ctrl', gameId: currentGameId, cmd: 'delete' });
-        gamesDb.get(currentGameId).put({ deleted: Date.now() });
+        mq.publish('hkrs5/games/' + currentGameId, '', { retain: true, qos: 0 });
     }
 });
 </script>
