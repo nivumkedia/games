@@ -426,6 +426,40 @@ body {
     background: rgba(0,255,65,0.08);
 }
 
+/* ── Hack screens ── */
+.hack-target-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    max-width: 300px;
+    margin-top: 8px;
+}
+.hack-target-btn {
+    font-family: 'Courier New', monospace;
+    font-size: 16px;
+    letter-spacing: 0.3em;
+    color: #00ff41;
+    background: transparent;
+    border: 1px solid #00ff4155;
+    padding: 14px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: border-color 0.15s, background 0.15s;
+}
+.hack-target-btn:hover {
+    border-color: #00ff41;
+    background: rgba(0,255,65,0.08);
+}
+.hack-result-label {
+    font-size: 13px;
+    letter-spacing: 0.4em;
+    margin-bottom: 28px;
+    animation: blink 1s infinite;
+}
+.hack-result-label.success { color: #00ff41; }
+.hack-result-label.fail { color: #ff003c; animation: blink 0.4s infinite; }
+
 /* ── Corners ── */
 .corner {
     position: fixed;
@@ -557,9 +591,9 @@ body {
             <span class="hub-btn-icon">◈</span>
             <span class="hub-btn-label">SHOP</span>
         </button>
-        <button class="hub-btn">
+        <button class="hub-btn" id="hack-btn" onclick="openHack()">
             <span class="hub-btn-icon">&gt;_</span>
-            <span class="hub-btn-label">HACK</span>
+            <span class="hub-btn-label" id="hack-btn-label">HACK</span>
         </button>
     </div>
     <div class="hub-center">
@@ -569,6 +603,40 @@ body {
     </div>
     <div class="hub-bottom">
         <button class="end-turn-btn" onclick="endTurn()">END TURN</button>
+    </div>
+</div>
+
+<!-- ── Hack: pick target (3+ players) ── -->
+<div id="screen-hack-target" class="screen">
+    <div class="title-sm">HACKERS</div>
+    <div class="setup-label">HACK WHO?</div>
+    <div class="hack-target-list" id="hack-target-list"></div>
+</div>
+
+<!-- ── Hack: guess password ── -->
+<div id="screen-hack" class="screen">
+    <div class="title-sm">HACKERS</div>
+    <div class="pw-player-label" id="hack-target-label">HACKING PLAYER 2</div>
+    <div class="password-display">
+        <span class="pslot" id="h0">_</span>
+        <span class="pslot" id="h1">_</span>
+        <span class="pslot" id="h2">_</span>
+        <span class="pslot" id="h3">_</span>
+    </div>
+    <div class="hack-result-label" id="hack-result-label" style="visibility:hidden">...</div>
+    <div class="numpad">
+        <button class="npbtn" onclick="enterHackDigit(1)">1</button>
+        <button class="npbtn" onclick="enterHackDigit(2)">2</button>
+        <button class="npbtn" onclick="enterHackDigit(3)">3</button>
+        <button class="npbtn" onclick="enterHackDigit(4)">4</button>
+        <button class="npbtn" onclick="enterHackDigit(5)">5</button>
+        <button class="npbtn" onclick="enterHackDigit(6)">6</button>
+        <button class="npbtn" onclick="enterHackDigit(7)">7</button>
+        <button class="npbtn" onclick="enterHackDigit(8)">8</button>
+        <button class="npbtn" onclick="enterHackDigit(9)">9</button>
+        <button class="npbtn npbtn-back" onclick="backspaceHack()">⌫</button>
+        <button class="npbtn" onclick="enterHackDigit(0)">0</button>
+        <button class="npbtn npbtn-lock" id="hack-submit-btn" onclick="submitHack()" disabled>HACK</button>
     </div>
 </div>
 
@@ -636,6 +704,107 @@ function endTurn() {
 function updateHub() {
     document.getElementById('hub-player-label').textContent = 'PLAYER ' + (currentPlayer + 1);
     document.getElementById('hub-coins').textContent = players[currentPlayer].coins;
+    const cooldownEnd = hackCooldowns[currentPlayer] || 0;
+    const remaining = Math.ceil((cooldownEnd - Date.now()) / 1000);
+    const hackBtn = document.getElementById('hack-btn');
+    const hackLabel = document.getElementById('hack-btn-label');
+    if (remaining > 0) {
+        hackBtn.disabled = true;
+        hackLabel.textContent = remaining + 's';
+        if (!hackCooldownTimer) hackCooldownTimer = setInterval(updateHub, 1000);
+    } else {
+        hackBtn.disabled = false;
+        hackLabel.textContent = 'HACK';
+        clearInterval(hackCooldownTimer);
+        hackCooldownTimer = null;
+    }
+}
+
+// ── Hack mechanics ───────────────────────────────────────────
+let hackTarget = -1;
+let hackGuess = [];
+const hackCooldowns = {};
+let hackCooldownTimer = null;
+
+function openHack() {
+    if (numPlayers === 2) {
+        hackTarget = currentPlayer === 0 ? 1 : 0;
+        startHack();
+    } else {
+        const list = document.getElementById('hack-target-list');
+        list.innerHTML = '';
+        for (let i = 0; i < numPlayers; i++) {
+            if (i === currentPlayer) continue;
+            const btn = document.createElement('button');
+            btn.className = 'hack-target-btn';
+            btn.textContent = 'PLAYER ' + (i + 1);
+            btn.onclick = () => { hackTarget = i; startHack(); };
+            list.appendChild(btn);
+        }
+        goTo('hack-target');
+    }
+}
+
+function startHack() {
+    hackGuess = [];
+    document.getElementById('hack-target-label').textContent = 'HACKING PLAYER ' + (hackTarget + 1);
+    document.getElementById('hack-result-label').style.visibility = 'hidden';
+    for (let i = 0; i < 4; i++) {
+        const el = document.getElementById('h' + i);
+        if (el) { el.textContent = '_'; el.className = 'pslot'; }
+    }
+    document.getElementById('hack-submit-btn').disabled = true;
+    document.querySelectorAll('#screen-hack .npbtn').forEach(b => b.disabled = false);
+    goTo('hack');
+}
+
+function enterHackDigit(d) {
+    if (hackGuess.length >= 4) return;
+    hackGuess.push(d);
+    updateHackDisplay();
+}
+
+function backspaceHack() {
+    if (hackGuess.length === 0) return;
+    hackGuess.pop();
+    updateHackDisplay();
+}
+
+function updateHackDisplay() {
+    for (let i = 0; i < 4; i++) {
+        const el = document.getElementById('h' + i);
+        if (!el) continue;
+        el.textContent = hackGuess[i] !== undefined ? hackGuess[i] : '_';
+        el.className = 'pslot' + (hackGuess[i] !== undefined ? ' filled' : '');
+    }
+    document.getElementById('hack-submit-btn').disabled = hackGuess.length < 4;
+}
+
+function submitHack() {
+    if (hackGuess.length < 4) return;
+    const correct = players[hackTarget].password;
+    const resultEl = document.getElementById('hack-result-label');
+    document.querySelectorAll('#screen-hack .npbtn').forEach(b => b.disabled = true);
+
+    if (JSON.stringify(hackGuess) === JSON.stringify(correct)) {
+        for (let i = 0; i < 4; i++) {
+            const el = document.getElementById('h' + i);
+            if (el) { el.className = 'pslot locked'; }
+        }
+        const stolen = 3;
+        players[hackTarget].coins = Math.max(0, players[hackTarget].coins - stolen);
+        players[currentPlayer].coins += stolen;
+        resultEl.textContent = 'ACCESS GRANTED — +' + stolen + ' COINS';
+        resultEl.className = 'hack-result-label success';
+        resultEl.style.visibility = 'visible';
+        setTimeout(() => { updateHub(); goTo('hub'); }, 1800);
+    } else {
+        resultEl.textContent = 'ACCESS DENIED — 60s LOCKOUT';
+        resultEl.className = 'hack-result-label fail';
+        resultEl.style.visibility = 'visible';
+        hackCooldowns[currentPlayer] = Date.now() + 60000;
+        setTimeout(() => { updateHub(); goTo('hub'); }, 1800);
+    }
 }
 
 // ── Screen navigation ────────────────────────────────────────
