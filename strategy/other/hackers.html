@@ -857,6 +857,44 @@ body {
     90%  { transform: translate(10px, -5px); }
 }
 
+/* ── Recap full-screen ── */
+.recap-screen {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 15;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+}
+.recap-screen.active { display: flex; }
+
+/* ── Recap step boxes ── */
+.recap-step {
+    width: 62px;
+    height: 62px;
+    border: 2px solid #ff003c33;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    background: rgba(255,0,60,0.03);
+    transition: border-color 0.3s, background 0.3s, box-shadow 0.3s;
+}
+.recap-step.cracked {
+    border-color: #ff003c;
+    background: rgba(255,0,60,0.12);
+    box-shadow: 0 0 14px #ff003c40;
+}
+.recap-step.coins-step { border-color: #ffd70033; background: rgba(255,215,0,0.03); }
+.recap-step.coins-step.cracked {
+    border-color: #ffd700;
+    background: rgba(255,215,0,0.12);
+    box-shadow: 0 0 14px #ffd70040;
+}
+
 /* ── Corners ── */
 .corner {
     position: fixed;
@@ -1146,6 +1184,17 @@ body {
     </div>
 </div>
 
+<!-- ── Hack recap ── -->
+<div id="screen-hack-recap" class="recap-screen">
+    <div style="font-size:11px;letter-spacing:0.4em;color:#ff003c88;text-transform:uppercase;margin-bottom:10px;">HACK REPLAY</div>
+    <div id="recap-hacker-label" style="font-size:clamp(16px,3.5vw,26px);font-weight:900;letter-spacing:0.25em;color:#ff003c;text-shadow:0 0 14px #ff003c;margin-bottom:56px;text-transform:uppercase;"></div>
+    <div id="recap-stage" style="position:relative;width:min(90vw,480px);height:150px;">
+        <div class="reveal-dot" id="recap-dot" style="position:absolute;top:0;left:0;opacity:0;"></div>
+        <div id="recap-steps-row" style="position:absolute;bottom:0;left:0;right:0;display:flex;gap:6px;justify-content:center;align-items:center;flex-wrap:wrap;"></div>
+    </div>
+    <div id="recap-status" style="font-size:11px;letter-spacing:0.4em;color:#ff003c66;margin-top:44px;text-transform:uppercase;min-height:20px;cursor:pointer;animation:blink 1s infinite;"></div>
+</div>
+
 <!-- ── Box hack: pick a box ── -->
 <div id="screen-box-hack" class="screen">
     <div class="title-sm">HACKERS</div>
@@ -1318,7 +1367,7 @@ const hackedPlayers = new Set(); // players whose coins were stolen, pending gli
 
 function startGame(n) {
     numPlayers = n;
-    players = Array.from({ length: n }, () => ({ password: [], coins: 10, boxes: 0, boxesBought: 0, boxCoinsSlot: null, splitEnabled: false, splitAmounts: [], touchIdDot: null, permanentBoxes: false, safePassword: null, hackAttempt: null, hackCooldownReductions: 0, extraCoinsPerTurn: 0 }));
+    players = Array.from({ length: n }, () => ({ password: [], coins: 10, boxes: 0, boxesBought: 0, boxCoinsSlot: null, splitEnabled: false, splitAmounts: [], touchIdDot: null, permanentBoxes: false, safePassword: null, hackAttempt: null, hackCooldownReductions: 0, extraCoinsPerTurn: 0, hackRecap: null }));
     currentPlayer = 0;
     inSetupPhase = true;
     showPassScreen();
@@ -1335,16 +1384,19 @@ function readyForTurn() {
         document.getElementById('pw-player-label').textContent = 'PLAYER ' + (currentPlayer + 1);
         initPasswordScreen();
         goTo('game');
-    } else if (hackedPlayers.has(currentPlayer)) {
-        hackedPlayers.delete(currentPlayer);
-        showGlitch();
-    } else if (players[currentPlayer].hackAttempt) {
-        players[currentPlayer].coins += 1 + players[currentPlayer].extraCoinsPerTurn;
-        showBoxReveal();
     } else {
-        players[currentPlayer].coins += 1 + players[currentPlayer].extraCoinsPerTurn;
-        updateHub();
-        goTo('hub');
+        if (hackCooldowns[currentPlayer] > 0) hackCooldowns[currentPlayer]--;
+        if (hackedPlayers.has(currentPlayer)) {
+            hackedPlayers.delete(currentPlayer);
+            showGlitch();
+        } else if (players[currentPlayer].hackAttempt) {
+            players[currentPlayer].coins += 1 + players[currentPlayer].extraCoinsPerTurn;
+            showBoxReveal();
+        } else {
+            players[currentPlayer].coins += 1 + players[currentPlayer].extraCoinsPerTurn;
+            updateHub();
+            goTo('hub');
+        }
     }
 }
 
@@ -1353,8 +1405,12 @@ function showGlitch() {
     document.getElementById('glitch-overlay').classList.add('active');
     setTimeout(() => {
         document.getElementById('glitch-overlay').classList.remove('active');
-        updateHub();
-        goTo('hub');
+        if (players[currentPlayer].hackRecap) {
+            showHackRecap();
+        } else {
+            updateHub();
+            goTo('hub');
+        }
     }, 1800);
 }
 
@@ -1402,19 +1458,15 @@ function updateHub() {
     }
 
     // Hack cooldown
-    const cooldownEnd = hackCooldowns[currentPlayer] || 0;
-    const remaining = Math.ceil((cooldownEnd - Date.now()) / 1000);
+    const cooldownTurns = hackCooldowns[currentPlayer] || 0;
     const hackBtn = document.getElementById('hack-btn');
     const hackLabel = document.getElementById('hack-btn-label');
-    if (remaining > 0) {
+    if (cooldownTurns > 0) {
         hackBtn.disabled = true;
-        hackLabel.textContent = remaining + 's';
-        if (!hackCooldownTimer) hackCooldownTimer = setInterval(updateHub, 1000);
+        hackLabel.textContent = cooldownTurns + 'T';
     } else {
         hackBtn.disabled = false;
         hackLabel.textContent = 'HACK';
-        clearInterval(hackCooldownTimer);
-        hackCooldownTimer = null;
     }
 }
 
@@ -1494,8 +1546,8 @@ function resetSplit(p) {
 // ── Hack mechanics ───────────────────────────────────────────
 let hackTarget = -1;
 let hackGuess = [];
+let hackPath = [];
 const hackCooldowns = {};
-let hackCooldownTimer = null;
 
 function openHack() {
     if (numPlayers === 2) {
@@ -1518,6 +1570,7 @@ function openHack() {
 
 function startHack() {
     hackGuess = [];
+    hackPath = [];
     document.getElementById('hack-target-label').textContent = 'HACKING PLAYER ' + (hackTarget + 1);
     document.getElementById('hack-result-label').style.visibility = 'hidden';
     for (let i = 0; i < 4; i++) {
@@ -1552,6 +1605,7 @@ function showBoxHack() {
 function guessBox(slot) {
     const t = players[hackTarget];
     if (slot === t.boxCoinsSlot) {
+        hackPath.push('box');
         // correct box — check for Touch ID
         if (t.touchIdDot !== null) {
             showTouchHack();
@@ -1566,6 +1620,7 @@ function guessBox(slot) {
             t.splitAmounts[slot] = 0;
             if (!t.permanentBoxes) { t.boxes = 0; t.splitEnabled = false; t.touchIdDot = null; t.safePassword = null; }
             else { t.boxCoinsSlot = Math.floor(Math.random() * t.boxes); t.splitAmounts = Array(t.boxes).fill(0); }
+            t.hackRecap = { hackerIdx: currentPlayer, steps: [...hackPath] };
             hackedPlayers.add(hackTarget);
             updateHub(); goTo('hub');
         } else {
@@ -1576,7 +1631,7 @@ function guessBox(slot) {
         }
     } else {
         // wrong — cooldown, record wrong slot for reveal
-        hackCooldowns[currentPlayer] = Date.now() + hackCooldownSecs() * 1000;
+        hackCooldowns[currentPlayer] = hackCooldownTurns();
         t.hackAttempt = { wrongSlot: slot };
         updateHub(); goTo('hub');
     }
@@ -1639,6 +1694,7 @@ function updateHackDisplay() {
 }
 
 function stealCoins() {
+    players[hackTarget].hackRecap = { hackerIdx: currentPlayer, steps: [...hackPath] };
     const stolen = players[hackTarget].coins;
     players[currentPlayer].coins += stolen;
     players[hackTarget].coins = 0;
@@ -1724,6 +1780,7 @@ function submitTouchId() {
         resultEl.className = 'touch-result-label success';
         resultEl.style.visibility = 'visible';
         setTimeout(() => {
+            hackPath.push('touchid');
             if (players[hackTarget].safePassword !== null) { showSafeCrack(); return; }
             document.getElementById('steal-coins-num').textContent = players[hackTarget].splitEnabled
                 ? (players[hackTarget].splitAmounts[players[hackTarget].boxCoinsSlot] || 0)
@@ -1732,11 +1789,11 @@ function submitTouchId() {
             goTo('steal');
         }, 900);
     } else {
-        const secs = hackCooldownSecs();
-        resultEl.textContent = 'ACCESS DENIED — ' + secs + 's LOCKOUT';
+        const turns = hackCooldownTurns();
+        resultEl.textContent = 'ACCESS DENIED — ' + turns + ' TURN LOCKOUT';
         resultEl.className = 'touch-result-label fail';
         resultEl.style.visibility = 'visible';
-        hackCooldowns[currentPlayer] = Date.now() + secs * 1000;
+        hackCooldowns[currentPlayer] = turns;
         setTimeout(() => { updateHub(); goTo('hub'); }, 1800);
     }
 }
@@ -1831,6 +1888,7 @@ function submitSafeCrack() {
         resultEl.className = 'hack-result-label success';
         resultEl.style.visibility = 'visible';
         setTimeout(() => {
+            hackPath.push('safe');
             document.getElementById('steal-coins-num').textContent = players[hackTarget].splitEnabled
                 ? (players[hackTarget].splitAmounts[players[hackTarget].boxCoinsSlot] || 0)
                 : players[hackTarget].coins;
@@ -1838,17 +1896,97 @@ function submitSafeCrack() {
             goTo('steal');
         }, 900);
     } else {
-        const secs = hackCooldownSecs();
-        resultEl.textContent = 'ACCESS DENIED — ' + secs + 's LOCKOUT';
+        const turns = hackCooldownTurns();
+        resultEl.textContent = 'ACCESS DENIED — ' + turns + ' TURN LOCKOUT';
         resultEl.className = 'hack-result-label fail';
         resultEl.style.visibility = 'visible';
-        hackCooldowns[currentPlayer] = Date.now() + secs * 1000;
+        hackCooldowns[currentPlayer] = turns;
         setTimeout(() => { updateHub(); goTo('hub'); }, 1800);
     }
 }
 
+// ── Hack recap ───────────────────────────────────────────────
+function showHackRecap() {
+    const recap = players[currentPlayer].hackRecap;
+    players[currentPlayer].hackRecap = null;
+
+    document.getElementById('recap-hacker-label').textContent = 'HACKED BY PLAYER ' + (recap.hackerIdx + 1);
+
+    const allSteps = [...recap.steps, 'coins'];
+    const icons  = { password: '●●●●', box: '[ ]', touchid: '●', safe: '■■', coins: '◈' };
+    const labels = { password: 'PASS',  box: 'BOX', touchid: 'TOUCH', safe: 'SAFE', coins: 'COINS' };
+
+    const row = document.getElementById('recap-steps-row');
+    row.innerHTML = '';
+    allSteps.forEach((step, i) => {
+        if (i > 0) {
+            const sep = document.createElement('div');
+            sep.style.cssText = 'color:#ff003c22;font-size:14px;align-self:center;';
+            sep.textContent = '›';
+            row.appendChild(sep);
+        }
+        const el = document.createElement('div');
+        el.className = 'recap-step' + (step === 'coins' ? ' coins-step' : '');
+        el.id = 'recap-step-' + i;
+        const iconColor = step === 'coins' ? '#ffd70055' : '#ff003c55';
+        const labelColor = step === 'coins' ? '#ffd70044' : '#ff003c44';
+        el.innerHTML = `<div style="font-size:13px;color:${iconColor};">${icons[step]}</div><div style="font-size:7px;letter-spacing:0.15em;color:${labelColor};">${labels[step]}</div>`;
+        row.appendChild(el);
+    });
+
+    document.getElementById('recap-status').textContent = '';
+    document.getElementById('screen-hack-recap').onclick = null;
+    goTo('hack-recap');
+
+    const dot = document.getElementById('recap-dot');
+    dot.style.transition = 'none';
+    dot.style.opacity = '0';
+
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        const stage = document.getElementById('recap-stage');
+        const stageRect = stage.getBoundingClientRect();
+        const step0 = document.getElementById('recap-step-0');
+        if (!step0) { updateHub(); goTo('hub'); return; }
+        const s0Rect = step0.getBoundingClientRect();
+        dot.style.left = (s0Rect.left - stageRect.left + s0Rect.width / 2 - 9) + 'px';
+        dot.style.top = '0px';
+        dot.style.opacity = '1';
+        setTimeout(() => recapAnimStep(allSteps.length, 0), 400);
+    }));
+}
+
+function recapAnimStep(total, idx) {
+    if (idx >= total) {
+        const statusEl = document.getElementById('recap-status');
+        statusEl.textContent = 'TAP TO CONTINUE';
+        document.getElementById('screen-hack-recap').onclick = () => {
+            document.getElementById('screen-hack-recap').onclick = null;
+            updateHub(); goTo('hub');
+        };
+        return;
+    }
+    const dot = document.getElementById('recap-dot');
+    const stepEl = document.getElementById('recap-step-' + idx);
+    if (!stepEl || !dot) { updateHub(); goTo('hub'); return; }
+
+    const stage = document.getElementById('recap-stage');
+    const stageRect = stage.getBoundingClientRect();
+    const stepRect = stepEl.getBoundingClientRect();
+    const dotLeft = stepRect.left - stageRect.left + stepRect.width / 2 - 9;
+    const dotTop  = stepRect.top  - stageRect.top  + stepRect.height / 2 - 9;
+
+    dot.style.transition = 'left 0.5s cubic-bezier(.4,0,.6,1), top 0.5s cubic-bezier(.4,0,.6,1)';
+    dot.style.left = dotLeft + 'px';
+    dot.style.top  = dotTop  + 'px';
+
+    setTimeout(() => {
+        stepEl.classList.add('cracked');
+        setTimeout(() => recapAnimStep(total, idx + 1), 380);
+    }, 550);
+}
+
 // ── Upgrading shop ───────────────────────────────────────────
-function hackCooldownUpgradePrice(p) { return 5 + p.hackCooldownReductions * 5; }
+function hackCooldownUpgradePrice(p) { return 5 + p.hackCooldownReductions * 8; }
 function coinsPerTurnUpgradePrice(p) { return 5 + p.extraCoinsPerTurn * 2; }
 
 function openShopUpgrading() {
@@ -1860,8 +1998,8 @@ function openShopUpgrading() {
     cdBtn.textContent = maxCd ? 'MAX' : 'BUY';
     document.getElementById('cooldown-price-label').textContent = maxCd ? '—' : cdPrice + ' ◈';
     document.getElementById('cooldown-desc').textContent = maxCd
-        ? 'MAX LEVEL — lockout: ' + (60 - p.hackCooldownReductions * 5) + 's'
-        : 'Reduce hack lockout by 5s (now ' + (60 - p.hackCooldownReductions * 5) + 's). Level ' + p.hackCooldownReductions + '/5.';
+        ? 'MAX LEVEL — lockout: ' + (10 - p.hackCooldownReductions) + ' turns'
+        : 'Reduce hack lockout by 1 turn (now ' + (10 - p.hackCooldownReductions) + ' turns). Level ' + p.hackCooldownReductions + '/5.';
 
     const ctpPrice = coinsPerTurnUpgradePrice(p);
     const ctpBtn = document.getElementById('buy-cpt-btn');
@@ -1963,6 +2101,7 @@ function submitHack() {
         resultEl.className = 'hack-result-label success';
         resultEl.style.visibility = 'visible';
         setTimeout(() => {
+            hackPath = ['password'];
             if (players[hackTarget].boxes > 0) {
                 showBoxHack();
             } else {
@@ -1972,20 +2111,20 @@ function submitHack() {
             }
         }, 1000);
     } else {
-        const secs = hackCooldownSecs();
-        resultEl.textContent = 'ACCESS DENIED — ' + secs + 's LOCKOUT';
+        const turns = hackCooldownTurns();
+        resultEl.textContent = 'ACCESS DENIED — ' + turns + ' TURN LOCKOUT';
         resultEl.className = 'hack-result-label fail';
         resultEl.style.visibility = 'visible';
-        hackCooldowns[currentPlayer] = Date.now() + secs * 1000;
+        hackCooldowns[currentPlayer] = turns;
         setTimeout(() => { updateHub(); goTo('hub'); }, 1800);
     }
 }
 
 // ── Screen navigation ────────────────────────────────────────
-function hackCooldownSecs() { return 60 - players[currentPlayer].hackCooldownReductions * 5; }
+function hackCooldownTurns() { return 10 - players[currentPlayer].hackCooldownReductions; }
 
 function goTo(id) {
-    document.querySelectorAll('.screen, #screen-hub, #screen-pass, #screen-steal, #screen-shop, #screen-shop-defending, #screen-shop-upgrading, #glitch-overlay').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.screen, #screen-hub, #screen-pass, #screen-steal, #screen-shop, #screen-shop-defending, #screen-shop-upgrading, #screen-hack-recap, #glitch-overlay').forEach(s => s.classList.remove('active'));
 
     document.getElementById('screen-' + id).classList.add('active');
 }
