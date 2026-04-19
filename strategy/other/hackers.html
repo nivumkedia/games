@@ -580,111 +580,29 @@ body {
 #glitch-overlay {
     display: none;
     position: fixed;
-    inset: 0;
+    inset: -30px;
     z-index: 200;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    background: #ff0000;
     overflow: hidden;
-    animation: screen-bg 0.07s infinite;
+    animation: screen-shake 0.08s infinite;
 }
-#glitch-overlay.active { display: flex; }
-
-@keyframes screen-bg {
-    0%, 100% { background: #000; }
-    15%  { background: #0d0002; }
-    30%  { background: #00020d; }
-    50%  { background: #020d00; }
-    70%  { background: #0d0000; }
-    85%  { background: #00000d; }
-}
-
-/* scanlines that shift */
-#glitch-overlay::before {
-    content: '';
-    position: absolute;
-    inset: -4px;
-    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.3) 2px, rgba(0,0,0,0.3) 4px);
-    pointer-events: none;
-    z-index: 1;
-    animation: scan-move 0.05s infinite;
-}
-@keyframes scan-move {
-    0%, 100% { transform: translateY(0); }
-    50%       { transform: translateY(4px); }
-}
-
-/* full-width color tears that sweep left/right */
+#glitch-overlay.active { display: block; }
 #glitch-overlay::after {
     content: '';
     position: absolute;
-    inset: 0;
-    pointer-events: none;
-    z-index: 1;
-    background:
-        linear-gradient(transparent 14%, rgba(255,0,60,0.18) 14%, rgba(255,0,60,0.18) 15.5%, transparent 15.5%),
-        linear-gradient(transparent 37%, rgba(0,212,255,0.18) 37%, rgba(0,212,255,0.18) 38.5%, transparent 38.5%),
-        linear-gradient(transparent 61%, rgba(255,255,255,0.08) 61%, rgba(255,255,255,0.08) 62%, transparent 62%),
-        linear-gradient(transparent 79%, rgba(0,212,255,0.15) 79%, rgba(0,212,255,0.15) 80.5%, transparent 80.5%);
-    animation: tear-sweep 0.06s infinite;
+    bottom: 30px;
+    left: 0; right: 0;
+    height: 55px;
+    background: #fff;
 }
-@keyframes tear-sweep {
-    0%, 100% { transform: translateX(0); }
-    12%  { transform: translateX(-30px); }
-    25%  { transform: translateX(30px); }
-    37%  { transform: translateX(-18px); }
-    50%  { transform: translateX(22px); }
-    62%  { transform: translateX(-28px); }
-    75%  { transform: translateX(18px); }
-    87%  { transform: translateX(-12px); }
-}
-
-.glitch-big {
-    font-size: clamp(100px, 25vw, 180px);
-    font-weight: 900;
-    position: relative;
-    animation: glitch-num 0.07s infinite;
-    z-index: 2;
-}
-.glitch-big::before, .glitch-big::after {
-    content: attr(data-val);
-    position: absolute;
-    top: 0; left: 0;
-}
-.glitch-big::before {
-    color: #ff003c;
-    animation: glitch-r 0.07s infinite;
-    clip-path: polygon(0 25%, 100% 25%, 100% 55%, 0 55%);
-}
-.glitch-big::after {
-    color: #00d4ff;
-    animation: glitch-b 0.07s infinite;
-    clip-path: polygon(0 60%, 100% 60%, 100% 85%, 0 85%);
-}
-.glitch-label {
-    font-size: clamp(14px, 3vw, 22px);
-    letter-spacing: 0.5em;
-    margin-top: 8px;
-    animation: glitch-num 0.1s infinite;
-    z-index: 2;
-    position: relative;
-}
-@keyframes glitch-num {
-    0%, 100% { transform: translateX(0); color: #00ff41; }
-    20%  { transform: translateX(-8px); color: #ff003c; }
-    40%  { transform: translateX(8px);  color: #fff; }
-    60%  { transform: translateX(-4px); color: #00d4ff; }
-    80%  { transform: translateX(5px);  color: #ff003c; }
-}
-@keyframes glitch-r {
-    0%, 100% { transform: translateX(0); opacity: 0.9; }
-    30% { transform: translateX(12px); opacity: 1; }
-    70% { transform: translateX(-12px); opacity: 0.7; }
-}
-@keyframes glitch-b {
-    0%, 100% { transform: translateX(0); opacity: 0.9; }
-    30% { transform: translateX(-12px); opacity: 1; }
-    70% { transform: translateX(12px); opacity: 0.7; }
+@keyframes screen-shake {
+    0%, 100% { transform: translate(0, 0); }
+    15%  { transform: translate(-18px, 4px); }
+    30%  { transform: translate(18px, -4px); }
+    45%  { transform: translate(-12px, 6px); }
+    60%  { transform: translate(14px, -2px); }
+    75%  { transform: translate(-16px, 3px); }
+    90%  { transform: translate(10px, -5px); }
 }
 
 /* ── Corners ── */
@@ -872,10 +790,7 @@ body {
 </div>
 
 <!-- ── Glitch overlay ── -->
-<div id="glitch-overlay">
-    <div class="glitch-big" id="glitch-num" data-val="0">0</div>
-    <div class="glitch-label">COINS</div>
-</div>
+<div id="glitch-overlay"></div>
 
 <!-- ── Hack: pick target (3+ players) ── -->
 <div id="screen-hack-target" class="screen">
@@ -972,20 +887,13 @@ function readyForTurn() {
 }
 
 function showGlitch() {
-    const el = document.getElementById('glitch-num');
-    el.textContent = players[currentPlayer].coins;
-    el.setAttribute('data-val', players[currentPlayer].coins);
+    players[currentPlayer].coins = 0;
     document.getElementById('glitch-overlay').classList.add('active');
-    setTimeout(() => {
-        el.textContent = '0';
-        el.setAttribute('data-val', '0');
-        players[currentPlayer].coins = 0;
-    }, 800);
     setTimeout(() => {
         document.getElementById('glitch-overlay').classList.remove('active');
         updateHub();
         goTo('hub');
-    }, 2200);
+    }, 1800);
 }
 
 function endTurn() {
