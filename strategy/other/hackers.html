@@ -1072,7 +1072,7 @@ const hackedPlayers = new Set(); // players whose coins were stolen, pending gli
 
 function startGame(n) {
     numPlayers = n;
-    players = Array.from({ length: n }, () => ({ password: [], coins: 10, boxes: 0, boxCoinsSlot: null, splitEnabled: false, splitAmounts: [], hackAttempt: null }));
+    players = Array.from({ length: n }, () => ({ password: [], coins: 10, boxes: 0, boxesBought: 0, boxCoinsSlot: null, splitEnabled: false, splitAmounts: [], hackAttempt: null }));
     currentPlayer = 0;
     inSetupPhase = true;
     showPassScreen();
@@ -1144,7 +1144,7 @@ function updateHub() {
 }
 
 // ── Shop mechanics ───────────────────────────────────────────
-function boxPrice(p) { return 5 + p.boxes * 4; }
+function boxPrice(p) { return 5 + p.boxesBought * 4; }
 
 function openShopDefending() {
     const p = players[currentPlayer];
@@ -1153,7 +1153,7 @@ function openShopDefending() {
     boxBtn.disabled = p.coins < price;
     boxBtn.textContent = 'BUY';
     document.getElementById('box-price-label').textContent = price + ' ◈';
-    document.getElementById('box-count-label').textContent = p.boxes > 0 ? 'YOU HAVE ' + p.boxes + ' BOX' + (p.boxes > 1 ? 'ES' : '') : 'ADDS A DECOY BOX';
+    document.getElementById('box-count-label').textContent = p.boxes > 0 ? 'YOU HAVE ' + p.boxes + ' BOXES' : 'FIRST PURCHASE GIVES 2 BOXES';
     const splitBtn = document.getElementById('buy-split-btn');
     splitBtn.disabled = p.boxes === 0 || p.splitEnabled || p.coins < 5;
     splitBtn.textContent = p.splitEnabled ? 'OWNED' : 'BUY';
@@ -1165,7 +1165,8 @@ function buyBox() {
     const price = boxPrice(p);
     if (p.coins < price) return;
     p.coins -= price;
-    p.boxes++;
+    p.boxesBought++;
+    p.boxes = p.boxesBought === 1 ? 2 : p.boxes + 1;
     p.boxCoinsSlot = Math.floor(Math.random() * p.boxes);
     if (p.splitEnabled) resetSplit(p);
     openShopDefending();
@@ -1215,10 +1216,6 @@ function openHack() {
 }
 
 function startHack() {
-    if (players[hackTarget].boxes > 0) {
-        showBoxHack();
-        return;
-    }
     hackGuess = [];
     document.getElementById('hack-target-label').textContent = 'HACKING PLAYER ' + (hackTarget + 1);
     document.getElementById('hack-result-label').style.visibility = 'hidden';
@@ -1414,9 +1411,13 @@ function submitHack() {
         resultEl.className = 'hack-result-label success';
         resultEl.style.visibility = 'visible';
         setTimeout(() => {
-            document.getElementById('steal-coins-num').textContent = players[hackTarget].coins;
-            document.getElementById('steal-who-label').textContent = 'PLAYER ' + (hackTarget + 1) + '\'S COINS';
-            goTo('steal');
+            if (players[hackTarget].boxes > 0) {
+                showBoxHack();
+            } else {
+                document.getElementById('steal-coins-num').textContent = players[hackTarget].coins;
+                document.getElementById('steal-who-label').textContent = 'PLAYER ' + (hackTarget + 1) + '\'S COINS';
+                goTo('steal');
+            }
         }, 1000);
     } else {
         resultEl.textContent = 'ACCESS DENIED — 60s LOCKOUT';
