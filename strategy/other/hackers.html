@@ -533,6 +533,20 @@ body {
     color: #00ff4144;
 }
 
+/* ── Shop upgrading items ── */
+#screen-shop-upgrading {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 24px;
+    background: #000;
+    overflow-y: auto;
+}
+#screen-shop-upgrading.active { display: flex; }
+
 /* ── Shop defending items ── */
 #screen-shop-defending {
     display: none;
@@ -1050,6 +1064,34 @@ body {
     </div>
 </div>
 
+<!-- ── Shop: Upgrading ── -->
+<div id="screen-shop-upgrading">
+    <div class="shop-header">
+        <div class="shop-title">UPGRADING</div>
+        <button class="shop-back" onclick="goTo('shop')">← BACK</button>
+    </div>
+    <div class="shop-item">
+        <div class="shop-item-info">
+            <div class="shop-item-name">HACK COOLDOWN</div>
+            <div class="shop-item-desc" id="cooldown-desc">Reduce hack lockout by 5s. Buy up to 5 times.</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+            <div class="shop-item-price" id="cooldown-price-label">5 ◈</div>
+            <button class="buy-btn" id="buy-cooldown-btn" onclick="buyHackCooldown()">BUY</button>
+        </div>
+    </div>
+    <div class="shop-item">
+        <div class="shop-item-info">
+            <div class="shop-item-name">+1 COINS/TURN</div>
+            <div class="shop-item-desc" id="cpt-desc">Earn an extra coin at the start of each turn.</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+            <div class="shop-item-price" id="cpt-price-label">5 ◈</div>
+            <button class="buy-btn" id="buy-cpt-btn" onclick="buyCoinsPerTurn()">BUY</button>
+        </div>
+    </div>
+</div>
+
 <!-- ── Safe setup ── -->
 <div id="screen-safe-setup" class="screen">
     <div class="title-sm">HACKERS</div>
@@ -1143,11 +1185,11 @@ body {
                 <div class="shop-cat-sub">BOX · 5 COINS</div>
             </div>
         </div>
-        <div class="shop-cat">
+        <div class="shop-cat" onclick="openShopUpgrading()" style="cursor:pointer">
             <div class="shop-cat-icon">↑</div>
             <div class="shop-cat-info">
                 <div class="shop-cat-name">UPGRADING</div>
-                <div class="shop-cat-sub">COMING SOON</div>
+                <div class="shop-cat-sub">HACK COOLDOWN · 5 COINS</div>
             </div>
         </div>
     </div>
@@ -1276,7 +1318,7 @@ const hackedPlayers = new Set(); // players whose coins were stolen, pending gli
 
 function startGame(n) {
     numPlayers = n;
-    players = Array.from({ length: n }, () => ({ password: [], coins: 10, boxes: 0, boxesBought: 0, boxCoinsSlot: null, splitEnabled: false, splitAmounts: [], touchIdDot: null, permanentBoxes: false, safePassword: null, hackAttempt: null }));
+    players = Array.from({ length: n }, () => ({ password: [], coins: 10, boxes: 0, boxesBought: 0, boxCoinsSlot: null, splitEnabled: false, splitAmounts: [], touchIdDot: null, permanentBoxes: false, safePassword: null, hackAttempt: null, hackCooldownReductions: 0, extraCoinsPerTurn: 0 }));
     currentPlayer = 0;
     inSetupPhase = true;
     showPassScreen();
@@ -1297,10 +1339,10 @@ function readyForTurn() {
         hackedPlayers.delete(currentPlayer);
         showGlitch();
     } else if (players[currentPlayer].hackAttempt) {
-        players[currentPlayer].coins++;
+        players[currentPlayer].coins += 1 + players[currentPlayer].extraCoinsPerTurn;
         showBoxReveal();
     } else {
-        players[currentPlayer].coins++;
+        players[currentPlayer].coins += 1 + players[currentPlayer].extraCoinsPerTurn;
         updateHub();
         goTo('hub');
     }
@@ -1534,7 +1576,7 @@ function guessBox(slot) {
         }
     } else {
         // wrong — cooldown, record wrong slot for reveal
-        hackCooldowns[currentPlayer] = Date.now() + 60000;
+        hackCooldowns[currentPlayer] = Date.now() + hackCooldownSecs() * 1000;
         t.hackAttempt = { wrongSlot: slot };
         updateHub(); goTo('hub');
     }
@@ -1690,10 +1732,11 @@ function submitTouchId() {
             goTo('steal');
         }, 900);
     } else {
-        resultEl.textContent = 'ACCESS DENIED — 60s LOCKOUT';
+        const secs = hackCooldownSecs();
+        resultEl.textContent = 'ACCESS DENIED — ' + secs + 's LOCKOUT';
         resultEl.className = 'touch-result-label fail';
         resultEl.style.visibility = 'visible';
-        hackCooldowns[currentPlayer] = Date.now() + 60000;
+        hackCooldowns[currentPlayer] = Date.now() + secs * 1000;
         setTimeout(() => { updateHub(); goTo('hub'); }, 1800);
     }
 }
@@ -1795,12 +1838,59 @@ function submitSafeCrack() {
             goTo('steal');
         }, 900);
     } else {
-        resultEl.textContent = 'ACCESS DENIED — 60s LOCKOUT';
+        const secs = hackCooldownSecs();
+        resultEl.textContent = 'ACCESS DENIED — ' + secs + 's LOCKOUT';
         resultEl.className = 'hack-result-label fail';
         resultEl.style.visibility = 'visible';
-        hackCooldowns[currentPlayer] = Date.now() + 60000;
+        hackCooldowns[currentPlayer] = Date.now() + secs * 1000;
         setTimeout(() => { updateHub(); goTo('hub'); }, 1800);
     }
+}
+
+// ── Upgrading shop ───────────────────────────────────────────
+function hackCooldownUpgradePrice(p) { return 5 + p.hackCooldownReductions * 5; }
+function coinsPerTurnUpgradePrice(p) { return 5 + p.extraCoinsPerTurn * 2; }
+
+function openShopUpgrading() {
+    const p = players[currentPlayer];
+    const cdPrice = hackCooldownUpgradePrice(p);
+    const cdBtn = document.getElementById('buy-cooldown-btn');
+    const maxCd = p.hackCooldownReductions >= 5;
+    cdBtn.disabled = maxCd || p.coins < cdPrice;
+    cdBtn.textContent = maxCd ? 'MAX' : 'BUY';
+    document.getElementById('cooldown-price-label').textContent = maxCd ? '—' : cdPrice + ' ◈';
+    document.getElementById('cooldown-desc').textContent = maxCd
+        ? 'MAX LEVEL — lockout: ' + (60 - p.hackCooldownReductions * 5) + 's'
+        : 'Reduce hack lockout by 5s (now ' + (60 - p.hackCooldownReductions * 5) + 's). Level ' + p.hackCooldownReductions + '/5.';
+
+    const ctpPrice = coinsPerTurnUpgradePrice(p);
+    const ctpBtn = document.getElementById('buy-cpt-btn');
+    ctpBtn.disabled = p.coins < ctpPrice;
+    ctpBtn.textContent = 'BUY';
+    document.getElementById('cpt-price-label').textContent = ctpPrice + ' ◈';
+    document.getElementById('cpt-desc').textContent = 'Earn +1 more coin per turn (now +'  + (1 + p.extraCoinsPerTurn) + '/turn). Level ' + p.extraCoinsPerTurn + '.';
+    goTo('shop-upgrading');
+}
+
+function buyHackCooldown() {
+    const p = players[currentPlayer];
+    if (p.hackCooldownReductions >= 5) return;
+    const price = hackCooldownUpgradePrice(p);
+    if (p.coins < price) return;
+    p.coins -= price;
+    p.hackCooldownReductions++;
+    openShopUpgrading();
+    updateHub();
+}
+
+function buyCoinsPerTurn() {
+    const p = players[currentPlayer];
+    const price = coinsPerTurnUpgradePrice(p);
+    if (p.coins < price) return;
+    p.coins -= price;
+    p.extraCoinsPerTurn++;
+    openShopUpgrading();
+    updateHub();
 }
 
 // ── Password change ───────────────────────────────────────────
@@ -1882,17 +1972,20 @@ function submitHack() {
             }
         }, 1000);
     } else {
-        resultEl.textContent = 'ACCESS DENIED — 60s LOCKOUT';
+        const secs = hackCooldownSecs();
+        resultEl.textContent = 'ACCESS DENIED — ' + secs + 's LOCKOUT';
         resultEl.className = 'hack-result-label fail';
         resultEl.style.visibility = 'visible';
-        hackCooldowns[currentPlayer] = Date.now() + 60000;
+        hackCooldowns[currentPlayer] = Date.now() + secs * 1000;
         setTimeout(() => { updateHub(); goTo('hub'); }, 1800);
     }
 }
 
 // ── Screen navigation ────────────────────────────────────────
+function hackCooldownSecs() { return 60 - players[currentPlayer].hackCooldownReductions * 5; }
+
 function goTo(id) {
-    document.querySelectorAll('.screen, #screen-hub, #screen-pass, #screen-steal, #screen-shop, #screen-shop-defending, #glitch-overlay').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.screen, #screen-hub, #screen-pass, #screen-steal, #screen-shop, #screen-shop-defending, #screen-shop-upgrading, #glitch-overlay').forEach(s => s.classList.remove('active'));
 
     document.getElementById('screen-' + id).classList.add('active');
 }
