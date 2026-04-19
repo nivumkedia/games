@@ -1019,6 +1019,16 @@ body {
     </div>
     <div class="shop-item">
         <div class="shop-item-info">
+            <div class="shop-item-name">PERMANENT BOXES</div>
+            <div class="shop-item-desc">Your boxes survive forever — even after a successful hack. Requires a box.</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+            <div class="shop-item-price">20 ◈</div>
+            <button class="buy-btn" id="buy-perm-btn" onclick="buyPermBoxes()">BUY</button>
+        </div>
+    </div>
+    <div class="shop-item">
+        <div class="shop-item-info">
             <div class="shop-item-name">TOUCH ID</div>
             <div class="shop-item-desc">Attach to your coin box. Hacker must also pick the right dot from a 4×4 grid. Requires a box.</div>
         </div>
@@ -1201,7 +1211,7 @@ const hackedPlayers = new Set(); // players whose coins were stolen, pending gli
 
 function startGame(n) {
     numPlayers = n;
-    players = Array.from({ length: n }, () => ({ password: [], coins: 10, boxes: 0, boxesBought: 0, boxCoinsSlot: null, splitEnabled: false, splitAmounts: [], touchIdDot: null, hackAttempt: null }));
+    players = Array.from({ length: n }, () => ({ password: [], coins: 10, boxes: 0, boxesBought: 0, boxCoinsSlot: null, splitEnabled: false, splitAmounts: [], touchIdDot: null, permanentBoxes: false, hackAttempt: null }));
     currentPlayer = 0;
     inSetupPhase = true;
     showPassScreen();
@@ -1322,6 +1332,9 @@ function openShopDefending() {
     const splitBtn = document.getElementById('buy-split-btn');
     splitBtn.disabled = p.boxes === 0 || p.splitEnabled || p.coins < 5;
     splitBtn.textContent = p.splitEnabled ? 'OWNED' : 'BUY';
+    const permBtn = document.getElementById('buy-perm-btn');
+    permBtn.disabled = p.boxes === 0 || p.permanentBoxes || p.coins < 20;
+    permBtn.textContent = p.permanentBoxes ? 'OWNED' : 'BUY';
     const touchBtn = document.getElementById('buy-touch-btn');
     touchBtn.disabled = p.boxes === 0 || p.touchIdDot !== null || p.coins < 30;
     touchBtn.textContent = p.touchIdDot !== null ? 'OWNED' : 'BUY';
@@ -1337,6 +1350,15 @@ function buyBox() {
     p.boxes = p.boxesBought === 1 ? 2 : p.boxes + 1;
     p.boxCoinsSlot = Math.floor(Math.random() * p.boxes);
     if (p.splitEnabled) resetSplit(p);
+    openShopDefending();
+    updateHub();
+}
+
+function buyPermBoxes() {
+    const p = players[currentPlayer];
+    if (p.coins < 20 || p.boxes === 0 || p.permanentBoxes) return;
+    p.coins -= 20;
+    p.permanentBoxes = true;
     openShopDefending();
     updateHub();
 }
@@ -1428,7 +1450,8 @@ function guessBox(slot) {
             const stolen = t.splitAmounts[slot] || 0;
             players[currentPlayer].coins += stolen;
             t.splitAmounts[slot] = 0;
-            t.boxes = 0; t.splitEnabled = false;
+            if (!t.permanentBoxes) { t.boxes = 0; t.splitEnabled = false; t.touchIdDot = null; }
+            else { t.boxCoinsSlot = Math.floor(Math.random() * t.boxes); t.splitAmounts = Array(t.boxes).fill(0); }
             hackedPlayers.add(hackTarget);
             updateHub(); goTo('hub');
         } else {
@@ -1505,9 +1528,17 @@ function stealCoins() {
     const stolen = players[hackTarget].coins;
     players[currentPlayer].coins += stolen;
     players[hackTarget].coins = 0;
-    players[hackTarget].boxes = 0;
-    players[hackTarget].splitEnabled = false;
-    players[hackTarget].touchIdDot = null;
+    if (!players[hackTarget].permanentBoxes) {
+        players[hackTarget].boxes = 0;
+        players[hackTarget].splitEnabled = false;
+        players[hackTarget].touchIdDot = null;
+    } else {
+        // re-randomise real box so hacker can't reuse knowledge
+        players[hackTarget].boxCoinsSlot = Math.floor(Math.random() * players[hackTarget].boxes);
+        if (players[hackTarget].splitEnabled) {
+            players[hackTarget].splitAmounts = Array(players[hackTarget].boxes).fill(0);
+        }
+    }
     hackedPlayers.add(hackTarget);
     updateHub();
     goTo('hub');
