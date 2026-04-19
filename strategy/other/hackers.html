@@ -1038,6 +1038,70 @@ body {
             <button class="buy-btn" id="buy-touch-btn" onclick="buyTouchId()" disabled>BUY</button>
         </div>
     </div>
+    <div class="shop-item">
+        <div class="shop-item-info">
+            <div class="shop-item-name">SAFE</div>
+            <div class="shop-item-desc">A second password on your coin box. Hacker must crack it after finding the right box. Requires a box.</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+            <div class="shop-item-price">40 ◈</div>
+            <button class="buy-btn" id="buy-safe-btn" onclick="buySafe()" disabled>BUY</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── Safe setup ── -->
+<div id="screen-safe-setup" class="screen">
+    <div class="title-sm">HACKERS</div>
+    <div class="pw-player-label">SAFE SETUP</div>
+    <div class="password-display">
+        <span class="pslot" id="s0">_</span>
+        <span class="pslot" id="s1">_</span>
+        <span class="pslot" id="s2">_</span>
+        <span class="pslot" id="s3">_</span>
+    </div>
+    <div class="pw-label" id="safe-setup-label">SET SAFE PASSWORD</div>
+    <div class="numpad">
+        <button class="npbtn" onclick="enterSafeSetup(1)">1</button>
+        <button class="npbtn" onclick="enterSafeSetup(2)">2</button>
+        <button class="npbtn" onclick="enterSafeSetup(3)">3</button>
+        <button class="npbtn" onclick="enterSafeSetup(4)">4</button>
+        <button class="npbtn" onclick="enterSafeSetup(5)">5</button>
+        <button class="npbtn" onclick="enterSafeSetup(6)">6</button>
+        <button class="npbtn" onclick="enterSafeSetup(7)">7</button>
+        <button class="npbtn" onclick="enterSafeSetup(8)">8</button>
+        <button class="npbtn" onclick="enterSafeSetup(9)">9</button>
+        <button class="npbtn npbtn-back" onclick="backspaceSafeSetup()">⌫</button>
+        <button class="npbtn" onclick="enterSafeSetup(0)">0</button>
+        <button class="npbtn npbtn-lock" id="safe-setup-lock" onclick="lockSafeSetup()" disabled>LOCK</button>
+    </div>
+</div>
+
+<!-- ── Safe crack ── -->
+<div id="screen-safe-crack" class="screen">
+    <div class="title-sm">HACKERS</div>
+    <div class="pw-player-label">CRACK THE SAFE</div>
+    <div class="password-display">
+        <span class="pslot" id="sc0">_</span>
+        <span class="pslot" id="sc1">_</span>
+        <span class="pslot" id="sc2">_</span>
+        <span class="pslot" id="sc3">_</span>
+    </div>
+    <div class="hack-result-label" id="safe-crack-result" style="visibility:hidden">...</div>
+    <div class="numpad">
+        <button class="npbtn" onclick="enterSafeCrack(1)">1</button>
+        <button class="npbtn" onclick="enterSafeCrack(2)">2</button>
+        <button class="npbtn" onclick="enterSafeCrack(3)">3</button>
+        <button class="npbtn" onclick="enterSafeCrack(4)">4</button>
+        <button class="npbtn" onclick="enterSafeCrack(5)">5</button>
+        <button class="npbtn" onclick="enterSafeCrack(6)">6</button>
+        <button class="npbtn" onclick="enterSafeCrack(7)">7</button>
+        <button class="npbtn" onclick="enterSafeCrack(8)">8</button>
+        <button class="npbtn" onclick="enterSafeCrack(9)">9</button>
+        <button class="npbtn npbtn-back" onclick="backspaceSafeCrack()">⌫</button>
+        <button class="npbtn" onclick="enterSafeCrack(0)">0</button>
+        <button class="npbtn npbtn-lock" id="safe-crack-btn" onclick="submitSafeCrack()" disabled>CRACK</button>
+    </div>
 </div>
 
 <!-- ── Box hack: pick a box ── -->
@@ -1212,7 +1276,7 @@ const hackedPlayers = new Set(); // players whose coins were stolen, pending gli
 
 function startGame(n) {
     numPlayers = n;
-    players = Array.from({ length: n }, () => ({ password: [], coins: 10, boxes: 0, boxesBought: 0, boxCoinsSlot: null, splitEnabled: false, splitAmounts: [], touchIdDot: null, permanentBoxes: false, hackAttempt: null }));
+    players = Array.from({ length: n }, () => ({ password: [], coins: 10, boxes: 0, boxesBought: 0, boxCoinsSlot: null, splitEnabled: false, splitAmounts: [], touchIdDot: null, permanentBoxes: false, safePassword: null, hackAttempt: null }));
     currentPlayer = 0;
     inSetupPhase = true;
     showPassScreen();
@@ -1233,8 +1297,10 @@ function readyForTurn() {
         hackedPlayers.delete(currentPlayer);
         showGlitch();
     } else if (players[currentPlayer].hackAttempt) {
+        players[currentPlayer].coins++;
         showBoxReveal();
     } else {
+        players[currentPlayer].coins++;
         updateHub();
         goTo('hub');
     }
@@ -1339,6 +1405,9 @@ function openShopDefending() {
     const touchBtn = document.getElementById('buy-touch-btn');
     touchBtn.disabled = p.boxes === 0 || p.touchIdDot !== null || p.coins < 30;
     touchBtn.textContent = p.touchIdDot !== null ? 'OWNED' : 'BUY';
+    const safeBtn = document.getElementById('buy-safe-btn');
+    safeBtn.disabled = p.boxes === 0 || p.safePassword !== null || p.coins < 40;
+    safeBtn.textContent = p.safePassword !== null ? 'OWNED' : 'BUY';
     goTo('shop-defending');
 }
 
@@ -1446,17 +1515,19 @@ function guessBox(slot) {
             showTouchHack();
             return;
         }
-        // no touch ID — go to steal
+        // no touch ID — check safe
+        if (t.safePassword !== null) { showSafeCrack(); return; }
+        // no safe — go to steal
         if (t.splitEnabled) {
             const stolen = t.splitAmounts[slot] || 0;
             players[currentPlayer].coins += stolen;
             t.splitAmounts[slot] = 0;
-            if (!t.permanentBoxes) { t.boxes = 0; t.splitEnabled = false; t.touchIdDot = null; }
+            if (!t.permanentBoxes) { t.boxes = 0; t.splitEnabled = false; t.touchIdDot = null; t.safePassword = null; }
             else { t.boxCoinsSlot = Math.floor(Math.random() * t.boxes); t.splitAmounts = Array(t.boxes).fill(0); }
             hackedPlayers.add(hackTarget);
             updateHub(); goTo('hub');
         } else {
-            t.boxes = 0;
+            if (!t.permanentBoxes) t.boxes = 0;
             document.getElementById('steal-coins-num').textContent = t.coins;
             document.getElementById('steal-who-label').textContent = 'PLAYER ' + (hackTarget + 1) + '\'S COINS';
             goTo('steal');
@@ -1611,6 +1682,7 @@ function submitTouchId() {
         resultEl.className = 'touch-result-label success';
         resultEl.style.visibility = 'visible';
         setTimeout(() => {
+            if (players[hackTarget].safePassword !== null) { showSafeCrack(); return; }
             document.getElementById('steal-coins-num').textContent = players[hackTarget].splitEnabled
                 ? (players[hackTarget].splitAmounts[players[hackTarget].boxCoinsSlot] || 0)
                 : players[hackTarget].coins;
@@ -1620,6 +1692,111 @@ function submitTouchId() {
     } else {
         resultEl.textContent = 'ACCESS DENIED — 60s LOCKOUT';
         resultEl.className = 'touch-result-label fail';
+        resultEl.style.visibility = 'visible';
+        hackCooldowns[currentPlayer] = Date.now() + 60000;
+        setTimeout(() => { updateHub(); goTo('hub'); }, 1800);
+    }
+}
+
+// ── Safe ─────────────────────────────────────────────────────
+let safeSetupDigits = [];
+let safeCrackDigits = [];
+
+function buySafe() {
+    const p = players[currentPlayer];
+    if (p.coins < 40 || p.boxes === 0 || p.safePassword !== null) return;
+    p.coins -= 40;
+    safeSetupDigits = [];
+    updateSafeSetupDisplay();
+    document.getElementById('safe-setup-lock').disabled = true;
+    document.querySelectorAll('#screen-safe-setup .npbtn').forEach(b => b.disabled = false);
+    document.getElementById('safe-setup-label').textContent = 'SET SAFE PASSWORD';
+    document.getElementById('safe-setup-label').className = 'pw-label';
+    updateHub();
+    goTo('safe-setup');
+}
+
+function enterSafeSetup(d) {
+    if (safeSetupDigits.length >= 4) return;
+    safeSetupDigits.push(d);
+    updateSafeSetupDisplay();
+}
+function backspaceSafeSetup() {
+    safeSetupDigits.pop();
+    updateSafeSetupDisplay();
+}
+function updateSafeSetupDisplay() {
+    for (let i = 0; i < 4; i++) {
+        const el = document.getElementById('s' + i);
+        if (!el) continue;
+        el.textContent = safeSetupDigits[i] !== undefined ? safeSetupDigits[i] : '_';
+        el.className = 'pslot' + (safeSetupDigits[i] !== undefined ? ' filled' : '');
+    }
+    document.getElementById('safe-setup-lock').disabled = safeSetupDigits.length < 4;
+}
+function lockSafeSetup() {
+    if (safeSetupDigits.length < 4) return;
+    players[currentPlayer].safePassword = [...safeSetupDigits];
+    for (let i = 0; i < 4; i++) {
+        const el = document.getElementById('s' + i);
+        if (el) { el.textContent = '●'; el.className = 'pslot locked'; }
+    }
+    document.getElementById('safe-setup-label').textContent = 'SAFE LOCKED';
+    document.getElementById('safe-setup-label').className = 'pw-label is-locked';
+    document.getElementById('safe-setup-lock').disabled = true;
+    document.querySelectorAll('#screen-safe-setup .npbtn').forEach(b => b.disabled = true);
+    setTimeout(() => { updateHub(); goTo('hub'); }, 800);
+}
+
+function showSafeCrack() {
+    safeCrackDigits = [];
+    updateSafeCrackDisplay();
+    document.getElementById('safe-crack-result').style.visibility = 'hidden';
+    document.getElementById('safe-crack-btn').disabled = true;
+    document.querySelectorAll('#screen-safe-crack .npbtn').forEach(b => b.disabled = false);
+    goTo('safe-crack');
+}
+function enterSafeCrack(d) {
+    if (safeCrackDigits.length >= 4) return;
+    safeCrackDigits.push(d);
+    updateSafeCrackDisplay();
+}
+function backspaceSafeCrack() {
+    safeCrackDigits.pop();
+    updateSafeCrackDisplay();
+}
+function updateSafeCrackDisplay() {
+    for (let i = 0; i < 4; i++) {
+        const el = document.getElementById('sc' + i);
+        if (!el) continue;
+        el.textContent = safeCrackDigits[i] !== undefined ? safeCrackDigits[i] : '_';
+        el.className = 'pslot' + (safeCrackDigits[i] !== undefined ? ' filled' : '');
+    }
+    document.getElementById('safe-crack-btn').disabled = safeCrackDigits.length < 4;
+}
+function submitSafeCrack() {
+    if (safeCrackDigits.length < 4) return;
+    const resultEl = document.getElementById('safe-crack-result');
+    document.querySelectorAll('#screen-safe-crack .npbtn').forEach(b => b.disabled = true);
+    document.getElementById('safe-crack-btn').disabled = true;
+    if (JSON.stringify(safeCrackDigits) === JSON.stringify(players[hackTarget].safePassword)) {
+        for (let i = 0; i < 4; i++) {
+            const el = document.getElementById('sc' + i);
+            if (el) el.className = 'pslot locked';
+        }
+        resultEl.textContent = 'SAFE CRACKED';
+        resultEl.className = 'hack-result-label success';
+        resultEl.style.visibility = 'visible';
+        setTimeout(() => {
+            document.getElementById('steal-coins-num').textContent = players[hackTarget].splitEnabled
+                ? (players[hackTarget].splitAmounts[players[hackTarget].boxCoinsSlot] || 0)
+                : players[hackTarget].coins;
+            document.getElementById('steal-who-label').textContent = 'PLAYER ' + (hackTarget + 1) + '\'S COINS';
+            goTo('steal');
+        }, 900);
+    } else {
+        resultEl.textContent = 'ACCESS DENIED — 60s LOCKOUT';
+        resultEl.className = 'hack-result-label fail';
         resultEl.style.visibility = 'visible';
         hackCooldowns[currentPlayer] = Date.now() + 60000;
         setTimeout(() => { updateHub(); goTo('hub'); }, 1800);
