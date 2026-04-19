@@ -597,6 +597,66 @@ body {
 }
 .hub-box-indicator.active-box { color: #8B6914; }
 
+/* ── Hub box display ── */
+#hub-boxes-display {
+    display: none;
+    align-items: center;
+    gap: 0;
+    margin-top: 18px;
+}
+.hub-box-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+.hub-box-small {
+    width: 64px;
+    height: 64px;
+    background: #3d1f08;
+    border: 2px solid #5C3317;
+    box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+.hub-box-small.is-real {
+    border-color: #8B6914;
+    box-shadow: inset 0 2px 8px rgba(0,0,0,0.5), 0 0 8px #8B691440;
+}
+.hub-box-amount {
+    font-size: 22px;
+    font-weight: 900;
+    color: #ffd700;
+    text-shadow: 0 0 8px #ffd70066;
+}
+.hub-box-small.is-real .hub-box-amount { color: #ffd700; }
+.hub-box-small:not(.is-real) .hub-box-amount { color: #5C3317; }
+.hub-transfer-col {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0 6px;
+    padding-bottom: 20px;
+}
+.transfer-btn {
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    color: #00ff41;
+    background: transparent;
+    border: 1px solid #00ff4133;
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.1s, border-color 0.1s;
+}
+.transfer-btn:hover { background: rgba(0,255,65,0.1); border-color: #00ff41; }
+.transfer-btn:disabled { opacity: 0.2; cursor: default; }
+
 /* ── Brown boxes (box hack + reveal) ── */
 .brown-box {
     width: 110px;
@@ -882,6 +942,7 @@ body {
         <div class="coins-number" id="hub-coins">10</div>
         <div class="coins-label">COINS</div>
         <div class="hub-player" id="hub-player-label">PLAYER 1</div>
+        <div id="hub-boxes-display"></div>
         <div class="hub-box-indicator" id="hub-box-indicator"></div>
         <button class="end-turn-btn" style="margin-top:20px;font-size:10px;padding:8px 24px;opacity:0.5;" onclick="changePassword()">●●●● CHANGE PASSWORD</button>
     </div>
@@ -1116,17 +1177,44 @@ function endTurn() {
 }
 
 function updateHub() {
-    document.getElementById('hub-player-label').textContent = 'PLAYER ' + (currentPlayer + 1);
-    document.getElementById('hub-coins').textContent = players[currentPlayer].coins;
-    const boxEl = document.getElementById('hub-box-indicator');
     const p = players[currentPlayer];
+    document.getElementById('hub-player-label').textContent = 'PLAYER ' + (currentPlayer + 1);
+    document.getElementById('hub-coins').textContent = p.coins;
+
+    // Box display
+    const boxDisplay = document.getElementById('hub-boxes-display');
+    const boxEl = document.getElementById('hub-box-indicator');
     if (p.boxes > 0) {
-        boxEl.textContent = '[ ' + p.boxes + ' BOX' + (p.boxes > 1 ? 'ES' : '') + (p.splitEnabled ? ' · SPLIT' : '') + ' ACTIVE ]';
+        boxDisplay.style.display = 'flex';
+        boxDisplay.innerHTML = '';
+        for (let i = 0; i < p.boxes; i++) {
+            const amount = p.splitEnabled ? (p.splitAmounts[i] || 0) : (i === p.boxCoinsSlot ? p.coins : 0);
+            const isReal = i === p.boxCoinsSlot;
+            const wrap = document.createElement('div');
+            wrap.className = 'hub-box-wrap';
+            wrap.innerHTML = `<div class="hub-box-small${isReal ? ' is-real' : ''}"><span class="hub-box-amount">${amount}</span></div>`;
+            boxDisplay.appendChild(wrap);
+            if (i < p.boxes - 1) {
+                const col = document.createElement('div');
+                col.className = 'hub-transfer-col';
+                const canRight = p.splitEnabled && amount > 0;
+                const nextAmt = p.splitEnabled ? (p.splitAmounts[i + 1] || 0) : 0;
+                const canLeft = p.splitEnabled && nextAmt > 0;
+                col.innerHTML = `
+                    <button class="transfer-btn" onclick="transferCoin(${i},${i+1})" ${canRight ? '' : 'disabled'}>›</button>
+                    <button class="transfer-btn" onclick="transferCoin(${i+1},${i})" ${canLeft ? '' : 'disabled'}>‹</button>`;
+                boxDisplay.appendChild(col);
+            }
+        }
+        boxEl.textContent = p.splitEnabled ? '[ SPLIT ACTIVE ]' : '[ ' + p.boxes + ' BOXES ]';
         boxEl.className = 'hub-box-indicator active-box';
     } else {
+        boxDisplay.style.display = 'none';
         boxEl.textContent = '';
         boxEl.className = 'hub-box-indicator';
     }
+
+    // Hack cooldown
     const cooldownEnd = hackCooldowns[currentPlayer] || 0;
     const remaining = Math.ceil((cooldownEnd - Date.now()) / 1000);
     const hackBtn = document.getElementById('hack-btn');
@@ -1143,8 +1231,17 @@ function updateHub() {
     }
 }
 
+function transferCoin(from, to) {
+    const p = players[currentPlayer];
+    if (!p.splitEnabled) return;
+    if ((p.splitAmounts[from] || 0) <= 0) return;
+    p.splitAmounts[from]--;
+    p.splitAmounts[to] = (p.splitAmounts[to] || 0) + 1;
+    updateHub();
+}
+
 // ── Shop mechanics ───────────────────────────────────────────
-function boxPrice(p) { return 5 + p.boxesBought * 4; }
+function boxPrice(p) { return 10 + p.boxesBought * 4; }
 
 function openShopDefending() {
     const p = players[currentPlayer];
@@ -1186,7 +1283,6 @@ function buySplit() {
 
 function resetSplit(p) {
     p.splitAmounts = Array(p.boxes).fill(0);
-    // put all coins in the "real" box by default
     p.splitAmounts[p.boxCoinsSlot] = p.coins;
 }
 
