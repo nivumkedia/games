@@ -460,6 +460,119 @@ body {
 .hack-result-label.success { color: #00ff41; }
 .hack-result-label.fail { color: #ff003c; animation: blink 0.4s infinite; }
 
+/* ── Steal screen ── */
+#screen-steal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+    cursor: pointer;
+}
+#screen-steal.active { display: flex; }
+.steal-coins {
+    font-size: clamp(100px, 25vw, 180px);
+    font-weight: 900;
+    color: #ff003c;
+    text-shadow: 0 0 20px #ff003c, 0 0 60px #ff003c80;
+    line-height: 1;
+    animation: pulse-steal 0.8s infinite;
+    transition: transform 0.1s;
+}
+.steal-coins:active { transform: scale(0.93); }
+.steal-who {
+    font-size: 12px;
+    letter-spacing: 0.4em;
+    color: #ff003c88;
+    margin-top: 8px;
+    text-transform: uppercase;
+}
+.steal-label {
+    font-size: 13px;
+    letter-spacing: 0.45em;
+    color: #ff003c;
+    margin-top: 28px;
+    text-transform: uppercase;
+    animation: blink 0.6s infinite;
+}
+@keyframes pulse-steal {
+    0%, 100% { text-shadow: 0 0 20px #ff003c, 0 0 60px #ff003c80; }
+    50% { text-shadow: 0 0 40px #ff003c, 0 0 100px #ff003c; }
+}
+
+/* ── Glitch overlay ── */
+#glitch-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: #000;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+#glitch-overlay.active { display: flex; }
+#glitch-overlay::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.25) 2px, rgba(0,0,0,0.25) 4px);
+    pointer-events: none;
+    z-index: 1;
+}
+.glitch-big {
+    font-size: clamp(100px, 25vw, 180px);
+    font-weight: 900;
+    position: relative;
+    animation: glitch-num 0.07s infinite;
+    z-index: 2;
+}
+.glitch-big::before, .glitch-big::after {
+    content: attr(data-val);
+    position: absolute;
+    top: 0; left: 0;
+}
+.glitch-big::before {
+    color: #ff003c;
+    animation: glitch-r 0.07s infinite;
+    clip-path: polygon(0 25%, 100% 25%, 100% 55%, 0 55%);
+}
+.glitch-big::after {
+    color: #00d4ff;
+    animation: glitch-b 0.07s infinite;
+    clip-path: polygon(0 60%, 100% 60%, 100% 85%, 0 85%);
+}
+.glitch-label {
+    font-size: clamp(14px, 3vw, 22px);
+    letter-spacing: 0.5em;
+    color: #ff003c;
+    margin-top: 8px;
+    animation: glitch-num 0.1s infinite;
+    z-index: 2;
+    position: relative;
+}
+@keyframes glitch-num {
+    0%, 100% { transform: translateX(0); color: #00ff41; }
+    20%  { transform: translateX(-8px); color: #ff003c; }
+    40%  { transform: translateX(8px);  color: #fff; }
+    60%  { transform: translateX(-4px); color: #00d4ff; }
+    80%  { transform: translateX(5px);  color: #ff003c; }
+}
+@keyframes glitch-r {
+    0%, 100% { transform: translateX(0); opacity: 0.9; }
+    30% { transform: translateX(10px); opacity: 1; }
+    70% { transform: translateX(-10px); opacity: 0.7; }
+}
+@keyframes glitch-b {
+    0%, 100% { transform: translateX(0); opacity: 0.9; }
+    30% { transform: translateX(-10px); opacity: 1; }
+    70% { transform: translateX(10px); opacity: 0.7; }
+}
+
 /* ── Corners ── */
 .corner {
     position: fixed;
@@ -606,6 +719,19 @@ body {
     </div>
 </div>
 
+<!-- ── Steal screen ── -->
+<div id="screen-steal" onclick="stealCoins()">
+    <div class="steal-coins" id="steal-coins-num">10</div>
+    <div class="steal-who" id="steal-who-label">PLAYER 2'S COINS</div>
+    <div class="steal-label">TAP TO STEAL</div>
+</div>
+
+<!-- ── Glitch overlay ── -->
+<div id="glitch-overlay">
+    <div class="glitch-big" id="glitch-num" data-val="0">0</div>
+    <div class="glitch-label">COINS</div>
+</div>
+
 <!-- ── Hack: pick target (3+ players) ── -->
 <div id="screen-hack-target" class="screen">
     <div class="title-sm">HACKERS</div>
@@ -670,6 +796,7 @@ let numPlayers = 2;
 let players = [];      // [{password:[], coins:10}]
 let currentPlayer = 0;
 let inSetupPhase = true;
+const hackedPlayers = new Set(); // players whose coins were stolen, pending glitch reveal
 
 function startGame(n) {
     numPlayers = n;
@@ -690,10 +817,30 @@ function readyForTurn() {
         document.getElementById('pw-player-label').textContent = 'PLAYER ' + (currentPlayer + 1);
         initPasswordScreen();
         goTo('game');
+    } else if (hackedPlayers.has(currentPlayer)) {
+        hackedPlayers.delete(currentPlayer);
+        showGlitch();
     } else {
         updateHub();
         goTo('hub');
     }
+}
+
+function showGlitch() {
+    const el = document.getElementById('glitch-num');
+    el.textContent = players[currentPlayer].coins;
+    el.setAttribute('data-val', players[currentPlayer].coins);
+    document.getElementById('glitch-overlay').classList.add('active');
+    setTimeout(() => {
+        el.textContent = '0';
+        el.setAttribute('data-val', '0');
+        players[currentPlayer].coins = 0;
+    }, 800);
+    setTimeout(() => {
+        document.getElementById('glitch-overlay').classList.remove('active');
+        updateHub();
+        goTo('hub');
+    }, 2200);
 }
 
 function endTurn() {
@@ -780,6 +927,14 @@ function updateHackDisplay() {
     document.getElementById('hack-submit-btn').disabled = hackGuess.length < 4;
 }
 
+function stealCoins() {
+    const stolen = players[hackTarget].coins;
+    players[currentPlayer].coins += stolen;
+    hackedPlayers.add(hackTarget);
+    updateHub();
+    goTo('hub');
+}
+
 function submitHack() {
     if (hackGuess.length < 4) return;
     const correct = players[hackTarget].password;
@@ -791,13 +946,14 @@ function submitHack() {
             const el = document.getElementById('h' + i);
             if (el) { el.className = 'pslot locked'; }
         }
-        const stolen = 3;
-        players[hackTarget].coins = Math.max(0, players[hackTarget].coins - stolen);
-        players[currentPlayer].coins += stolen;
-        resultEl.textContent = 'ACCESS GRANTED — +' + stolen + ' COINS';
+        resultEl.textContent = 'ACCESS GRANTED';
         resultEl.className = 'hack-result-label success';
         resultEl.style.visibility = 'visible';
-        setTimeout(() => { updateHub(); goTo('hub'); }, 1800);
+        setTimeout(() => {
+            document.getElementById('steal-coins-num').textContent = players[hackTarget].coins;
+            document.getElementById('steal-who-label').textContent = 'PLAYER ' + (hackTarget + 1) + '\'S COINS';
+            goTo('steal');
+        }, 1000);
     } else {
         resultEl.textContent = 'ACCESS DENIED — 60s LOCKOUT';
         resultEl.className = 'hack-result-label fail';
@@ -809,7 +965,7 @@ function submitHack() {
 
 // ── Screen navigation ────────────────────────────────────────
 function goTo(id) {
-    document.querySelectorAll('.screen, #screen-hub, #screen-pass').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.screen, #screen-hub, #screen-pass, #screen-steal, #glitch-overlay').forEach(s => s.classList.remove('active'));
     document.getElementById('screen-' + id).classList.add('active');
 }
 
