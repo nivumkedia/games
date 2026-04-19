@@ -730,6 +730,46 @@ body {
     text-transform: uppercase;
 }
 
+/* ── Touch ID dot grid ── */
+.dot-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    padding: 4px;
+    margin-bottom: 24px;
+}
+.dot-btn {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: #ff003c22;
+    border: 2px solid #ff003c55;
+    cursor: pointer;
+    transition: background 0.1s, border-color 0.1s, box-shadow 0.1s;
+}
+.dot-btn:hover { background: #ff003c44; border-color: #ff003caa; }
+.dot-btn.selected {
+    background: #ff003c;
+    border-color: #ff003c;
+    box-shadow: 0 0 14px #ff003c, 0 0 28px #ff003c80;
+}
+.dot-grid-label {
+    font-size: 11px;
+    letter-spacing: 0.4em;
+    color: #ff003c88;
+    margin-bottom: 20px;
+    text-transform: uppercase;
+    animation: blink 2s infinite;
+}
+.touch-result-label {
+    font-size: 13px;
+    letter-spacing: 0.4em;
+    margin-bottom: 20px;
+    visibility: hidden;
+}
+.touch-result-label.success { color: #00ff41; }
+.touch-result-label.fail { color: #ff003c; animation: blink 0.4s infinite; }
+
 /* ── Steal screen ── */
 #screen-steal {
     display: none;
@@ -977,6 +1017,16 @@ body {
             <button class="buy-btn" id="buy-split-btn" onclick="buySplit()" disabled>BUY</button>
         </div>
     </div>
+    <div class="shop-item">
+        <div class="shop-item-info">
+            <div class="shop-item-name">TOUCH ID</div>
+            <div class="shop-item-desc">Attach to your coin box. Hacker must also pick the right dot from a 4×4 grid. Requires a box.</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+            <div class="shop-item-price">30 ◈</div>
+            <button class="buy-btn" id="buy-touch-btn" onclick="buyTouchId()" disabled>BUY</button>
+        </div>
+    </div>
 </div>
 
 <!-- ── Box hack: pick a box ── -->
@@ -1037,6 +1087,24 @@ body {
 
 <!-- ── Glitch overlay ── -->
 <div id="glitch-overlay"></div>
+
+<!-- ── Touch ID setup ── -->
+<div id="screen-touch-setup" class="screen">
+    <div class="title-sm">HACKERS</div>
+    <div class="pw-player-label">TOUCH ID SETUP</div>
+    <div class="dot-grid-label">TAP YOUR SECRET DOT</div>
+    <div class="dot-grid" id="setup-dot-grid"></div>
+    <button class="btn" id="confirm-touch-btn" onclick="confirmTouchId()" disabled>CONFIRM</button>
+</div>
+
+<!-- ── Touch ID hack ── -->
+<div id="screen-touch-hack" class="screen">
+    <div class="title-sm">HACKERS</div>
+    <div class="pw-player-label">TOUCH ID REQUIRED</div>
+    <div class="touch-result-label" id="touch-result-label">...</div>
+    <div class="dot-grid" id="hack-dot-grid"></div>
+    <button class="btn" id="submit-touch-btn" onclick="submitTouchId()" disabled>CONFIRM</button>
+</div>
 
 <!-- ── Change password ── -->
 <div id="screen-change-pw" class="screen">
@@ -1133,7 +1201,7 @@ const hackedPlayers = new Set(); // players whose coins were stolen, pending gli
 
 function startGame(n) {
     numPlayers = n;
-    players = Array.from({ length: n }, () => ({ password: [], coins: 10, boxes: 0, boxesBought: 0, boxCoinsSlot: null, splitEnabled: false, splitAmounts: [], hackAttempt: null }));
+    players = Array.from({ length: n }, () => ({ password: [], coins: 10, boxes: 0, boxesBought: 0, boxCoinsSlot: null, splitEnabled: false, splitAmounts: [], touchIdDot: null, hackAttempt: null }));
     currentPlayer = 0;
     inSetupPhase = true;
     showPassScreen();
@@ -1254,6 +1322,9 @@ function openShopDefending() {
     const splitBtn = document.getElementById('buy-split-btn');
     splitBtn.disabled = p.boxes === 0 || p.splitEnabled || p.coins < 5;
     splitBtn.textContent = p.splitEnabled ? 'OWNED' : 'BUY';
+    const touchBtn = document.getElementById('buy-touch-btn');
+    touchBtn.disabled = p.boxes === 0 || p.touchIdDot !== null || p.coins < 30;
+    touchBtn.textContent = p.touchIdDot !== null ? 'OWNED' : 'BUY';
     goTo('shop-defending');
 }
 
@@ -1347,9 +1418,13 @@ function showBoxHack() {
 function guessBox(slot) {
     const t = players[hackTarget];
     if (slot === t.boxCoinsSlot) {
-        // correct — go to steal
+        // correct box — check for Touch ID
+        if (t.touchIdDot !== null) {
+            showTouchHack();
+            return;
+        }
+        // no touch ID — go to steal
         if (t.splitEnabled) {
-            // only steal the coins in that slot
             const stolen = t.splitAmounts[slot] || 0;
             players[currentPlayer].coins += stolen;
             t.splitAmounts[slot] = 0;
@@ -1432,9 +1507,91 @@ function stealCoins() {
     players[hackTarget].coins = 0;
     players[hackTarget].boxes = 0;
     players[hackTarget].splitEnabled = false;
+    players[hackTarget].touchIdDot = null;
     hackedPlayers.add(hackTarget);
     updateHub();
     goTo('hub');
+}
+
+// ── Touch ID ─────────────────────────────────────────────────
+let setupDotSelected = -1;
+let hackDotSelected = -1;
+
+function buyTouchId() {
+    const p = players[currentPlayer];
+    if (p.coins < 30 || p.boxes === 0 || p.touchIdDot !== null) return;
+    p.coins -= 30;
+    setupDotSelected = -1;
+    renderDotGrid('setup-dot-grid', setupDotSelected, selectSetupDot);
+    document.getElementById('confirm-touch-btn').disabled = true;
+    updateHub();
+    goTo('touch-setup');
+}
+
+function renderDotGrid(containerId, selected, onSelect) {
+    const grid = document.getElementById(containerId);
+    grid.innerHTML = '';
+    for (let i = 0; i < 16; i++) {
+        const btn = document.createElement('button');
+        btn.className = 'dot-btn' + (i === selected ? ' selected' : '');
+        btn.onclick = () => onSelect(i);
+        grid.appendChild(btn);
+    }
+}
+
+function selectSetupDot(idx) {
+    setupDotSelected = idx;
+    renderDotGrid('setup-dot-grid', setupDotSelected, selectSetupDot);
+    document.getElementById('confirm-touch-btn').disabled = false;
+}
+
+function confirmTouchId() {
+    if (setupDotSelected < 0) return;
+    players[currentPlayer].touchIdDot = setupDotSelected;
+    updateHub();
+    goTo('hub');
+}
+
+function showTouchHack() {
+    hackDotSelected = -1;
+    renderDotGrid('hack-dot-grid', hackDotSelected, selectHackDot);
+    document.getElementById('submit-touch-btn').disabled = true;
+    const resultEl = document.getElementById('touch-result-label');
+    resultEl.style.visibility = 'hidden';
+    resultEl.className = 'touch-result-label';
+    document.getElementById('hack-dot-grid').querySelectorAll('.dot-btn').forEach(b => b.disabled = false);
+    goTo('touch-hack');
+}
+
+function selectHackDot(idx) {
+    hackDotSelected = idx;
+    renderDotGrid('hack-dot-grid', hackDotSelected, selectHackDot);
+    document.getElementById('submit-touch-btn').disabled = false;
+}
+
+function submitTouchId() {
+    if (hackDotSelected < 0) return;
+    document.getElementById('hack-dot-grid').querySelectorAll('.dot-btn').forEach(b => b.disabled = true);
+    document.getElementById('submit-touch-btn').disabled = true;
+    const resultEl = document.getElementById('touch-result-label');
+    if (hackDotSelected === players[hackTarget].touchIdDot) {
+        resultEl.textContent = 'ACCESS GRANTED';
+        resultEl.className = 'touch-result-label success';
+        resultEl.style.visibility = 'visible';
+        setTimeout(() => {
+            document.getElementById('steal-coins-num').textContent = players[hackTarget].splitEnabled
+                ? (players[hackTarget].splitAmounts[players[hackTarget].boxCoinsSlot] || 0)
+                : players[hackTarget].coins;
+            document.getElementById('steal-who-label').textContent = 'PLAYER ' + (hackTarget + 1) + '\'S COINS';
+            goTo('steal');
+        }, 900);
+    } else {
+        resultEl.textContent = 'ACCESS DENIED — 60s LOCKOUT';
+        resultEl.className = 'touch-result-label fail';
+        resultEl.style.visibility = 'visible';
+        hackCooldowns[currentPlayer] = Date.now() + 60000;
+        setTimeout(() => { updateHub(); goTo('hub'); }, 1800);
+    }
 }
 
 // ── Password change ───────────────────────────────────────────
@@ -1527,6 +1684,7 @@ function submitHack() {
 // ── Screen navigation ────────────────────────────────────────
 function goTo(id) {
     document.querySelectorAll('.screen, #screen-hub, #screen-pass, #screen-steal, #screen-shop, #screen-shop-defending, #glitch-overlay').forEach(s => s.classList.remove('active'));
+
     document.getElementById('screen-' + id).classList.add('active');
 }
 
