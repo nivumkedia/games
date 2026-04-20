@@ -1021,7 +1021,7 @@ body {
 <div id="screen-home" class="screen active">
     <div class="title-big">HACKERS</div>
     <div class="subtitle">Pass &nbsp;·&nbsp; Play &nbsp;·&nbsp; Steal</div>
-    <button class="btn" onclick="goTo('lobby')">START GAME</button>
+    <button class="btn" onclick="openLobby()">START GAME</button>
 </div>
 
 <!-- ── Lobby ── -->
@@ -1104,6 +1104,10 @@ body {
         <button class="hub-btn" onclick="goTo('shop')">
             <span class="hub-btn-icon">◈</span>
             <span class="hub-btn-label">SHOP</span>
+        </button>
+        <button class="hub-btn" onclick="pauseGame()">
+            <span class="hub-btn-icon">⏸</span>
+            <span class="hub-btn-label">PAUSE</span>
         </button>
         <button class="hub-btn" id="hack-btn" onclick="openHack()">
             <span class="hub-btn-icon">&gt;_</span>
@@ -1470,20 +1474,11 @@ function updateTimerDisplay() {
 
 function startTimerCountdown() {
     gameTimerRemaining = gameTimerDuration;
-    updateTimerDisplay();
-    document.getElementById('game-timer').style.display = 'block';
-    clearInterval(gameTimerInterval);
-    gameTimerInterval = setInterval(() => {
-        gameTimerRemaining--;
-        updateTimerDisplay();
-        if (gameTimerRemaining <= 0) {
-            clearInterval(gameTimerInterval);
-            endGame();
-        }
-    }, 1000);
+    resumeTimerCountdown();
 }
 
 function endGame() {
+    localStorage.removeItem('hackers_save');
     gameOver = true;
     const sorted = players.map((p, i) => ({ pts: p.points, idx: i })).sort((a, b) => b.pts - a.pts);
     const list = document.getElementById('game-over-list');
@@ -1505,12 +1500,81 @@ function goToHome() {
     goTo('home');
 }
 
+// ── Save / Resume ────────────────────────────────────────────
+function pauseGame() {
+    clearInterval(gameTimerInterval);
+    const state = {
+        players, currentPlayer, inSetupPhase, numPlayers,
+        gameTimerDuration, gameTimerRemaining,
+        hackedPlayers: [...hackedPlayers],
+        hackCooldowns
+    };
+    localStorage.setItem('hackers_save', JSON.stringify(state));
+    document.getElementById('game-timer').style.display = 'none';
+    openLobby();
+}
+
+function openLobby() {
+    const raw = localStorage.getItem('hackers_save');
+    const list = document.getElementById('game-list');
+    const noMsg = document.getElementById('no-games-msg');
+    list.innerHTML = '';
+    if (raw) {
+        noMsg.style.display = 'none';
+        const s = JSON.parse(raw);
+        const m = Math.floor(s.gameTimerRemaining / 60);
+        const sec = s.gameTimerRemaining % 60;
+        const timeStr = String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0');
+        const row = document.createElement('div');
+        row.className = 'game-row';
+        row.innerHTML = `<span class="game-row-name">${s.numPlayers}-PLAYER GAME</span><span class="game-row-meta">${timeStr} LEFT · P${s.currentPlayer+1}'S TURN</span>`;
+        row.onclick = resumeSavedGame;
+        list.appendChild(row);
+    } else {
+        noMsg.style.display = 'block';
+        list.appendChild(noMsg);
+    }
+    goTo('lobby');
+}
+
+function resumeSavedGame() {
+    const raw = localStorage.getItem('hackers_save');
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    players = s.players;
+    currentPlayer = s.currentPlayer;
+    inSetupPhase = s.inSetupPhase;
+    numPlayers = s.numPlayers;
+    gameTimerDuration = s.gameTimerDuration;
+    gameTimerRemaining = s.gameTimerRemaining;
+    hackedPlayers.clear();
+    s.hackedPlayers.forEach(i => hackedPlayers.add(i));
+    Object.keys(hackCooldowns).forEach(k => delete hackCooldowns[k]);
+    Object.assign(hackCooldowns, s.hackCooldowns);
+    gameOver = false;
+    if (!inSetupPhase) resumeTimerCountdown();
+    updateHub();
+    goTo('hub');
+}
+
+function resumeTimerCountdown() {
+    clearInterval(gameTimerInterval);
+    document.getElementById('game-timer').style.display = 'block';
+    updateTimerDisplay();
+    gameTimerInterval = setInterval(() => {
+        gameTimerRemaining--;
+        updateTimerDisplay();
+        if (gameTimerRemaining <= 0) { clearInterval(gameTimerInterval); endGame(); }
+    }, 1000);
+}
+
 function selectPlayerCount(n) {
     numPlayers = n;
     goTo('timer-setup');
 }
 
 function startGame(timerSecs) {
+    localStorage.removeItem('hackers_save');
     gameTimerDuration = timerSecs;
     gameOver = false;
     players = Array.from({ length: numPlayers }, () => ({ password: [], coins: 10, points: 100, boxes: 0, boxesBought: 0, boxCoinsSlot: null, splitEnabled: false, splitAmounts: [], touchIdDot: null, permanentBoxes: false, safePassword: null, hackAttempt: null, hackCooldownReductions: 0, extraCoinsPerTurn: 0, hackRecap: null }));
