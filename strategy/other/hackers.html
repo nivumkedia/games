@@ -1556,9 +1556,9 @@ body { background: #010801; }
         0 0 100px #00ff4155;
 }
 
-/* Title glitch — more intensity */
-.title-big::before { opacity: 0; }
-.title-big::after  { opacity: 0; }
+/* Title glitch disabled — strips appeared as lines beside the title */
+.title-big::before { opacity: 0; animation: none; }
+.title-big::after  { opacity: 0; animation: none; }
 @keyframes glitch-1 {
     0%, 78%, 100% { opacity: 0; transform: translateX(0) skewX(0); }
     80% { opacity: 0.9; transform: translateX(-8px) skewX(-2deg); }
@@ -1735,6 +1735,7 @@ body { background: #010801; }
         <div class="hub-pts" id="hub-pts">100</div>
         <div class="hub-pts-label">PTS</div>
         <div class="hub-player" id="hub-player-label">PLAYER 1</div>
+        <div id="hub-pw-display" style="font-size:11px;letter-spacing:0.35em;color:#00ff4188;margin-top:4px;margin-bottom:2px;"></div>
         <div id="hub-boxes-display"></div>
         <div class="hub-box-indicator" id="hub-box-indicator"></div>
         <button class="end-turn-btn" style="margin-top:20px;font-size:10px;padding:8px 24px;opacity:0.5;" onclick="changePassword()">●●●● CHANGE PASSWORD</button>
@@ -2105,6 +2106,7 @@ body { background: #010801; }
     <div class="title-sm">HACKERS</div>
     <div class="pw-player-label">PRO COMPUTER · STEP 5</div>
     <div id="procomp-s5-timer" style="font-size:36px;font-weight:900;color:#ff003c;text-shadow:0 0 14px #ff003c;animation:blink 0.5s infinite;margin-bottom:6px;min-height:44px;"></div>
+    <div style="font-size:10px;letter-spacing:0.25em;color:#00af2f;text-transform:uppercase;margin-bottom:8px;">Scroll to the top · find "enter password" · type the word between them</div>
     <div id="procomp-s5-code" class="procomp-code-block"></div>
     <div id="procomp-s5-input-row" style="display:none;flex-direction:column;gap:8px;align-items:center;width:100%;max-width:400px;margin-top:12px;">
         <div style="font-size:10px;letter-spacing:0.3em;color:#00af2f;text-transform:uppercase;">WHAT IS THE WORD BETWEEN "ENTER" AND "PASSWORD"?</div>
@@ -2470,6 +2472,7 @@ function animateCounter(elId, from, to, duration, flashClass) {
 function updateHub() {
     const p = players[currentPlayer];
     document.getElementById('hub-player-label').textContent = 'PLAYER ' + (currentPlayer + 1);
+    document.getElementById('hub-pw-display').textContent = 'PW: ' + p.password.join(' · ');
     document.getElementById('hub-coins').textContent = p.coins;
     document.getElementById('hub-pts').textContent = p.points;
 
@@ -3778,7 +3781,7 @@ function proCompPickBox(outcome) {
     }
 }
 
-const PROCOMP_CODE = `> enter user password
+const PROCOMP_CODE = `> enter password
 [BOOT]    system v3.14.1
 [INIT]    crypto module............
 [INIT]    network stack............
@@ -3938,15 +3941,13 @@ function showProCompStep5() {
     const inputEl = document.getElementById('procomp-s5-input');
     inputEl.value = '';
     inputEl.disabled = false;
-    let secs = (tutorialMode && tutDemoKey === 'procomp') ? 60 : 15;
+    let secs = (tutorialMode && tutDemoKey === 'procomp') ? 60 : 20;
     const timerEl = document.getElementById('procomp-s5-timer');
     timerEl.textContent = secs + 's';
     goTo('procomp-step5');
+    setTimeout(() => { codeEl.scrollTop = 0; inputEl.focus(); }, 50);
     if (tutorialMode && tutDemoKey === 'procomp') {
-        setTimeout(() => { codeEl.scrollTop = 0; inputEl.focus(); }, 50);
-        tutSetDemoText('Scroll to the TOP of the terminal. Find the line "enter _ password" — type what goes in between: user');
-    } else {
-        setTimeout(() => { codeEl.scrollTop = codeEl.scrollHeight; inputEl.focus(); }, 50);
+        tutSetDemoText('Scroll to the top! The terminal says "enter password" — type user in between, then press ENTER!');
     }
     clearInterval(proCompS5TimerInterval);
     proCompS5TimerInterval = setInterval(() => {
@@ -4042,6 +4043,7 @@ function submitHack() {
         resultEl.className = 'hack-result-label success';
         resultEl.style.visibility = 'visible';
         setTimeout(() => {
+            if (tutorialMode) { tutDemoComplete(); return; }
             if (players[hackTarget].boxes > 0) {
                 showBoxHack();
             } else {
