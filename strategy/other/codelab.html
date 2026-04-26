@@ -692,30 +692,12 @@ const GAME_TYPES = {
 };
 
 // ── autocomplete ──────────────────────────────────
-const AC_TRIGGER = /^<dev>\s+import\.\((\w*)$/;
+const AC_TRIGGER = null; // will be defined when new autocomplete triggers are added
 let acIndex = 0;
 let acVisible = false;
 let acMatches = [];
 
 function checkAutocomplete() {
-    const lines = codeInput.value.split('\n');
-    const pos = codeInput.selectionStart;
-    let count = 0, lineIdx = 0;
-    for (let i = 0; i < lines.length; i++) {
-        if (count + lines[i].length >= pos) { lineIdx = i; break; }
-        count += lines[i].length + 1;
-    }
-    const cur = lines[lineIdx];
-    const m = cur.match(AC_TRIGGER);
-    if (m) {
-        const typed = m[1].toLowerCase();
-        acMatches = Object.keys(GAME_TYPES).filter(t => t.startsWith(typed));
-        if (acMatches.length) {
-            acIndex = 0;
-            showAC(lineIdx);
-            return;
-        }
-    }
     hideAC();
 }
 
@@ -896,17 +878,52 @@ function hl(line) {
         return `<span style="color:#6c7086;font-style:italic">${escHtml(line)}</span>`;
     }
 
-    // <dev> import.(type)  — single line
-    const devM = line.match(/^(\s*)<dev>\s+import\.\((\w*)\)$/);
-    if (devM) {
-        const [, indent, type] = devM;
+    // set.create newvariable ("name")
+    const createM = line.match(/^(\s*)set\.create\s+newvariable\s*\(\s*"([^"]*)"\s*\)$/);
+    if (createM) {
+        const [, indent, name] = createM;
         return escHtml(indent)
-            + `<span style="color:#6c7086">&lt;</span><span style="color:#f38ba8;font-weight:bold">dev</span><span style="color:#6c7086">&gt;</span>`
-            + ` <span style="color:#cba6f7;font-weight:bold">import</span>`
+            + `<span style="color:#89b4fa">set</span>`
             + `<span style="color:#6c7086">.</span>`
-            + `<span style="color:#cba6f7">(</span>`
-            + `<span style="color:#fab387">${escHtml(type)}</span>`
+            + `<span style="color:#f9e2af">create</span>`
+            + ` <span style="color:#cba6f7">newvariable</span>`
+            + `<span style="color:#cba6f7"> (</span>`
+            + `<span style="color:#fab387">"${escHtml(name)}"</span>`
             + `<span style="color:#cba6f7">)</span>`;
+    }
+
+    // import.spawnsprite. spawnsprite() activate:
+    if (line.trim().match(/^import\.spawnsprite\.\s+spawnsprite\(\)\s+activate:$/)) {
+        return escHtml(line.match(/^(\s*)/)[1])
+            + `<span style="color:#cba6f7;font-weight:bold">import</span>`
+            + `<span style="color:#6c7086">.</span>`
+            + `<span style="color:#f9e2af">spawnsprite</span>`
+            + `<span style="color:#6c7086">.</span>`
+            + ` <span style="color:#f9e2af">spawnsprite</span>`
+            + `<span style="color:#cba6f7">()</span>`
+            + ` <span style="color:#a6e3a1;font-weight:bold">activate</span>`
+            + `<span style="color:#6c7086">:</span>`;
+    }
+
+    // activate:
+    if (line.trim() === 'activate:') {
+        return escHtml(line.match(/^(\s*)/)[1])
+            + `<span style="color:#a6e3a1;font-weight:bold">activate</span>`
+            + `<span style="color:#6c7086">:</span>`;
+    }
+
+    // spawnsprite(name), name()
+    const spawnM = line.match(/^(\s*)spawnsprite\s*\(\s*(\w+)\s*\)\s*,\s*(\w+)\s*\(\)$/);
+    if (spawnM) {
+        const [, indent, spriteName, typeName] = spawnM;
+        return escHtml(indent)
+            + `<span style="color:#f9e2af">spawnsprite</span>`
+            + `<span style="color:#cba6f7">(</span>`
+            + `<span style="color:#89dceb">${escHtml(spriteName)}</span>`
+            + `<span style="color:#cba6f7">)</span>`
+            + `<span style="color:#6c7086">, </span>`
+            + `<span style="color:#89dceb">${escHtml(typeName)}</span>`
+            + `<span style="color:#cba6f7">()</span>`;
     }
 
     // on <event> block header
@@ -989,43 +1006,52 @@ function runCode() {
     gameState = {
         canvas, ctx,
         sprites: {},
-        type: null,
-        bg: '#080a12'
+        variables: {},
+        type: null
     };
 
     log('Running...', 'info');
 
-    // parse sections: <dev> config and on <event> blocks
-    const blocks = [];
-    let curBlock = null;
-    codeInput.value.split('\n').forEach((raw, i) => {
-        const n = i + 1;
-        const trimmed = raw.trim();
-        if (!trimmed || trimmed.startsWith('//')) return;
-
-        // <dev> import.(type) — single line
-        const devM = trimmed.match(/^<dev>\s+import\.\((\w*)\)$/);
-        if (devM) { gameState.type = devM[1]; log(`type: ${devM[1]}`, 'info'); return; }
-
-        const onM = trimmed.match(/^on\s+(\w+)$/);
-        if (onM) {
-            curBlock = { event: onM[1], lines: [] };
-            blocks.push(curBlock);
-        } else if (curBlock) {
-            curBlock.lines.push({ line: trimmed, n });
-        } else {
-            log(`line ${n}: code must be inside a block (e.g. "on start")`, 'err');
-        }
-    });
-
+    const rawLines = codeInput.value.split('\n');
     let ok = true;
-    for (const block of blocks) {
-        if (block.event === 'start') {
-            for (const { line, n } of block.lines) {
-                if (!execLine(line, n)) { ok = false; break; }
-            }
+    let i = 0;
+
+    while (i < rawLines.length && ok) {
+        const raw = rawLines[i];
+        const t = raw.trim();
+        const n = i + 1;
+        i++;
+
+        if (!t || t.startsWith('//')) continue;
+
+        // skip on start / on <event> headers (not used in new system)
+        if (t.match(/^on\s+\w+$/)) continue;
+
+        // set.create newvariable ("name") or set.create newvariable (name)
+        const createM = t.match(/^set\.create\s+newvariable\s*\(\s*"?([^")\s]+)"?\s*\)$/);
+        if (createM) {
+            gameState.variables[createM[1]] = true;
+            log(`variable "${createM[1]}" declared`, 'info');
+            continue;
         }
-        if (!ok) break;
+
+        // activate: or import.spawnsprite. spawnsprite() activate:
+        const isActivate = t === 'activate:' || t.match(/^import\.spawnsprite\.\s+spawnsprite\(\)\s+activate:$/);
+        if (isActivate) {
+            while (i < rawLines.length) {
+                const braw = rawLines[i];
+                const bt = braw.trim();
+                if (!bt || bt.startsWith('//')) { i++; continue; }
+                // stop at next top-level statement
+                if (bt.match(/^set\./) || bt.match(/^on\s+\w+$/) || bt === 'activate:' || bt.match(/^import\./)) break;
+                i++;
+                if (!execActivateLine(bt, i)) { ok = false; break; }
+            }
+            continue;
+        }
+
+        log(`line ${n}: unexpected — "${t}"`, 'err');
+        ok = false;
     }
 
     if (ok) {
@@ -1037,83 +1063,40 @@ function runCode() {
     }
 }
 
-function execLine(line, n) {
-    const m = line.match(/^(\w+)\.(\w+)\(([^)]*)\)$/);
-    if (!m) {
-        log(`line ${n}: can't read — "${line}"`, 'err');
-        return false;
+function execActivateLine(line, n) {
+    // spawnsprite(name), name()
+    const m = line.match(/^spawnsprite\s*\(\s*(\w+)\s*\)\s*,\s*(\w+)\s*\(\)$/);
+    if (m) {
+        const [, spriteName, typeName] = m;
+        const cv = gameState.canvas;
+        const defaults = {
+            road:   { x:0, y:0, w:cv.width, h:cv.height },
+            car:    { x:cv.width/2-18, y:cv.height/2-30, w:36, h:60 },
+            player: { x:cv.width/2-18, y:cv.height/2-24, w:36, h:52 },
+            enemy:  { x:cv.width/2-22, y:cv.height/2-22, w:44, h:44 },
+            tree:   { x:cv.width/2-22, y:cv.height/2-28, w:44, h:56 },
+            coin:   { x:cv.width/2-14, y:cv.height/2-14, w:28, h:28 },
+        };
+        const d = defaults[typeName] || { x:cv.width/2-20, y:cv.height/2-20, w:40, h:40 };
+        gameState.sprites[spriteName] = {
+            ...d,
+            color: spriteColor(typeName),
+            typeName,
+            visible: true
+        };
+        log(`spawned "${spriteName}"`, 'info');
+        return true;
     }
-    const [, obj, method, rawArgs] = m;
-
-    if (obj !== 'set') {
-        log(`line ${n}: unknown object "${obj}" — did you mean "set"?`, 'err');
-        return false;
-    }
-
-    const args = rawArgs.split(',').map(a => {
-        a = a.trim();
-        if ((a.startsWith('"') && a.endsWith('"')) || (a.startsWith("'") && a.endsWith("'")))
-            return a.slice(1, -1);
-        if (a !== '' && !isNaN(a)) return Number(a);
-        return a;
-    }).filter((_, i, arr) => !(arr.length === 1 && arr[0] === ''));
-
-    return runCmd(method, args, n);
+    log(`line ${n}: unrecognized — "${line}"`, 'err');
+    return false;
 }
 
-function runCmd(cmd, args, n) {
-    const { sprites, canvas } = gameState;
-
-    const need = (name, count) => {
-        if (!sprites[name]) {
-            log(`line ${n}: no sprite named "${name}"`, 'err');
-            return false;
-        }
-        return true;
+function spriteColor(typeName) {
+    const palette = {
+        road: '#888a8c', car: '#f5a623', player: '#89b4fa',
+        enemy: '#f38ba8', tree: '#4a8a2a', coin: '#f9e2af'
     };
-
-    switch (cmd) {
-        case 'spawnSprite': {
-            const [name] = args;
-            if (!name) { log(`line ${n}: spawnSprite(name) — name required`, 'err'); return false; }
-            sprites[name] = {
-                x: canvas.width / 2 - 20,
-                y: canvas.height / 2 - 20,
-                w: 40, h: 40,
-                color: '#89b4fa',
-                visible: true
-            };
-            log(`spawned "${name}"`, 'info');
-            return true;
-        }
-        case 'setColor': {
-            const [name, color] = args;
-            if (!need(name)) return false;
-            sprites[name].color = color;
-            return true;
-        }
-        case 'setPosition': {
-            const [name, x, y] = args;
-            if (!need(name)) return false;
-            sprites[name].x = x; sprites[name].y = y;
-            return true;
-        }
-        case 'setSize': {
-            const [name, w, h] = args;
-            if (!need(name)) return false;
-            sprites[name].w = w; sprites[name].h = h;
-            return true;
-        }
-        case 'move': {
-            const [name, dx, dy] = args;
-            if (!need(name)) return false;
-            sprites[name].x += dx; sprites[name].y += dy;
-            return true;
-        }
-        default:
-            log(`line ${n}: unknown command "${cmd}"`, 'err');
-            return false;
-    }
+    return palette[typeName] || '#cba6f7';
 }
 
 function renderGame() {
@@ -1135,19 +1118,194 @@ function renderGame() {
         }
     }
 
-    Object.entries(sprites).forEach(([name, s]) => {
+    // draw background sprites first, then foreground
+    const bgTypes = ['road'];
+    const sorted = Object.entries(sprites).sort(([,a],[,b]) =>
+        (bgTypes.includes(a.typeName)?0:1) - (bgTypes.includes(b.typeName)?0:1));
+
+    sorted.forEach(([name, s]) => {
         if (!s.visible) return;
         ctx.save();
-        ctx.shadowColor = s.color;
-        ctx.shadowBlur = 14;
-        ctx.fillStyle = s.color;
-        ctx.fillRect(s.x, s.y, s.w, s.h);
+        drawSprite(ctx, canvas, name, s);
         ctx.restore();
-
-        ctx.fillStyle = 'rgba(255,255,255,0.45)';
-        ctx.font = '10px Courier New';
-        ctx.fillText(name, s.x, s.y - 5);
     });
+}
+
+function drawSprite(ctx, canvas, name, s) {
+    const cx = s.x + s.w / 2, cy = s.y + s.h / 2;
+
+    switch (s.typeName) {
+        case 'road': {
+            // full-canvas road
+            ctx.fillStyle = '#2a2a2e';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // shoulders
+            ctx.fillStyle = '#1e3a10';
+            ctx.fillRect(0, 0, canvas.width * 0.12, canvas.height);
+            ctx.fillRect(canvas.width * 0.88, 0, canvas.width * 0.12, canvas.height);
+            // edge lines
+            ctx.strokeStyle = '#e8d44d';
+            ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(canvas.width*0.12,0); ctx.lineTo(canvas.width*0.12,canvas.height); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(canvas.width*0.88,0); ctx.lineTo(canvas.width*0.88,canvas.height); ctx.stroke();
+            // center dashes
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2.5;
+            ctx.setLineDash([28, 20]);
+            ctx.beginPath(); ctx.moveTo(canvas.width/2,0); ctx.lineTo(canvas.width/2,canvas.height); ctx.stroke();
+            ctx.setLineDash([]);
+            // lane dashes
+            ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([20, 24]);
+            [0.36, 0.64].forEach(f => {
+                ctx.beginPath(); ctx.moveTo(canvas.width*f,0); ctx.lineTo(canvas.width*f,canvas.height); ctx.stroke();
+            });
+            ctx.setLineDash([]);
+            break;
+        }
+        case 'car': {
+            const w = s.w, h = s.h;
+            ctx.translate(cx, cy);
+            // shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.beginPath(); ctx.ellipse(2, 4, w*0.42, h*0.22, 0, 0, Math.PI*2); ctx.fill();
+            // body
+            ctx.fillStyle = s.color || '#e84040';
+            roundRect(ctx, -w/2, -h/2, w, h, 6); ctx.fill();
+            // windshield
+            ctx.fillStyle = 'rgba(160,220,255,0.7)';
+            roundRect(ctx, -w*0.32, -h*0.42, w*0.64, h*0.28, 3); ctx.fill();
+            // rear window
+            ctx.fillStyle = 'rgba(160,220,255,0.5)';
+            roundRect(ctx, -w*0.28, h*0.16, w*0.56, h*0.2, 3); ctx.fill();
+            // wheels
+            ctx.fillStyle = '#111';
+            [[-w*0.44,-h*0.34],[w*0.44,-h*0.34],[-w*0.44,h*0.3],[w*0.44,h*0.3]].forEach(([wx,wy]) => {
+                roundRect(ctx, wx-5, wy-7, 10, 14, 3); ctx.fill();
+            });
+            // headlights
+            ctx.fillStyle = '#fffde7';
+            ctx.shadowColor = '#fffde7'; ctx.shadowBlur = 8;
+            [[-w*0.22,-h*0.47],[w*0.22,-h*0.47]].forEach(([lx,ly]) => {
+                roundRect(ctx, lx-6, ly, 12, 5, 2); ctx.fill();
+            });
+            ctx.shadowBlur = 0;
+            break;
+        }
+        case 'player': {
+            ctx.translate(cx, cy);
+            const pw = s.w, ph = s.h;
+            // shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.25)';
+            ctx.beginPath(); ctx.ellipse(1, ph*0.48, pw*0.28, 5, 0, 0, Math.PI*2); ctx.fill();
+            // body
+            ctx.fillStyle = '#4a90d9';
+            roundRect(ctx, -pw*0.28, -ph*0.1, pw*0.56, ph*0.45, 4); ctx.fill();
+            // legs
+            ctx.fillStyle = '#2a5080';
+            roundRect(ctx, -pw*0.26, ph*0.3, pw*0.22, ph*0.22, 3); ctx.fill();
+            roundRect(ctx, pw*0.04, ph*0.3, pw*0.22, ph*0.22, 3); ctx.fill();
+            // arms
+            ctx.fillStyle = '#4a90d9';
+            roundRect(ctx, -pw*0.48, -ph*0.08, pw*0.22, ph*0.32, 3); ctx.fill();
+            roundRect(ctx, pw*0.26, -ph*0.08, pw*0.22, ph*0.32, 3); ctx.fill();
+            // head
+            ctx.fillStyle = '#f5c5a0';
+            ctx.beginPath(); ctx.arc(0, -ph*0.28, pw*0.26, 0, Math.PI*2); ctx.fill();
+            // eyes
+            ctx.fillStyle = '#222';
+            ctx.beginPath(); ctx.arc(-pw*0.09, -ph*0.3, 2.5, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(pw*0.09, -ph*0.3, 2.5, 0, Math.PI*2); ctx.fill();
+            break;
+        }
+        case 'enemy': {
+            ctx.translate(cx, cy);
+            const ew = s.w, eh = s.h;
+            // glow
+            ctx.shadowColor = '#ff2040'; ctx.shadowBlur = 16;
+            // body
+            ctx.fillStyle = '#c0102a';
+            roundRect(ctx, -ew*0.38, -eh*0.38, ew*0.76, eh*0.76, 5); ctx.fill();
+            ctx.shadowBlur = 0;
+            // horns
+            ctx.fillStyle = '#880020';
+            [[-ew*0.2,-eh*0.38],[ew*0.2,-eh*0.38]].forEach(([hx,hy]) => {
+                ctx.beginPath(); ctx.moveTo(hx-6,hy); ctx.lineTo(hx,hy-14); ctx.lineTo(hx+6,hy); ctx.closePath(); ctx.fill();
+            });
+            // eyes
+            ctx.fillStyle = '#ff4060';
+            ctx.shadowColor = '#ff4060'; ctx.shadowBlur = 6;
+            ctx.beginPath(); ctx.arc(-ew*0.13,-eh*0.06,4,0,Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(ew*0.13,-eh*0.06,4,0,Math.PI*2); ctx.fill();
+            ctx.shadowBlur = 0;
+            // mouth
+            ctx.strokeStyle = '#ff2040'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(0, eh*0.1, ew*0.16, 0.2, Math.PI-0.2); ctx.stroke();
+            break;
+        }
+        case 'tree': {
+            ctx.translate(cx, cy);
+            const tw = s.w, th = s.h;
+            // trunk
+            ctx.fillStyle = '#5c3d1a';
+            roundRect(ctx, -tw*0.12, th*0.1, tw*0.24, th*0.4, 2); ctx.fill();
+            // canopy layers
+            [[0,-th*0.46,tw*0.46,'#2d6e1a'],[0,-th*0.28,tw*0.4,'#3a8a22'],[0,-th*0.1,tw*0.5,'#4aa82a']].forEach(([cx2,cy2,r,col]) => {
+                ctx.fillStyle = col;
+                ctx.shadowColor = 'rgba(0,0,0,0.3)'; ctx.shadowBlur = 4;
+                ctx.beginPath(); ctx.arc(cx2, cy2, r, 0, Math.PI*2); ctx.fill();
+            });
+            ctx.shadowBlur = 0;
+            break;
+        }
+        case 'coin': {
+            ctx.translate(cx, cy);
+            const r = Math.min(s.w, s.h) / 2 - 2;
+            // glow
+            ctx.shadowColor = '#f9c820'; ctx.shadowBlur = 14;
+            // outer ring
+            ctx.fillStyle = '#c8860a';
+            ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2); ctx.fill();
+            // face
+            ctx.fillStyle = '#f9c820';
+            ctx.beginPath(); ctx.arc(0, 0, r*0.82, 0, Math.PI*2); ctx.fill();
+            ctx.shadowBlur = 0;
+            // shine
+            ctx.fillStyle = 'rgba(255,255,255,0.45)';
+            ctx.beginPath(); ctx.ellipse(-r*0.22, -r*0.3, r*0.28, r*0.16, -0.5, 0, Math.PI*2); ctx.fill();
+            break;
+        }
+        default: {
+            ctx.translate(cx, cy);
+            ctx.shadowColor = s.color; ctx.shadowBlur = 12;
+            ctx.fillStyle = s.color;
+            roundRect(ctx, -s.w/2, -s.h/2, s.w, s.h, 5); ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+    }
+
+    // name label (no transform active)
+    ctx.setTransform(1,0,0,1,0,0);
+    if (s.typeName !== 'road') {
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = '9px Courier New';
+        ctx.fillText(name, s.x, s.y - 5);
+    }
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x+r, y);
+    ctx.lineTo(x+w-r, y);
+    ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+    ctx.lineTo(x+w, y+h-r);
+    ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+    ctx.lineTo(x+r, y+h);
+    ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+    ctx.lineTo(x, y+r);
+    ctx.quadraticCurveTo(x, y, x+r, y);
+    ctx.closePath();
 }
 
 function stopGame() {
