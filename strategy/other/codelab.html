@@ -1200,6 +1200,31 @@ function hl(line) {
             + `<span style="color:#cba6f7">${escHtml(system)}</span>`;
     }
 
+    // motion key: [N: ] m.("key")=
+    const motKeyHL = line.match(/^(\s*)(?:(\d+):\s+)?m\.\("([^"]+)"\)=$/);
+    if (motKeyHL) {
+        const [, indent, num, key] = motKeyHL;
+        return escHtml(indent)
+            + (num ? `<span style="color:#fab387">${num}</span><span style="color:#6c7086">: </span>` : '')
+            + `<span style="color:#89dceb">m</span>`
+            + `<span style="color:#6c7086">.(</span>`
+            + `<span style="color:#fab387">"${escHtml(key)}"</span>`
+            + `<span style="color:#6c7086">)=</span>`;
+    }
+
+    // motion move: [N: ] m.(sprite)direction
+    const motMvHL = line.match(/^(\s*)(?:(\d+):\s+)?m\.\((\w+)\)(left|right|up|down)$/);
+    if (motMvHL) {
+        const [, indent, num, sprite, dir] = motMvHL;
+        return escHtml(indent)
+            + (num ? `<span style="color:#fab387">${num}</span><span style="color:#6c7086">: </span>` : '')
+            + `<span style="color:#89dceb">m</span>`
+            + `<span style="color:#6c7086">.(</span>`
+            + `<span style="color:#89dceb">${escHtml(sprite)}</span>`
+            + `<span style="color:#6c7086">)</span>`
+            + `<span style="color:#f9e2af">${escHtml(dir)}</span>`;
+    }
+
     // animation move: [N: ] a.dir (n)  or  animation.dir (n)
     const animMvHL = line.match(/^(\s*)(?:(\d+):\s+)?(?:a|animation)\.(down|up|left|right)\s*\((\d+)\)$/);
     if (animMvHL) {
@@ -1363,6 +1388,8 @@ function runCode() {
         animRunning: false,
         controlledMotionEnabled: false,
         controlledMotionFn: false,
+        motionBindings: [],
+        pendingMotionKey: null,
         type: null
     };
 
@@ -1469,6 +1496,18 @@ function runCode() {
             continue;
         }
 
+        // [N: ] m.("key")=  or  [N: ] m.(sprite)direction
+        {
+            const keyM2 = t.match(/^(?:\d+:\s+)?m\.\("([^"]+)"\)=$/);
+            if (keyM2) { gameState.pendingMotionKey = keyM2[1]; continue; }
+            const motM2 = t.match(/^(?:\d+:\s+)?m\.\((\w+)\)(left|right|up|down)$/);
+            if (motM2) {
+                gameState.motionBindings.push({ key: gameState.pendingMotionKey || '', sprite: motM2[1], dir: motM2[2] });
+                gameState.pendingMotionKey = null;
+                continue;
+            }
+        }
+
         // animation step (numbered or bare): [N: ] on sprite  |  [N: ] alias.dir (units)
         {
             const stripped = t.replace(/^\d+:\s+/, '');
@@ -1495,6 +1534,7 @@ function runCode() {
     if (ok) {
         renderGame();
         playAnimations();
+        setupMotionControls();
         log('Done.', 'ok');
         setRunning(true);
     } else {
@@ -1541,6 +1581,18 @@ function execActivateLine(line, n) {
         log(`positioned "${sname}" at (${xu}u, ${yu}u)`, 'info');
         return true;
     }
+    // [N: ] m.("key")= — set pending key for motion binding
+    const keyM = line.match(/^(?:\d+:\s+)?m\.\("([^"]+)"\)=$/);
+    if (keyM) { gameState.pendingMotionKey = keyM[1]; return true; }
+
+    // [N: ] m.(sprite)direction — complete motion binding
+    const motM = line.match(/^(?:\d+:\s+)?m\.\((\w+)\)(left|right|up|down)$/);
+    if (motM) {
+        gameState.motionBindings.push({ key: gameState.pendingMotionKey || '', sprite: motM[1], dir: motM[2] });
+        gameState.pendingMotionKey = null;
+        return true;
+    }
+
     // numbered or bare animation step: [N: ] on sprite  |  [N: ] alias.dir (units)
     const stripped = line.replace(/^\d+:\s+/, '');
     let resolved = stripped;
@@ -2903,8 +2955,36 @@ function playAnimations() {
     setTimeout(doNext, 400);
 }
 
+function setupMotionControls() {
+    if (!gameState.motionBindings || !gameState.motionBindings.length) return;
+    const step = getUnitPx();
+    const keyMap = {
+        'leftarrow': 'ArrowLeft', 'rightarrow': 'ArrowRight',
+        'uparrow': 'ArrowUp', 'downarrow': 'ArrowDown'
+    };
+    gameState._motionHandler = (e) => {
+        for (const b of gameState.motionBindings) {
+            const expected = keyMap[b.key.toLowerCase()] || b.key;
+            if (e.key !== expected) continue;
+            const sp = gameState.sprites[b.sprite];
+            if (!sp) continue;
+            if (b.dir === 'left')  sp.x -= step;
+            if (b.dir === 'right') sp.x += step;
+            if (b.dir === 'up')    sp.y -= step;
+            if (b.dir === 'down')  sp.y += step;
+            e.preventDefault();
+            renderGame();
+        }
+    };
+    document.addEventListener('keydown', gameState._motionHandler);
+}
+
 function stopGame() {
     gameState.animRunning = false;
+    if (gameState._motionHandler) {
+        document.removeEventListener('keydown', gameState._motionHandler);
+        gameState._motionHandler = null;
+    }
     setRunning(false);
     const c = document.getElementById('game-canvas');
     c.getContext('2d').clearRect(0, 0, c.width, c.height);
