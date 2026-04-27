@@ -1040,6 +1040,7 @@ const GHOST_PATTERNS = [
     'start <dev>:',
     'set.create (newdev/unit), (name)',
     'devunit: name; name(..)',
+    '(sprite) xy (0, 0), (0, 0)',
 ];
 
 function updateGhost() {
@@ -1160,6 +1161,28 @@ function hl(line) {
             + `<span style="color:#89dceb">${escHtml(uname)}</span>`
             + `<span style="color:#cba6f7">(</span>`
             + `<span style="color:#fab387">${escHtml(dots)}</span>`
+            + `<span style="color:#cba6f7">)</span>`;
+    }
+
+    // (sprite) xy (base, xUnits), (base, yUnits)
+    const xyM = line.match(/^(\s*)\((\w+)\)\s+xy\s+\((\d+)\s*,\s*(\d+)\)\s*,\s*\((\d+)\s*,\s*(\d+)\)$/);
+    if (xyM) {
+        const [, indent, sname, bx, xu, by, yu] = xyM;
+        return escHtml(indent)
+            + `<span style="color:#cba6f7">(</span>`
+            + `<span style="color:#89dceb">${escHtml(sname)}</span>`
+            + `<span style="color:#cba6f7">)</span>`
+            + ` <span style="color:#f9e2af;font-weight:bold">xy</span>`
+            + ` <span style="color:#cba6f7">(</span>`
+            + `<span style="color:#a6e3a1">${bx}</span>`
+            + `<span style="color:#6c7086">, </span>`
+            + `<span style="color:#a6e3a1">${xu}</span>`
+            + `<span style="color:#cba6f7">)</span>`
+            + `<span style="color:#6c7086">, </span>`
+            + `<span style="color:#cba6f7">(</span>`
+            + `<span style="color:#a6e3a1">${by}</span>`
+            + `<span style="color:#6c7086">, </span>`
+            + `<span style="color:#a6e3a1">${yu}</span>`
             + `<span style="color:#cba6f7">)</span>`;
     }
 
@@ -1358,6 +1381,21 @@ function execActivateLine(line, n) {
             visible: true
         };
         log(`spawned "${spriteName}"`, 'info');
+        return true;
+    }
+    // (sprite) xy (base, xUnits), (base, yUnits)
+    const xyM = line.match(/^\((\w+)\)\s+xy\s+\((\d+)\s*,\s*(\d+)\)\s*,\s*\((\d+)\s*,\s*(\d+)\)$/);
+    if (xyM) {
+        const [, sname, , xu, , yu] = xyM;
+        if (!gameState.sprites[sname]) {
+            log(`line ${n}: sprite "${sname}" not spawned yet`, 'err');
+            return false;
+        }
+        const units = Object.values(gameState.devUnits);
+        const unitPx = units.length ? units[0].size * 10 : 10;
+        gameState.sprites[sname].x = parseInt(xu) * unitPx;
+        gameState.sprites[sname].y = parseInt(yu) * unitPx;
+        log(`positioned "${sname}" at (${xu}u, ${yu}u)`, 'info');
         return true;
     }
     log(`line ${n}: unrecognized — "${line}"`, 'err');
