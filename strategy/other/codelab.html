@@ -1172,29 +1172,28 @@ function hl(line) {
             + `<span style="color:#cba6f7">animation</span>`;
     }
 
-    // numbered step: N: on sprite  OR  N: alias.dir (units)
-    const animStepM = line.match(/^(\s*)(\d+):\s+(.+)$/);
+    // numbered or bare animation step
+    const animStepM = line.match(/^(\s*)(?:(\d+):\s+)?(.+)$/);
     if (animStepM) {
         const [, indent, num, body] = animStepM;
         const onM = body.match(/^on\s+(\w+)$/);
         const mvM = body.match(/^(\w+)\.(down|up|left|right)\s*\((\d+)\)$/);
-        let bodyHtml;
-        if (onM) {
-            bodyHtml = `<span style="color:#a6e3a1;font-weight:bold">on</span> <span style="color:#89dceb">${escHtml(onM[1])}</span>`;
-        } else if (mvM) {
-            bodyHtml = `<span style="color:#89dceb">${escHtml(mvM[1])}</span>`
-                + `<span style="color:#6c7086">.</span>`
-                + `<span style="color:#f9e2af">${escHtml(mvM[2])}</span>`
-                + `<span style="color:#cba6f7"> (</span>`
-                + `<span style="color:#a6e3a1">${escHtml(mvM[3])}</span>`
-                + `<span style="color:#cba6f7">)</span>`;
-        } else {
-            bodyHtml = escHtml(body);
+        if (onM || mvM) {
+            let bodyHtml;
+            if (onM) {
+                bodyHtml = `<span style="color:#a6e3a1;font-weight:bold">on</span> <span style="color:#89dceb">${escHtml(onM[1])}</span>`;
+            } else {
+                bodyHtml = `<span style="color:#89dceb">${escHtml(mvM[1])}</span>`
+                    + `<span style="color:#6c7086">.</span>`
+                    + `<span style="color:#f9e2af">${escHtml(mvM[2])}</span>`
+                    + `<span style="color:#cba6f7"> (</span>`
+                    + `<span style="color:#a6e3a1">${escHtml(mvM[3])}</span>`
+                    + `<span style="color:#cba6f7">)</span>`;
+            }
+            return escHtml(indent)
+                + (num ? `<span style="color:#fab387">${escHtml(num)}</span><span style="color:#6c7086">: </span>` : '')
+                + bodyHtml;
         }
-        return escHtml(indent)
-            + `<span style="color:#fab387">${escHtml(num)}</span>`
-            + `<span style="color:#6c7086">: </span>`
-            + bodyHtml;
     }
 
     // start <dev>:
@@ -1414,7 +1413,7 @@ function runCode() {
                 const bt = braw.trim();
                 if (!bt || bt.startsWith('//')) { i++; continue; }
                 // stop at next top-level statement
-                if (bt.match(/^set\.create\s+newvariable/) || bt.match(/^on\s+\w+$/) || bt === 'activate:' || bt.match(/^import\./) || bt.match(/^start\s+<dev>:$/) || bt.match(/^<dev>:import\./) || bt.match(/^\w+=animation\./) || bt.match(/^\d+:\s/)) break;
+                if (bt.match(/^set\.create\s+newvariable/) || bt.match(/^on\s+\w+$/) || bt === 'activate:' || bt.match(/^import\./) || bt.match(/^start\s+<dev>:$/) || bt.match(/^<dev>:import\./) || bt.match(/^\w+=animation\./)) break;
                 i++;
                 if (!execActivateLine(bt, i)) { ok = false; break; }
             }
@@ -1503,6 +1502,22 @@ function execActivateLine(line, n) {
         gameState.sprites[sname].x = parseInt(xu) * unitPx;
         gameState.sprites[sname].y = parseInt(yu) * unitPx;
         log(`positioned "${sname}" at (${xu}u, ${yu}u)`, 'info');
+        return true;
+    }
+    // numbered or bare animation step: [N: ] on sprite  |  [N: ] alias.dir (units)
+    const stripped = line.replace(/^\d+:\s+/, '');
+    let resolved = stripped;
+    for (const [alias] of Object.entries(gameState.aliases || {})) {
+        resolved = resolved.replace(new RegExp(`^${alias}\\.`), 'animation.');
+    }
+    const animOnM = resolved.match(/^on\s+(\w+)$/);
+    if (animOnM) {
+        gameState.animSteps.push({ step: gameState.animSteps.length, type: 'target', sprite: animOnM[1] });
+        return true;
+    }
+    const animMvM = resolved.match(/^animation\.(down|up|left|right)\s*\((\d+)\)$/);
+    if (animMvM) {
+        gameState.animSteps.push({ step: gameState.animSteps.length, type: 'move', dir: animMvM[1], units: parseInt(animMvM[2]) });
         return true;
     }
     log(`line ${n}: unrecognized — "${line}"`, 'err');
