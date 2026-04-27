@@ -1407,8 +1407,16 @@ function runCode() {
 
         if (!t || t.startsWith('//')) continue;
 
-        // skip on start / on <event> headers
-        if (t.match(/^on\s+\w+$/)) continue;
+        // skip only "on start" (other "on X" lines are animation targets)
+        if (t === 'on start') continue;
+
+        // direct animation move: a.dir (n)  /  animation.dir (n)
+        const _mvM = t.replace(/^\d+:\s+/,'').match(/^(?:a|animation)\.(down|up|left|right)\s*\((\d+)\)$/);
+        if (_mvM) { gameState.animSteps.push({ step: gameState.animSteps.length, type: 'move', dir: _mvM[1], units: parseInt(_mvM[2]) }); continue; }
+
+        // direct animation target: on spriteName  (numbered or bare)
+        const _onM = t.replace(/^\d+:\s+/,'').match(/^on\s+(\w+)$/);
+        if (_onM) { gameState.animSteps.push({ step: gameState.animSteps.length, type: 'target', sprite: _onM[1] }); continue; }
 
         // start <dev>: positioning/setup block
         if (t.match(/^start\s+<dev>:$/)) {
