@@ -1063,6 +1063,9 @@ const GHOST_PATTERNS = [
     '(sprite) xy (0, 0), (0, 0)',
     '<dev>:import. animation',
     'a=animation.a.animation',
+    '<dev>: import. controlled_motion. motion()',
+    'set.create newfunction (controlled_motion())',
+    'm=controlled_motion.m.controlled_motion',
     '1: on sprite',
     '2: a.down (1)',
 ];
@@ -1158,18 +1161,43 @@ function hl(line) {
             + `<span style="color:#cba6f7;font-weight:bold">animation</span>`;
     }
 
-    // alias: x=animation.x.animation
-    const animAliasM = line.match(/^(\s*)(\w+)=animation\.\2\.animation$/);
+    // <dev>: import. controlled_motion. motion()
+    if (line.trim().match(/^<dev>:\s*import\.\s*controlled_motion\.\s*motion\(\)$/)) {
+        return escHtml(line.match(/^(\s*)/)[1])
+            + `<span style="color:#6c7086">&lt;</span>`
+            + `<span style="color:#f9e2af">dev</span>`
+            + `<span style="color:#6c7086">&gt;: import. </span>`
+            + `<span style="color:#cba6f7;font-weight:bold">controlled_motion</span>`
+            + `<span style="color:#6c7086">. </span>`
+            + `<span style="color:#f9e2af">motion</span>`
+            + `<span style="color:#cba6f7">()</span>`;
+    }
+
+    // set.create newfunction (controlled_motion())
+    if (line.trim().match(/^set\.create\s+newfunction\s*\(\s*controlled_motion\(\)\s*\)$/)) {
+        return escHtml(line.match(/^(\s*)/)[1])
+            + `<span style="color:#89b4fa">set</span>`
+            + `<span style="color:#6c7086">.</span>`
+            + `<span style="color:#f9e2af">create</span>`
+            + ` <span style="color:#cba6f7">newfunction</span>`
+            + ` <span style="color:#cba6f7">(</span>`
+            + `<span style="color:#89dceb">controlled_motion</span>`
+            + `<span style="color:#cba6f7">()</span>`
+            + `<span style="color:#cba6f7">)</span>`;
+    }
+
+    // alias: x=animation.x.animation  OR  x=controlled_motion.x.controlled_motion
+    const animAliasM = line.match(/^(\s*)(\w+)=(animation|controlled_motion)\.\2\.\3$/);
     if (animAliasM) {
-        const [, indent, alias] = animAliasM;
+        const [, indent, alias,, system] = animAliasM;
         return escHtml(indent)
             + `<span style="color:#89dceb">${escHtml(alias)}</span>`
             + `<span style="color:#6c7086">=</span>`
-            + `<span style="color:#cba6f7">animation</span>`
+            + `<span style="color:#cba6f7">${escHtml(system)}</span>`
             + `<span style="color:#6c7086">.</span>`
             + `<span style="color:#89dceb">${escHtml(alias)}</span>`
             + `<span style="color:#6c7086">.</span>`
-            + `<span style="color:#cba6f7">animation</span>`;
+            + `<span style="color:#cba6f7">${escHtml(system)}</span>`;
     }
 
     // animation move: [N: ] a.dir (n)  or  animation.dir (n)
@@ -1333,6 +1361,8 @@ function runCode() {
         aliases: {},
         animEnabled: false,
         animRunning: false,
+        controlledMotionEnabled: false,
+        controlledMotionFn: false,
         type: null
     };
 
@@ -1403,7 +1433,7 @@ function runCode() {
                 const bt = braw.trim();
                 if (!bt || bt.startsWith('//')) { i++; continue; }
                 // stop at next top-level statement
-                if (bt.match(/^set\.create\s+newvariable/) || bt.match(/^on\s+\w+$/) || bt === 'activate:' || bt.match(/^import\./) || bt.match(/^start\s+<dev>:$/) || bt.match(/^<dev>:import\./) || bt.match(/^\w+=animation\./)) break;
+                if (bt.match(/^set\.create\s+newvariable/) || bt.match(/^on\s+\w+$/) || bt === 'activate:' || bt.match(/^import\./) || bt.match(/^start\s+<dev>:$/) || bt.match(/^<dev>:/) || bt.match(/^\w+=(?:animation|controlled_motion)\./) || bt.match(/^set\.create\s+newfunction/)) break;
                 i++;
                 if (!execActivateLine(bt, i)) { ok = false; break; }
             }
@@ -1417,11 +1447,25 @@ function runCode() {
             continue;
         }
 
-        // alias: x=animation.x.animation
-        const aliasM = t.match(/^(\w+)=animation\.\1\.animation$/);
+        // <dev>: import. controlled_motion. motion()
+        if (t.match(/^<dev>:\s*import\.\s*controlled_motion\.\s*motion\(\)$/)) {
+            gameState.controlledMotionEnabled = true;
+            log('controlled motion imported', 'info');
+            continue;
+        }
+
+        // set.create newfunction (controlled_motion())
+        if (t.match(/^set\.create\s+newfunction\s*\(\s*controlled_motion\(\)\s*\)$/)) {
+            gameState.controlledMotionFn = true;
+            log('controlled_motion() declared', 'info');
+            continue;
+        }
+
+        // alias: x=animation.x.animation  OR  x=controlled_motion.x.controlled_motion
+        const aliasM = t.match(/^(\w+)=(animation|controlled_motion)\.\1\.\2$/);
         if (aliasM) {
-            gameState.aliases[aliasM[1]] = 'animation';
-            log(`alias "${aliasM[1]}" → animation`, 'info');
+            gameState.aliases[aliasM[1]] = aliasM[2];
+            log(`alias "${aliasM[1]}" → ${aliasM[2]}`, 'info');
             continue;
         }
 
