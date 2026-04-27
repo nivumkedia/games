@@ -1410,11 +1410,15 @@ function runCode() {
         // skip only "on start" (other "on X" lines are animation targets)
         if (t === 'on start') continue;
 
-        // direct animation move: a.dir (n)  /  animation.dir (n)
-        const _mvM = t.replace(/^\d+:\s+/,'').match(/^(?:a|animation)\.(down|up|left|right)\s*\((\d+)\)$/);
-        if (_mvM) { gameState.animSteps.push({ step: gameState.animSteps.length, type: 'move', dir: _mvM[1], units: parseInt(_mvM[2]) }); continue; }
+        // animation move: anything containing a.dir(n) or animation.dir(n)
+        if (/(?:^|\s)(?:a|animation)\.(down|up|left|right)/.test(t)) {
+            const _dir = t.match(/(down|up|left|right)/)[1];
+            const _num = t.match(/\((\d+)\)/);
+            gameState.animSteps.push({ step: gameState.animSteps.length, type: 'move', dir: _dir, units: _num ? parseInt(_num[1]) : 1 });
+            continue;
+        }
 
-        // direct animation target: on spriteName  (numbered or bare)
+        // animation target: on spriteName (numbered or bare, not "on start")
         const _onM = t.replace(/^\d+:\s+/,'').match(/^on\s+(\w+)$/);
         if (_onM) { gameState.animSteps.push({ step: gameState.animSteps.length, type: 'target', sprite: _onM[1] }); continue; }
 
