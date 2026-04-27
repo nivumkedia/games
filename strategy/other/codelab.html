@@ -1037,6 +1037,9 @@ const GHOST_PATTERNS = [
     'activate:',
     'import.spawnsprite. spawnsprite() activate:',
     'spawnsprite (name), name()',
+    'start <dev>:',
+    'set.create (newdev/unit), (name)',
+    'devunit: name; name(..)',
 ];
 
 function updateGhost() {
@@ -1121,6 +1124,45 @@ function hl(line) {
             + `<span style="color:#cba6f7">()</span>`;
     }
 
+    // start <dev>:
+    if (line.trim() === 'start <dev>:') {
+        return escHtml(line.match(/^(\s*)/)[1])
+            + `<span style="color:#cba6f7;font-weight:bold">start</span>`
+            + ` <span style="color:#6c7086">&lt;</span>`
+            + `<span style="color:#f9e2af">dev</span>`
+            + `<span style="color:#6c7086">&gt;:</span>`;
+    }
+
+    // set.create (newdev/unit), (name)
+    const devCreateM = line.match(/^(\s*)set\.create\s*\(newdev\/unit\)\s*,\s*\(([^)]+)\)$/);
+    if (devCreateM) {
+        const [, indent, uname] = devCreateM;
+        return escHtml(indent)
+            + `<span style="color:#89b4fa">set</span>`
+            + `<span style="color:#6c7086">.</span>`
+            + `<span style="color:#f9e2af">create</span>`
+            + ` <span style="color:#cba6f7">(newdev/unit)</span>`
+            + `<span style="color:#6c7086">, </span>`
+            + `<span style="color:#cba6f7">(</span>`
+            + `<span style="color:#89dceb">${escHtml(uname)}</span>`
+            + `<span style="color:#cba6f7">)</span>`;
+    }
+
+    // devunit: name; name(periods)
+    const devUnitM = line.match(/^(\s*)devunit:\s*(\w+)\s*;\s*(\w+)\s*\(([^)]*)\)$/);
+    if (devUnitM) {
+        const [, indent, uref, uname, dots] = devUnitM;
+        return escHtml(indent)
+            + `<span style="color:#a6e3a1;font-weight:bold">devunit</span>`
+            + `<span style="color:#6c7086">: </span>`
+            + `<span style="color:#89dceb">${escHtml(uref)}</span>`
+            + `<span style="color:#6c7086">; </span>`
+            + `<span style="color:#89dceb">${escHtml(uname)}</span>`
+            + `<span style="color:#cba6f7">(</span>`
+            + `<span style="color:#fab387">${escHtml(dots)}</span>`
+            + `<span style="color:#cba6f7">)</span>`;
+    }
+
     // on <event> block header
     const onM = line.match(/^(\s*)(on)\s+(\w+)\s*$/);
     if (onM) {
@@ -1202,6 +1244,7 @@ function runCode() {
         canvas, ctx,
         sprites: {},
         variables: {},
+        devUnits: {},
         type: null
     };
 
@@ -1219,8 +1262,43 @@ function runCode() {
 
         if (!t || t.startsWith('//')) continue;
 
-        // skip on start / on <event> headers (not used in new system)
+        // skip on start / on <event> headers
         if (t.match(/^on\s+\w+$/)) continue;
+
+        // start <dev>: positioning/setup block
+        if (t === 'start <dev>:') {
+            while (i < rawLines.length) {
+                const braw = rawLines[i];
+                const bt = braw.trim();
+                if (!bt || bt.startsWith('//')) { i++; continue; }
+                if (bt === 'start <dev>:' || bt.match(/^set\./) || bt.match(/^on\s+\w+$/) || bt === 'activate:' || bt.match(/^import\./)) break;
+                i++;
+                // set.create (newdev/unit), (name)
+                const dcM = bt.match(/^set\.create\s*\(newdev\/unit\)\s*,\s*\(([^)]+)\)$/);
+                if (dcM) {
+                    gameState.devUnits[dcM[1]] = { size: null };
+                    log(`unit "${dcM[1]}" declared`, 'info');
+                    continue;
+                }
+                // devunit: name; name(periods)
+                const duM = bt.match(/^devunit:\s*(\w+)\s*;\s*\w+\s*\(([^)]*)\)$/);
+                if (duM) {
+                    const uname = duM[1];
+                    const size = duM[2].length;
+                    if (gameState.devUnits[uname] !== undefined) {
+                        gameState.devUnits[uname].size = size;
+                        log(`unit "${uname}" = ${size} period${size!==1?'s':''}`, 'info');
+                    } else {
+                        log(`line ${i}: unit "${uname}" not declared`, 'err');
+                        ok = false; break;
+                    }
+                    continue;
+                }
+                log(`line ${i}: unknown dev line — "${bt}"`, 'err');
+                ok = false; break;
+            }
+            continue;
+        }
 
         // set.create newvariable ("name") or set.create newvariable (name)
         const createM = t.match(/^set\.create\s+newvariable\s*\(\s*"?([^")\s]+)"?\s*\)$/);
