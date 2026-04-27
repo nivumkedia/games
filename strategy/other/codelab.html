@@ -1172,28 +1172,18 @@ function hl(line) {
             + `<span style="color:#cba6f7">animation</span>`;
     }
 
-    // numbered or bare animation step
-    const animStepM = line.match(/^(\s*)(?:(\d+):\s+)?(.+)$/);
-    if (animStepM) {
-        const [, indent, num, body] = animStepM;
-        const onM = body.match(/^on\s+(\w+)$/);
-        const mvM = body.match(/^(\w+)\.(down|up|left|right)\s*\((\d+)\)$/);
-        if (onM || mvM) {
-            let bodyHtml;
-            if (onM) {
-                bodyHtml = `<span style="color:#a6e3a1;font-weight:bold">on</span> <span style="color:#89dceb">${escHtml(onM[1])}</span>`;
-            } else {
-                bodyHtml = `<span style="color:#89dceb">${escHtml(mvM[1])}</span>`
-                    + `<span style="color:#6c7086">.</span>`
-                    + `<span style="color:#f9e2af">${escHtml(mvM[2])}</span>`
-                    + `<span style="color:#cba6f7"> (</span>`
-                    + `<span style="color:#a6e3a1">${escHtml(mvM[3])}</span>`
-                    + `<span style="color:#cba6f7">)</span>`;
-            }
-            return escHtml(indent)
-                + (num ? `<span style="color:#fab387">${escHtml(num)}</span><span style="color:#6c7086">: </span>` : '')
-                + bodyHtml;
-        }
+    // animation move: [N: ] a.dir (n)  or  animation.dir (n)
+    const animMvHL = line.match(/^(\s*)(?:(\d+):\s+)?(?:a|animation)\.(down|up|left|right)\s*\((\d+)\)$/);
+    if (animMvHL) {
+        const [, indent, num,, dir, units] = animMvHL;
+        return escHtml(indent)
+            + (num ? `<span style="color:#fab387">${num}</span><span style="color:#6c7086">: </span>` : '')
+            + `<span style="color:#89dceb">a</span>`
+            + `<span style="color:#6c7086">.</span>`
+            + `<span style="color:#f9e2af">${escHtml(dir)}</span>`
+            + `<span style="color:#cba6f7"> (</span>`
+            + `<span style="color:#a6e3a1">${escHtml(units)}</span>`
+            + `<span style="color:#cba6f7">)</span>`;
     }
 
     // start <dev>:
@@ -1435,20 +1425,23 @@ function runCode() {
             continue;
         }
 
-        // numbered animation step: N: on sprite  OR  N: a.dir (units)
-        const stepM = t.match(/^(\d+):\s+(.+)$/);
-        if (stepM) {
-            const sn = parseInt(stepM[1]);
-            let body = stepM[2];
+        // animation step (numbered or bare): [N: ] on sprite  |  [N: ] alias.dir (units)
+        {
+            const stripped = t.replace(/^\d+:\s+/, '');
+            let resolved = stripped;
             for (const [alias] of Object.entries(gameState.aliases)) {
-                body = body.replace(new RegExp(`^${alias}\\.`), 'animation.');
+                resolved = resolved.replace(new RegExp(`^${alias}\\.`), 'animation.');
             }
-            const onM = body.match(/^on\s+(\w+)$/);
-            if (onM) { gameState.animSteps.push({ step: sn, type: 'target', sprite: onM[1] }); continue; }
-            const mvM = body.match(/^animation\.(down|up|left|right)\s*\((\d+)\)$/);
-            if (mvM) { gameState.animSteps.push({ step: sn, type: 'move', dir: mvM[1], units: parseInt(mvM[2]) }); continue; }
-            log(`line ${n}: unknown animation step — "${stepM[2]}"`, 'err');
-            ok = false; continue;
+            const animOnM = resolved.match(/^on\s+(\w+)$/);
+            if (animOnM) {
+                gameState.animSteps.push({ step: gameState.animSteps.length, type: 'target', sprite: animOnM[1] });
+                continue;
+            }
+            const animMvM = resolved.match(/^(?:animation|a)\.(down|up|left|right)\s*\((\d+)\)$/);
+            if (animMvM) {
+                gameState.animSteps.push({ step: gameState.animSteps.length, type: 'move', dir: animMvM[1], units: parseInt(animMvM[2]) });
+                continue;
+            }
         }
 
         log(`line ${n}: unexpected — "${t}"`, 'err');
@@ -1515,7 +1508,7 @@ function execActivateLine(line, n) {
         gameState.animSteps.push({ step: gameState.animSteps.length, type: 'target', sprite: animOnM[1] });
         return true;
     }
-    const animMvM = resolved.match(/^animation\.(down|up|left|right)\s*\((\d+)\)$/);
+    const animMvM = resolved.match(/^(?:animation|a)\.(down|up|left|right)\s*\((\d+)\)$/);
     if (animMvM) {
         gameState.animSteps.push({ step: gameState.animSteps.length, type: 'move', dir: animMvM[1], units: parseInt(animMvM[2]) });
         return true;
