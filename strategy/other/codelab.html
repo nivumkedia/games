@@ -111,6 +111,9 @@ body {
 .file-icon { color: var(--purple); font-size: 11px; }
 .file-name { color: var(--cyan); font-size: 14px; flex: 1; }
 .file-meta { color: var(--dim); font-size: 11px; }
+.file-delete { color: var(--dim); font-size: 12px; opacity: 0; cursor: pointer; padding: 0 4px; transition: opacity 0.15s, color 0.15s; }
+.file-entry:hover .file-delete { opacity: 1; }
+.file-delete:hover { color: #f38ba8; }
 
 .no-files { color: var(--dim); font-size: 13px; padding: 6px 0 16px; }
 
@@ -853,14 +856,31 @@ function renderList() {
         el.innerHTML = '<div class="no-files">no projects yet — type a name to start</div>';
         return;
     }
-    el.innerHTML = names.map(n => {
+    el.innerHTML = '';
+    names.forEach(n => {
         const lines = (files[n].code || '').split('\n').length;
-        return `<div class="file-entry" onclick="openEditor('${n}')">
-            <span class="file-icon">◈</span>
-            <span class="file-name">${n}.cl</span>
-            <span class="file-meta">${lines} line${lines !== 1 ? 's' : ''}</span>
-        </div>`;
-    }).join('');
+        const row = document.createElement('div');
+        row.className = 'file-entry';
+        row.innerHTML = `<span class="file-icon">◈</span>`
+            + `<span class="file-name">${n}.cl</span>`
+            + `<span class="file-meta">${lines} line${lines !== 1 ? 's' : ''}</span>`
+            + `<span class="file-delete" title="delete">✕</span>`;
+        row.querySelector('.file-name').addEventListener('click', () => openEditor(n));
+        row.querySelector('.file-icon').addEventListener('click', () => openEditor(n));
+        row.querySelector('.file-meta').addEventListener('click', () => openEditor(n));
+        row.querySelector('.file-delete').addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteProject(n);
+        });
+        el.appendChild(row);
+    });
+}
+
+function deleteProject(name) {
+    if (!confirm(`Delete "${name}.cl"?`)) return;
+    delete files[name];
+    saveFiles();
+    renderList();
 }
 
 function showTerminal() {
@@ -1041,6 +1061,10 @@ const GHOST_PATTERNS = [
     'set.create (newdev/unit), (name)',
     'devunit: name; name(..)',
     '(sprite) xy (0, 0), (0, 0)',
+    '<dev>:import. animation',
+    'a=animation.a.animation',
+    '1: on sprite',
+    '2: a.down (1)',
 ];
 
 function updateGhost() {
@@ -1123,6 +1147,54 @@ function hl(line) {
             + `<span style="color:#6c7086">, </span>`
             + `<span style="color:#89dceb">${escHtml(typeName)}</span>`
             + `<span style="color:#cba6f7">()</span>`;
+    }
+
+    // <dev>:import. animation
+    if (line.trim().match(/^<dev>:import\.\s+animation$/)) {
+        return escHtml(line.match(/^(\s*)/)[1])
+            + `<span style="color:#6c7086">&lt;</span>`
+            + `<span style="color:#f9e2af">dev</span>`
+            + `<span style="color:#6c7086">&gt;:import. </span>`
+            + `<span style="color:#cba6f7;font-weight:bold">animation</span>`;
+    }
+
+    // alias: x=animation.x.animation
+    const animAliasM = line.match(/^(\s*)(\w+)=animation\.\2\.animation$/);
+    if (animAliasM) {
+        const [, indent, alias] = animAliasM;
+        return escHtml(indent)
+            + `<span style="color:#89dceb">${escHtml(alias)}</span>`
+            + `<span style="color:#6c7086">=</span>`
+            + `<span style="color:#cba6f7">animation</span>`
+            + `<span style="color:#6c7086">.</span>`
+            + `<span style="color:#89dceb">${escHtml(alias)}</span>`
+            + `<span style="color:#6c7086">.</span>`
+            + `<span style="color:#cba6f7">animation</span>`;
+    }
+
+    // numbered step: N: on sprite  OR  N: alias.dir (units)
+    const animStepM = line.match(/^(\s*)(\d+):\s+(.+)$/);
+    if (animStepM) {
+        const [, indent, num, body] = animStepM;
+        const onM = body.match(/^on\s+(\w+)$/);
+        const mvM = body.match(/^(\w+)\.(down|up|left|right)\s*\((\d+)\)$/);
+        let bodyHtml;
+        if (onM) {
+            bodyHtml = `<span style="color:#a6e3a1;font-weight:bold">on</span> <span style="color:#89dceb">${escHtml(onM[1])}</span>`;
+        } else if (mvM) {
+            bodyHtml = `<span style="color:#89dceb">${escHtml(mvM[1])}</span>`
+                + `<span style="color:#6c7086">.</span>`
+                + `<span style="color:#f9e2af">${escHtml(mvM[2])}</span>`
+                + `<span style="color:#cba6f7"> (</span>`
+                + `<span style="color:#a6e3a1">${escHtml(mvM[3])}</span>`
+                + `<span style="color:#cba6f7">)</span>`;
+        } else {
+            bodyHtml = escHtml(body);
+        }
+        return escHtml(indent)
+            + `<span style="color:#fab387">${escHtml(num)}</span>`
+            + `<span style="color:#6c7086">: </span>`
+            + bodyHtml;
     }
 
     // start <dev>:
@@ -1268,6 +1340,10 @@ function runCode() {
         sprites: {},
         variables: {},
         devUnits: {},
+        animSteps: [],
+        aliases: {},
+        animEnabled: false,
+        animRunning: false,
         type: null
     };
 
@@ -1338,11 +1414,42 @@ function runCode() {
                 const bt = braw.trim();
                 if (!bt || bt.startsWith('//')) { i++; continue; }
                 // stop at next top-level statement
-                if (bt.match(/^set\./) || bt.match(/^on\s+\w+$/) || bt === 'activate:' || bt.match(/^import\./) || bt === 'start <dev>:') break;
+                if (bt.match(/^set\.create\s+newvariable/) || bt.match(/^on\s+\w+$/) || bt === 'activate:' || bt.match(/^import\./) || bt.match(/^start\s+<dev>:$/) || bt.match(/^<dev>:import\./) || bt.match(/^\w+=animation\./) || bt.match(/^\d+:\s/)) break;
                 i++;
                 if (!execActivateLine(bt, i)) { ok = false; break; }
             }
             continue;
+        }
+
+        // <dev>:import. animation
+        if (t.match(/^<dev>:import\.\s+animation$/)) {
+            gameState.animEnabled = true;
+            log('animation imported', 'info');
+            continue;
+        }
+
+        // alias: x=animation.x.animation
+        const aliasM = t.match(/^(\w+)=animation\.\1\.animation$/);
+        if (aliasM) {
+            gameState.aliases[aliasM[1]] = 'animation';
+            log(`alias "${aliasM[1]}" → animation`, 'info');
+            continue;
+        }
+
+        // numbered animation step: N: on sprite  OR  N: a.dir (units)
+        const stepM = t.match(/^(\d+):\s+(.+)$/);
+        if (stepM) {
+            const sn = parseInt(stepM[1]);
+            let body = stepM[2];
+            for (const [alias] of Object.entries(gameState.aliases)) {
+                body = body.replace(new RegExp(`^${alias}\\.`), 'animation.');
+            }
+            const onM = body.match(/^on\s+(\w+)$/);
+            if (onM) { gameState.animSteps.push({ step: sn, type: 'target', sprite: onM[1] }); continue; }
+            const mvM = body.match(/^animation\.(down|up|left|right)\s*\((\d+)\)$/);
+            if (mvM) { gameState.animSteps.push({ step: sn, type: 'move', dir: mvM[1], units: parseInt(mvM[2]) }); continue; }
+            log(`line ${n}: unknown animation step — "${stepM[2]}"`, 'err');
+            ok = false; continue;
         }
 
         log(`line ${n}: unexpected — "${t}"`, 'err');
@@ -1351,6 +1458,7 @@ function runCode() {
 
     if (ok) {
         renderGame();
+        playAnimations();
         log('Done.', 'ok');
         setRunning(true);
     } else {
@@ -2712,7 +2820,39 @@ function roundRect(ctx, x, y, w, h, r) {
     ctx.closePath();
 }
 
+function getUnitPx() {
+    const units = Object.values(gameState.devUnits || {});
+    return units.length && units[0].size ? units[0].size * 10 : 10;
+}
+
+function playAnimations() {
+    if (!gameState.animSteps || gameState.animSteps.length === 0) return;
+    const unitPx = getUnitPx();
+    let currentSprite = null;
+    const moves = [];
+    const sorted = [...gameState.animSteps].sort((a, b) => a.step - b.step);
+    for (const s of sorted) {
+        if (s.type === 'target') { currentSprite = s.sprite; continue; }
+        if (s.type === 'move' && currentSprite) {
+            const dx = s.dir === 'right' ? s.units * unitPx : s.dir === 'left' ? -s.units * unitPx : 0;
+            const dy = s.dir === 'down' ? s.units * unitPx : s.dir === 'up' ? -s.units * unitPx : 0;
+            moves.push({ sprite: currentSprite, dx, dy });
+        }
+    }
+    gameState.animRunning = true;
+    let idx = 0;
+    function doNext() {
+        if (!gameState.animRunning || idx >= moves.length) return;
+        const mv = moves[idx++];
+        const sp = gameState.sprites[mv.sprite];
+        if (sp) { sp.x += mv.dx; sp.y += mv.dy; renderGame(); }
+        setTimeout(doNext, 700);
+    }
+    setTimeout(doNext, 400);
+}
+
 function stopGame() {
+    gameState.animRunning = false;
     setRunning(false);
     const c = document.getElementById('game-canvas');
     c.getContext('2d').clearRect(0, 0, c.width, c.height);
