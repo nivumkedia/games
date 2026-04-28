@@ -1062,7 +1062,7 @@ const GHOST_PATTERNS = [
     'start <dev>:',
     'set.create (newdev/unit), (name)',
     'devunit: name; name(..)',
-    '(sprite) xy (0), (0)',
+    'sprite xy (0, 10), (0, 10)',
     '<dev>:import. animation',
     'a=animation.a.animation',
     '<dev>: import. controlled_motion. motion()',
@@ -1287,20 +1287,22 @@ function hl(line) {
     }
 
     // (sprite) xy (base, xUnits), (base, yUnits)
-    const xyM = line.match(/^(\s*)\((\w+)\)\s+xy\s+\((-?\d+)\)\s*,\s*\((-?\d+)\)$/);
+    const xyM = line.match(/^(\s*)(\w+)\s+xy\s+\((-?\d+)\s*,\s*(-?\d+)\)\s*,\s*\((-?\d+)\s*,\s*(-?\d+)\)$/);
     if (xyM) {
-        const [, indent, sname, xu, yu] = xyM;
+        const [, indent, sname, x1, x2, y1, y2] = xyM;
         return escHtml(indent)
-            + `<span style="color:#cba6f7">(</span>`
             + `<span style="color:#89dceb">${escHtml(sname)}</span>`
-            + `<span style="color:#cba6f7">)</span>`
             + ` <span style="color:#f9e2af;font-weight:bold">xy</span>`
             + ` <span style="color:#cba6f7">(</span>`
-            + `<span style="color:#a6e3a1">${xu}</span>`
+            + `<span style="color:#a6e3a1">${x1}</span>`
+            + `<span style="color:#6c7086">, </span>`
+            + `<span style="color:#a6e3a1">${x2}</span>`
             + `<span style="color:#cba6f7">)</span>`
             + `<span style="color:#6c7086">, </span>`
             + `<span style="color:#cba6f7">(</span>`
-            + `<span style="color:#a6e3a1">${yu}</span>`
+            + `<span style="color:#a6e3a1">${y1}</span>`
+            + `<span style="color:#6c7086">, </span>`
+            + `<span style="color:#a6e3a1">${y2}</span>`
             + `<span style="color:#cba6f7">)</span>`;
     }
 
@@ -1722,19 +1724,20 @@ function execActivateLine(line, n) {
         log(`spawned "${finalName}"`, 'info');
         return true;
     }
-    // (sprite) xy (base, xUnits), (base, yUnits)
-    const xyM = line.match(/^\((\w+)\)\s+xy\s+\((-?\d+)\)\s*,\s*\((-?\d+)\)$/);
+    // sprite xy (minX, maxX), (minY, maxY)
+    const xyM = line.match(/^(\w+)\s+xy\s+\((-?\d+)\s*,\s*(-?\d+)\)\s*,\s*\((-?\d+)\s*,\s*(-?\d+)\)$/);
     if (xyM) {
-        const [, sname, xu, yu] = xyM;
+        const [, sname, x1, x2, y1, y2] = xyM;
         if (!gameState.sprites[sname]) {
             log(`line ${n}: sprite "${sname}" not spawned yet`, 'err');
             return false;
         }
         const units = Object.values(gameState.devUnits);
         const unitPx = units.length ? units[0].size * 10 : 10;
-        gameState.sprites[sname].x = Math.random() * parseInt(xu) * unitPx;
-        gameState.sprites[sname].y = Math.random() * parseInt(yu) * unitPx;
-        log(`positioned "${sname}" in (0–${xu}u, 0–${yu}u)`, 'info');
+        const rx1 = parseInt(x1), rx2 = parseInt(x2), ry1 = parseInt(y1), ry2 = parseInt(y2);
+        gameState.sprites[sname].x = (rx1 + Math.random() * (rx2 - rx1)) * unitPx;
+        gameState.sprites[sname].y = (ry1 + Math.random() * (ry2 - ry1)) * unitPx;
+        log(`positioned "${sname}" in (${x1}–${x2}u, ${y1}–${y2}u)`, 'info');
         return true;
     }
     // [N: ] m.("key")= — set pending key for motion binding
