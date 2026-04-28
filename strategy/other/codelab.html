@@ -2964,14 +2964,30 @@ function playAnimations() {
     }
     gameState.animRunning = true;
     let idx = 0;
-    function doNext() {
+    const STEP_MS = 900;
+
+    function doNextMove() {
         if (!gameState.animRunning || idx >= moves.length) return;
         const mv = moves[idx++];
         const sp = gameState.sprites[mv.sprite];
-        if (sp) { sp.x += mv.dx; sp.y += mv.dy; renderGame(); }
-        setTimeout(doNext, 700);
+        if (!sp) { setTimeout(doNextMove, STEP_MS); return; }
+        const startX = sp.x, startY = sp.y;
+        const endX = sp.x + mv.dx, endY = sp.y + mv.dy;
+        const start = performance.now();
+
+        function frame(now) {
+            if (!gameState.animRunning) return;
+            const t = Math.min((now - start) / STEP_MS, 1);
+            const ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+            sp.x = startX + (endX - startX) * ease;
+            sp.y = startY + (endY - startY) * ease;
+            renderGame();
+            if (t < 1) { requestAnimationFrame(frame); }
+            else { sp.x = endX; sp.y = endY; setTimeout(doNextMove, 200); }
+        }
+        requestAnimationFrame(frame);
     }
-    setTimeout(doNext, 400);
+    setTimeout(doNextMove, 300);
 }
 
 function setupMotionControls() {
