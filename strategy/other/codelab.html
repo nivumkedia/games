@@ -1070,6 +1070,12 @@ const GHOST_PATTERNS = [
     'm=controlled_motion.m.controlled_motion',
     '1: on sprite',
     '2: a.down (1)',
+    '<dev>:import.("if_then")',
+    'searchdev (if_then)',
+    'set.create newfunction (if_then)',
+    '<dev> activate: if_then)/',
+    '{if',
+    '{then',
 ];
 
 function updateGhost() {
@@ -1302,6 +1308,86 @@ function hl(line) {
             + `<span style="color:#cba6f7">)</span>`;
     }
 
+    // <dev>:import.("if_then")
+    if (line.trim().match(/^<dev>:import\.\("if_then"\)$/)) {
+        return escHtml(line.match(/^(\s*)/)[1])
+            + `<span style="color:#6c7086">&lt;</span>`
+            + `<span style="color:#f9e2af">dev</span>`
+            + `<span style="color:#6c7086">&gt;:import.(</span>`
+            + `<span style="color:#fab387">"if_then"</span>`
+            + `<span style="color:#6c7086">)</span>`;
+    }
+
+    // searchdev (if_then)
+    if (line.trim().match(/^searchdev\s*\(\s*if_then\s*\)$/)) {
+        return escHtml(line.match(/^(\s*)/)[1])
+            + `<span style="color:#cba6f7">searchdev</span>`
+            + `<span style="color:#6c7086"> (</span>`
+            + `<span style="color:#89dceb">if_then</span>`
+            + `<span style="color:#6c7086">)</span>`;
+    }
+
+    // set.create newfunction (if_then)
+    if (line.trim().match(/^set\.create\s+newfunction\s*\(\s*if_then\s*\)$/)) {
+        return escHtml(line.match(/^(\s*)/)[1])
+            + `<span style="color:#89b4fa">set</span>`
+            + `<span style="color:#6c7086">.</span>`
+            + `<span style="color:#f9e2af">create</span>`
+            + ` <span style="color:#cba6f7">newfunction</span>`
+            + ` <span style="color:#cba6f7">(</span>`
+            + `<span style="color:#89dceb">if_then</span>`
+            + `<span style="color:#cba6f7">)</span>`;
+    }
+
+    // <dev> activate: if_then)/
+    if (line.trim().match(/^<dev>\s+activate:\s+if_then\)\/$/)) {
+        return escHtml(line.match(/^(\s*)/)[1])
+            + `<span style="color:#6c7086">&lt;</span>`
+            + `<span style="color:#f9e2af">dev</span>`
+            + `<span style="color:#6c7086">&gt; </span>`
+            + `<span style="color:#a6e3a1;font-weight:bold">activate</span>`
+            + `<span style="color:#6c7086">: </span>`
+            + `<span style="color:#89dceb">if_then</span>`
+            + `<span style="color:#6c7086">)/</span>`;
+    }
+
+    // {if  and  {then
+    if (line.trim() === '{if' || line.trim() === '{then') {
+        const kw = line.trim();
+        return escHtml(line.match(/^(\s*)/)[1])
+            + `<span style="color:#f38ba8;font-weight:bold">{</span>`
+            + `<span style="color:#f38ba8;font-weight:bold">${kw.slice(1)}</span>`;
+    }
+
+    // sprite = (touching) sprite#
+    const touchHL = line.match(/^(\s*)(\w+)\s*=\s*\(touching\)\s*(\w+)#?$/);
+    if (touchHL) {
+        const [, indent, s1, s2] = touchHL;
+        return escHtml(indent)
+            + `<span style="color:#89dceb">${escHtml(s1)}</span>`
+            + `<span style="color:#6c7086"> = </span>`
+            + `<span style="color:#6c7086">(</span>`
+            + `<span style="color:#f9e2af">touching</span>`
+            + `<span style="color:#6c7086">) </span>`
+            + `<span style="color:#89dceb">${escHtml(s2)}</span>`
+            + `<span style="color:#6c7086">#</span>`;
+    }
+
+    // (var +n). newvar = var +n
+    const varAddHL = line.match(/^(\s*)\((\w+)\s*\+(\d+)\)\.\s*(\w+)\s*=\s*\2\s*\+\s*\3$/);
+    if (varAddHL) {
+        const [, indent, v, n, tgt] = varAddHL;
+        return escHtml(indent)
+            + `<span style="color:#cba6f7">(</span>`
+            + `<span style="color:#89dceb">${escHtml(v)}</span>`
+            + `<span style="color:#a6e3a1"> +${n}</span>`
+            + `<span style="color:#cba6f7">). </span>`
+            + `<span style="color:#89dceb">${escHtml(tgt)}</span>`
+            + `<span style="color:#6c7086"> = </span>`
+            + `<span style="color:#89dceb">${escHtml(v)}</span>`
+            + `<span style="color:#a6e3a1"> +${n}</span>`;
+    }
+
     // on <event> block header
     const onM = line.match(/^(\s*)(on)\s+(\w+)\s*$/);
     if (onM) {
@@ -1394,7 +1480,11 @@ function runCode() {
         controlledMotionFn: false,
         motionBindings: [],
         pendingMotionKey: null,
-        type: null
+        type: null,
+        ifThenEnabled: false,
+        ifThenBlocks: [],
+        _gameLoopActive: false,
+        _gameLoopId: null
     };
 
     log('Running...', 'info');
@@ -1432,7 +1522,7 @@ function runCode() {
                 const braw = rawLines[i];
                 const bt = braw.trim();
                 if (!bt || bt.startsWith('//')) { i++; continue; }
-                if (bt.match(/^start\s+<dev>:$/) || bt.match(/^set\.create\s+newvariable/) || bt.match(/^on\s+\w+$/) || bt === 'activate:' || bt.match(/^import\./)) break;
+                if (bt.match(/^start\s+<dev>:$/) || bt.match(/^set\.create\s+newvariable/) || bt.match(/^on\s+\w+$/) || bt === 'activate:' || bt.match(/^import\./) || bt.match(/^<dev>/) || bt.match(/^searchdev\s*\(/) || bt === '{if') break;
                 i++;
                 // set.create (newdev/unit), (name)
                 const dcM = bt.match(/^set\.create\s*\(newdev\/unit\)\s*,\s*\(([^)]+)\)$/);
@@ -1476,7 +1566,7 @@ function runCode() {
                 const bt = braw.trim();
                 if (!bt || bt.startsWith('//')) { i++; continue; }
                 // stop at next top-level statement
-                if (bt.match(/^set\.create\s+newvariable/) || bt.match(/^on\s+\w+$/) || bt === 'activate:' || bt.match(/^import\./) || bt.match(/^start\s+<dev>:$/) || bt.match(/^<dev>:/) || bt.match(/^\w+=(?:animation|controlled_motion)\./) || bt.match(/^set\.create\s+newfunction/)) break;
+                if (bt.match(/^set\.create\s+newvariable/) || bt.match(/^on\s+\w+$/) || bt === 'activate:' || bt.match(/^import\./) || bt.match(/^start\s+<dev>:$/) || bt.match(/^<dev>/) || bt.match(/^\w+=(?:animation|controlled_motion)\./) || bt.match(/^set\.create\s+newfunction/) || bt.match(/^searchdev\s*\(/) || bt === '{if') break;
                 i++;
                 if (!execActivateLine(bt, i)) { ok = false; break; }
             }
@@ -1543,6 +1633,37 @@ function runCode() {
             }
         }
 
+        // if_then setup lines
+        if (t.match(/^<dev>:import\.\("if_then"\)$/)) { log('if_then imported', 'info'); continue; }
+        if (t.match(/^searchdev\s*\(\s*if_then\s*\)$/)) { continue; }
+        if (t.match(/^set\.create\s+newfunction\s*\(\s*if_then\s*\)$/)) { gameState.ifThenEnabled = true; log('if_then declared', 'info'); continue; }
+        if (t.match(/^<dev>\s+activate:\s+if_then\)\/$/)) { continue; }
+
+        // {if ... {then ... block
+        if (t === '{if') {
+            const block = { conditions: [], actions: [] };
+            let phase = 'cond';
+            while (i < rawLines.length) {
+                const braw = rawLines[i];
+                const bt = braw.trim();
+                if (!bt || bt.startsWith('//')) { i++; continue; }
+                if (bt === '{then') { phase = 'act'; i++; continue; }
+                if (bt === '{if' || bt.match(/^set\.create/) || bt === 'activate:' || bt.match(/^import\./) || bt.match(/^start\s+<dev>:$/) || bt.match(/^<dev>/) || bt.match(/^on\s+\w+$/) || bt.match(/^searchdev\s*\(/)) break;
+                i++;
+                if (phase === 'cond') {
+                    const touchM = bt.match(/^(\w+)\s*=\s*\(touching\)\s*(\w+)#?$/);
+                    if (touchM) { block.conditions.push({ type: 'touching', s1: touchM[1], s2: touchM[2] }); continue; }
+                    log(`line ${i}: unknown if-condition — "${bt}"`, 'err'); ok = false; break;
+                } else {
+                    const varAddM = bt.match(/^\((\w+)\s*\+(\d+)\)\.\s*(\w+)\s*=\s*\1\s*\+\s*\2$/);
+                    if (varAddM) { block.actions.push({ type: 'var_add', srcVar: varAddM[1], delta: parseInt(varAddM[2]), target: varAddM[3] }); continue; }
+                    log(`line ${i}: unknown then-action — "${bt}"`, 'err'); ok = false; break;
+                }
+            }
+            if (ok) gameState.ifThenBlocks.push(block);
+            continue;
+        }
+
         // try as a generic activate line before failing
         if (execActivateLine(t, n)) continue;
 
@@ -1554,6 +1675,7 @@ function runCode() {
         renderGame();
         playAnimations();
         setupMotionControls();
+        if (gameState.ifThenEnabled) startGameLoop();
         log('Done.', 'ok');
         setRunning(true);
     } else {
@@ -3022,8 +3144,45 @@ function setupMotionControls() {
     document.addEventListener('keydown', gameState._motionHandler);
 }
 
+function spritesTouching(a, b) {
+    if (!a || !b || !a.visible || !b.visible) return false;
+    return !(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
+}
+
+function evalIfThen() {
+    for (const block of (gameState.ifThenBlocks || [])) {
+        let cond = true;
+        for (const c of block.conditions) {
+            if (c.type === 'touching') {
+                if (!spritesTouching(gameState.sprites[c.s1], gameState.sprites[c.s2])) { cond = false; break; }
+            }
+        }
+        if (!cond) continue;
+        for (const a of block.actions) {
+            if (a.type === 'var_add') {
+                const cur = typeof gameState.variables[a.srcVar] === 'number' ? gameState.variables[a.srcVar] : 0;
+                gameState.variables[a.target] = cur + a.delta;
+            }
+        }
+    }
+}
+
+function startGameLoop() {
+    if (gameState._gameLoopActive) return;
+    gameState._gameLoopActive = true;
+    function loop() {
+        if (!gameState._gameLoopActive) return;
+        evalIfThen();
+        renderGame();
+        gameState._gameLoopId = requestAnimationFrame(loop);
+    }
+    gameState._gameLoopId = requestAnimationFrame(loop);
+}
+
 function stopGame() {
     gameState.animRunning = false;
+    gameState._gameLoopActive = false;
+    if (gameState._gameLoopId) { cancelAnimationFrame(gameState._gameLoopId); gameState._gameLoopId = null; }
     if (gameState._motionHandler) {
         document.removeEventListener('keydown', gameState._motionHandler);
         gameState._motionHandler = null;
