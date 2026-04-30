@@ -1138,6 +1138,10 @@ const GHOST_PATTERNS = [
     '{if',
     '{then',
     '{',
+    '<dev>:import. loop()',
+    'set.create newfunction (loop())',
+    'activate: loop()',
+    'loop (0, 5)',
 ];
 
 function updateGhost() {
@@ -1209,7 +1213,7 @@ function hl(line) {
     }
 
     // spawnsprite(name), name()
-    const spawnM = line.match(/^(\s*)spawnsprite\s*\(\s*(\w+)\s*\)\s*,\s*(\w+)\s*\(\)$/);
+    const spawnM = line.match(/^(\s*)spawnsprite\s*\(\s*([\w]+(?:\s[\w]+)*)\s*\)\s*,\s*([\w]+(?:\s[\w]+)*)\s*\(\)$/);
     if (spawnM) {
         const [, indent, spriteName, typeName] = spawnM;
         return escHtml(indent)
@@ -1223,7 +1227,7 @@ function hl(line) {
     }
 
     // despawnsprite(name), name()
-    const despawnHL = line.match(/^(\s*)despawnsprite\s*\(\s*(\w+)\s*\)\s*,\s*(\w+)\s*\(\)$/);
+    const despawnHL = line.match(/^(\s*)despawnsprite\s*\(\s*([\w]+(?:\s[\w]+)*)\s*\)\s*,\s*([\w]+(?:\s[\w]+)*)\s*\(\)$/);
     if (despawnHL) {
         const [, indent, spriteName, typeName] = despawnHL;
         return escHtml(indent)
@@ -1237,7 +1241,7 @@ function hl(line) {
     }
 
     // respawnsprite(name), name()
-    const respawnHL = line.match(/^(\s*)respawnsprite\s*\(\s*(\w+)\s*\)\s*,\s*(\w+)\s*\(\)$/);
+    const respawnHL = line.match(/^(\s*)respawnsprite\s*\(\s*([\w]+(?:\s[\w]+)*)\s*\)\s*,\s*([\w]+(?:\s[\w]+)*)\s*\(\)$/);
     if (respawnHL) {
         const [, indent, spriteName, typeName] = respawnHL;
         return escHtml(indent)
@@ -1377,7 +1381,7 @@ function hl(line) {
     }
 
     // (sprite) xy (base, xUnits), (base, yUnits)
-    const xyM = line.match(/^(\s*)(\w+)\s+xy\s+\((-?\d+)(?:\s*,\s*(-?\d+))?\)\s*,\s*\((-?\d+)(?:\s*,\s*(-?\d+))?\)$/);
+    const xyM = line.match(/^(\s*)([\w]+(?:\s[\w]+)*)\s+xy\s+\((-?\d+)(?:\s*,\s*(-?\d+))?\)\s*,\s*\((-?\d+)(?:\s*,\s*(-?\d+))?\)$/);
     if (xyM) {
         const [, indent, sname, x1, x2, y1, y2] = xyM;
         const xPart = x2 != null
@@ -1444,8 +1448,53 @@ function hl(line) {
             + (kw.length > 1 ? `<span style="color:#f38ba8;font-weight:bold">${kw.slice(1)}</span>` : '');
     }
 
+    // <dev>:import. loop()
+    if (line.trim().match(/^<dev>:import\.\s+loop\(\)$/)) {
+        return escHtml(line.match(/^(\s*)/)[1])
+            + `<span style="color:#6c7086">&lt;</span>`
+            + `<span style="color:#f9e2af">dev</span>`
+            + `<span style="color:#6c7086">&gt;:import. </span>`
+            + `<span style="color:#cba6f7;font-weight:bold">loop</span>`
+            + `<span style="color:#cba6f7">()</span>`;
+    }
+
+    // set.create newfunction (loop())
+    if (line.trim().match(/^set\.create\s+newfunction\s*\(\s*loop\(\)\s*\)$/)) {
+        return escHtml(line.match(/^(\s*)/)[1])
+            + `<span style="color:#89b4fa">set</span>`
+            + `<span style="color:#6c7086">.</span>`
+            + `<span style="color:#f9e2af">create</span>`
+            + ` <span style="color:#cba6f7">newfunction</span>`
+            + ` <span style="color:#cba6f7">(</span>`
+            + `<span style="color:#89dceb">loop</span>`
+            + `<span style="color:#cba6f7">()</span>`
+            + `<span style="color:#cba6f7">)</span>`;
+    }
+
+    // activate: loop()
+    if (line.trim() === 'activate: loop()') {
+        return escHtml(line.match(/^(\s*)/)[1])
+            + `<span style="color:#a6e3a1;font-weight:bold">activate</span>`
+            + `<span style="color:#6c7086">: </span>`
+            + `<span style="color:#89dceb">loop</span>`
+            + `<span style="color:#cba6f7">()</span>`;
+    }
+
+    // loop (0, N)
+    const loopHL = line.match(/^(\s*)loop\s+\(\s*0\s*,\s*(\d+)\s*\)$/);
+    if (loopHL) {
+        const [, indent, count] = loopHL;
+        return escHtml(indent)
+            + `<span style="color:#cba6f7;font-weight:bold">loop</span>`
+            + ` <span style="color:#cba6f7">(</span>`
+            + `<span style="color:#a6e3a1">0</span>`
+            + `<span style="color:#6c7086">, </span>`
+            + `<span style="color:#a6e3a1">${count}</span>`
+            + `<span style="color:#cba6f7">)</span>`;
+    }
+
     // sprite=(touching)=othersprite
-    const touchHL = line.match(/^(\s*)(\w+)\s*=\s*\(touching\)\s*=\s*(\w+)$/);
+    const touchHL = line.match(/^(\s*)([\w]+(?:\s[\w]+)*)\s*=\s*\(touching\)\s*=\s*([\w]+(?:\s[\w]+)*)$/);
     if (touchHL) {
         const [, indent, s1, s2] = touchHL;
         return escHtml(indent)
@@ -1472,7 +1521,7 @@ function hl(line) {
     }
 
     // sprite, colorcode
-    const colorHL = line.match(/^(\s*)(\w+),\s*(\d+#[\d()]+)$/);
+    const colorHL = line.match(/^(\s*)([\w]+(?:\s[\w]+)*)\s*,\s*(\d+#[\d()]+)$/);
     if (colorHL) {
         const [, indent, sname, code] = colorHL;
         const hex = parseColorCode(code) || '#cdd6f4';
@@ -1578,6 +1627,8 @@ function runCode() {
         type: null,
         ifThenEnabled: false,
         ifThenBlocks: [],
+        loopEnabled: false,
+        loopFn: false,
         _gameLoopActive: false,
         _gameLoopId: null
     };
@@ -1734,6 +1785,40 @@ function runCode() {
         if (t.match(/^set\.create\s+newfunction\s*\(\s*if_then\s*\)$/)) { gameState.ifThenEnabled = true; log('if_then declared', 'info'); continue; }
         if (t.match(/^<dev>\s+activate:\s+if_then\)\/$/)) { continue; }
 
+        // loop setup lines
+        if (t.match(/^<dev>:import\.\s+loop\(\)$/)) { gameState.loopEnabled = true; log('loop imported', 'info'); continue; }
+        if (t.match(/^set\.create\s+newfunction\s*\(\s*loop\(\)\s*\)$/)) { gameState.loopFn = true; log('loop() declared', 'info'); continue; }
+
+        // activate: loop()
+        if (t === 'activate: loop()') {
+            // next non-blank line must be loop (0, N)
+            while (i < rawLines.length && !rawLines[i].trim()) i++;
+            if (i >= rawLines.length) { log(`line ${n}: activate: loop() — missing loop (0, N)`, 'err'); ok = false; continue; }
+            const loopLine = rawLines[i].trim();
+            const loopM = loopLine.match(/^loop\s+\(\s*0\s*,\s*(\d+)\s*\)$/);
+            if (!loopM) { log(`line ${i+1}: expected loop (0, N) — got "${loopLine}"`, 'err'); ok = false; continue; }
+            i++;
+            const loopCount = parseInt(loopM[1]);
+            // collect body lines until standalone {
+            const bodyLines = [];
+            while (i < rawLines.length) {
+                const bt = rawLines[i].trim();
+                if (!bt || bt.startsWith('//')) { i++; continue; }
+                if (bt === '{') { i++; break; }
+                if (bt.match(/^set\.create/) || bt === 'activate:' || bt === 'activate: loop()' || bt.match(/^import\./) || bt.match(/^<dev>/) || bt.match(/^on\s+\w+$/) || bt === '{if') break;
+                bodyLines.push(bt);
+                i++;
+            }
+            // execute body loopCount times
+            for (let iter = 0; iter < loopCount; iter++) {
+                for (const bl of bodyLines) {
+                    if (!execActivateLine(bl, n)) { ok = false; break; }
+                }
+                if (!ok) break;
+            }
+            continue;
+        }
+
         // standalone { closes a block (no-op at top level)
         if (t === '{') continue;
 
@@ -1750,15 +1835,15 @@ function runCode() {
                 if (bt === '{if' || bt.match(/^set\.create/) || bt === 'activate:' || bt.match(/^import\./) || bt.match(/^start\s+<dev>:$/) || bt.match(/^<dev>/) || bt.match(/^on\s+\w+$/) || bt.match(/^searchdev\s*\(/)) break;
                 i++;
                 if (phase === 'cond') {
-                    const touchM = bt.match(/^(\w+)\s*=\s*\(touching\)\s*=\s*(\w+)$/);
+                    const touchM = bt.match(/^([\w]+(?:\s[\w]+)*)\s*=\s*\(touching\)\s*=\s*([\w]+(?:\s[\w]+)*)$/);
                     if (touchM) { block.conditions.push({ type: 'touching', s1: touchM[1], s2: touchM[2] }); continue; }
                     log(`line ${i}: unknown if-condition — "${bt}"`, 'err'); ok = false; break;
                 } else {
                     const varAddM = bt.match(/^\((\w+)\s*\+(\d+)\)\.\s*(\w+)\s*=\s*\1\s*\+\s*\2$/);
                     if (varAddM) { block.actions.push({ type: 'var_add', srcVar: varAddM[1], delta: parseInt(varAddM[2]), target: varAddM[3] }); continue; }
-                    const despawnA = bt.match(/^despawnsprite\s*\(\s*(\w+)\s*\)\s*,\s*(\w+)\s*\(\)$/);
+                    const despawnA = bt.match(/^despawnsprite\s*\(\s*([\w]+(?:\s[\w]+)*)\s*\)\s*,\s*([\w]+(?:\s[\w]+)*)\s*\(\)$/);
                     if (despawnA) { block.actions.push({ type: 'despawn', sprite: despawnA[1] }); continue; }
-                    const respawnA = bt.match(/^respawnsprite\s*\(\s*(\w+)\s*\)\s*,\s*(\w+)\s*\(\)$/);
+                    const respawnA = bt.match(/^respawnsprite\s*\(\s*([\w]+(?:\s[\w]+)*)\s*\)\s*,\s*([\w]+(?:\s[\w]+)*)\s*\(\)$/);
                     if (respawnA) { block.actions.push({ type: 'respawn', sprite: respawnA[1], typeName: respawnA[2] }); continue; }
                     log(`line ${i}: unknown then-action — "${bt}"`, 'err'); ok = false; break;
                 }
@@ -1788,7 +1873,7 @@ function runCode() {
 
 function execActivateLine(line, n) {
     // spawnsprite(name), name()
-    const m = line.match(/^spawnsprite\s*\(\s*(\w+)\s*\)\s*,\s*(\w+)\s*\(\)$/);
+    const m = line.match(/^spawnsprite\s*\(\s*([\w]+(?:\s[\w]+)*)\s*\)\s*,\s*([\w]+(?:\s[\w]+)*)\s*\(\)$/);
     if (m) {
         const [, spriteName, typeName] = m;
         const cv = gameState.canvas;
@@ -1820,7 +1905,7 @@ function execActivateLine(line, n) {
         return true;
     }
     // despawnsprite(name), type()
-    const despawnM = line.match(/^despawnsprite\s*\(\s*(\w+)\s*\)\s*,\s*(\w+)\s*\(\)$/);
+    const despawnM = line.match(/^despawnsprite\s*\(\s*([\w]+(?:\s[\w]+)*)\s*\)\s*,\s*([\w]+(?:\s[\w]+)*)\s*\(\)$/);
     if (despawnM) {
         const [, spriteName] = despawnM;
         if (!gameState.sprites[spriteName]) {
@@ -1832,7 +1917,7 @@ function execActivateLine(line, n) {
         return true;
     }
     // respawnsprite(name), type() — recreates sprite and reapplies stored xy/color config
-    const respawnM = line.match(/^respawnsprite\s*\(\s*(\w+)\s*\)\s*,\s*(\w+)\s*\(\)$/);
+    const respawnM = line.match(/^respawnsprite\s*\(\s*([\w]+(?:\s[\w]+)*)\s*\)\s*,\s*([\w]+(?:\s[\w]+)*)\s*\(\)$/);
     if (respawnM) {
         const [, spriteName, typeName] = respawnM;
         const cv = gameState.canvas;
@@ -1854,7 +1939,7 @@ function execActivateLine(line, n) {
         return true;
     }
     // sprite xy (minX, maxX), (minY, maxY)
-    const xyM = line.match(/^(\w+)\s+xy\s+\((-?\d+)(?:\s*,\s*(-?\d+))?\)\s*,\s*\((-?\d+)(?:\s*,\s*(-?\d+))?\)$/);
+    const xyM = line.match(/^([\w]+(?:\s[\w]+)*)\s+xy\s+\((-?\d+)(?:\s*,\s*(-?\d+))?\)\s*,\s*\((-?\d+)(?:\s*,\s*(-?\d+))?\)$/);
     if (xyM) {
         const [, sname, x1, x2raw, y1, y2raw] = xyM;
         if (!gameState.sprites[sname]) {
@@ -1902,7 +1987,7 @@ function execActivateLine(line, n) {
         return true;
     }
     // sprite, colorcode
-    const colorM = line.match(/^(\w+),\s*(\d+#[\d()]+)$/);
+    const colorM = line.match(/^([\w]+(?:\s[\w]+)*)\s*,\s*(\d+#[\d()]+)$/);
     if (colorM) {
         const [, sname, code] = colorM;
         if (!gameState.sprites[sname]) { log(`line ${n}: sprite "${sname}" not found`, 'err'); return false; }
