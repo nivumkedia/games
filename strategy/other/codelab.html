@@ -476,6 +476,31 @@ body {
     border-radius: 0;
 }
 
+.fs-run-btn {
+    display: none;
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: var(--green);
+    color: #1e1e2e;
+    border: none;
+    padding: 8px 22px;
+    border-radius: 6px;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    z-index: 10;
+}
+.fs-run-btn:hover { opacity: 0.82; }
+
+.canvas-wrap:fullscreen .fs-run-btn,
+.canvas-wrap:-webkit-full-screen .fs-run-btn {
+    display: block;
+}
+
 .console-panel {
     height: 130px;
     background: var(--surface);
@@ -611,6 +636,7 @@ body {
       </div>
       <div class="canvas-wrap" id="canvas-wrap">
         <canvas id="game-canvas" width="400" height="300"></canvas>
+        <button class="fs-run-btn" id="fs-run-btn">▶ RUN</button>
         <span class="fs-hint">⛶</span>
       </div>
       <div class="console-panel">
@@ -1111,6 +1137,7 @@ const GHOST_PATTERNS = [
     '<dev> activate: if_then)/',
     '{if',
     '{then',
+    '{',
 ];
 
 function updateGhost() {
@@ -1410,11 +1437,11 @@ function hl(line) {
     }
 
     // {if  and  {then
-    if (line.trim() === '{if' || line.trim() === '{then') {
+    if (line.trim() === '{if' || line.trim() === '{then' || line.trim() === '{') {
         const kw = line.trim();
         return escHtml(line.match(/^(\s*)/)[1])
             + `<span style="color:#f38ba8;font-weight:bold">{</span>`
-            + `<span style="color:#f38ba8;font-weight:bold">${kw.slice(1)}</span>`;
+            + (kw.length > 1 ? `<span style="color:#f38ba8;font-weight:bold">${kw.slice(1)}</span>` : '');
     }
 
     // sprite=(touching)=othersprite
@@ -1707,6 +1734,9 @@ function runCode() {
         if (t.match(/^set\.create\s+newfunction\s*\(\s*if_then\s*\)$/)) { gameState.ifThenEnabled = true; log('if_then declared', 'info'); continue; }
         if (t.match(/^<dev>\s+activate:\s+if_then\)\/$/)) { continue; }
 
+        // standalone { closes a block (no-op at top level)
+        if (t === '{') continue;
+
         // {if ... {then ... block
         if (t === '{if') {
             const block = { conditions: [], actions: [] };
@@ -1716,6 +1746,7 @@ function runCode() {
                 const bt = braw.trim();
                 if (!bt || bt.startsWith('//')) { i++; continue; }
                 if (bt === '{then') { phase = 'act'; i++; continue; }
+                if (bt === '{') { i++; break; }
                 if (bt === '{if' || bt.match(/^set\.create/) || bt === 'activate:' || bt.match(/^import\./) || bt.match(/^start\s+<dev>:$/) || bt.match(/^<dev>/) || bt.match(/^on\s+\w+$/) || bt.match(/^searchdev\s*\(/)) break;
                 i++;
                 if (phase === 'cond') {
@@ -1725,6 +1756,10 @@ function runCode() {
                 } else {
                     const varAddM = bt.match(/^\((\w+)\s*\+(\d+)\)\.\s*(\w+)\s*=\s*\1\s*\+\s*\2$/);
                     if (varAddM) { block.actions.push({ type: 'var_add', srcVar: varAddM[1], delta: parseInt(varAddM[2]), target: varAddM[3] }); continue; }
+                    const despawnA = bt.match(/^despawnsprite\s*\(\s*(\w+)\s*\)\s*,\s*(\w+)\s*\(\)$/);
+                    if (despawnA) { block.actions.push({ type: 'despawn', sprite: despawnA[1] }); continue; }
+                    const respawnA = bt.match(/^respawnsprite\s*\(\s*(\w+)\s*\)\s*,\s*(\w+)\s*\(\)$/);
+                    if (respawnA) { block.actions.push({ type: 'respawn', sprite: respawnA[1], typeName: respawnA[2] }); continue; }
                     log(`line ${i}: unknown then-action — "${bt}"`, 'err'); ok = false; break;
                 }
             }
@@ -3328,6 +3363,21 @@ function evalIfThen() {
             if (a.type === 'var_add') {
                 const cur = typeof gameState.variables[a.srcVar] === 'number' ? gameState.variables[a.srcVar] : 0;
                 gameState.variables[a.target] = cur + a.delta;
+            } else if (a.type === 'despawn') {
+                delete gameState.sprites[a.sprite];
+            } else if (a.type === 'respawn') {
+                const cv = gameState.canvas;
+                const d = { x: cv.width/2-20, y: cv.height/2-20, w: 40, h: 40 };
+                gameState.sprites[a.sprite] = { ...d, color: spriteColor(a.typeName), typeName: a.typeName, visible: true };
+                const cfg = gameState.spriteConfigs[a.sprite];
+                if (cfg) {
+                    if (cfg.xyConfig) {
+                        const { x1, x2, y1, y2, unitPx } = cfg.xyConfig;
+                        gameState.sprites[a.sprite].x = (x1 + Math.random() * (x2 - x1)) * unitPx;
+                        gameState.sprites[a.sprite].y = (y1 + Math.random() * (y2 - y1)) * unitPx;
+                    }
+                    if (cfg.customColor) gameState.sprites[a.sprite].customColor = cfg.customColor;
+                }
             }
         }
     }
@@ -3389,6 +3439,11 @@ document.addEventListener('fullscreenchange', () => {
         gameState.ctx = canvas.getContext('2d');
         renderGame();
     }
+});
+
+document.getElementById('fs-run-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    runCode();
 });
 
 // ── console ──────────────────────────────────────
