@@ -1142,6 +1142,7 @@ const GHOST_PATTERNS = [
     'set.create newfunction (loop())',
     'activate: loop()',
     'loop (0, 5)',
+    'sprite blink (60, 30)',
 ];
 
 function updateGhost() {
@@ -1520,6 +1521,20 @@ function hl(line) {
             + `<span style="color:#a6e3a1"> +${n}</span>`;
     }
 
+    // sprite blink (showF, hideF)
+    const blinkHL = line.match(/^(\s*)([\w]+(?:\s[\w]+)*)\s+blink\s+\((\d+)\s*,\s*(\d+)\)$/);
+    if (blinkHL) {
+        const [, indent, sname, showF, hideF] = blinkHL;
+        return escHtml(indent)
+            + `<span style="color:#89dceb">${escHtml(sname)}</span>`
+            + ` <span style="color:#f9e2af;font-weight:bold">blink</span>`
+            + ` <span style="color:#cba6f7">(</span>`
+            + `<span style="color:#a6e3a1">${showF}</span>`
+            + `<span style="color:#6c7086">, </span>`
+            + `<span style="color:#a6e3a1">${hideF}</span>`
+            + `<span style="color:#cba6f7">)</span>`;
+    }
+
     // sprite, colorcode
     const colorHL = line.match(/^(\s*)([\w]+(?:\s[\w]+)*)\s*,\s*(\d+#[\d()]+)$/);
     if (colorHL) {
@@ -1629,6 +1644,8 @@ function runCode() {
         ifThenBlocks: [],
         loopEnabled: false,
         loopFn: false,
+        _spawnCounters: {},
+        blinkTimers: {},
         _gameLoopActive: false,
         _gameLoopId: null
     };
@@ -1888,9 +1905,10 @@ function execActivateLine(line, n) {
         // auto-number if name already taken: monkey → monkey2 → monkey3
         let finalName = spriteName;
         if (gameState.sprites[finalName]) {
-            let idx = 2;
-            while (gameState.sprites[spriteName + idx]) idx++;
-            finalName = spriteName + idx;
+            if (!gameState._spawnCounters) gameState._spawnCounters = {};
+            const cnt = (gameState._spawnCounters[spriteName] || 1) + 1;
+            gameState._spawnCounters[spriteName] = cnt;
+            finalName = spriteName + cnt;
         }
         const d = { x: cv.width/2-20, y: cv.height/2-20, w: 40, h: 40 };
         if (typeName === 'road') { d.x=0; d.y=0; d.w=cv.width; d.h=cv.height; }
@@ -1996,6 +2014,16 @@ function execActivateLine(line, n) {
         gameState.sprites[sname].customColor = hex;
         if (gameState.spriteConfigs[sname]) gameState.spriteConfigs[sname].customColor = hex;
         log(`colored "${sname}" → ${code}`, 'info');
+        return true;
+    }
+
+    // sprite blink (showFrames, hideFrames)
+    const blinkM = line.match(/^([\w]+(?:\s[\w]+)*)\s+blink\s+\((\d+)\s*,\s*(\d+)\)$/);
+    if (blinkM) {
+        const [, sname, showF, hideF] = blinkM;
+        if (!gameState.sprites[sname]) { log(`line ${n}: sprite "${sname}" not found`, 'err'); return false; }
+        gameState.blinkTimers[sname] = { counter: 0, showFrames: parseInt(showF), hideFrames: parseInt(hideF), showing: true };
+        log(`"${sname}" blinks ${showF}/${hideF} frames`, 'info');
         return true;
     }
 
@@ -3473,6 +3501,25 @@ function startGameLoop() {
     gameState._gameLoopActive = true;
     function loop() {
         if (!gameState._gameLoopActive) return;
+        for (const [name, bt] of Object.entries(gameState.blinkTimers || {})) {
+            bt.counter++;
+            if (bt.showing && bt.counter >= bt.showFrames) {
+                bt.counter = 0;
+                bt.showing = false;
+                if (gameState.sprites[name]) gameState.sprites[name].visible = false;
+            } else if (!bt.showing && bt.counter >= bt.hideFrames) {
+                bt.counter = 0;
+                bt.showing = true;
+                const sp = gameState.sprites[name];
+                const cfg = gameState.spriteConfigs[name];
+                if (sp && cfg && cfg.xyConfig) {
+                    const { x1, x2, y1, y2, unitPx } = cfg.xyConfig;
+                    sp.x = (x1 + Math.random() * (x2 - x1)) * unitPx;
+                    sp.y = (y1 + Math.random() * (y2 - y1)) * unitPx;
+                }
+                if (sp) sp.visible = true;
+            }
+        }
         evalIfThen();
         renderGame();
         gameState._gameLoopId = requestAnimationFrame(loop);
