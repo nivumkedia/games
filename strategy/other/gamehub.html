@@ -17,6 +17,20 @@
     --surface: #f0f7ff;
 }
 
+body.dark {
+    --bg: #0e1621;
+    --sidebar-bg: #131d2b;
+    --border: #1e3048;
+    --text: #c8ddf0;
+    --dim: #4a6a88;
+    --accent: #4a9fe4;
+    --surface: #192840;
+}
+
+*, *::before, *::after {
+    transition: background 0.4s, background-color 0.4s, border-color 0.4s, color 0.4s;
+}
+
 body {
     background: var(--bg);
     color: var(--text);
@@ -39,7 +53,7 @@ body {
 }
 
 .sidebar-title {
-    padding: 24px 20px 20px;
+    padding: 18px 16px 14px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
 }
@@ -49,6 +63,47 @@ body {
     font-weight: 800;
     letter-spacing: 1px;
     color: var(--accent);
+}
+
+.theme-toggle {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--dim);
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: border-color 0.2s, color 0.2s, transform 0.3s;
+}
+
+.theme-toggle:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    transform: rotate(20deg);
+}
+
+.home-btn {
+    margin-top: 10px;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--dim);
+    width: 100%;
+    padding: 5px 0;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+
+.home-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--surface);
 }
 
 .sidebar-section-label {
@@ -61,11 +116,6 @@ body {
     flex-shrink: 0;
 }
 
-.sidebar-categories {
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 8px;
-    flex-shrink: 0;
-}
 
 .sidebar-games {
     flex: 1;
@@ -79,24 +129,32 @@ body {
 
 .category-item, .game-item {
     display: flex;
-    align-items: center;
-    padding: 7px 20px;
-    font-size: 13px;
-    color: var(--dim);
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 8px 20px;
     cursor: pointer;
     border-radius: 0;
-    transition: background 0.15s, color 0.15s;
+    transition: background 0.15s;
     user-select: none;
-    gap: 9px;
+}
+
+.game-item-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+}
+
+.game-item-desc {
+    font-size: 11px;
+    color: var(--dim);
+    margin-top: 2px;
 }
 
 .category-item:hover, .game-item:hover {
     background: var(--surface);
-    color: var(--text);
 }
 
 .category-item.active, .game-item.active {
-    color: var(--accent);
     background: var(--surface);
 }
 
@@ -131,17 +189,22 @@ body {
 
 <div class="sidebar">
     <div class="sidebar-title">
-        <h1>PLAYMERTH 2.0</h1>
-    </div>
-
-    <div class="sidebar-categories">
-        <div class="sidebar-section-label">Categories</div>
-        <!-- categories go here -->
+        <div style="display:flex;align-items:center;justify-content:space-between">
+            <h1>PLAYMERTH 2.0</h1>
+            <div style="display:flex;gap:5px">
+                <button class="theme-toggle" id="scene-toggle" title="Toggle day/night scene">☀</button>
+                <button class="theme-toggle" id="theme-toggle" title="Toggle light/dark colors">○</button>
+            </div>
+        </div>
+        <button class="home-btn" id="home-btn" title="Home">⌂ Home</button>
     </div>
 
     <div class="sidebar-games">
         <div class="sidebar-section-label">Games</div>
-        <!-- games go here -->
+        <div class="game-item" onclick="loadGame('codelab.html')">
+            <span class="game-item-name">CodeLab</span>
+            <span class="game-item-desc">Build games with a visual scripting language</span>
+        </div>
     </div>
 </div>
 
@@ -159,12 +222,36 @@ function loadGame(src) {
     canvas.style.display = 'none';
 }
 
+function goHome() {
+    const frame = document.getElementById('game-frame');
+    const canvas = document.getElementById('screensaver');
+    frame.style.display = 'none';
+    frame.src = '';
+    canvas.style.display = 'block';
+}
+
+document.getElementById('home-btn').addEventListener('click', goHome);
+
+// Light/dark toggle
+let isDark = false;
+document.getElementById('theme-toggle').addEventListener('click', () => {
+    isDark = document.body.classList.toggle('dark');
+    document.getElementById('theme-toggle').textContent = isDark ? '●' : '○';
+});
+
+// Day/night scene toggle
+let isNight = false;
+document.getElementById('scene-toggle').addEventListener('click', () => {
+    isNight = !isNight;
+    document.getElementById('scene-toggle').textContent = isNight ? '☽' : '☀';
+});
+
 // Screensaver
 (function() {
     const canvas = document.getElementById('screensaver');
     const ctx = canvas.getContext('2d');
 
-    let clouds = [], birds = [], t = 0;
+    let clouds = [], birds = [], stars = [], shootingStars = [], t = 0;
 
     function resize() {
         canvas.width = canvas.offsetWidth || canvas.parentElement.clientWidth;
@@ -224,65 +311,78 @@ function loadGame(src) {
                 flock
             });
         }
+
+        stars = [];
+        shootingStars = [];
+        for (let i = 0; i < 200; i++) {
+            stars.push({
+                x: Math.random() * w,
+                y: Math.random() * h * 0.72,
+                size: Math.random() * 2.5 + 0.5,
+                speed: Math.random() * 0.3 + 0.05,
+                opacity: Math.random(),
+                twinkleSpeed: Math.random() * 0.02 + 0.005,
+                twinkleDir: Math.random() > 0.5 ? 1 : -1
+            });
+        }
     }
 
-    // Draw a realistic cumulus cloud at (cx, cy) with given scale
-    function drawCloud(cx, cy, scale) {
-        const r = 52 * scale;
+    // Draw a cloud as merged solid circles with a clipped gradient underside
+    function drawCloud(cx, cy, scale, pal) {
+        const r = 46 * scale;
         const puffs = [
-            { dx: 0,          dy: 0,         rx: r,        ry: r * 0.68 },
-            { dx: -r * 0.72,  dy: r * 0.18,  rx: r * 0.58, ry: r * 0.46 },
-            { dx:  r * 0.72,  dy: r * 0.18,  rx: r * 0.58, ry: r * 0.46 },
-            { dx: -r * 0.36,  dy: -r * 0.28, rx: r * 0.5,  ry: r * 0.44 },
-            { dx:  r * 0.36,  dy: -r * 0.28, rx: r * 0.5,  ry: r * 0.44 },
-            { dx:  r * 0.0,   dy: -r * 0.46, rx: r * 0.4,  ry: r * 0.36 },
+            [  0,        0,       r       ],
+            [ -r*0.65,   r*0.22,  r*0.60  ],
+            [  r*0.65,   r*0.22,  r*0.60  ],
+            [ -r*0.32,  -r*0.30,  r*0.50  ],
+            [  r*0.32,  -r*0.30,  r*0.50  ],
+            [  0,       -r*0.48,  r*0.40  ],
+            [ -r*0.90,   r*0.38,  r*0.38  ],
+            [  r*0.90,   r*0.38,  r*0.38  ],
         ];
 
         ctx.save();
         ctx.translate(cx, cy);
 
-        // Shadow underside
-        puffs.forEach(p => {
-            const ug = ctx.createRadialGradient(p.dx, p.dy + p.ry * 0.3, 0, p.dx, p.dy, p.rx);
-            ug.addColorStop(0, 'rgba(180,195,215,0.18)');
-            ug.addColorStop(1, 'transparent');
-            ctx.fillStyle = ug;
+        const topY = -r * 0.48 - r * 0.40;
+        const botY =  r * 0.22 + r * 0.60;
+
+        ctx.shadowColor = pal.cloudShadow;
+        ctx.shadowBlur  = 10 * scale;
+        ctx.fillStyle   = pal.cloud;
+        puffs.forEach(([dx, dy, pr]) => {
             ctx.beginPath();
-            ctx.ellipse(p.dx, p.dy, p.rx, p.ry, 0, 0, Math.PI * 2);
+            ctx.arc(dx, dy, pr, 0, Math.PI * 2);
             ctx.fill();
         });
+        ctx.shadowBlur = 0;
 
-        // White body
-        puffs.forEach(p => {
-            const g = ctx.createRadialGradient(p.dx - p.rx * 0.25, p.dy - p.ry * 0.3, 0, p.dx, p.dy, p.rx * 1.1);
-            g.addColorStop(0, 'rgba(255,255,255,0.98)');
-            g.addColorStop(0.6, 'rgba(245,248,255,0.88)');
-            g.addColorStop(1, 'rgba(220,232,248,0)');
-            ctx.fillStyle = g;
-            ctx.beginPath();
-            ctx.ellipse(p.dx, p.dy, p.rx, p.ry, 0, 0, Math.PI * 2);
-            ctx.fill();
-        });
-
-        // Bright top highlight on tallest puff
-        const hg = ctx.createRadialGradient(-r * 0.1, -r * 0.5, 0, 0, -r * 0.2, r * 0.5);
-        hg.addColorStop(0, 'rgba(255,255,255,0.55)');
-        hg.addColorStop(1, 'transparent');
-        ctx.fillStyle = hg;
+        ctx.save();
         ctx.beginPath();
-        ctx.ellipse(0, -r * 0.46, r * 0.4, r * 0.36, 0, 0, Math.PI * 2);
-        ctx.fill();
+        puffs.forEach(([dx, dy, pr]) => {
+            ctx.moveTo(dx + pr, dy);
+            ctx.arc(dx, dy, pr, 0, Math.PI * 2);
+        });
+        ctx.clip();
+        const shade = ctx.createLinearGradient(0, topY, 0, botY);
+        shade.addColorStop(0,    pal.cloudShadeTop);
+        shade.addColorStop(0.50, pal.cloudShadeMid);
+        shade.addColorStop(1,    pal.cloudShadeBot);
+        ctx.fillStyle = shade;
+        ctx.fillRect(-r * 1.5, topY, r * 3, botY - topY);
+        ctx.restore();
 
         ctx.restore();
     }
 
-    function drawBird(b) {
+    function drawBird(b, pal) {
         const wingAmp = b.size * 0.9;
         const wingY = Math.sin(b.flap) * wingAmp;
         const bodyLen = b.size * 0.55;
         ctx.save();
         ctx.translate(b.x, b.y);
-        ctx.strokeStyle = `rgba(30,55,100,${0.55 - b.flock * 0.12})`;
+        const [br, bg, bb] = pal.birdRGB;
+        ctx.strokeStyle = `rgba(${br},${bg},${bb},${0.55 - b.flock * 0.12})`;
         ctx.lineWidth = Math.max(0.8, b.size * 0.14);
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
@@ -304,113 +404,173 @@ function loadGame(src) {
         ctx.restore();
     }
 
+    const nightScenePal = {
+        sky:          ['#020408', '#03060e', '#040914', '#060b18', '#080d1c'],
+        hills:        [['#0a1a0c', '#050d06'], ['#0c1e0e', '#061008'], ['#0e220f', '#071209']],
+        cloud:        '#18263a', cloudShadow: 'rgba(0,5,20,0.65)',
+        cloudShadeTop:'rgba(4,8,20,0.00)', cloudShadeMid:'rgba(4,8,18,0.12)', cloudShadeBot:'rgba(2,5,14,0.55)',
+        birdRGB:      [80, 110, 160],
+    };
+
+    const palettes = {
+        light: {
+            sky:          ['#1a82c4', '#3ea8e0', '#89cff0', '#c8e8f8', '#dff2fb'],
+            haloC:        'rgba(255,250,210,0.22)', haloM: 'rgba(255,230,130,0.09)', haloF: 'rgba(255,200,80,0.03)',
+            corona0:      'rgba(255,255,220,0.85)', corona1: 'rgba(255,240,150,0.25)',
+            disc0:        '#fffde8', disc1: '#ffe980', disc2: '#ffd040',
+            horizGlow:    'rgba(255,245,220,0.18)',
+            hills:        [['#7ec87e','#5aaa5a'], ['#8fd48f','#6abf6a'], ['#a5dda5','#7ec87e']],
+            cloud:        '#ffffff', cloudShadow: 'rgba(160,185,220,0.30)',
+            cloudShadeTop:'rgba(220,235,255,0.00)', cloudShadeMid:'rgba(190,210,240,0.05)', cloudShadeBot:'rgba(150,175,215,0.32)',
+            birdRGB:      [30, 55, 100],
+        },
+        dark: {
+            sky:          ['#060d18', '#091422', '#0e1e30', '#122438', '#162a40'],
+            haloC:        'rgba(180,140,80,0.14)',  haloM: 'rgba(160,110,40,0.06)',  haloF: 'rgba(140,90,20,0.02)',
+            corona0:      'rgba(200,170,80,0.60)',  corona1: 'rgba(180,140,50,0.18)',
+            disc0:        '#e8c060', disc1: '#c08820', disc2: '#a06010',
+            horizGlow:    'rgba(180,130,60,0.12)',
+            hills:        [['#183020','#0c1c10'], ['#1c3824','#102014'], ['#204028','#142818']],
+            cloud:        '#1e2e48', cloudShadow: 'rgba(0,10,30,0.50)',
+            cloudShadeTop:'rgba(10,20,40,0.00)',    cloudShadeMid:'rgba(10,18,36,0.08)',    cloudShadeBot:'rgba(8,14,28,0.45)',
+            birdRGB:      [140, 170, 210],
+        },
+    };
+
     function draw() {
         const w = canvas.width, h = canvas.height;
         t += 0.009;
 
-        // Realistic sky gradient — deep cerulean at top, pale near horizon
+        const pal = isNight ? nightScenePal : (isDark ? palettes.dark : palettes.light);
+
+        // Sky
         const sky = ctx.createLinearGradient(0, 0, 0, h);
-        sky.addColorStop(0,    '#1a82c4');
-        sky.addColorStop(0.35, '#3ea8e0');
-        sky.addColorStop(0.7,  '#89cff0');
-        sky.addColorStop(0.88, '#c8e8f8');
-        sky.addColorStop(1,    '#dff2fb');
-        ctx.fillStyle = sky;
-        ctx.fillRect(0, 0, w, h);
+        const [s0,s1,s2,s3,s4] = pal.sky;
+        sky.addColorStop(0, s0); sky.addColorStop(0.35, s1); sky.addColorStop(0.7, s2);
+        sky.addColorStop(0.88, s3); sky.addColorStop(1, s4);
+        ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h);
 
-        // Sun — upper right, bright corona + disc
-        const sunX = w * 0.80, sunY = h * 0.11;
-        // Wide outer halo
-        const halo = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, w * 0.28);
-        halo.addColorStop(0,    'rgba(255,250,210,0.22)');
-        halo.addColorStop(0.3,  'rgba(255,230,130,0.09)');
-        halo.addColorStop(0.7,  'rgba(255,200,80,0.03)');
-        halo.addColorStop(1,    'transparent');
-        ctx.fillStyle = halo;
-        ctx.fillRect(0, 0, w, h);
-        // Inner corona
-        const corona = ctx.createRadialGradient(sunX, sunY, 18, sunX, sunY, 90);
-        corona.addColorStop(0,   'rgba(255,255,220,0.85)');
-        corona.addColorStop(0.4, 'rgba(255,240,150,0.25)');
-        corona.addColorStop(1,   'transparent');
-        ctx.fillStyle = corona;
-        ctx.fillRect(0, 0, w, h);
-        // Disc
-        ctx.beginPath();
-        ctx.arc(sunX, sunY, 22, 0, Math.PI * 2);
-        const disc = ctx.createRadialGradient(sunX - 6, sunY - 6, 0, sunX, sunY, 22);
-        disc.addColorStop(0, '#fffde8');
-        disc.addColorStop(0.6, '#ffe980');
-        disc.addColorStop(1, '#ffd040');
-        ctx.fillStyle = disc;
-        ctx.fill();
+        if (isNight) {
+            // Stars — same style as Playmerth space background
+            stars.forEach(s => {
+                s.opacity += s.twinkleSpeed * s.twinkleDir;
+                if (s.opacity >= 1)   { s.opacity = 1;   s.twinkleDir = -1; }
+                if (s.opacity <= 0.1) { s.opacity = 0.1; s.twinkleDir =  1; }
+                s.y += s.speed;
+                if (s.y > h * 0.72) { s.y = 0; s.x = Math.random() * w; }
+                ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255,255,255,${s.opacity})`; ctx.fill();
+                if (s.size > 1.5) {
+                    ctx.beginPath(); ctx.arc(s.x, s.y, s.size * 2.5, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(200,220,255,${s.opacity * 0.15})`; ctx.fill();
+                }
+            });
 
-        // Atmospheric horizon glow
-        const hGlow = ctx.createLinearGradient(0, h * 0.65, 0, h);
-        hGlow.addColorStop(0, 'transparent');
-        hGlow.addColorStop(1, 'rgba(255,245,220,0.18)');
-        ctx.fillStyle = hGlow;
-        ctx.fillRect(0, 0, w, h);
+            // Shooting stars
+            if (Math.random() < 0.002) {
+                shootingStars.push({
+                    x: Math.random() * w * 0.8, y: Math.random() * h * 0.4,
+                    speed: Math.random() * 8 + 6, angle: Math.PI / 6 + Math.random() * 0.3,
+                    tailLen: Math.random() * 60 + 40, opacity: 1, life: 0
+                });
+            }
+            shootingStars = shootingStars.filter(s => {
+                s.x += s.speed * Math.cos(s.angle);
+                s.y += s.speed * Math.sin(s.angle);
+                s.life++; s.opacity = Math.max(0, 1 - s.life / 40);
+                const grad = ctx.createLinearGradient(s.x, s.y, s.x - s.tailLen * Math.cos(s.angle), s.y - s.tailLen * Math.sin(s.angle));
+                grad.addColorStop(0, `rgba(255,255,255,${s.opacity})`);
+                grad.addColorStop(1, 'rgba(255,255,255,0)');
+                ctx.strokeStyle = grad; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(s.x, s.y);
+                ctx.lineTo(s.x - s.tailLen * Math.cos(s.angle), s.y - s.tailLen * Math.sin(s.angle));
+                ctx.stroke();
+                return s.opacity > 0;
+            });
 
-        // Rolling hills
-        const hillColors = [
-            { yBase: h * 0.82, amp: h * 0.06, period: w * 1.3, phase: 0,    color: '#7ec87e', dark: '#5aaa5a' },
-            { yBase: h * 0.87, amp: h * 0.05, period: w * 0.9, phase: 1.2,  color: '#8fd48f', dark: '#6abf6a' },
-            { yBase: h * 0.91, amp: h * 0.04, period: w * 0.7, phase: 2.6,  color: '#a5dda5', dark: '#7ec87e' },
-        ];
-        hillColors.forEach(hill => {
-            ctx.beginPath();
-            ctx.moveTo(0, h);
+            // Moon — same upper-right position as sun
+            const mx = w * 0.80, my = h * 0.11, mr = 24;
+            const moonGlow = ctx.createRadialGradient(mx, my, 0, mx, my, mr * 5);
+            moonGlow.addColorStop(0, 'rgba(200,215,255,0.13)'); moonGlow.addColorStop(1, 'transparent');
+            ctx.fillStyle = moonGlow; ctx.fillRect(0, 0, w, h);
+            // Disc
+            ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2);
+            const moonFill = ctx.createRadialGradient(mx - 6, my - 6, 0, mx, my, mr);
+            moonFill.addColorStop(0, '#f0f4e2'); moonFill.addColorStop(0.65, '#d8e0c4'); moonFill.addColorStop(1, '#b8c8a0');
+            ctx.fillStyle = moonFill; ctx.fill();
+            // Crescent shadow cutout using sky color
+            ctx.beginPath(); ctx.arc(mx + mr * 0.56, my - mr * 0.06, mr * 0.80, 0, Math.PI * 2);
+            ctx.fillStyle = s0; ctx.fill();
+
+            // Horizon glow from moonlight
+            const hGlow = ctx.createLinearGradient(0, h * 0.65, 0, h);
+            hGlow.addColorStop(0, 'transparent'); hGlow.addColorStop(1, 'rgba(100,130,200,0.08)');
+            ctx.fillStyle = hGlow; ctx.fillRect(0, 0, w, h);
+
+        } else {
+            // Sun
+            const sunX = w * 0.80, sunY = h * 0.11;
+            const halo = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, w * 0.28);
+            halo.addColorStop(0, pal.haloC); halo.addColorStop(0.3, pal.haloM);
+            halo.addColorStop(0.7, pal.haloF); halo.addColorStop(1, 'transparent');
+            ctx.fillStyle = halo; ctx.fillRect(0, 0, w, h);
+            const corona = ctx.createRadialGradient(sunX, sunY, 18, sunX, sunY, 90);
+            corona.addColorStop(0, pal.corona0); corona.addColorStop(0.4, pal.corona1); corona.addColorStop(1, 'transparent');
+            ctx.fillStyle = corona; ctx.fillRect(0, 0, w, h);
+            ctx.beginPath(); ctx.arc(sunX, sunY, 22, 0, Math.PI * 2);
+            const disc = ctx.createRadialGradient(sunX - 6, sunY - 6, 0, sunX, sunY, 22);
+            disc.addColorStop(0, pal.disc0); disc.addColorStop(0.6, pal.disc1); disc.addColorStop(1, pal.disc2);
+            ctx.fillStyle = disc; ctx.fill();
+
+            const hGlow = ctx.createLinearGradient(0, h * 0.65, 0, h);
+            hGlow.addColorStop(0, 'transparent'); hGlow.addColorStop(1, pal.horizGlow);
+            ctx.fillStyle = hGlow; ctx.fillRect(0, 0, w, h);
+        }
+
+        // Hills
+        const hillPhases = [[h*0.82, h*0.06, w*1.3, 0], [h*0.87, h*0.05, w*0.9, 1.2], [h*0.91, h*0.04, w*0.7, 2.6]];
+        hillPhases.forEach(([yBase, amp, period, phase], i) => {
+            ctx.beginPath(); ctx.moveTo(0, h);
             for (let x = 0; x <= w; x += 4) {
-                const y = hill.yBase + Math.sin((x / hill.period) * Math.PI * 2 + hill.phase) * hill.amp
-                                     + Math.sin((x / hill.period * 1.7) * Math.PI * 2 + hill.phase * 0.5) * hill.amp * 0.35;
+                const y = yBase + Math.sin((x / period) * Math.PI * 2 + phase) * amp
+                                + Math.sin((x / period * 1.7) * Math.PI * 2 + phase * 0.5) * amp * 0.35;
                 ctx.lineTo(x, y);
             }
-            ctx.lineTo(w, h);
-            ctx.closePath();
-            const hg = ctx.createLinearGradient(0, hill.yBase - hill.amp, 0, h);
-            hg.addColorStop(0, hill.color);
-            hg.addColorStop(1, hill.dark);
-            ctx.fillStyle = hg;
-            ctx.fill();
+            ctx.lineTo(w, h); ctx.closePath();
+            const hg = ctx.createLinearGradient(0, yBase - amp, 0, h);
+            hg.addColorStop(0, pal.hills[i][0]); hg.addColorStop(1, pal.hills[i][1]);
+            ctx.fillStyle = hg; ctx.fill();
         });
 
-        // Far clouds (layer 0)
-        clouds.filter(c => c.layer === 0).forEach(c => {
-            c.x += c.speed;
-            if (c.x - 200 * c.scale > w) c.x = -200 * c.scale;
-            ctx.save();
-            ctx.globalAlpha = 0.55;
-            drawCloud(c.x, c.y, c.scale);
-            ctx.restore();
+        // Clouds layers 0 & 1
+        const cloudAlphas = isNight ? [0.35, 0.50] : [0.55, 0.78];
+        [[0, cloudAlphas[0]], [1, cloudAlphas[1]]].forEach(([layer, alpha]) => {
+            clouds.filter(c => c.layer === layer).forEach(c => {
+                c.x += c.speed;
+                if (c.x - 200 * c.scale > w) c.x = -200 * c.scale;
+                ctx.save(); ctx.globalAlpha = alpha;
+                drawCloud(c.x, c.y, c.scale, pal);
+                ctx.restore();
+            });
         });
 
-        // Mid clouds (layer 1)
-        clouds.filter(c => c.layer === 1).forEach(c => {
-            c.x += c.speed;
-            if (c.x - 200 * c.scale > w) c.x = -200 * c.scale;
-            ctx.save();
-            ctx.globalAlpha = 0.78;
-            drawCloud(c.x, c.y, c.scale);
-            ctx.restore();
-        });
+        // Birds (hidden at night)
+        if (!isNight) {
+            birds.forEach(b => {
+                b.x += b.speed; b.flap += b.flapSpeed;
+                b.y = b.baseY + Math.sin(t * 0.6 + b.offsetX * 0.05) * 4;
+                if (b.x > w + 40) b.x = -40;
+                drawBird(b, pal);
+            });
+        }
 
-        // Birds
-        birds.forEach(b => {
-            b.x += b.speed;
-            b.flap += b.flapSpeed;
-            b.y = b.baseY + Math.sin(t * 0.6 + b.offsetX * 0.05) * 4;
-            if (b.x > w + 40) b.x = -40;
-            drawBird(b);
-        });
-
-        // Near clouds (layer 2) — drawn over birds for depth
+        // Near clouds over birds
+        const nearAlpha = isNight ? 0.65 : 0.92;
         clouds.filter(c => c.layer === 2).forEach(c => {
             c.x += c.speed;
             if (c.x - 200 * c.scale > w) c.x = -200 * c.scale;
-            ctx.save();
-            ctx.globalAlpha = 0.92;
-            drawCloud(c.x, c.y, c.scale);
+            ctx.save(); ctx.globalAlpha = nearAlpha;
+            drawCloud(c.x, c.y, c.scale, pal);
             ctx.restore();
         });
 
