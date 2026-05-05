@@ -7,94 +7,143 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    background: #e8f4e8;
+    background: linear-gradient(160deg, #87CEEB 0%, #B0DFF0 40%, #C8EBC0 100%);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: 100vh;
+    min-height: 100vh;
     font-family: 'Arial Rounded MT Bold', Arial, sans-serif;
     overflow: hidden;
   }
-  #header {
+  #game-container {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 30px;
-    margin-bottom: 12px;
+    gap: 10px;
   }
-  h1 {
-    font-size: 2rem;
-    color: #2d6a2d;
-    text-shadow: 2px 2px 0 #a8d5a8;
+  #title {
+    font-size: 2.2rem;
+    color: #fff;
+    text-shadow: 3px 3px 0 #2a6030, 0 0 20px rgba(80,200,80,0.4);
+    letter-spacing: 3px;
   }
   #hud {
     display: flex;
-    gap: 30px;
-    font-size: 1.1rem;
-    color: #2d6a2d;
+    gap: 0;
+    background: rgba(255,255,255,0.9);
+    border-radius: 40px;
+    padding: 0;
+    font-size: 1rem;
+    color: #3a5a3a;
     font-weight: bold;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.8);
+    border: 2px solid rgba(255,255,255,0.6);
+    overflow: hidden;
   }
-  #canvas {
-    border: 4px solid #2d6a2d;
-    border-radius: 8px;
-    background: #f5faf5;
-    display: block;
+  .hud-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px 22px;
+    gap: 2px;
   }
+  .hud-item + .hud-item {
+    border-left: 1px solid #ddd;
+  }
+  .hud-label {
+    font-size: 0.65rem;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+  }
+  .hud-value {
+    font-size: 1.15rem;
+    color: #2a5a2a;
+  }
+  #wrapper {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow:
+      0 12px 40px rgba(0,0,0,0.3),
+      0 0 0 3px #3a7a3a,
+      0 0 0 6px rgba(255,255,255,0.5),
+      0 0 0 8px #3a7a3a;
+  }
+  #canvas { display: block; }
   #overlay {
     position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
+    inset: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: rgba(232, 244, 232, 0.88);
+    background: rgba(230, 248, 230, 0.93);
+    backdrop-filter: blur(3px);
   }
-  #overlay h2 {
-    font-size: 2.5rem;
-    color: #2d6a2d;
-    margin-bottom: 12px;
+  .overlay-title {
+    font-size: 2.8rem;
+    color: #2a6030;
+    text-shadow: 3px 3px 0 #a0d0a0;
+    margin-bottom: 4px;
   }
-  #overlay p {
-    font-size: 1.1rem;
-    color: #4a8a4a;
-    margin-bottom: 24px;
+  .overlay-sub {
+    font-size: 1rem;
+    color: #5a8a5a;
+    margin-bottom: 16px;
+  }
+  .overlay-box {
+    background: rgba(255,255,255,0.75);
+    border-radius: 14px;
+    padding: 14px 26px;
+    margin-bottom: 22px;
+    color: #4a6a4a;
+    line-height: 1.9;
+    font-size: 0.92rem;
     text-align: center;
-    max-width: 320px;
-    line-height: 1.6;
+    border: 1px solid rgba(100,180,100,0.3);
   }
   button {
-    background: #2d6a2d;
+    background: linear-gradient(160deg, #4a9a4a, #2a6a2a);
     color: white;
     border: none;
-    padding: 12px 32px;
-    font-size: 1.1rem;
-    border-radius: 8px;
+    padding: 13px 42px;
+    font-size: 1.15rem;
+    border-radius: 40px;
     cursor: pointer;
     font-family: inherit;
     font-weight: bold;
-    transition: background 0.2s;
+    letter-spacing: 1px;
+    box-shadow: 0 5px 0 #1a4a1a, 0 6px 16px rgba(0,0,0,0.25);
+    transition: all 0.12s;
   }
-  button:hover { background: #1f4e1f; }
-  #wrapper { position: relative; }
+  button:hover { background: linear-gradient(160deg, #5aaa5a, #3a7a3a); transform: translateY(-2px); }
+  button:active { transform: translateY(2px); box-shadow: 0 3px 0 #1a4a1a, 0 4px 10px rgba(0,0,0,0.2); }
 </style>
 </head>
 <body>
-
-<div id="header">
-  <h1>Monster Escape</h1>
+<div id="game-container">
+  <div id="title">Monster Escape</div>
   <div id="hud">
-    <span>Score: <span id="score">0</span></span>
-    <span>Lives: <span id="lives">3</span></span>
-    <span>Level: <span id="level">1</span></span>
+    <div class="hud-item"><span class="hud-label">Score</span><span class="hud-value" id="score">0</span></div>
+    <div class="hud-item"><span class="hud-label">Best</span><span class="hud-value" id="highscore">0</span></div>
+    <div class="hud-item"><span class="hud-label">Lives</span><span class="hud-value" id="lives">3</span></div>
+    <div class="hud-item"><span class="hud-label">Level</span><span class="hud-value" id="level">1</span></div>
   </div>
-</div>
-
-<div id="wrapper">
-  <canvas id="canvas"></canvas>
-  <div id="overlay">
-    <h2>Monster Escape</h2>
-    <p>Use <b>Arrow Keys</b> or <b>WASD</b> to move.<br>Collect all the dots — avoid the monsters!</p>
-    <button id="startBtn">Play</button>
+  <div id="wrapper">
+    <canvas id="canvas"></canvas>
+    <div id="overlay">
+      <div class="overlay-title">Monster Escape</div>
+      <div class="overlay-sub">Can you collect every dot?</div>
+      <div class="overlay-box">
+        <b>Arrow Keys</b> or <b>WASD</b> to move<br>
+        Collect all the dots to advance<br>
+        Eat a <b>Power Pellet</b> to scare monsters<br>
+        Eat scared monsters for bonus points!
+      </div>
+      <button id="startBtn">Play</button>
+    </div>
   </div>
 </div>
 
@@ -103,17 +152,21 @@ const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const overlay = document.getElementById('overlay');
 const scoreEl = document.getElementById('score');
+const highscoreEl = document.getElementById('highscore');
 const livesEl = document.getElementById('lives');
 const levelEl = document.getElementById('level');
 const startBtn = document.getElementById('startBtn');
 
-const CELL = 28;
+let highScore = parseInt(localStorage.getItem('monsterEscapeHigh') || '0');
+highscoreEl.textContent = highScore;
+
+const CELL = 30;
 const COLS = 21;
 const ROWS = 19;
 canvas.width = COLS * CELL;
 canvas.height = ROWS * CELL;
 
-// 0=path, 1=wall, 2=dot, 3=power pellet
+// 0=open, 1=wall, 2=dot, 3=power pellet
 const BASE_MAP = [
   [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
   [1,2,2,2,2,2,2,2,2,2,1,2,2,2,2,2,2,2,2,2,1],
@@ -135,325 +188,425 @@ const BASE_MAP = [
   [1,1,2,1,2,1,2,1,1,1,1,1,1,1,2,1,2,1,2,1,1],
   [1,2,2,2,2,2,2,2,2,2,1,2,2,2,2,2,2,2,2,2,1],
 ];
-// last row needs wall at edges
 BASE_MAP[18][0] = 1;
 BASE_MAP[18][20] = 1;
 
 let map, player, monsters, score, lives, level, gameActive, animFrame;
 let powerTimer = 0;
+let tick = 0;
+let particles = [];
+let flashTimer = 0, flashColor = 'rgba(255,0,0,0.3)';
 const POWER_DURATION = 300;
 
-const MONSTER_COLORS = ['#e74c3c','#9b59b6','#e67e22','#16a085'];
-const MONSTER_SCARED = '#3498db';
+// Monster base colors [body-light, body-dark]
+const MONSTER_PALETTES = [
+  ['#FF6B6B','#C0392B'],
+  ['#C06BE8','#8E44AD'],
+  ['#FF9B4A','#D35400'],
+  ['#26C9B0','#1A8870'],
+];
 
-function buildMap() {
-  return BASE_MAP.map(row => [...row]);
-}
-
-function countDots(m) {
-  return m.reduce((s, row) => s + row.filter(c => c === 2 || c === 3).length, 0);
-}
+function buildMap() { return BASE_MAP.map(row => [...row]); }
+function countDots(m) { return m.reduce((s,r)=>s+r.filter(c=>c===2||c===3).length,0); }
 
 function initGame() {
-  map = buildMap();
-  score = 0;
-  lives = 3;
-  level = 1;
-  updateHUD();
-  spawnEntities();
-  gameActive = true;
+  map = buildMap(); score = 0; lives = 3; level = 1;
+  particles = []; tick = 0; flashTimer = 0;
+  updateHUD(); spawnEntities(); gameActive = true;
 }
 
 function spawnEntities() {
-  player = { col: 10, row: 16, dx: 0, dy: 0, nextDx: 0, nextDy: 0, moveTimer: 0, mouthAngle: 0, mouthDir: 1 };
+  player = { col:10, row:16, dx:0, dy:0, nextDx:0, nextDy:0, moveTimer:0, mouthAngle:0.05, mouthDir:1 };
   monsters = [
-    { col: 9,  row: 9, dx: 0, dy: -1, moveTimer: 0, color: MONSTER_COLORS[0], scared: false },
-    { col: 11, row: 9, dx: 0, dy: 1,  moveTimer: 0, color: MONSTER_COLORS[1], scared: false },
-    { col: 10, row: 8, dx: -1,dy: 0,  moveTimer: 0, color: MONSTER_COLORS[2], scared: false },
-    { col: 10, row: 10,dx: 1, dy: 0,  moveTimer: 0, color: MONSTER_COLORS[3], scared: false },
+    { col:9,  row:9,  dx:0,  dy:-1, moveTimer:0, idx:0, scared:false },
+    { col:11, row:9,  dx:0,  dy:1,  moveTimer:0, idx:1, scared:false },
+    { col:10, row:8,  dx:-1, dy:0,  moveTimer:0, idx:2, scared:false },
+    { col:10, row:10, dx:1,  dy:0,  moveTimer:0, idx:3, scared:false },
   ];
 }
 
-function playerSpeed() { return Math.max(4, 7 - level); }
-function monsterSpeed() { return Math.max(5, 9 - level); }
+function playerSpeed() { return Math.max(4, 7-level); }
+function monsterSpeed() { return Math.max(5, 9-level); }
 
 function canMove(col, row) {
   if (row < 0 || row >= ROWS) return false;
-  const c = ((col % COLS) + COLS) % COLS;
+  const c = ((col%COLS)+COLS)%COLS;
   return map[row][c] !== 1;
 }
 
 function updatePlayer() {
   player.moveTimer++;
-  const speed = playerSpeed();
-  if (player.moveTimer < speed) return;
+  if (player.moveTimer < playerSpeed()) return;
   player.moveTimer = 0;
-
-  const nc = ((player.col + player.nextDx) % COLS + COLS) % COLS;
-  const nr = player.row + player.nextDy;
-  if (canMove(nc, nr)) {
-    player.dx = player.nextDx;
-    player.dy = player.nextDy;
-  }
-
-  const mc = ((player.col + player.dx) % COLS + COLS) % COLS;
-  const mr = player.row + player.dy;
-  if (canMove(mc, mr)) {
-    player.col = mc;
-    player.row = mr;
-  }
-
+  const nc = ((player.col+player.nextDx)%COLS+COLS)%COLS;
+  const nr = player.row+player.nextDy;
+  if (canMove(nc,nr)) { player.dx=player.nextDx; player.dy=player.nextDy; }
+  const mc = ((player.col+player.dx)%COLS+COLS)%COLS;
+  const mr = player.row+player.dy;
+  if (canMove(mc,mr)) { player.col=mc; player.row=mr; }
   const cell = map[player.row][player.col];
-  if (cell === 2) {
-    map[player.row][player.col] = 0;
-    score += 10;
-    updateHUD();
-  } else if (cell === 3) {
-    map[player.row][player.col] = 0;
-    score += 50;
-    powerTimer = POWER_DURATION;
-    monsters.forEach(m => m.scared = true);
-    updateHUD();
+  if (cell===2) {
+    map[player.row][player.col]=0;
+    score+=10; updateHUD();
+    addParticle(player.col, player.row, '+10', '#FFD700');
+  } else if (cell===3) {
+    map[player.row][player.col]=0;
+    score+=50; updateHUD();
+    powerTimer=POWER_DURATION;
+    monsters.forEach(m=>m.scared=true);
+    flashTimer=20; flashColor='rgba(255,220,0,0.35)';
+    addParticle(player.col, player.row, '+50', '#FF8C00');
   }
 }
 
 function updateMonsters() {
-  if (powerTimer > 0) {
-    powerTimer--;
-    if (powerTimer === 0) monsters.forEach(m => m.scared = false);
-  }
-
+  if (powerTimer>0) { powerTimer--; if(powerTimer===0) monsters.forEach(m=>m.scared=false); }
   monsters.forEach(m => {
     m.moveTimer++;
-    const speed = m.scared ? monsterSpeed() + 3 : monsterSpeed();
-    if (m.moveTimer < speed) return;
+    const spd = m.scared ? monsterSpeed()+3 : monsterSpeed();
+    if (m.moveTimer < spd) return;
     m.moveTimer = 0;
-
     const dirs = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
-    const opposite = {dx: -m.dx, dy: -m.dy};
-
-    let options = dirs.filter(d => {
-      if (d.dx === opposite.dx && d.dy === opposite.dy) return false;
-      const nc = ((m.col + d.dx) % COLS + COLS) % COLS;
-      const nr = m.row + d.dy;
-      return canMove(nc, nr);
+    const opp = {dx:-m.dx, dy:-m.dy};
+    let opts = dirs.filter(d=>{
+      if(d.dx===opp.dx&&d.dy===opp.dy) return false;
+      const nc=((m.col+d.dx)%COLS+COLS)%COLS, nr=m.row+d.dy;
+      return canMove(nc,nr);
     });
-
-    if (options.length === 0) options = dirs.filter(d => {
-      const nc = ((m.col + d.dx) % COLS + COLS) % COLS;
-      const nr = m.row + d.dy;
-      return canMove(nc, nr);
-    });
-
+    if (!opts.length) opts = dirs.filter(d=>{ const nc=((m.col+d.dx)%COLS+COLS)%COLS,nr=m.row+d.dy; return canMove(nc,nr); });
     let chosen;
     if (m.scared) {
-      // run away from player
-      chosen = options.reduce((best, d) => {
-        const nc = ((m.col + d.dx) % COLS + COLS) % COLS;
-        const nr = m.row + d.dy;
-        const dist = Math.abs(nc - player.col) + Math.abs(nr - player.row);
-        return dist > (best.dist ?? -1) ? {d, dist} : best;
-      }, {}).d || options[Math.floor(Math.random() * options.length)];
-    } else if (Math.random() < 0.7) {
-      // chase player
-      chosen = options.reduce((best, d) => {
-        const nc = ((m.col + d.dx) % COLS + COLS) % COLS;
-        const nr = m.row + d.dy;
-        const dist = Math.abs(nc - player.col) + Math.abs(nr - player.row);
-        return dist < (best.dist ?? Infinity) ? {d, dist} : best;
-      }, {}).d || options[Math.floor(Math.random() * options.length)];
+      chosen = opts.reduce((b,d)=>{ const nc=((m.col+d.dx)%COLS+COLS)%COLS,nr=m.row+d.dy; const dist=Math.abs(nc-player.col)+Math.abs(nr-player.row); return dist>(b.dist??-1)?{d,dist}:b; },{}).d || opts[Math.floor(Math.random()*opts.length)];
+    } else if (Math.random()<0.7) {
+      chosen = opts.reduce((b,d)=>{ const nc=((m.col+d.dx)%COLS+COLS)%COLS,nr=m.row+d.dy; const dist=Math.abs(nc-player.col)+Math.abs(nr-player.row); return dist<(b.dist??Infinity)?{d,dist}:b; },{}).d || opts[Math.floor(Math.random()*opts.length)];
     } else {
-      chosen = options[Math.floor(Math.random() * options.length)];
+      chosen = opts[Math.floor(Math.random()*opts.length)];
     }
-
-    if (chosen) {
-      m.dx = chosen.dx;
-      m.dy = chosen.dy;
-      m.col = ((m.col + chosen.dx) % COLS + COLS) % COLS;
-      m.row = m.row + chosen.dy;
-    }
+    if (chosen) { m.dx=chosen.dx; m.dy=chosen.dy; m.col=((m.col+chosen.dx)%COLS+COLS)%COLS; m.row=m.row+chosen.dy; }
   });
 }
 
 function checkCollisions() {
   monsters.forEach(m => {
-    if (m.col === player.col && m.row === player.row) {
+    if (m.col===player.col && m.row===player.row) {
       if (m.scared) {
-        m.col = 10; m.row = 9;
-        m.scared = false;
-        score += 200;
-        updateHUD();
+        m.col=10; m.row=9; m.scared=false;
+        score+=200; updateHUD();
+        addParticle(player.col, player.row, '+200', '#FF6B00');
       } else {
-        lives--;
-        updateHUD();
-        if (lives <= 0) {
-          endGame(false);
-        } else {
-          spawnEntities();
-        }
+        lives--; updateHUD();
+        flashTimer=30; flashColor='rgba(255,40,40,0.45)';
+        if (lives<=0) endGame(false);
+        else spawnEntities();
       }
     }
   });
 }
 
 function checkWin() {
-  if (countDots(map) === 0) {
-    level++;
-    updateHUD();
-    map = buildMap();
-    spawnEntities();
-    powerTimer = 0;
-  }
+  if (countDots(map)===0) { level++; updateHUD(); map=buildMap(); spawnEntities(); powerTimer=0; }
 }
 
 function updateHUD() {
   scoreEl.textContent = score;
   livesEl.textContent = lives;
   levelEl.textContent = level;
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem('monsterEscapeHigh', highScore);
+    highscoreEl.textContent = highScore;
+  }
 }
 
-function drawCell(col, row) {
-  const x = col * CELL;
-  const y = row * CELL;
-  const v = map[row][col];
+// ---- Particles ----
+function addParticle(col, row, text, color) {
+  particles.push({ x: col*CELL+CELL/2, y: row*CELL+CELL/2, text, color, vy:-1.8, alpha:1, life:50 });
+}
 
-  if (v === 1) {
-    ctx.fillStyle = '#2d6a2d';
-    ctx.fillRect(x, y, CELL, CELL);
-    ctx.fillStyle = '#4a8a4a';
-    ctx.fillRect(x+1, y+1, CELL-2, 3);
-    ctx.fillRect(x+1, y+1, 3, CELL-2);
-  } else {
-    ctx.fillStyle = '#f5faf5';
-    ctx.fillRect(x, y, CELL, CELL);
-    if (v === 2) {
-      ctx.fillStyle = '#f0c040';
-      ctx.beginPath();
-      ctx.arc(x + CELL/2, y + CELL/2, 3, 0, Math.PI*2);
-      ctx.fill();
-    } else if (v === 3) {
-      ctx.fillStyle = '#f0c040';
-      ctx.beginPath();
-      ctx.arc(x + CELL/2, y + CELL/2, 7, 0, Math.PI*2);
-      ctx.fill();
-    }
+function updateParticles() {
+  particles = particles.filter(p=>p.life>0);
+  particles.forEach(p=>{ p.y+=p.vy; p.alpha=p.life/50; p.life--; });
+}
+
+// ---- Drawing ----
+function isWall(c,r) {
+  if (r<0||r>=ROWS||c<0||c>=COLS) return true;
+  return BASE_MAP[r][c]===1;
+}
+
+function drawWall(col, row) {
+  const x=col*CELL, y=row*CELL;
+  // Base stone
+  ctx.fillStyle='#B49A6E';
+  ctx.fillRect(x,y,CELL,CELL);
+  // Top-left highlight bevel
+  ctx.fillStyle='#D4BC8A';
+  ctx.fillRect(x,y,CELL,4);
+  ctx.fillRect(x,y,4,CELL);
+  // Bottom-right shadow bevel
+  ctx.fillStyle='#7A6040';
+  ctx.fillRect(x,y+CELL-4,CELL,4);
+  ctx.fillRect(x+CELL-4,y,4,CELL);
+  // Inner face
+  ctx.fillStyle='#C0A878';
+  ctx.fillRect(x+4,y+4,CELL-8,CELL-8);
+  // Subtle center mark
+  ctx.fillStyle='#A8906A';
+  ctx.fillRect(x+CELL/2-2,y+CELL/2-2,4,4);
+
+  // Cyan edge glow on sides facing open corridors
+  ctx.lineWidth=2.5; ctx.lineCap='square';
+  ctx.strokeStyle='rgba(80,200,240,0.9)';
+  const top=!isWall(col,row-1), bot=!isWall(col,row+1), lft=!isWall(col-1,row), rgt=!isWall(col+1,row);
+  if (top) { ctx.beginPath(); ctx.moveTo(x,y+2.5); ctx.lineTo(x+CELL,y+2.5); ctx.stroke(); }
+  if (bot) { ctx.beginPath(); ctx.moveTo(x,y+CELL-2.5); ctx.lineTo(x+CELL,y+CELL-2.5); ctx.stroke(); }
+  if (lft) { ctx.beginPath(); ctx.moveTo(x+2.5,y); ctx.lineTo(x+2.5,y+CELL); ctx.stroke(); }
+  if (rgt) { ctx.beginPath(); ctx.moveTo(x+CELL-2.5,y); ctx.lineTo(x+CELL-2.5,y+CELL); ctx.stroke(); }
+}
+
+function drawFloor(col, row) {
+  const x=col*CELL, y=row*CELL;
+  ctx.fillStyle=(col+row)%2===0 ? '#FFF6E8' : '#FFF0D8';
+  ctx.fillRect(x,y,CELL,CELL);
+  ctx.fillStyle='rgba(180,160,130,0.15)';
+  ctx.fillRect(x,y,CELL,1);
+  ctx.fillRect(x,y,1,CELL);
+}
+
+function drawDot(col, row) {
+  const cx=col*CELL+CELL/2, cy=row*CELL+CELL/2;
+  ctx.shadowColor='#FFD700'; ctx.shadowBlur=8;
+  const grd=ctx.createRadialGradient(cx,cy,0,cx,cy,4);
+  grd.addColorStop(0,'#FFFFFF'); grd.addColorStop(0.5,'#FFE840'); grd.addColorStop(1,'rgba(255,200,0,0)');
+  ctx.fillStyle=grd;
+  ctx.beginPath(); ctx.arc(cx,cy,4,0,Math.PI*2); ctx.fill();
+  ctx.shadowBlur=0;
+}
+
+function drawPellet(col, row) {
+  const cx=col*CELL+CELL/2, cy=row*CELL+CELL/2;
+  const pulse=8+Math.sin(tick*0.09)*2.5;
+  ctx.shadowColor='#FFA500'; ctx.shadowBlur=22;
+  const grd=ctx.createRadialGradient(cx,cy,0,cx,cy,pulse+3);
+  grd.addColorStop(0,'#FFFFFF'); grd.addColorStop(0.3,'#FFE840'); grd.addColorStop(0.7,'#FF8C00'); grd.addColorStop(1,'rgba(255,140,0,0)');
+  ctx.fillStyle=grd;
+  ctx.beginPath(); ctx.arc(cx,cy,pulse+3,0,Math.PI*2); ctx.fill();
+  // Star rays
+  ctx.fillStyle='rgba(255,220,80,0.7)';
+  for (let i=0;i<8;i++) {
+    const a=i/8*Math.PI*2+tick*0.03;
+    const len=pulse+8, wid=1.5;
+    ctx.save();
+    ctx.translate(cx,cy); ctx.rotate(a);
+    ctx.fillRect(-wid/2,0,wid,len);
+    ctx.restore();
   }
+  ctx.shadowBlur=0;
 }
 
 function drawPlayer() {
-  const x = player.col * CELL + CELL/2;
-  const y = player.row * CELL + CELL/2;
-  const r = CELL/2 - 2;
+  const x=player.col*CELL+CELL/2, y=player.row*CELL+CELL/2;
+  const r=CELL/2-1;
+  player.mouthAngle+=0.16*player.mouthDir;
+  if(player.mouthAngle>0.38||player.mouthAngle<0.02) player.mouthDir*=-1;
+  let ang=0;
+  if(player.dx===1) ang=0; else if(player.dx===-1) ang=Math.PI;
+  else if(player.dy===1) ang=Math.PI/2; else if(player.dy===-1) ang=-Math.PI/2;
 
-  player.mouthAngle += 0.15 * player.mouthDir;
-  if (player.mouthAngle > 0.35 || player.mouthAngle < 0) player.mouthDir *= -1;
-
-  let angle = 0;
-  if (player.dx === 1) angle = 0;
-  else if (player.dx === -1) angle = Math.PI;
-  else if (player.dy === 1) angle = Math.PI/2;
-  else if (player.dy === -1) angle = -Math.PI/2;
-
-  ctx.fillStyle = '#f0c040';
-  ctx.beginPath();
-  ctx.moveTo(x, y);
-  ctx.arc(x, y, r, angle + player.mouthAngle, angle + Math.PI*2 - player.mouthAngle);
-  ctx.closePath();
-  ctx.fill();
-
-  // eye
-  const ex = x + Math.cos(angle - Math.PI/4) * r * 0.5;
-  const ey = y + Math.sin(angle - Math.PI/4) * r * 0.5;
-  ctx.fillStyle = '#2d6a2d';
-  ctx.beginPath();
-  ctx.arc(ex, ey, 2.5, 0, Math.PI*2);
-  ctx.fill();
+  ctx.shadowColor='rgba(255,210,0,0.8)'; ctx.shadowBlur=18;
+  const grd=ctx.createRadialGradient(x-r*0.3,y-r*0.35,0,x,y,r);
+  grd.addColorStop(0,'#FFFF90'); grd.addColorStop(0.45,'#FFD700'); grd.addColorStop(1,'#E08000');
+  ctx.fillStyle=grd;
+  ctx.beginPath(); ctx.moveTo(x,y);
+  ctx.arc(x,y,r,ang+player.mouthAngle,ang+Math.PI*2-player.mouthAngle);
+  ctx.closePath(); ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.strokeStyle='#B86000'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(x,y);
+  ctx.arc(x,y,r,ang+player.mouthAngle,ang+Math.PI*2-player.mouthAngle);
+  ctx.closePath(); ctx.stroke();
+  // Eye
+  const ex=x+Math.cos(ang-Math.PI/4)*r*0.5, ey=y+Math.sin(ang-Math.PI/4)*r*0.5;
+  ctx.fillStyle='#1a1a1a'; ctx.beginPath(); ctx.arc(ex,ey,3,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.arc(ex+0.8,ey-0.8,1.3,0,Math.PI*2); ctx.fill();
 }
 
 function drawMonster(m) {
-  const x = m.col * CELL + CELL/2;
-  const y = m.row * CELL + CELL/2;
-  const r = CELL/2 - 3;
-  const color = m.scared ? (powerTimer < 100 && Math.floor(powerTimer/10) % 2 === 0 ? '#fff' : MONSTER_SCARED) : m.color;
+  const cx=m.col*CELL+CELL/2, cy=m.row*CELL+CELL/2;
+  const hw=CELL/2-2; // half-width of the square blob
+  const scared=m.scared;
+  const flashing=scared&&powerTimer<100&&Math.floor(powerTimer/10)%2===0;
+  let c1,c2;
+  if (scared) { c1=flashing?'#FFFFFF':'#5599FF'; c2=flashing?'#AABBFF':'#2255CC'; }
+  else { [c1,c2]=MONSTER_PALETTES[m.idx]; }
 
-  ctx.fillStyle = color;
+  const x=cx-hw, y=cy-hw, s=hw*2;
+
+  // Slight squash/stretch wobble
+  const wobble=Math.sin(tick*0.18+m.idx)*1.5;
+  const bx=x-wobble*0.5, by=y+wobble*0.5, bw=s+wobble, bh=s-wobble;
+
+  // Glow
+  ctx.shadowColor=c1; ctx.shadowBlur=14;
+
+  // Body gradient (top-left light → bottom-right dark)
+  const grd=ctx.createLinearGradient(bx,by,bx+bw,by+bh);
+  grd.addColorStop(0,lighten(c1,55));
+  grd.addColorStop(0.5,c1);
+  grd.addColorStop(1,c2);
+  ctx.fillStyle=grd;
+
+  // Rounded square blob
+  const cr=6; // corner radius
   ctx.beginPath();
-  ctx.arc(x, y - 2, r, Math.PI, 0);
-  // wavy bottom
-  const steps = 4;
-  const waveW = (r * 2) / steps;
-  for (let i = 0; i <= steps; i++) {
-    const wx = (x - r) + i * waveW;
-    const wy = (y + r - 4) + (i % 2 === 0 ? 4 : 0);
-    ctx.lineTo(wx, wy);
-  }
+  ctx.moveTo(bx+cr,by);
+  ctx.lineTo(bx+bw-cr,by);
+  ctx.quadraticCurveTo(bx+bw,by,bx+bw,by+cr);
+  ctx.lineTo(bx+bw,by+bh-cr);
+  ctx.quadraticCurveTo(bx+bw,by+bh,bx+bw-cr,by+bh);
+  ctx.lineTo(bx+cr,by+bh);
+  ctx.quadraticCurveTo(bx,by+bh,bx,by+bh-cr);
+  ctx.lineTo(bx,by+cr);
+  ctx.quadraticCurveTo(bx,by,bx+cr,by);
   ctx.closePath();
   ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.strokeStyle=c2; ctx.lineWidth=2; ctx.stroke();
 
-  // eyes
-  const eyeOff = 5;
-  [-eyeOff, eyeOff].forEach(ox => {
-    ctx.fillStyle = 'white';
+  // Face features
+  const faceY=cy+2; // vertical center of face
+
+  if (scared) {
+    // Scared: X eyes + wobbly mouth
+    ctx.strokeStyle=flashing?'#8899FF':'#ffffff'; ctx.lineWidth=2.5; ctx.lineCap='round';
+    [-6,6].forEach(ox=>{
+      ctx.beginPath(); ctx.moveTo(cx+ox-3,faceY-8); ctx.lineTo(cx+ox+3,faceY-2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx+ox+3,faceY-8); ctx.lineTo(cx+ox-3,faceY-2); ctx.stroke();
+    });
+    // Wobbly scared mouth
     ctx.beginPath();
-    ctx.ellipse(x + ox, y - 4, 4, 5, 0, 0, Math.PI*2);
-    ctx.fill();
-    ctx.fillStyle = m.scared ? 'white' : '#1a1a1a';
+    ctx.moveTo(cx-7,faceY+5);
+    ctx.lineTo(cx-4,faceY+8); ctx.lineTo(cx-1,faceY+5);
+    ctx.lineTo(cx+2,faceY+8); ctx.lineTo(cx+5,faceY+5);
+    ctx.lineTo(cx+7,faceY+8);
+    ctx.stroke();
+  } else {
+    // Angry eyes: white sclera + dark pupils
+    [-6,6].forEach(ox=>{
+      ctx.fillStyle='white';
+      ctx.fillRect(cx+ox-4,faceY-9,8,7);
+      ctx.strokeStyle=c2; ctx.lineWidth=1; ctx.strokeRect(cx+ox-4,faceY-9,8,7);
+      const px=(cx+ox)+(m.dx||0)*1.5, py=(faceY-5.5)+(m.dy||0)*1;
+      ctx.fillStyle='#1a1a1a';
+      ctx.fillRect(px-2,py-2,4,4);
+    });
+
+    // Angry V eyebrows (always angry!)
+    ctx.strokeStyle=c2; ctx.lineWidth=3; ctx.lineCap='round';
+    // left brow: inner-high → outer-low
+    ctx.beginPath(); ctx.moveTo(cx-3,faceY-12); ctx.lineTo(cx-9,faceY-9); ctx.stroke();
+    // right brow: inner-high → outer-low
+    ctx.beginPath(); ctx.moveTo(cx+3,faceY-12); ctx.lineTo(cx+9,faceY-9); ctx.stroke();
+
+    // Angry mouth: jagged teeth frown
+    ctx.fillStyle='#1a1a1a';
     ctx.beginPath();
-    ctx.arc(x + ox + (m.dx || 0), y - 4 + (m.dy || 0), 2.5, 0, Math.PI*2);
+    ctx.moveTo(cx-7,faceY+3);
+    ctx.lineTo(cx-5,faceY+7);
+    ctx.lineTo(cx-2,faceY+4);
+    ctx.lineTo(cx+1,faceY+7);
+    ctx.lineTo(cx+4,faceY+4);
+    ctx.lineTo(cx+7,faceY+7);
+    ctx.lineTo(cx+7,faceY+3);
+    ctx.closePath();
     ctx.fill();
+
+    // Tiny white teeth
+    ctx.fillStyle='white';
+    ctx.fillRect(cx-5,faceY+3,3,3);
+    ctx.fillRect(cx-1,faceY+3,3,3);
+    ctx.fillRect(cx+3,faceY+3,3,3);
+  }
+}
+
+function drawParticles() {
+  particles.forEach(p=>{
+    ctx.globalAlpha=p.alpha;
+    ctx.fillStyle=p.color;
+    ctx.font='bold 13px Arial Rounded MT Bold, Arial';
+    ctx.textAlign='center';
+    ctx.fillText(p.text, p.x, p.y);
   });
+  ctx.globalAlpha=1;
 }
 
 function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  for (let r = 0; r < ROWS; r++)
-    for (let c = 0; c < COLS; c++)
-      drawCell(c, r);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) {
+    const v=map[r][c];
+    if(v===1) drawWall(c,r);
+    else { drawFloor(c,r); if(v===2) drawDot(c,r); else if(v===3) drawPellet(c,r); }
+  }
   drawPlayer();
   monsters.forEach(drawMonster);
+  drawParticles();
+  if (flashTimer>0) {
+    ctx.fillStyle=flashColor.replace(/[\d.]+\)$/,(flashTimer/30).toFixed(2)+')');
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    flashTimer--;
+  }
 }
 
 function loop() {
   if (!gameActive) return;
+  tick++;
   updatePlayer();
   updateMonsters();
   checkCollisions();
+  updateParticles();
   if (gameActive) checkWin();
   if (gameActive) draw();
-  animFrame = requestAnimationFrame(loop);
+  animFrame=requestAnimationFrame(loop);
 }
 
 function endGame(won) {
-  gameActive = false;
-  cancelAnimationFrame(animFrame);
-  overlay.innerHTML = `
-    <h2>${won ? 'You Win!' : 'Game Over'}</h2>
-    <p>Score: <b>${score}</b></p>
+  gameActive=false; cancelAnimationFrame(animFrame);
+  const newBest = score >= highScore && score > 0;
+  overlay.innerHTML=`
+    <div class="overlay-title">${won?'You Win!':'Game Over'}</div>
+    <div class="overlay-sub">Score: <b>${score}</b>${newBest ? ' &nbsp;— New Best!' : ''}</div>
+    <div style="font-size:0.9rem;color:#7a9a7a;margin-bottom:20px">Best: ${highScore}</div>
     <button id="restartBtn">Play Again</button>
   `;
-  overlay.style.display = 'flex';
-  document.getElementById('restartBtn').addEventListener('click', startGame);
+  overlay.style.display='flex';
+  document.getElementById('restartBtn').addEventListener('click',startGame);
 }
 
 function startGame() {
-  overlay.style.display = 'none';
+  overlay.style.display='none';
   cancelAnimationFrame(animFrame);
-  initGame();
-  loop();
+  initGame(); loop();
 }
 
-startBtn.addEventListener('click', startGame);
+startBtn.addEventListener('click',startGame);
 
-document.addEventListener('keydown', e => {
-  if (!gameActive) return;
-  switch(e.key) {
-    case 'ArrowLeft':  case 'a': player.nextDx = -1; player.nextDy = 0; break;
-    case 'ArrowRight': case 'd': player.nextDx =  1; player.nextDy = 0; break;
-    case 'ArrowUp':    case 'w': player.nextDx =  0; player.nextDy = -1; break;
-    case 'ArrowDown':  case 's': player.nextDx =  0; player.nextDy =  1; break;
+document.addEventListener('keydown',e=>{
+  if(!gameActive) return;
+  switch(e.key){
+    case 'ArrowLeft': case 'a': player.nextDx=-1; player.nextDy=0; break;
+    case 'ArrowRight':case 'd': player.nextDx=1;  player.nextDy=0; break;
+    case 'ArrowUp':   case 'w': player.nextDx=0;  player.nextDy=-1;break;
+    case 'ArrowDown': case 's': player.nextDx=0;  player.nextDy=1; break;
   }
   e.preventDefault();
 });
+
+// Color helper: lighten a hex color by `amount`
+function lighten(hex, amount) {
+  let r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+  r=Math.min(255,r+amount); g=Math.min(255,g+amount); b=Math.min(255,b+amount);
+  return `rgb(${r},${g},${b})`;
+}
 </script>
 </body>
 </html>
