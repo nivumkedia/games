@@ -18,26 +18,44 @@ const ctx = canvas.getContext('2d');
 
 let W, H;
 
-function resize() {
-    W = canvas.width = window.innerWidth;
-    H = canvas.height = window.innerHeight;
-    draw();
-}
-
-// Path control points (normalized 0-1)
-const pathPts = [
-    [0.50, 0.96],
-    [0.44, 0.86],
-    [0.54, 0.76],
-    [0.42, 0.66],
-    [0.52, 0.55],
-    [0.46, 0.44],
-    [0.51, 0.33],
-    [0.49, 0.22],
-    [0.50, 0.14],
+// Three paths, all converging at the peak
+const PATHS = [
+    // Left trail — winds up the left flank
+    [
+        [0.32, 0.97],
+        [0.18, 0.87],
+        [0.13, 0.77],
+        [0.22, 0.67],
+        [0.19, 0.57],
+        [0.30, 0.47],
+        [0.38, 0.37],
+        [0.44, 0.26],
+        [0.50, 0.14],
+    ],
+    // Center trail — winds up the middle
+    [
+        [0.50, 0.97],
+        [0.44, 0.87],
+        [0.55, 0.77],
+        [0.46, 0.67],
+        [0.53, 0.55],
+        [0.48, 0.44],
+        [0.51, 0.33],
+        [0.50, 0.14],
+    ],
+    // Right trail — winds up the right flank
+    [
+        [0.68, 0.97],
+        [0.82, 0.87],
+        [0.87, 0.77],
+        [0.78, 0.67],
+        [0.81, 0.57],
+        [0.70, 0.47],
+        [0.62, 0.37],
+        [0.56, 0.26],
+        [0.50, 0.14],
+    ],
 ];
-
-function px(p) { return [p[0] * W, p[1] * H]; }
 
 function drawSky() {
     const g = ctx.createLinearGradient(0, 0, 0, H * 0.6);
@@ -150,65 +168,61 @@ function drawTree(x, y, h, variant) {
 }
 
 function drawForest() {
-    // trees scattered over mountain; avoid the path center
     const trees = [
-        // left side
-        [0.10, 0.70, 38, 0], [0.15, 0.64, 44, 1], [0.08, 0.64, 36, 2],
-        [0.20, 0.58, 40, 0], [0.12, 0.58, 32, 1], [0.26, 0.52, 38, 2],
-        [0.17, 0.50, 34, 0], [0.22, 0.44, 30, 1], [0.30, 0.46, 36, 2],
-        [0.27, 0.38, 28, 0], [0.33, 0.36, 32, 1], [0.36, 0.30, 26, 2],
-        [0.31, 0.28, 24, 0], [0.38, 0.24, 22, 1],
-        [0.04, 0.72, 48, 2], [0.24, 0.68, 42, 0],
-        // right side
-        [0.90, 0.70, 38, 1], [0.85, 0.64, 44, 0], [0.92, 0.64, 36, 2],
-        [0.80, 0.58, 40, 1], [0.88, 0.58, 32, 0], [0.74, 0.52, 38, 2],
-        [0.83, 0.50, 34, 1], [0.78, 0.44, 30, 0], [0.70, 0.46, 36, 2],
-        [0.73, 0.38, 28, 1], [0.67, 0.36, 32, 0], [0.64, 0.30, 26, 2],
-        [0.69, 0.28, 24, 1], [0.62, 0.24, 22, 0],
-        [0.96, 0.72, 48, 2], [0.76, 0.68, 42, 1],
-        // near top
-        [0.42, 0.20, 18, 0], [0.58, 0.20, 18, 1],
-        [0.44, 0.16, 14, 2], [0.56, 0.16, 14, 0],
+        // Far left (outside left path)
+        [0.05, 0.73, 48, 2], [0.09, 0.66, 42, 0], [0.07, 0.60, 36, 1],
+
+        // Between left and center paths
+        [0.28, 0.82, 46, 1], [0.34, 0.74, 42, 2], [0.30, 0.68, 36, 0],
+        [0.36, 0.61, 32, 1], [0.34, 0.54, 28, 2], [0.38, 0.46, 24, 0],
+        [0.40, 0.39, 20, 1], [0.43, 0.31, 17, 2],
+
+        // Between center and right paths
+        [0.56, 0.82, 46, 0], [0.62, 0.74, 42, 1], [0.58, 0.68, 36, 2],
+        [0.64, 0.61, 32, 0], [0.62, 0.54, 28, 1], [0.60, 0.46, 24, 2],
+        [0.58, 0.39, 20, 0], [0.57, 0.31, 17, 1],
+
+        // Far right (outside right path)
+        [0.95, 0.73, 48, 1], [0.91, 0.66, 42, 2], [0.93, 0.60, 36, 0],
+
+        // Near top, flanking all paths
+        [0.44, 0.22, 16, 0], [0.56, 0.22, 16, 1],
+        [0.46, 0.18, 13, 2], [0.54, 0.18, 13, 0],
     ];
     trees.forEach(([nx, ny, h, v]) => drawTree(nx * W, ny * H, h, v));
 }
 
-function drawPath() {
-    const pts = pathPts.map(px);
+function strokeCurve(pts) {
+    ctx.beginPath();
+    ctx.moveTo(...pts[0]);
+    for (let i = 1; i < pts.length; i++) {
+        const [px0, py0] = pts[i - 1], [px1, py1] = pts[i];
+        ctx.quadraticCurveTo(px0, py0, (px0 + px1) / 2, (py0 + py1) / 2);
+    }
+    ctx.lineTo(...pts[pts.length - 1]);
+    ctx.stroke();
+}
 
-    // Shadow/border pass
+function drawPaths() {
     ctx.save();
-    ctx.lineWidth = W * 0.022;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.strokeStyle = 'rgba(100,60,10,0.35)';
-    ctx.beginPath();
-    ctx.moveTo(...pts[0]);
-    for (let i = 1; i < pts.length; i++) {
-        const prev = pts[i - 1], cur = pts[i];
-        const mx = (prev[0] + cur[0]) / 2, my = (prev[1] + cur[1]) / 2;
-        ctx.quadraticCurveTo(prev[0], prev[1], mx, my);
-    }
-    ctx.lineTo(...pts[pts.length - 1]);
-    ctx.stroke();
 
-    // Main dirt path
-    ctx.lineWidth = W * 0.018;
-    ctx.strokeStyle = '#d4a35a';
-    ctx.beginPath();
-    ctx.moveTo(...pts[0]);
-    for (let i = 1; i < pts.length; i++) {
-        const prev = pts[i - 1], cur = pts[i];
-        const mx = (prev[0] + cur[0]) / 2, my = (prev[1] + cur[1]) / 2;
-        ctx.quadraticCurveTo(prev[0], prev[1], mx, my);
-    }
-    ctx.lineTo(...pts[pts.length - 1]);
-    ctx.stroke();
+    PATHS.forEach(rawPts => {
+        const pts = rawPts.map(([nx, ny]) => [nx * W, ny * H]);
 
-    // Light center stripe
-    ctx.lineWidth = W * 0.006;
-    ctx.strokeStyle = 'rgba(255,225,160,0.55)';
-    ctx.stroke();
+        ctx.lineWidth = W * 0.020;
+        ctx.strokeStyle = 'rgba(90,50,8,0.32)';
+        strokeCurve(pts);
+
+        ctx.lineWidth = W * 0.015;
+        ctx.strokeStyle = '#d4a35a';
+        strokeCurve(pts);
+
+        ctx.lineWidth = W * 0.005;
+        ctx.strokeStyle = 'rgba(255,228,165,0.55)';
+        strokeCurve(pts);
+    });
 
     ctx.restore();
 }
@@ -293,29 +307,206 @@ function drawTitle() {
     ctx.restore();
 }
 
-function draw() {
-    ctx.clearRect(0, 0, W, H);
+// ── Path position helper ──
+function getPosOnPath(path, t) {
+    const n = path.length - 1;
+    const seg = Math.min(Math.floor(t * n), n - 1);
+    const st = t * n - seg;
+    const [x0, y0] = path[seg], [x1, y1] = path[seg + 1];
+    return [(x0 + st * (x1 - x0)) * W, (y0 + st * (y1 - y0)) * H];
+}
 
+// ── Blobs ──
+let blobs = [];
+let particles = [];
+
+function initBlobs() {
+    blobs = [
+        // Blue wanderers — bounce back and forth along their path
+        { pathIndex: 0, t: 0.22, type: 'blue', wobble: 0.0, speed: 0.00012, dir:  1 },
+        { pathIndex: 0, t: 0.62, type: 'blue', wobble: 1.8, speed: 0.00009, dir: -1 },
+        { pathIndex: 1, t: 0.35, type: 'blue', wobble: 0.7, speed: 0.00011, dir:  1 },
+        { pathIndex: 1, t: 0.68, type: 'blue', wobble: 2.4, speed: 0.00008, dir: -1 },
+        { pathIndex: 2, t: 0.42, type: 'blue', wobble: 1.2, speed: 0.00013, dir:  1 },
+        { pathIndex: 2, t: 0.75, type: 'blue', wobble: 3.1, speed: 0.00010, dir: -1 },
+        // Lvl 1 red enemies on all three paths
+        { pathIndex: 0, t: 0.10, type: 'red',  wobble: 1.2, speed: 0.00016 },
+        { pathIndex: 1, t: 0.20, type: 'red',  wobble: 0.5, speed: 0.00014 },
+        { pathIndex: 2, t: 0.15, type: 'red',  wobble: 2.1, speed: 0.00015 },
+        { pathIndex: 0, t: 0.50, type: 'red',  wobble: 0.8, speed: 0.00013 },
+        { pathIndex: 2, t: 0.55, type: 'red',  wobble: 1.6, speed: 0.00017 },
+    ];
+}
+
+function spawnParticles(x, y) {
+    for (let i = 0; i < 10; i++) {
+        const angle = (i / 10) * Math.PI * 2 + Math.random() * 0.4;
+        const spd   = 1.8 + Math.random() * 2.8;
+        particles.push({
+            x, y,
+            vx: Math.cos(angle) * spd,
+            vy: Math.sin(angle) * spd - 1,
+            r: H * 0.007 + Math.random() * H * 0.006,
+            alpha: 1,
+        });
+    }
+}
+
+function drawBlob(x, y, r, type, wobble) {
+    const angry = type === 'red';
+    const baseColor = angry ? '#e83535' : '#38b0f0';
+    const shineColor = angry ? '#ff7070' : '#88d8ff';
+    const sq = Math.sin(wobble) * r * 0.11;
+    const cq = Math.cos(wobble * 1.3) * r * 0.09;
+
+    ctx.save();
+    ctx.translate(x, y);
+
+    // Drop shadow
+    ctx.beginPath();
+    ctx.ellipse(r * 0.1, r * 0.35, r * 0.75, r * 0.22, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.13)';
+    ctx.fill();
+
+    // Body
+    ctx.beginPath();
+    ctx.ellipse(0, sq * 0.4, r + cq, r - sq * 0.35, 0, 0, Math.PI * 2);
+    ctx.fillStyle = baseColor;
+    ctx.fill();
+    ctx.strokeStyle = angry ? 'rgba(100,0,0,0.28)' : 'rgba(0,60,130,0.22)';
+    ctx.lineWidth = r * 0.09;
+    ctx.stroke();
+
+    // Sheen
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.2, -r * 0.26, r * 0.28, r * 0.15, -0.5, 0, Math.PI * 2);
+    ctx.fillStyle = shineColor.replace(')', ',0.35)').replace('rgb', 'rgba');
+    ctx.fillStyle = `rgba(255,255,255,0.30)`;
+    ctx.fill();
+
+    // Eyes
+    const ey = -r * 0.10 + sq * 0.25;
+    const ex = r * 0.27;
+    [[-ex, ey], [ex, ey]].forEach(([bx, by], side) => {
+        ctx.beginPath();
+        ctx.arc(bx, by, r * 0.20, 0, Math.PI * 2);
+        ctx.fillStyle = 'white';
+        ctx.fill();
+        const px = bx + (angry ? (side === 0 ? -r * 0.04 : r * 0.04) : 0);
+        ctx.beginPath();
+        ctx.arc(px, by + r * 0.06, r * 0.10, 0, Math.PI * 2);
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fill();
+    });
+
+    ctx.lineCap = 'round';
+    if (angry) {
+        // Angry brows
+        ctx.strokeStyle = 'rgba(70,0,0,0.7)';
+        ctx.lineWidth = r * 0.09;
+        ctx.beginPath(); ctx.moveTo(-ex - r*0.13, ey - r*0.22); ctx.lineTo(-ex + r*0.10, ey - r*0.08); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo( ex + r*0.13, ey - r*0.22); ctx.lineTo( ex - r*0.10, ey - r*0.08); ctx.stroke();
+        // Frown
+        ctx.beginPath();
+        ctx.arc(0, r * 0.40, r * 0.18, Math.PI, 0);
+        ctx.strokeStyle = 'rgba(70,0,0,0.45)';
+        ctx.lineWidth = r * 0.08;
+        ctx.stroke();
+    } else {
+        // Smile
+        ctx.beginPath();
+        ctx.arc(0, r * 0.16, r * 0.22, 0.1, Math.PI - 0.1);
+        ctx.strokeStyle = 'rgba(0,60,130,0.40)';
+        ctx.lineWidth = r * 0.08;
+        ctx.stroke();
+    }
+
+    ctx.restore();
+}
+
+// ── Main draw ──
+function drawScene() {
+    ctx.clearRect(0, 0, W, H);
     drawSky();
     drawSun();
     drawCloud(W * 0.08, H * 0.07, 0.85);
     drawCloud(W * 0.55, H * 0.05, 0.65);
     drawCloud(W * 0.35, H * 0.09, 0.55);
-
     drawMountain();
     drawMountainShading();
     drawForest();
-    drawPath();
-
-    // Treasure chest at peak
-    const peakX = W * 0.5, peakY = H * 0.1;
-    drawTreasureChest(peakX, peakY - H * 0.01, H * 0.038);
-
+    drawPaths();
+    drawTreasureChest(W * 0.5, H * 0.09, H * 0.038);
     drawTitle();
+}
+
+// ── Game loop ──
+function gameLoop() {
+    drawScene();
+
+    const r = H * 0.024;
+
+    blobs.forEach(b => {
+        b.wobble += 0.055;
+        if (b.type === 'red') {
+            b.t = Math.min(b.t + b.speed, 1.0);
+        } else {
+            b.t += b.speed * b.dir;
+            if (b.t >= 1.0) { b.t = 1.0; b.dir = -1; }
+            if (b.t <= 0.0) { b.t = 0.0; b.dir =  1; }
+            // small random nudge so they don't all feel mechanical
+            if (Math.random() < 0.0008) b.dir *= -1;
+        }
+        const [x, y] = getPosOnPath(PATHS[b.pathIndex], b.t);
+        drawBlob(x, y, r, b.type, b.wobble);
+    });
+
+    // Death particles
+    particles = particles.filter(p => {
+        p.x += p.vx; p.y += p.vy;
+        p.vx *= 0.87; p.vy *= 0.87;
+        p.alpha -= 0.045;
+        if (p.alpha > 0) {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r * p.alpha, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(232,50,50,${p.alpha})`;
+            ctx.fill();
+        }
+        return p.alpha > 0;
+    });
+
+    requestAnimationFrame(gameLoop);
+}
+
+// ── Click to kill red blobs ──
+canvas.style.cursor = 'crosshair';
+canvas.addEventListener('click', e => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (W / rect.width);
+    const my = (e.clientY - rect.top) * (H / rect.height);
+    const r = H * 0.024;
+
+    for (let i = blobs.length - 1; i >= 0; i--) {
+        const b = blobs[i];
+        if (b.type !== 'red') continue;
+        const [bx, by] = getPosOnPath(PATHS[b.pathIndex], b.t);
+        if (Math.hypot(mx - bx, my - by) < r * 1.4) {
+            spawnParticles(bx, by);
+            blobs.splice(i, 1);
+            break;
+        }
+    }
+});
+
+function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
 }
 
 window.addEventListener('resize', resize);
 resize();
+initBlobs();
+gameLoop();
 </script>
 </body>
 </html>

@@ -153,7 +153,7 @@ body {
 <div class="overlay" id="overlay">
     <div class="panel">
         <h1>Pulse Runner</h1>
-        <p>Clear 50 levels, collect charge coins, and stay out of the red pulse fields.</p>
+        <p>Clear 50 levels, press buttons to disarm danger, and survive lava, drones, portals, and springs.</p>
         <button class="primary-btn" id="start-btn">Start Run</button>
     </div>
 </div>
@@ -185,6 +185,8 @@ let lastTime = 0;
 let elapsed = 0;
 let levelIndex = 0;
 let totalCoins = 0;
+let portalCooldown = 0;
+let trampolineCooldown = 0;
 
 let start = { x: 90, y: 520 };
 const player = {
@@ -201,8 +203,15 @@ const player = {
 
 let platforms = [];
 let hazards = [];
+let lavaPools = [];
+let waterPools = [];
 let enemies = [];
+let drones = [];
+let droneShots = [];
 let coins = [];
+let portals = [];
+let trampolines = [];
+let buttons = [];
 let goal = { x: 4075, y: 548, w: 56, h: 102 };
 
 const baseLevelThemes = [
@@ -412,9 +421,118 @@ function cloneLevel(level) {
         goal: { ...level.goal },
         platforms: level.platforms.map(item => ({ ...item })),
         hazards: level.hazards.map(item => ({ ...item })),
+        lavaPools: (level.lavaPools || []).map(item => ({ ...item })),
+        waterPools: (level.waterPools || []).map(item => ({ ...item })),
         enemies: level.enemies.map(item => ({ ...item })),
-        coins: level.coins.map(item => ({ ...item }))
+        drones: (level.drones || []).map(item => ({ ...item })),
+        coins: level.coins.map(item => ({ ...item })),
+        portals: (level.portals || []).map(item => ({ ...item })),
+        trampolines: (level.trampolines || []).map(item => ({ ...item })),
+        buttons: (level.buttons || []).map(item => ({ ...item }))
     };
+}
+
+function createTrampoline(platform, offset = 0.5) {
+    const w = Math.round(Math.min(58, Math.max(42, platform.w * 0.32)));
+    return {
+        x: Math.round(platform.x + platform.w * offset - w / 2),
+        y: platform.y - 14,
+        w,
+        h: 14,
+        power: 23
+    };
+}
+
+function createLavaPool(hazard, tier = 0) {
+    return {
+        x: hazard.x,
+        y: Math.max(638, hazard.y - 14),
+        w: hazard.w,
+        h: 52 + Math.min(18, tier * 2)
+    };
+}
+
+function createWaterPool(hazard) {
+    return {
+        x: hazard.x,
+        y: Math.max(636, hazard.y - 18),
+        w: hazard.w,
+        h: 48
+    };
+}
+
+function createDrone(platform, delay = 1.2) {
+    return {
+        x: Math.round(platform.x + platform.w / 2),
+        y: Math.max(80, platform.y - 115),
+        r: 18,
+        delay,
+        nextShot: 0
+    };
+}
+
+function createButton(platform, target) {
+    const w = 44;
+    return {
+        x: Math.round(platform.x + platform.w / 2 - w / 2),
+        y: platform.y - 12,
+        w,
+        h: 12,
+        target,
+        pressed: false
+    };
+}
+
+function createPortalPair(platformA, platformB, colorA, colorB) {
+    const w = 42;
+    const h = 58;
+    const a = {
+        x: Math.round(platformA.x + platformA.w / 2 - w / 2),
+        y: platformA.y - h,
+        w,
+        h,
+        color: colorA,
+        target: 1
+    };
+    const b = {
+        x: Math.round(platformB.x + platformB.w / 2 - w / 2),
+        y: platformB.y - h,
+        w,
+        h,
+        color: colorB,
+        target: 0
+    };
+    return [a, b];
+}
+
+function tunePlatformSizes(platforms, tier) {
+    const airScale = Math.max(0.64, 0.9 - tier * 0.025);
+    const groundScale = Math.max(0.62, 0.86 - tier * 0.02);
+    const endScale = Math.max(0.74, 0.94 - tier * 0.018);
+    return platforms.map((platform, platformIndex, allPlatforms) => {
+        const isGroundChunk = platform.h >= 60;
+        const isStartOrGoal = platformIndex === 0 || platformIndex === allPlatforms.length - 1;
+        if (isGroundChunk && isStartOrGoal) {
+            return { ...platform, w: Math.max(290, Math.round(platform.w * endScale)) };
+        }
+        if (isGroundChunk) {
+            return { ...platform, w: Math.max(220, Math.round(platform.w * groundScale)) };
+        }
+        return { ...platform, w: Math.max(145, Math.round(platform.w * airScale)) };
+    });
+}
+
+function makeGapsReachable(platforms, tier) {
+    const maxGap = Math.max(220, 250 - tier * 3);
+    const sorted = [...platforms].sort((a, b) => a.x - b.x);
+    for (let i = 0; i < sorted.length - 1; i++) {
+        const current = sorted[i];
+        const next = sorted[i + 1];
+        const gap = next.x - (current.x + current.w);
+        if (gap <= maxGap) continue;
+        current.w += gap - maxGap;
+    }
+    return platforms;
 }
 
 function buildCampaignLevels(count) {
@@ -425,6 +543,53 @@ function buildCampaignLevels(count) {
         const levelNumber = i + 1;
         const speedBoost = tier * 0.18;
         base.name = `${levelNumber}. ${levelNames[i]}`;
+
+        base.platforms = makeGapsReachable(tunePlatformSizes(base.platforms, tier), tier);
+
+        base.portals = [];
+        base.lavaPools = [];
+        base.waterPools = [];
+        base.trampolines = [];
+        base.drones = [];
+
+        if (tier >= 1) {
+            const springPlatform = base.platforms[Math.min(base.platforms.length - 2, 1 + (i % Math.max(1, base.platforms.length - 2)))];
+            base.trampolines.push(createTrampoline(springPlatform, 0.5));
+            const waterHazard = base.hazards.find(hazard => hazard.y >= 660);
+            if (waterHazard) base.waterPools.push(createWaterPool(waterHazard));
+        }
+
+        if (tier >= 2) {
+            base.lavaPools = base.hazards
+                .filter((hazard, hazardIndex) => hazard.y >= 660 && hazardIndex % 2 === i % 2)
+                .slice(0, 1 + Math.min(2, tier - 2))
+                .map(hazard => createLavaPool(hazard, tier));
+        }
+
+        if (tier >= 3) {
+            const portalStart = base.platforms[Math.min(2, base.platforms.length - 2)];
+            const portalEnd = base.platforms[Math.max(1, base.platforms.length - 3)];
+            base.portals = createPortalPair(portalStart, portalEnd, "#35d7ff", "#ff66f7");
+            const openWaterHazard = base.hazards.find(hazard => hazard.y >= 660 && !base.lavaPools.some(lava => lava.x === hazard.x));
+            if (openWaterHazard && !base.waterPools.some(water => water.x === openWaterHazard.x)) {
+                base.waterPools.push(createWaterPool(openWaterHazard));
+            }
+        }
+
+        if (tier >= 4) {
+            const dronePlatform = base.platforms[Math.min(base.platforms.length - 2, 2 + (i % Math.max(1, base.platforms.length - 3)))];
+            base.drones.push(createDrone(dronePlatform, 1.1 + (i % 3) * 0.35));
+        }
+
+        if (tier >= 5) {
+            const secondSpring = base.platforms[Math.min(base.platforms.length - 2, 3 + (i % Math.max(1, base.platforms.length - 4)))];
+            base.trampolines.push(createTrampoline(secondSpring, 0.68));
+        }
+
+        if (tier >= 7) {
+            const secondDronePlatform = base.platforms[Math.min(base.platforms.length - 2, 4 + (i % Math.max(1, base.platforms.length - 5)))];
+            base.drones.push(createDrone(secondDronePlatform, 2.0));
+        }
 
         base.enemies = base.enemies.map((enemy, enemyIndex) => ({
             ...enemy,
@@ -446,7 +611,7 @@ function buildCampaignLevels(count) {
             }
         }
 
-        if (tier >= 4) {
+        if (tier >= 5) {
             const anchor = base.platforms[Math.min(base.platforms.length - 2, 2 + (i % Math.max(1, base.platforms.length - 3)))];
             if (anchor && anchor.w > 180) {
                 base.hazards.push({
@@ -458,6 +623,13 @@ function buildCampaignLevels(count) {
             }
         }
 
+        const buttonPlatform = base.platforms[Math.min(base.platforms.length - 2, 1 + ((i + 2) % Math.max(1, base.platforms.length - 2)))];
+        let buttonTarget = null;
+        if (base.drones.length > 0) buttonTarget = "drones";
+        else if (base.lavaPools.length > 0) buttonTarget = "lava";
+        else if (tier >= 3) buttonTarget = "pulse";
+        base.buttons = buttonTarget ? [createButton(buttonPlatform, buttonTarget)] : [];
+
         if (tier >= 6) {
             const bonusPlatform = base.platforms[Math.min(base.platforms.length - 1, 3 + (i % Math.max(1, base.platforms.length - 4)))];
             if (bonusPlatform) {
@@ -466,6 +638,17 @@ function buildCampaignLevels(count) {
                     y: Math.max(80, bonusPlatform.y - 105)
                 });
             }
+        }
+
+        if (tier === 0) {
+            base.hazards = [];
+            base.lavaPools = [];
+            base.waterPools = [];
+            base.buttons = [];
+        } else if (tier === 1) {
+            base.hazards = [];
+            base.lavaPools = [];
+            base.buttons = [];
         }
 
         campaign.push(base);
@@ -488,15 +671,24 @@ function loadLevel(index) {
     start = { ...level.start };
     goal = { ...level.goal };
     platforms = level.platforms.map(item => ({ ...item }));
-    hazards = level.hazards.map(item => ({ ...item }));
+    hazards = level.hazards.map(item => ({ ...item, active: true }));
+    lavaPools = level.lavaPools.map(item => ({ ...item, active: true }));
+    waterPools = level.waterPools.map(item => ({ ...item }));
     enemies = level.enemies.map(item => ({ ...item }));
+    drones = level.drones.map(item => ({ ...item, nextShot: elapsed + item.delay, active: true }));
+    droneShots = [];
     coins = level.coins.map(item => ({ ...item, r: 11, taken: false }));
+    portals = level.portals.map(item => ({ ...item }));
+    trampolines = level.trampolines.map(item => ({ ...item }));
+    buttons = level.buttons.map(item => ({ ...item, pressed: false }));
     player.x = start.x;
     player.y = start.y;
     player.vx = 0;
     player.vy = 0;
     player.grounded = false;
     player.invuln = 0;
+    portalCooldown = 0;
+    trampolineCooldown = 0;
     cameraX = 0;
 }
 
@@ -542,6 +734,72 @@ function hurt() {
     }
 }
 
+function checkPortals() {
+    if (portalCooldown > 0) return;
+    for (const portal of portals) {
+        if (!rectsOverlap(player, portal)) continue;
+        const target = portals[portal.target];
+        if (!target) return;
+        player.x = target.x + target.w / 2 - player.w / 2;
+        player.y = target.y + target.h - player.h;
+        player.vx = player.vx >= 0 ? 4.5 : -4.5;
+        player.vy = -5;
+        player.grounded = false;
+        portalCooldown = 45;
+        return;
+    }
+}
+
+function checkTrampolines() {
+    if (trampolineCooldown > 0) return;
+    const centerX = player.x + player.w / 2;
+    const feetY = player.y + player.h;
+    for (const trampoline of trampolines) {
+        const onPad = centerX >= trampoline.x &&
+            centerX <= trampoline.x + trampoline.w &&
+            feetY >= trampoline.y &&
+            feetY <= trampoline.y + trampoline.h + 8;
+        if (!onPad || !player.grounded) continue;
+        player.vy = -trampoline.power;
+        player.grounded = false;
+        trampolineCooldown = 12;
+        return;
+    }
+}
+
+function activateButton(button) {
+    button.pressed = true;
+    if (button.target === "lava") lavaPools.forEach(lava => lava.active = false);
+    if (button.target === "pulse") hazards.forEach(hazard => hazard.active = false);
+    if (button.target === "drones") {
+        drones.forEach(drone => drone.active = false);
+        droneShots = [];
+    }
+}
+
+function checkButtons() {
+    for (const button of buttons) {
+        if (button.pressed || !rectsOverlap(player, button)) continue;
+        activateButton(button);
+    }
+}
+
+function fireDroneShot(drone) {
+    const targetX = player.x + player.w / 2;
+    const targetY = player.y + player.h / 2;
+    const dx = targetX - drone.x;
+    const dy = targetY - drone.y;
+    const distance = Math.hypot(dx, dy) || 1;
+    const speed = 6.2;
+    droneShots.push({
+        x: drone.x,
+        y: drone.y,
+        vx: dx / distance * speed,
+        vy: dy / distance * speed,
+        r: 6
+    });
+}
+
 function completeLevel() {
     const collected = coins.filter(c => c.taken).length;
     totalCoins += collected;
@@ -557,19 +815,21 @@ function completeLevel() {
 }
 
 function moveAndCollide() {
-    const speed = player.grounded ? 0.72 : 0.45;
+    const inWater = waterPools.some(water => rectsOverlap(player, water));
+    const speed = (player.grounded ? 0.72 : 0.45) * (inWater ? 0.58 : 1);
     if (keys.left) player.vx -= speed;
     if (keys.right) player.vx += speed;
     if (!keys.left && !keys.right) player.vx *= player.grounded ? 0.78 : 0.94;
-    player.vx = Math.max(-7.2, Math.min(7.2, player.vx));
+    const maxSpeed = inWater ? 3.5 : 7.2;
+    player.vx = Math.max(-maxSpeed, Math.min(maxSpeed, player.vx));
 
     if (keys.jump && player.grounded) {
-        player.vy = -15.5;
+        player.vy = inWater ? -14 : -18;
         player.grounded = false;
     }
 
-    player.vy += world.gravity;
-    player.vy = Math.min(player.vy, 18);
+    player.vy += inWater ? world.gravity * 0.38 : world.gravity;
+    player.vy = Math.min(player.vy, inWater ? 5.5 : 18);
 
     player.x += player.vx;
     for (const p of platforms) {
@@ -601,6 +861,8 @@ function update(dt) {
     if (!started || finished) return;
     elapsed += dt;
     if (player.invuln > 0) player.invuln -= 1;
+    if (portalCooldown > 0) portalCooldown -= 1;
+    if (trampolineCooldown > 0) trampolineCooldown -= 1;
 
     enemies.forEach(enemy => {
         enemy.x += enemy.speed;
@@ -610,14 +872,47 @@ function update(dt) {
         }
     });
 
+    drones.forEach(drone => {
+        if (!drone.active) return;
+        if (elapsed >= drone.nextShot) {
+            fireDroneShot(drone);
+            drone.nextShot = elapsed + 3;
+        }
+    });
+
+    droneShots.forEach(shot => {
+        shot.x += shot.vx * dt * 60;
+        shot.y += shot.vy * dt * 60;
+    });
+    droneShots = droneShots.filter(shot =>
+        shot.x > -80 &&
+        shot.x < world.width + 80 &&
+        shot.y > -120 &&
+        shot.y < world.height + 180
+    );
+
     moveAndCollide();
+    checkTrampolines();
+    checkPortals();
+    checkButtons();
 
     hazards.forEach(hazard => {
+        if (!hazard.active) return;
         if (rectsOverlap(player, hazard)) hurt();
+    });
+
+    lavaPools.forEach(lava => {
+        if (!lava.active) return;
+        if (rectsOverlap(player, lava)) hurt();
     });
 
     enemies.forEach(enemy => {
         if (rectsOverlap(player, enemy)) hurt();
+    });
+
+    droneShots.forEach(shot => {
+        const hitbox = { x: shot.x - shot.r, y: shot.y - shot.r, w: shot.r * 2, h: shot.r * 2 };
+        if (rectsOverlap(player, hitbox)) hurt();
     });
 
     coins.forEach(coin => {
@@ -703,11 +998,87 @@ function drawWorld() {
         ctx.fillRect(p.x + 8, p.y + 4, p.w - 16, 4);
     });
 
+    trampolines.forEach(trampoline => {
+        ctx.save();
+        ctx.shadowColor = "#7dff6a";
+        ctx.shadowBlur = 14;
+        ctx.fillStyle = "#7dff6a";
+        roundRect(trampoline.x, trampoline.y, trampoline.w, trampoline.h, 6);
+        ctx.fillStyle = "#113d20";
+        ctx.fillRect(trampoline.x + 7, trampoline.y + 4, trampoline.w - 14, 3);
+        ctx.fillStyle = "#d9ffd1";
+        ctx.beginPath();
+        ctx.moveTo(trampoline.x + trampoline.w / 2, trampoline.y - 12);
+        ctx.lineTo(trampoline.x + trampoline.w / 2 + 8, trampoline.y - 1);
+        ctx.lineTo(trampoline.x + trampoline.w / 2 - 8, trampoline.y - 1);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+    });
+
+    buttons.forEach(button => {
+        ctx.save();
+        ctx.shadowColor = button.pressed ? "#65ff8a" : "#ffe66d";
+        ctx.shadowBlur = button.pressed ? 8 : 14;
+        ctx.fillStyle = button.pressed ? "#2f8f4e" : "#ffe66d";
+        roundRect(button.x, button.y + (button.pressed ? 5 : 0), button.w, button.h - (button.pressed ? 5 : 0), 5);
+        ctx.fillStyle = button.pressed ? "#baffc8" : "#2f2300";
+        ctx.font = "800 10px Segoe UI, Arial, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(button.target.toUpperCase(), button.x + button.w / 2, button.y - 5);
+        ctx.textAlign = "left";
+        ctx.restore();
+    });
+
+    lavaPools.forEach(lava => {
+        const wave = Math.sin(elapsed * 5 + lava.x * 0.01) * 3;
+        ctx.save();
+        ctx.globalAlpha = lava.active ? 1 : 0.22;
+        ctx.shadowColor = "#ff6a00";
+        ctx.shadowBlur = 18;
+        const lavaGradient = ctx.createLinearGradient(0, lava.y, 0, lava.y + lava.h);
+        lavaGradient.addColorStop(0, "#ffd166");
+        lavaGradient.addColorStop(0.32, "#ff7a18");
+        lavaGradient.addColorStop(1, "#9d1b00");
+        ctx.fillStyle = lavaGradient;
+        roundRect(lava.x, lava.y + wave, lava.w, lava.h, 8);
+        ctx.fillStyle = "rgba(255, 245, 170, 0.82)";
+        for (let x = lava.x + 14; x < lava.x + lava.w; x += 46) {
+            ctx.beginPath();
+            ctx.arc(x, lava.y + 12 + Math.sin(elapsed * 6 + x) * 4, 5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
+    });
+
+    waterPools.forEach(water => {
+        const wave = Math.sin(elapsed * 4 + water.x * 0.012) * 3;
+        ctx.save();
+        ctx.shadowColor = "#2bd9ff";
+        ctx.shadowBlur = 14;
+        const waterGradient = ctx.createLinearGradient(0, water.y, 0, water.y + water.h);
+        waterGradient.addColorStop(0, "rgba(143, 238, 255, 0.9)");
+        waterGradient.addColorStop(0.45, "rgba(43, 158, 255, 0.72)");
+        waterGradient.addColorStop(1, "rgba(10, 52, 128, 0.88)");
+        ctx.fillStyle = waterGradient;
+        roundRect(water.x, water.y + wave, water.w, water.h, 8);
+        ctx.strokeStyle = "rgba(219, 250, 255, 0.82)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let x = water.x + 8; x <= water.x + water.w - 8; x += 14) {
+            const y = water.y + 9 + Math.sin(elapsed * 5 + x * 0.05) * 4;
+            if (x === water.x + 8) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.restore();
+    });
+
     hazards.forEach(h => {
+        ctx.globalAlpha = h.active ? 0.8 : 0.18;
         ctx.fillStyle = "#ff315d";
-        ctx.globalAlpha = 0.8;
         roundRect(h.x, h.y, h.w, h.h, 6);
-        ctx.globalAlpha = 1;
+        ctx.globalAlpha = h.active ? 1 : 0.25;
         for (let x = h.x + 12; x < h.x + h.w; x += 32) {
             ctx.fillStyle = "#ffd2dc";
             ctx.beginPath();
@@ -717,6 +1088,30 @@ function drawWorld() {
             ctx.closePath();
             ctx.fill();
         }
+        ctx.globalAlpha = 1;
+    });
+
+    portals.forEach(portal => {
+        const cx = portal.x + portal.w / 2;
+        const cy = portal.y + portal.h / 2;
+        ctx.save();
+        ctx.shadowColor = portal.color;
+        ctx.shadowBlur = 22;
+        ctx.strokeStyle = portal.color;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, portal.w / 2, portal.h / 2, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 0.22;
+        ctx.fillStyle = portal.color;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#e9fbff";
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, portal.w / 3, portal.h / 3, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
     });
 
     coins.forEach(coin => {
@@ -736,6 +1131,58 @@ function drawWorld() {
         ctx.fillStyle = "#f4d7ff";
         ctx.fillRect(enemy.x + 7, enemy.y + 9, 5, 5);
         ctx.fillRect(enemy.x + 18, enemy.y + 9, 5, 5);
+    });
+
+    drones.forEach(drone => {
+        if (!drone.active) {
+            ctx.save();
+            ctx.globalAlpha = 0.22;
+            ctx.fillStyle = "#6b5278";
+            ctx.beginPath();
+            ctx.arc(drone.x, drone.y, drone.r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = "#a88cb7";
+            ctx.stroke();
+            ctx.restore();
+            return;
+        }
+        const angle = Math.atan2(player.y + player.h / 2 - drone.y, player.x + player.w / 2 - drone.x);
+        ctx.save();
+        ctx.shadowColor = "#ff4fd8";
+        ctx.shadowBlur = 16;
+        ctx.fillStyle = "#2a163f";
+        ctx.beginPath();
+        ctx.arc(drone.x, drone.y, drone.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#ff4fd8";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.fillStyle = "#ffd9f7";
+        ctx.beginPath();
+        ctx.arc(drone.x + Math.cos(angle) * 6, drone.y + Math.sin(angle) * 6, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255, 79, 216, 0.45)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(drone.x, drone.y);
+        ctx.lineTo(drone.x + Math.cos(angle) * 34, drone.y + Math.sin(angle) * 34);
+        ctx.stroke();
+        ctx.restore();
+    });
+
+    droneShots.forEach(shot => {
+        ctx.save();
+        ctx.shadowColor = "#ff4fd8";
+        ctx.shadowBlur = 12;
+        ctx.fillStyle = "#ff4fd8";
+        ctx.beginPath();
+        ctx.arc(shot.x, shot.y, shot.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#fff2fb";
+        ctx.beginPath();
+        ctx.arc(shot.x - shot.vx * 0.35, shot.y - shot.vy * 0.35, shot.r * 0.45, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
     });
 
     ctx.fillStyle = "#49ffa8";
