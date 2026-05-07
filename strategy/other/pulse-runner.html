@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pulse Runner</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    min-height: 100vh;
+    overflow: hidden;
+    background: #0b1020;
+    color: #eaf6ff;
+    font-family: "Segoe UI", Arial, sans-serif;
+}
+
+#game {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    background: #0b1020;
+}
+
+.hud {
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    right: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.hud-group {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.pill {
+    min-width: 78px;
+    padding: 7px 10px;
+    border: 1px solid rgba(136, 220, 255, 0.28);
+    border-radius: 7px;
+    background: rgba(8, 18, 36, 0.72);
+    color: #dff7ff;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.24);
+}
+
+.overlay {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: radial-gradient(circle at 50% 35%, rgba(42, 220, 255, 0.16), rgba(7, 10, 22, 0.86) 58%);
+    z-index: 10;
+}
+
+.panel {
+    width: min(420px, calc(100vw - 32px));
+    padding: 22px;
+    border: 1px solid rgba(124, 226, 255, 0.28);
+    border-radius: 8px;
+    background: rgba(8, 16, 32, 0.9);
+    box-shadow: 0 18px 70px rgba(0, 0, 0, 0.42);
+    text-align: center;
+}
+
+.panel h1 {
+    color: #8deaff;
+    font-size: 34px;
+    letter-spacing: 0;
+    margin-bottom: 8px;
+}
+
+.panel p {
+    color: #aac7d8;
+    font-size: 14px;
+    line-height: 1.45;
+    margin-bottom: 16px;
+}
+
+.primary-btn {
+    border: 1px solid rgba(141, 234, 255, 0.65);
+    border-radius: 7px;
+    background: #20c6ff;
+    color: #06101d;
+    cursor: pointer;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 800;
+    padding: 10px 16px;
+}
+
+.primary-btn:hover {
+    background: #6ee6ff;
+}
+
+.touch-controls {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    display: none;
+    justify-content: space-between;
+    pointer-events: none;
+    z-index: 6;
+}
+
+.touch-cluster {
+    display: flex;
+    gap: 10px;
+}
+
+.touch-btn {
+    width: 54px;
+    height: 54px;
+    border: 1px solid rgba(141, 234, 255, 0.32);
+    border-radius: 8px;
+    background: rgba(8, 18, 36, 0.72);
+    color: #dff7ff;
+    font-size: 20px;
+    font-weight: 800;
+    pointer-events: auto;
+    touch-action: none;
+}
+
+@media (max-width: 760px), (pointer: coarse) {
+    .touch-controls { display: flex; }
+    .pill { min-width: 64px; font-size: 11px; }
+}
+</style>
+</head>
+<body>
+<canvas id="game" tabindex="0"></canvas>
+
+<div class="hud">
+    <div class="hud-group">
+        <div class="pill" id="level">Level 1</div>
+        <div class="pill" id="coins">Coins 0/0</div>
+        <div class="pill" id="lives">Lives 3</div>
+    </div>
+    <div class="pill" id="time">Time 0.0</div>
+</div>
+
+<div class="overlay" id="overlay">
+    <div class="panel">
+        <h1>Pulse Runner</h1>
+        <p>Clear 50 levels, collect charge coins, and stay out of the red pulse fields.</p>
+        <button class="primary-btn" id="start-btn">Start Run</button>
+    </div>
+</div>
+
+<div class="touch-controls" aria-hidden="true">
+    <div class="touch-cluster">
+        <button class="touch-btn" data-key="left">L</button>
+        <button class="touch-btn" data-key="right">R</button>
+    </div>
+    <button class="touch-btn" data-key="jump">J</button>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const levelEl = document.getElementById("level");
+const coinsEl = document.getElementById("coins");
+const livesEl = document.getElementById("lives");
+const timeEl = document.getElementById("time");
+const overlay = document.getElementById("overlay");
+const startBtn = document.getElementById("start-btn");
+
+const world = { width: 4300, height: 720, gravity: 0.82 };
+const keys = { left: false, right: false, jump: false };
+let cameraX = 0;
+let started = false;
+let finished = false;
+let lastTime = 0;
+let elapsed = 0;
+let levelIndex = 0;
+let totalCoins = 0;
+
+let start = { x: 90, y: 520 };
+const player = {
+    x: start.x,
+    y: start.y,
+    w: 34,
+    h: 48,
+    vx: 0,
+    vy: 0,
+    lives: 3,
+    grounded: false,
+    invuln: 0
+};
+
+let platforms = [];
+let hazards = [];
+let enemies = [];
+let coins = [];
+let goal = { x: 4075, y: 548, w: 56, h: 102 };
+
+const baseLevelThemes = [
+    {
+        name: "Neon Steps",
+        width: 3600,
+        start: { x: 90, y: 520 },
+        goal: { x: 3370, y: 548, w: 56, h: 102 },
+        platforms: [
+            { x: 0, y: 650, w: 620, h: 70 },
+            { x: 720, y: 590, w: 280, h: 32 },
+            { x: 1110, y: 530, w: 260, h: 32 },
+            { x: 1510, y: 600, w: 350, h: 32 },
+            { x: 2000, y: 540, w: 250, h: 32 },
+            { x: 2390, y: 470, w: 270, h: 32 },
+            { x: 2840, y: 570, w: 330, h: 32 },
+            { x: 3290, y: 650, w: 310, h: 70 }
+        ],
+        hazards: [
+            { x: 630, y: 680, w: 250, h: 26 },
+            { x: 1390, y: 680, w: 240, h: 26 },
+            { x: 2260, y: 680, w: 320, h: 26 }
+        ],
+        enemies: [
+            { x: 790, y: 552, w: 30, h: 30, min: 735, max: 950, speed: 1.2 },
+            { x: 1580, y: 562, w: 30, h: 30, min: 1525, max: 1810, speed: 1.5 }
+        ],
+        coins: [
+            { x: 340, y: 590 }, { x: 805, y: 530 }, { x: 930, y: 530 },
+            { x: 1190, y: 470 }, { x: 1600, y: 540 }, { x: 1760, y: 540 },
+            { x: 2100, y: 480 }, { x: 2500, y: 410 }, { x: 3000, y: 510 }
+        ]
+    },
+    {
+        name: "Rooftop Gaps",
+        width: 4100,
+        start: { x: 80, y: 520 },
+        goal: { x: 3880, y: 498, w: 56, h: 102 },
+        platforms: [
+            { x: 0, y: 650, w: 460, h: 70 },
+            { x: 610, y: 585, w: 240, h: 30 },
+            { x: 980, y: 500, w: 230, h: 30 },
+            { x: 1360, y: 570, w: 270, h: 30 },
+            { x: 1780, y: 470, w: 190, h: 30 },
+            { x: 2140, y: 560, w: 280, h: 30 },
+            { x: 2590, y: 500, w: 230, h: 30 },
+            { x: 2990, y: 430, w: 220, h: 30 },
+            { x: 3450, y: 600, w: 260, h: 30 },
+            { x: 3820, y: 600, w: 280, h: 70 }
+        ],
+        hazards: [
+            { x: 470, y: 680, w: 280, h: 26 },
+            { x: 1220, y: 680, w: 260, h: 26 },
+            { x: 1990, y: 680, w: 260, h: 26 },
+            { x: 3230, y: 680, w: 300, h: 26 }
+        ],
+        enemies: [
+            { x: 1420, y: 532, w: 30, h: 30, min: 1370, max: 1580, speed: 1.4 },
+            { x: 2630, y: 462, w: 30, h: 30, min: 2600, max: 2780, speed: 1.6 },
+            { x: 3500, y: 562, w: 30, h: 30, min: 3460, max: 3670, speed: 1.8 }
+        ],
+        coins: [
+            { x: 690, y: 525 }, { x: 1050, y: 440 }, { x: 1165, y: 440 },
+            { x: 1450, y: 510 }, { x: 1850, y: 410 }, { x: 2250, y: 500 },
+            { x: 2700, y: 440 }, { x: 3060, y: 370 }, { x: 3150, y: 370 },
+            { x: 3570, y: 540 }
+        ]
+    },
+    {
+        name: "Pulse Mines",
+        width: 4550,
+        start: { x: 90, y: 530 },
+        goal: { x: 4310, y: 548, w: 56, h: 102 },
+        platforms: [
+            { x: 0, y: 650, w: 520, h: 70 },
+            { x: 650, y: 650, w: 420, h: 70 },
+            { x: 1190, y: 610, w: 230, h: 32 },
+            { x: 1560, y: 540, w: 230, h: 32 },
+            { x: 1940, y: 610, w: 250, h: 32 },
+            { x: 2320, y: 520, w: 240, h: 32 },
+            { x: 2710, y: 450, w: 230, h: 32 },
+            { x: 3120, y: 540, w: 300, h: 32 },
+            { x: 3600, y: 610, w: 250, h: 32 },
+            { x: 4200, y: 650, w: 350, h: 70 }
+        ],
+        hazards: [
+            { x: 530, y: 680, w: 110, h: 26 },
+            { x: 1080, y: 680, w: 210, h: 26 },
+            { x: 1440, y: 680, w: 190, h: 26 },
+            { x: 2210, y: 680, w: 220, h: 26 },
+            { x: 2960, y: 680, w: 240, h: 26 },
+            { x: 3460, y: 680, w: 270, h: 26 }
+        ],
+        enemies: [
+            { x: 720, y: 612, w: 30, h: 30, min: 670, max: 1030, speed: 2.0 },
+            { x: 2000, y: 572, w: 30, h: 30, min: 1960, max: 2160, speed: 1.5 },
+            { x: 3180, y: 502, w: 30, h: 30, min: 3140, max: 3370, speed: 2.2 },
+            { x: 3650, y: 572, w: 30, h: 30, min: 3620, max: 3820, speed: 1.8 }
+        ],
+        coins: [
+            { x: 300, y: 590 }, { x: 760, y: 590 }, { x: 960, y: 590 },
+            { x: 1250, y: 550 }, { x: 1640, y: 480 }, { x: 2040, y: 550 },
+            { x: 2420, y: 460 }, { x: 2810, y: 390 }, { x: 3230, y: 480 },
+            { x: 3730, y: 550 }, { x: 4350, y: 590 }
+        ]
+    },
+    {
+        name: "High Wires",
+        width: 4300,
+        start: { x: 70, y: 410 },
+        goal: { x: 4070, y: 378, w: 56, h: 102 },
+        platforms: [
+            { x: 0, y: 540, w: 360, h: 34 },
+            { x: 520, y: 475, w: 180, h: 28 },
+            { x: 850, y: 405, w: 180, h: 28 },
+            { x: 1180, y: 335, w: 190, h: 28 },
+            { x: 1540, y: 450, w: 220, h: 28 },
+            { x: 1950, y: 380, w: 170, h: 28 },
+            { x: 2270, y: 310, w: 170, h: 28 },
+            { x: 2610, y: 430, w: 230, h: 28 },
+            { x: 3050, y: 500, w: 240, h: 28 },
+            { x: 3480, y: 430, w: 220, h: 28 },
+            { x: 3990, y: 480, w: 310, h: 70 }
+        ],
+        hazards: [
+            { x: 380, y: 680, w: 420, h: 26 },
+            { x: 1060, y: 680, w: 460, h: 26 },
+            { x: 1780, y: 680, w: 430, h: 26 },
+            { x: 2450, y: 680, w: 440, h: 26 },
+            { x: 3320, y: 680, w: 380, h: 26 }
+        ],
+        enemies: [
+            { x: 880, y: 367, w: 30, h: 30, min: 865, max: 1000, speed: 1.3 },
+            { x: 2640, y: 392, w: 30, h: 30, min: 2620, max: 2810, speed: 1.6 },
+            { x: 3515, y: 392, w: 30, h: 30, min: 3500, max: 3670, speed: 1.7 }
+        ],
+        coins: [
+            { x: 570, y: 415 }, { x: 900, y: 345 }, { x: 1240, y: 275 },
+            { x: 1610, y: 390 }, { x: 2010, y: 320 }, { x: 2330, y: 250 },
+            { x: 2690, y: 370 }, { x: 3130, y: 440 }, { x: 3540, y: 370 },
+            { x: 4130, y: 420 }
+        ]
+    },
+    {
+        name: "Final Gate",
+        width: 5000,
+        start: { x: 80, y: 530 },
+        goal: { x: 4760, y: 448, w: 60, h: 122 },
+        platforms: [
+            { x: 0, y: 650, w: 440, h: 70 },
+            { x: 580, y: 600, w: 220, h: 30 },
+            { x: 960, y: 535, w: 220, h: 30 },
+            { x: 1330, y: 470, w: 220, h: 30 },
+            { x: 1710, y: 580, w: 260, h: 30 },
+            { x: 2120, y: 510, w: 180, h: 30 },
+            { x: 2480, y: 440, w: 180, h: 30 },
+            { x: 2840, y: 560, w: 260, h: 30 },
+            { x: 3290, y: 490, w: 220, h: 30 },
+            { x: 3680, y: 420, w: 220, h: 30 },
+            { x: 4120, y: 570, w: 230, h: 30 },
+            { x: 4680, y: 570, w: 320, h: 70 }
+        ],
+        hazards: [
+            { x: 450, y: 680, w: 230, h: 26 },
+            { x: 830, y: 680, w: 240, h: 26 },
+            { x: 1210, y: 680, w: 260, h: 26 },
+            { x: 1990, y: 680, w: 270, h: 26 },
+            { x: 2320, y: 680, w: 280, h: 26 },
+            { x: 3130, y: 680, w: 340, h: 26 },
+            { x: 3890, y: 680, w: 420, h: 26 },
+            { x: 4370, y: 680, w: 300, h: 26 }
+        ],
+        enemies: [
+            { x: 620, y: 562, w: 30, h: 30, min: 590, max: 770, speed: 2.0 },
+            { x: 1740, y: 542, w: 30, h: 30, min: 1720, max: 1940, speed: 2.3 },
+            { x: 2870, y: 522, w: 30, h: 30, min: 2860, max: 3060, speed: 2.4 },
+            { x: 3330, y: 452, w: 30, h: 30, min: 3300, max: 3480, speed: 2.0 },
+            { x: 4160, y: 532, w: 30, h: 30, min: 4140, max: 4320, speed: 2.2 }
+        ],
+        coins: [
+            { x: 650, y: 540 }, { x: 1030, y: 475 }, { x: 1400, y: 410 },
+            { x: 1810, y: 520 }, { x: 2180, y: 450 }, { x: 2540, y: 380 },
+            { x: 2920, y: 500 }, { x: 3380, y: 430 }, { x: 3760, y: 360 },
+            { x: 4220, y: 510 }, { x: 4820, y: 510 }
+        ]
+    }
+];
+
+const levelNames = [
+    "Neon Steps", "Rooftop Gaps", "Pulse Mines", "High Wires", "Final Gate",
+    "Glass Alley", "Battery Bridge", "Static Sprint", "Blue Circuit", "Spark Yard",
+    "Signal Climb", "Magnet Row", "Fuse Factory", "Wirefall", "Afterglow",
+    "Voltage Vale", "Switchback", "Laser Ledges", "Comet Stack", "Echo Grid",
+    "Metro Pulse", "Circuit Canyon", "Night Relay", "Storm Switch", "Chrome Rise",
+    "Arcade Alley", "Tower Current", "Prism Path", "Beacon Bay", "Hazard Hall",
+    "Quantum Quay", "Rail Runner", "Flash Foundry", "Sky Battery", "Copper Crown",
+    "Grid Garden", "Signal Spire", "Pulse Pier", "Neon Needle", "Vector Vault",
+    "Relay Ridge", "Turbo Terrace", "Static Summit", "Spark Spiral", "Photon Field",
+    "Voltage Vault", "Gate Array", "Lightline", "Overdrive", "Core Finale"
+];
+
+function cloneLevel(level) {
+    return {
+        name: level.name,
+        width: level.width,
+        start: { ...level.start },
+        goal: { ...level.goal },
+        platforms: level.platforms.map(item => ({ ...item })),
+        hazards: level.hazards.map(item => ({ ...item })),
+        enemies: level.enemies.map(item => ({ ...item })),
+        coins: level.coins.map(item => ({ ...item }))
+    };
+}
+
+function buildCampaignLevels(count) {
+    const campaign = [];
+    for (let i = 0; i < count; i++) {
+        const base = cloneLevel(baseLevelThemes[i % baseLevelThemes.length]);
+        const tier = Math.floor(i / baseLevelThemes.length);
+        const levelNumber = i + 1;
+        const speedBoost = tier * 0.18;
+        base.name = `${levelNumber}. ${levelNames[i]}`;
+
+        base.enemies = base.enemies.map((enemy, enemyIndex) => ({
+            ...enemy,
+            speed: enemy.speed + speedBoost + (enemyIndex % 2) * 0.05
+        }));
+
+        if (tier >= 2) {
+            const platform = base.platforms.find(p => p.w >= 260 && p.y < 630);
+            if (platform) {
+                base.enemies.push({
+                    x: platform.x + 38,
+                    y: platform.y - 38,
+                    w: 30,
+                    h: 30,
+                    min: platform.x + 20,
+                    max: platform.x + platform.w - 50,
+                    speed: 1.1 + tier * 0.22
+                });
+            }
+        }
+
+        if (tier >= 4) {
+            const anchor = base.platforms[Math.min(base.platforms.length - 2, 2 + (i % Math.max(1, base.platforms.length - 3)))];
+            if (anchor && anchor.w > 180) {
+                base.hazards.push({
+                    x: anchor.x + Math.min(54, anchor.w / 3),
+                    y: anchor.y - 10,
+                    w: Math.min(120 + tier * 8, anchor.w - 80),
+                    h: 12
+                });
+            }
+        }
+
+        if (tier >= 6) {
+            const bonusPlatform = base.platforms[Math.min(base.platforms.length - 1, 3 + (i % Math.max(1, base.platforms.length - 4)))];
+            if (bonusPlatform) {
+                base.coins.push({
+                    x: bonusPlatform.x + bonusPlatform.w / 2,
+                    y: Math.max(80, bonusPlatform.y - 105)
+                });
+            }
+        }
+
+        campaign.push(base);
+    }
+    return campaign;
+}
+
+const levels = buildCampaignLevels(50);
+
+function resize() {
+    const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+    canvas.width = Math.floor(window.innerWidth * dpr);
+    canvas.height = Math.floor(window.innerHeight * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function loadLevel(index) {
+    const level = levels[index];
+    world.width = level.width;
+    start = { ...level.start };
+    goal = { ...level.goal };
+    platforms = level.platforms.map(item => ({ ...item }));
+    hazards = level.hazards.map(item => ({ ...item }));
+    enemies = level.enemies.map(item => ({ ...item }));
+    coins = level.coins.map(item => ({ ...item, r: 11, taken: false }));
+    player.x = start.x;
+    player.y = start.y;
+    player.vx = 0;
+    player.vy = 0;
+    player.grounded = false;
+    player.invuln = 0;
+    cameraX = 0;
+}
+
+function resetGame() {
+    levelIndex = 0;
+    totalCoins = 0;
+    player.lives = 3;
+    elapsed = 0;
+    finished = false;
+    loadLevel(levelIndex);
+}
+
+function showOverlay(title, copy, button) {
+    overlay.querySelector("h1").textContent = title;
+    overlay.querySelector("p").textContent = copy;
+    startBtn.textContent = button;
+    overlay.style.display = "grid";
+}
+
+function begin() {
+    resetGame();
+    started = true;
+    overlay.style.display = "none";
+    canvas.focus();
+}
+
+function rectsOverlap(a, b) {
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function hurt() {
+    if (player.invuln > 0 || finished) return;
+    player.lives -= 1;
+    player.invuln = 90;
+    player.x = Math.max(start.x, player.x - 120);
+    player.y = 450;
+    player.vx = 0;
+    player.vy = -7;
+    if (player.lives <= 0) {
+        finished = true;
+        started = false;
+        showOverlay("Run Failed", `You reached level ${levelIndex + 1} and collected ${totalCoins} coins. Try again.`, "Retry");
+    }
+}
+
+function completeLevel() {
+    const collected = coins.filter(c => c.taken).length;
+    totalCoins += collected;
+    if (levelIndex >= levels.length - 1) {
+        finished = true;
+        started = false;
+        showOverlay("Game Complete", `You cleared all ${levels.length} levels with ${totalCoins} coins in ${elapsed.toFixed(1)} seconds.`, "Run Again");
+        return;
+    }
+    levelIndex += 1;
+    loadLevel(levelIndex);
+    player.invuln = 75;
+}
+
+function moveAndCollide() {
+    const speed = player.grounded ? 0.72 : 0.45;
+    if (keys.left) player.vx -= speed;
+    if (keys.right) player.vx += speed;
+    if (!keys.left && !keys.right) player.vx *= player.grounded ? 0.78 : 0.94;
+    player.vx = Math.max(-7.2, Math.min(7.2, player.vx));
+
+    if (keys.jump && player.grounded) {
+        player.vy = -15.5;
+        player.grounded = false;
+    }
+
+    player.vy += world.gravity;
+    player.vy = Math.min(player.vy, 18);
+
+    player.x += player.vx;
+    for (const p of platforms) {
+        if (!rectsOverlap(player, p)) continue;
+        if (player.vx > 0) player.x = p.x - player.w;
+        if (player.vx < 0) player.x = p.x + p.w;
+        player.vx = 0;
+    }
+
+    player.y += player.vy;
+    player.grounded = false;
+    for (const p of platforms) {
+        if (!rectsOverlap(player, p)) continue;
+        if (player.vy > 0) {
+            player.y = p.y - player.h;
+            player.vy = 0;
+            player.grounded = true;
+        } else if (player.vy < 0) {
+            player.y = p.y + p.h;
+            player.vy = 0;
+        }
+    }
+
+    player.x = Math.max(0, Math.min(world.width - player.w, player.x));
+    if (player.y > world.height + 160) hurt();
+}
+
+function update(dt) {
+    if (!started || finished) return;
+    elapsed += dt;
+    if (player.invuln > 0) player.invuln -= 1;
+
+    enemies.forEach(enemy => {
+        enemy.x += enemy.speed;
+        if (enemy.x < enemy.min || enemy.x > enemy.max) {
+            enemy.speed *= -1;
+            enemy.x = Math.max(enemy.min, Math.min(enemy.max, enemy.x));
+        }
+    });
+
+    moveAndCollide();
+
+    hazards.forEach(hazard => {
+        if (rectsOverlap(player, hazard)) hurt();
+    });
+
+    enemies.forEach(enemy => {
+        if (rectsOverlap(player, enemy)) hurt();
+    });
+
+    coins.forEach(coin => {
+        if (!coin.taken) {
+            const dx = player.x + player.w / 2 - coin.x;
+            const dy = player.y + player.h / 2 - coin.y;
+            if (Math.hypot(dx, dy) < 34) coin.taken = true;
+        }
+    });
+
+    if (rectsOverlap(player, goal)) {
+        completeLevel();
+    }
+
+    cameraX = player.x - window.innerWidth * 0.38;
+    cameraX = Math.max(0, Math.min(world.width - window.innerWidth, cameraX));
+}
+
+function drawBackground() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const sky = ctx.createLinearGradient(0, 0, 0, h);
+    sky.addColorStop(0, "#0b1020");
+    sky.addColorStop(0.58, "#112446");
+    sky.addColorStop(1, "#07101f");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.save();
+    ctx.translate(-cameraX * 0.18, 0);
+    for (let i = 0; i < 32; i++) {
+        const x = i * 170 + 40;
+        const y = 44 + (i * 53) % 180;
+        ctx.fillStyle = i % 3 === 0 ? "#8deaff" : "#577da6";
+        ctx.globalAlpha = 0.45;
+        ctx.fillRect(x, y, 2, 2);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(-cameraX * 0.38, 0);
+    for (let i = 0; i < 12; i++) {
+        const x = i * 440 - 80;
+        const base = h - 90 - (i % 3) * 28;
+        ctx.fillStyle = i % 2 ? "#152d55" : "#102849";
+        ctx.beginPath();
+        ctx.moveTo(x, h);
+        ctx.lineTo(x + 180, base);
+        ctx.lineTo(x + 360, h);
+        ctx.closePath();
+        ctx.fill();
+    }
+    ctx.restore();
+}
+
+function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.fill();
+}
+
+function drawWorld() {
+    ctx.save();
+    ctx.translate(-cameraX, 0);
+
+    ctx.fillStyle = "rgba(141, 234, 255, 0.16)";
+    ctx.font = "800 56px Segoe UI, Arial, sans-serif";
+    ctx.fillText(levels[levelIndex].name, cameraX + 42, 112);
+
+    platforms.forEach(p => {
+        ctx.fillStyle = "#19365e";
+        roundRect(p.x, p.y, p.w, p.h, 8);
+        ctx.fillStyle = "#42d8ff";
+        ctx.fillRect(p.x + 8, p.y + 4, p.w - 16, 4);
+    });
+
+    hazards.forEach(h => {
+        ctx.fillStyle = "#ff315d";
+        ctx.globalAlpha = 0.8;
+        roundRect(h.x, h.y, h.w, h.h, 6);
+        ctx.globalAlpha = 1;
+        for (let x = h.x + 12; x < h.x + h.w; x += 32) {
+            ctx.fillStyle = "#ffd2dc";
+            ctx.beginPath();
+            ctx.moveTo(x, h.y + 3);
+            ctx.lineTo(x + 12, h.y + h.h - 4);
+            ctx.lineTo(x - 12, h.y + h.h - 4);
+            ctx.closePath();
+            ctx.fill();
+        }
+    });
+
+    coins.forEach(coin => {
+        if (coin.taken) return;
+        ctx.fillStyle = "#ffe86b";
+        ctx.beginPath();
+        ctx.arc(coin.x, coin.y, coin.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#fff8b8";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+    });
+
+    enemies.forEach(enemy => {
+        ctx.fillStyle = "#b64cff";
+        roundRect(enemy.x, enemy.y, enemy.w, enemy.h, 7);
+        ctx.fillStyle = "#f4d7ff";
+        ctx.fillRect(enemy.x + 7, enemy.y + 9, 5, 5);
+        ctx.fillRect(enemy.x + 18, enemy.y + 9, 5, 5);
+    });
+
+    ctx.fillStyle = "#49ffa8";
+    roundRect(goal.x, goal.y, goal.w, goal.h, 10);
+    ctx.fillStyle = "#08182b";
+    roundRect(goal.x + 12, goal.y + 16, goal.w - 24, goal.h - 32, 8);
+    ctx.strokeStyle = "#a3ffd4";
+    ctx.lineWidth = 4;
+    ctx.strokeRect(goal.x + 13, goal.y + 17, goal.w - 26, goal.h - 34);
+
+    if (player.invuln <= 0 || Math.floor(player.invuln / 5) % 2 === 0) {
+        ctx.fillStyle = "#8deaff";
+        roundRect(player.x, player.y, player.w, player.h, 8);
+        ctx.fillStyle = "#09213a";
+        ctx.fillRect(player.x + 8, player.y + 14, 6, 6);
+        ctx.fillRect(player.x + 21, player.y + 14, 6, 6);
+        ctx.fillStyle = "#dffbff";
+        ctx.fillRect(player.x + 8, player.y + player.h - 8, 18, 4);
+    }
+
+    ctx.restore();
+}
+
+function draw() {
+    drawBackground();
+    drawWorld();
+    const collected = coins.filter(c => c.taken).length;
+    levelEl.textContent = `Level ${levelIndex + 1}/${levels.length}`;
+    coinsEl.textContent = `Coins ${collected}/${coins.length}`;
+    livesEl.textContent = `Lives ${player.lives}`;
+    timeEl.textContent = `Time ${elapsed.toFixed(1)}`;
+}
+
+function loop(now) {
+    const dt = Math.min(0.05, (now - lastTime) / 1000 || 0);
+    lastTime = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(loop);
+}
+
+function setKey(code, down) {
+    if (code === "ArrowLeft" || code === "KeyA") keys.left = down;
+    if (code === "ArrowRight" || code === "KeyD") keys.right = down;
+    if (code === "ArrowUp" || code === "Space" || code === "KeyW") keys.jump = down;
+}
+
+window.addEventListener("keydown", event => {
+    setKey(event.code, true);
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "Space"].includes(event.code)) event.preventDefault();
+});
+
+window.addEventListener("keyup", event => setKey(event.code, false));
+window.addEventListener("message", event => {
+    if (event.data?.type !== "game-key") return;
+    setKey(event.data.code, event.data.down);
+});
+window.addEventListener("resize", resize);
+startBtn.addEventListener("click", begin);
+
+document.querySelectorAll(".touch-btn").forEach(button => {
+    const key = button.dataset.key;
+    const down = event => {
+        event.preventDefault();
+        keys[key] = true;
+    };
+    const up = event => {
+        event.preventDefault();
+        keys[key] = false;
+    };
+    button.addEventListener("pointerdown", down);
+    button.addEventListener("pointerup", up);
+    button.addEventListener("pointercancel", up);
+    button.addEventListener("pointerleave", up);
+});
+
+resize();
+resetGame();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
