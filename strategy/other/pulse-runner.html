@@ -145,7 +145,7 @@ body {
     <div class="hud-group">
         <div class="pill" id="level">Level 1</div>
         <div class="pill" id="coins">Coins 0/0</div>
-        <div class="pill" id="lives">Lives 3</div>
+        <div class="pill" id="lives">Lives 15</div>
     </div>
     <div class="pill" id="time">Time 0.0</div>
 </div>
@@ -153,7 +153,7 @@ body {
 <div class="overlay" id="overlay">
     <div class="panel">
         <h1>Pulse Runner</h1>
-        <p>Clear 50 levels, press buttons to disarm danger, and survive lava, drones, portals, and springs.</p>
+        <p>Clear 10 levels, press buttons to disarm danger, and survive lava, drones, portals, and springs.</p>
         <button class="primary-btn" id="start-btn">Start Run</button>
     </div>
 </div>
@@ -196,7 +196,7 @@ const player = {
     h: 48,
     vx: 0,
     vy: 0,
-    lives: 3,
+    lives: 15,
     grounded: false,
     invuln: 0
 };
@@ -535,58 +535,76 @@ function makeGapsReachable(platforms, tier) {
     return platforms;
 }
 
+function widenLaterLevelPlatforms(platforms, levelNumber) {
+    if (levelNumber < 4) return platforms;
+    return platforms.map(platform => ({
+        ...platform,
+        w: Math.round(platform.w * 1.18)
+    }));
+}
+
 function buildCampaignLevels(count) {
     const campaign = [];
     for (let i = 0; i < count; i++) {
         const base = cloneLevel(baseLevelThemes[i % baseLevelThemes.length]);
-        const tier = Math.floor(i / baseLevelThemes.length);
         const levelNumber = i + 1;
-        const speedBoost = tier * 0.18;
+        const tier = levelNumber - 1;
+        const speedBoost = tier * 0.06;
+        const originalHazards = base.hazards.map(hazard => ({ ...hazard }));
+        const groundHazards = originalHazards.filter(hazard => hazard.y >= 660);
         base.name = `${levelNumber}. ${levelNames[i]}`;
 
-        base.platforms = makeGapsReachable(tunePlatformSizes(base.platforms, tier), tier);
+        base.platforms = makeGapsReachable(widenLaterLevelPlatforms(tunePlatformSizes(base.platforms, tier), levelNumber), tier);
 
         base.portals = [];
         base.lavaPools = [];
         base.waterPools = [];
         base.trampolines = [];
         base.drones = [];
+        base.hazards = levelNumber >= 4 ? originalHazards : [];
 
-        if (tier >= 1) {
-            const springPlatform = base.platforms[Math.min(base.platforms.length - 2, 1 + (i % Math.max(1, base.platforms.length - 2)))];
-            base.trampolines.push(createTrampoline(springPlatform, 0.5));
-            const waterHazard = base.hazards.find(hazard => hazard.y >= 660);
+        if (levelNumber >= 2) {
+            const waterHazard = groundHazards[(i + 1) % Math.max(1, groundHazards.length)];
             if (waterHazard) base.waterPools.push(createWaterPool(waterHazard));
         }
 
-        if (tier >= 2) {
-            base.lavaPools = base.hazards
-                .filter((hazard, hazardIndex) => hazard.y >= 660 && hazardIndex % 2 === i % 2)
-                .slice(0, 1 + Math.min(2, tier - 2))
-                .map(hazard => createLavaPool(hazard, tier));
+        if (levelNumber >= 3) {
+            const springPlatform = base.platforms[Math.min(base.platforms.length - 2, 1 + (i % Math.max(1, base.platforms.length - 2)))];
+            base.trampolines.push(createTrampoline(springPlatform, 0.5));
         }
 
-        if (tier >= 3) {
+        if (levelNumber >= 5) {
+            const lavaCount = Math.min(3, 1 + Math.floor((levelNumber - 5) / 2));
+            base.lavaPools = groundHazards
+                .filter((hazard, hazardIndex) => hazardIndex % 2 === i % 2)
+                .slice(0, lavaCount)
+                .map(hazard => createLavaPool(hazard, tier));
+            if (base.lavaPools.length === 0 && groundHazards.length > 0) {
+                base.lavaPools.push(createLavaPool(groundHazards[0], tier));
+            }
+        }
+
+        if (levelNumber >= 6) {
             const portalStart = base.platforms[Math.min(2, base.platforms.length - 2)];
             const portalEnd = base.platforms[Math.max(1, base.platforms.length - 3)];
             base.portals = createPortalPair(portalStart, portalEnd, "#35d7ff", "#ff66f7");
-            const openWaterHazard = base.hazards.find(hazard => hazard.y >= 660 && !base.lavaPools.some(lava => lava.x === hazard.x));
+            const openWaterHazard = groundHazards.find(hazard => !base.lavaPools.some(lava => lava.x === hazard.x));
             if (openWaterHazard && !base.waterPools.some(water => water.x === openWaterHazard.x)) {
                 base.waterPools.push(createWaterPool(openWaterHazard));
             }
         }
 
-        if (tier >= 4) {
+        if (levelNumber >= 7) {
             const dronePlatform = base.platforms[Math.min(base.platforms.length - 2, 2 + (i % Math.max(1, base.platforms.length - 3)))];
             base.drones.push(createDrone(dronePlatform, 1.1 + (i % 3) * 0.35));
         }
 
-        if (tier >= 5) {
+        if (levelNumber >= 8) {
             const secondSpring = base.platforms[Math.min(base.platforms.length - 2, 3 + (i % Math.max(1, base.platforms.length - 4)))];
             base.trampolines.push(createTrampoline(secondSpring, 0.68));
         }
 
-        if (tier >= 7) {
+        if (levelNumber >= 10) {
             const secondDronePlatform = base.platforms[Math.min(base.platforms.length - 2, 4 + (i % Math.max(1, base.platforms.length - 5)))];
             base.drones.push(createDrone(secondDronePlatform, 2.0));
         }
@@ -596,7 +614,13 @@ function buildCampaignLevels(count) {
             speed: enemy.speed + speedBoost + (enemyIndex % 2) * 0.05
         }));
 
-        if (tier >= 2) {
+        if (levelNumber === 1) {
+            base.enemies = [];
+        } else if (levelNumber <= 3) {
+            base.enemies = base.enemies.slice(0, 1);
+        }
+
+        if (levelNumber >= 6) {
             const platform = base.platforms.find(p => p.w >= 260 && p.y < 630);
             if (platform) {
                 base.enemies.push({
@@ -611,7 +635,7 @@ function buildCampaignLevels(count) {
             }
         }
 
-        if (tier >= 5) {
+        if (levelNumber >= 8) {
             const anchor = base.platforms[Math.min(base.platforms.length - 2, 2 + (i % Math.max(1, base.platforms.length - 3)))];
             if (anchor && anchor.w > 180) {
                 base.hazards.push({
@@ -627,10 +651,10 @@ function buildCampaignLevels(count) {
         let buttonTarget = null;
         if (base.drones.length > 0) buttonTarget = "drones";
         else if (base.lavaPools.length > 0) buttonTarget = "lava";
-        else if (tier >= 3) buttonTarget = "pulse";
+        else if (levelNumber >= 4) buttonTarget = "pulse";
         base.buttons = buttonTarget ? [createButton(buttonPlatform, buttonTarget)] : [];
 
-        if (tier >= 6) {
+        if (levelNumber >= 9) {
             const bonusPlatform = base.platforms[Math.min(base.platforms.length - 1, 3 + (i % Math.max(1, base.platforms.length - 4)))];
             if (bonusPlatform) {
                 base.coins.push({
@@ -640,23 +664,12 @@ function buildCampaignLevels(count) {
             }
         }
 
-        if (tier === 0) {
-            base.hazards = [];
-            base.lavaPools = [];
-            base.waterPools = [];
-            base.buttons = [];
-        } else if (tier === 1) {
-            base.hazards = [];
-            base.lavaPools = [];
-            base.buttons = [];
-        }
-
         campaign.push(base);
     }
     return campaign;
 }
 
-const levels = buildCampaignLevels(50);
+const levels = buildCampaignLevels(10);
 
 function resize() {
     const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
@@ -695,7 +708,7 @@ function loadLevel(index) {
 function resetGame() {
     levelIndex = 0;
     totalCoins = 0;
-    player.lives = 3;
+    player.lives = 15;
     elapsed = 0;
     finished = false;
     loadLevel(levelIndex);

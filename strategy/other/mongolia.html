@@ -320,10 +320,26 @@ function getPosOnPath(path, t) {
 let blobs = [];
 let particles = [];
 let gameOver = false;
+let gameWon  = false;
 let loseReason = '';
 let killCount = 0;
 const KILL_TARGET = 15;
+const RANGER_COST = 20;
 let nextBlueSpawn = Date.now() + 4000;
+let level = 1;
+let impostorWave2At = 0;
+let coins = 0;
+let rangers = [];
+let rangerBtnBounds = null;
+
+const ALL_LEG_ANGLES = [
+    Math.PI * 5/6,  // left-front
+    Math.PI / 6,    // right-front
+    Math.PI,        // left-mid
+    0,              // right-mid
+    Math.PI * 7/6,  // left-back
+   -Math.PI / 6,    // right-back
+];
 
 function spawnRedBlob() {
     blobs.push({
@@ -337,22 +353,52 @@ function spawnRedBlob() {
 
 function initBlobs() {
     killCount = 0;
+    coins = 0;
+    rangers = [];
     nextBlueSpawn = Date.now() + 4000;
+    const now = Date.now();
     blobs = [
-        // Blue wanderers — bounce back and forth, despawn after 10s
-        { pathIndex: 0, t: 0.22, type: 'blue', wobble: 0.0, speed: 0.00045, dir:  1, born: Date.now() },
-        { pathIndex: 0, t: 0.62, type: 'blue', wobble: 1.8, speed: 0.00035, dir: -1, born: Date.now() },
-        { pathIndex: 1, t: 0.35, type: 'blue', wobble: 0.7, speed: 0.00042, dir:  1, born: Date.now() },
-        { pathIndex: 1, t: 0.68, type: 'blue', wobble: 2.4, speed: 0.00038, dir: -1, born: Date.now() },
-        { pathIndex: 2, t: 0.42, type: 'blue', wobble: 1.2, speed: 0.00048, dir:  1, born: Date.now() },
-        { pathIndex: 2, t: 0.75, type: 'blue', wobble: 3.1, speed: 0.00040, dir: -1, born: Date.now() },
-        // Lvl 1 red enemies on all three paths
-        { pathIndex: 0, t: 0.10, type: 'red',  wobble: 1.2, speed: 0.00055 },
-        { pathIndex: 1, t: 0.20, type: 'red',  wobble: 0.5, speed: 0.00050 },
-        { pathIndex: 2, t: 0.15, type: 'red',  wobble: 2.1, speed: 0.00052 },
-        { pathIndex: 0, t: 0.50, type: 'red',  wobble: 0.8, speed: 0.00048 },
-        { pathIndex: 2, t: 0.55, type: 'red',  wobble: 1.6, speed: 0.00058 },
+        // Blue wanderers
+        { pathIndex: 0, t: 0.22, type: 'blue', wobble: 0.0, speed: 0.00045, dir:  1, born: now },
+        { pathIndex: 0, t: 0.62, type: 'blue', wobble: 1.8, speed: 0.00035, dir: -1, born: now },
+        { pathIndex: 1, t: 0.35, type: 'blue', wobble: 0.7, speed: 0.00042, dir:  1, born: now },
+        { pathIndex: 1, t: 0.68, type: 'blue', wobble: 2.4, speed: 0.00038, dir: -1, born: now },
+        { pathIndex: 2, t: 0.42, type: 'blue', wobble: 1.2, speed: 0.00048, dir:  1, born: now },
+        { pathIndex: 2, t: 0.75, type: 'blue', wobble: 3.1, speed: 0.00040, dir: -1, born: now },
+        // Red enemies
+        { pathIndex: 0, t: 0.10, type: 'red', wobble: 1.2, speed: 0.00055 },
+        { pathIndex: 1, t: 0.20, type: 'red', wobble: 0.5, speed: 0.00050 },
+        { pathIndex: 2, t: 0.15, type: 'red', wobble: 2.1, speed: 0.00052 },
+        { pathIndex: 0, t: 0.50, type: 'red', wobble: 0.8, speed: 0.00048 },
+        { pathIndex: 2, t: 0.55, type: 'red', wobble: 1.6, speed: 0.00058 },
     ];
+    if (level === 2) {
+        blobs.push(
+            { pathIndex: 0, t: 0.05, type: 'red', disguised: true, showingBlue: true, wobble: 0.5, speed: 0.00052, nextToggle: now + 1500 + Math.random()*2000 },
+            { pathIndex: 1, t: 0.08, type: 'red', disguised: true, showingBlue: true, wobble: 2.2, speed: 0.00048, nextToggle: now + 2000 + Math.random()*2000 },
+            { pathIndex: 2, t: 0.06, type: 'red', disguised: true, showingBlue: true, wobble: 4.1, speed: 0.00055, nextToggle: now + 1000 + Math.random()*2000 },
+        );
+        impostorWave2At = now + 12000 + Math.random() * 6000;
+    }
+    if (level === 4) {
+        [0, 1, 2, 1].forEach((pathIndex, idx) => {
+            const legs = 2 + Math.floor(Math.random() * 5);
+            blobs.push({ pathIndex, t: 0.04 + idx * 0.10, type: 'spider', legs, wobble: Math.random()*Math.PI*2, speed: 0.00038 + Math.random()*0.00012 });
+        });
+    }
+    if (level === 3) {
+        // 3 impostors
+        blobs.push(
+            { pathIndex: 0, t: 0.05, type: 'red', disguised: true, showingBlue: true, wobble: 0.5, speed: 0.00054, nextToggle: now + 1200 + Math.random()*2000 },
+            { pathIndex: 1, t: 0.08, type: 'red', disguised: true, showingBlue: true, wobble: 2.2, speed: 0.00050, nextToggle: now + 1800 + Math.random()*2000 },
+            { pathIndex: 2, t: 0.06, type: 'red', disguised: true, showingBlue: true, wobble: 4.1, speed: 0.00057, nextToggle: now + 900  + Math.random()*2000 },
+        );
+        // Give hoodies to 2 red blobs and 2 blue blobs already in the list
+        blobs[6].hooded = true;   // first red
+        blobs[8].hooded = true;   // third red
+        blobs[0].hooded = true;   // first blue
+        blobs[3].hooded = true;   // fourth blue
+    }
 }
 
 function spawnParticles(x, y) {
@@ -369,9 +415,145 @@ function spawnParticles(x, y) {
     }
 }
 
-function drawBlob(x, y, r, type, wobble) {
+function drawSpider(x, y, r, legs, wobble) {
+    ctx.save();
+    ctx.translate(x, y);
+    const sq = Math.sin(wobble) * r * 0.08;
+
+    // Legs (behind body)
+    ctx.strokeStyle = '#1a1005';
+    ctx.lineWidth = r * 0.13;
+    ctx.lineCap = 'round';
+    for (let i = 0; i < legs; i++) {
+        const a = ALL_LEG_ANGLES[i];
+        const side = Math.cos(a) < 0 ? -1 : 1;
+        const bx0 = Math.cos(a) * r * 0.72, by0 = Math.sin(a) * r * 0.85 + sq * 0.5;
+        const kx  = Math.cos(a) * r * 1.45, ky  = Math.sin(a) * r * 0.7 + sq * 0.3 - r * 0.28;
+        const fx  = Math.cos(a) * r * 2.1  + side * r * 0.18;
+        const fy  = Math.sin(a) * r * 0.55 + sq * 0.2 + r * 0.38;
+        ctx.beginPath();
+        ctx.moveTo(bx0, by0);
+        ctx.quadraticCurveTo(kx, ky, fx, fy);
+        ctx.stroke();
+    }
+
+    // Body
+    ctx.beginPath();
+    ctx.ellipse(0, sq * 0.4, r * 0.82, r * 0.95, 0, 0, Math.PI * 2);
+    ctx.fillStyle = '#1e1005';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(80,40,10,0.5)';
+    ctx.lineWidth = r * 0.08;
+    ctx.stroke();
+
+    // Sheen
+    ctx.beginPath();
+    ctx.ellipse(-r*0.18, -r*0.28, r*0.22, r*0.14, -0.4, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fill();
+
+    // 4 red eyes
+    ctx.fillStyle = '#ff2222';
+    for (let i = 0; i < 4; i++) {
+        ctx.beginPath();
+        ctx.arc((i - 1.5) * r * 0.3, -r * 0.42 + sq * 0.3, r * 0.11, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Legs-remaining counter
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,160,50,0.95)';
+    ctx.font = `bold ${r * 0.72}px sans-serif`;
+    ctx.shadowColor = 'rgba(0,0,0,0.7)';
+    ctx.shadowBlur = 4;
+    ctx.fillText(legs, 0, r * 0.44 + sq * 0.3);
+    ctx.shadowBlur = 0;
+
+    ctx.restore();
+}
+
+function drawRanger(x, y, r, wobble) {
+    const sq = Math.sin(wobble) * r * 0.08;
+    ctx.save();
+    ctx.translate(x, y);
+
+    // Shadow
+    ctx.beginPath();
+    ctx.ellipse(r*0.1, r*0.35, r*0.75, r*0.22, 0, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(0,0,0,0.13)';
+    ctx.fill();
+
+    // Body - forest green
+    ctx.beginPath();
+    ctx.ellipse(0, sq*0.4, r*0.9, r, 0, 0, Math.PI*2);
+    ctx.fillStyle = '#2d8c20';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,60,0,0.3)';
+    ctx.lineWidth = r*0.09;
+    ctx.stroke();
+
+    // Sheen
+    ctx.beginPath();
+    ctx.ellipse(-r*0.2, -r*0.26, r*0.26, r*0.14, -0.5, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.fill();
+
+    // Hat brim
+    ctx.fillStyle = '#7a5010';
+    ctx.beginPath();
+    ctx.ellipse(0, -r*0.78+sq*0.3, r*0.75, r*0.14, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // Hat crown
+    ctx.fillStyle = '#8c5c14';
+    roundRect(-r*0.3, -r*1.3+sq*0.3, r*0.6, r*0.56, r*0.09);
+    ctx.fill();
+
+    // Eyes - determined
+    const ey = -r*0.10 + sq*0.25, ex = r*0.27;
+    [[-ex, ey], [ex, ey]].forEach(([bx, by]) => {
+        ctx.beginPath(); ctx.arc(bx, by, r*0.19, 0, Math.PI*2);
+        ctx.fillStyle = 'white'; ctx.fill();
+        ctx.beginPath(); ctx.arc(bx, by+r*0.04, r*0.11, 0, Math.PI*2);
+        ctx.fillStyle = '#1a1a1a'; ctx.fill();
+    });
+
+    // Stern flat mouth
+    ctx.strokeStyle = 'rgba(0,60,0,0.45)';
+    ctx.lineWidth = r*0.08; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-r*0.18, r*0.26); ctx.lineTo(r*0.18, r*0.26); ctx.stroke();
+
+    // Badge
+    ctx.fillStyle = '#f5c518';
+    ctx.beginPath(); ctx.arc(r*0.44, r*0.1, r*0.12, 0, Math.PI*2); ctx.fill();
+
+    ctx.restore();
+}
+
+function drawHood(r) {
+    // Cloak that covers the blob — hides its colour
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.05, r * 1.08, Math.PI, 0);
+    ctx.lineTo(r * 1.08, r * 0.55);
+    ctx.quadraticCurveTo(r * 0.7, r * 0.85, 0, r * 0.72);
+    ctx.quadraticCurveTo(-r * 0.7, r * 0.85, -r * 1.08, r * 0.55);
+    ctx.closePath();
+    ctx.fillStyle = '#2b1f0e';
+    ctx.fill();
+    // Inner shadow of hood opening
+    ctx.beginPath();
+    ctx.ellipse(0, r * 0.08, r * 0.52, r * 0.46, 0, 0, Math.PI * 2);
+    ctx.fillStyle = '#0e0a04';
+    ctx.fill();
+    // Mysterious glowing eyes inside hood
+    ctx.fillStyle = 'rgba(255,200,60,0.75)';
+    ctx.beginPath(); ctx.arc(-r * 0.19, r * 0.04, r * 0.09, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc( r * 0.19, r * 0.04, r * 0.09, 0, Math.PI * 2); ctx.fill();
+}
+
+function drawBlob(x, y, r, type, wobble, hooded) {
     const angry = type === 'red';
-    const baseColor = angry ? '#e83535' : '#38b0f0';
+    const baseColor = hooded ? '#888' : (angry ? '#e83535' : '#38b0f0');
     const shineColor = angry ? '#ff7070' : '#88d8ff';
     const sq = Math.sin(wobble) * r * 0.11;
     const cq = Math.cos(wobble * 1.3) * r * 0.09;
@@ -417,25 +599,26 @@ function drawBlob(x, y, r, type, wobble) {
     });
 
     ctx.lineCap = 'round';
-    if (angry) {
-        // Angry brows
-        ctx.strokeStyle = 'rgba(70,0,0,0.7)';
-        ctx.lineWidth = r * 0.09;
-        ctx.beginPath(); ctx.moveTo(-ex - r*0.13, ey - r*0.22); ctx.lineTo(-ex + r*0.10, ey - r*0.08); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo( ex + r*0.13, ey - r*0.22); ctx.lineTo( ex - r*0.10, ey - r*0.08); ctx.stroke();
-        // Frown
-        ctx.beginPath();
-        ctx.arc(0, r * 0.40, r * 0.18, Math.PI, 0);
-        ctx.strokeStyle = 'rgba(70,0,0,0.45)';
-        ctx.lineWidth = r * 0.08;
-        ctx.stroke();
+    if (!hooded) {
+        if (angry) {
+            ctx.strokeStyle = 'rgba(70,0,0,0.7)';
+            ctx.lineWidth = r * 0.09;
+            ctx.beginPath(); ctx.moveTo(-ex - r*0.13, ey - r*0.22); ctx.lineTo(-ex + r*0.10, ey - r*0.08); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo( ex + r*0.13, ey - r*0.22); ctx.lineTo( ex - r*0.10, ey - r*0.08); ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(0, r * 0.40, r * 0.18, Math.PI, 0);
+            ctx.strokeStyle = 'rgba(70,0,0,0.45)';
+            ctx.lineWidth = r * 0.08;
+            ctx.stroke();
+        } else {
+            ctx.beginPath();
+            ctx.arc(0, r * 0.16, r * 0.22, 0.1, Math.PI - 0.1);
+            ctx.strokeStyle = 'rgba(0,60,130,0.40)';
+            ctx.lineWidth = r * 0.08;
+            ctx.stroke();
+        }
     } else {
-        // Smile
-        ctx.beginPath();
-        ctx.arc(0, r * 0.16, r * 0.22, 0.1, Math.PI - 0.1);
-        ctx.strokeStyle = 'rgba(0,60,130,0.40)';
-        ctx.lineWidth = r * 0.08;
-        ctx.stroke();
+        drawHood(r);
     }
 
     ctx.restore();
@@ -460,12 +643,32 @@ function drawScene() {
 // ── Kill counter HUD ──
 function drawHUD() {
     ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.4)';
+    ctx.shadowBlur = 6;
+
     ctx.textAlign = 'left';
     ctx.font = `bold ${H * 0.028}px "Segoe UI", sans-serif`;
     ctx.fillStyle = 'rgba(255,255,255,0.92)';
-    ctx.shadowColor = 'rgba(0,0,0,0.4)';
-    ctx.shadowBlur = 6;
-    ctx.fillText(`Defeated: ${killCount} / ${KILL_TARGET}`, W * 0.02, H * 0.055);
+    ctx.fillText(`Level ${level}  |  Defeated: ${killCount} / ${KILL_TARGET}  |  Coins: ${coins}`, W * 0.02, H * 0.052);
+
+    // Ranger buy button
+    const btnW = W * 0.15, btnH = H * 0.044;
+    const btnX = W * 0.02, btnY = H * 0.068;
+    rangerBtnBounds = { x: btnX, y: btnY, w: btnW, h: btnH };
+    const canAfford = coins >= RANGER_COST;
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = canAfford ? 'rgba(30,110,30,0.88)' : 'rgba(50,50,50,0.65)';
+    roundRect(btnX, btnY, btnW, btnH, 6); ctx.fill();
+    ctx.strokeStyle = canAfford ? 'rgba(80,200,80,0.7)' : 'rgba(100,100,100,0.4)';
+    ctx.lineWidth = 1.5;
+    roundRect(btnX, btnY, btnW, btnH, 6); ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = canAfford ? '#fff' : 'rgba(180,180,180,0.55)';
+    ctx.font = `bold ${H * 0.021}px "Segoe UI", sans-serif`;
+    ctx.fillText(`Ranger  (${RANGER_COST})`, btnX + btnW * 0.5, btnY + btnH * 0.67);
+
     ctx.restore();
 }
 
@@ -489,16 +692,25 @@ function drawWinScreen() {
     ctx.shadowBlur = 18;
     ctx.fillStyle = '#44ee66';
     ctx.font = `bold ${H * 0.072}px "Segoe UI", Georgia, serif`;
-    ctx.fillText('YOU WIN!', W * 0.5, py + ph * 0.45);
+    const winTitles = ['LEVEL 1 CLEAR!', 'LEVEL 2 CLEAR!', 'LEVEL 3 CLEAR!', 'YOU WIN!'];
+    const winSubs   = [
+        'Watch out — some impostors ahead...',
+        'Some blobs wear hoodies in Level 3!',
+        'Level 4 has spiders — click them once per leg!',
+        'The treasure chest is safe!',
+    ];
+    const winBtns   = ['Click to start Level 2', 'Click to start Level 3', 'Click to start Level 4', 'Click to play again'];
+    const wi = Math.min(level - 1, 3);
+    ctx.fillText(winTitles[wi], W * 0.5, py + ph * 0.45);
 
     ctx.shadowBlur = 0;
     ctx.fillStyle = 'rgba(180,255,190,0.75)';
     ctx.font = `${H * 0.028}px "Segoe UI", sans-serif`;
-    ctx.fillText('The treasure chest is safe!', W * 0.5, py + ph * 0.68);
+    ctx.fillText(winSubs[wi], W * 0.5, py + ph * 0.68);
 
     ctx.fillStyle = 'rgba(255,255,255,0.45)';
     ctx.font = `${H * 0.022}px "Segoe UI", sans-serif`;
-    ctx.fillText('Click anywhere to play again', W * 0.5, py + ph * 0.88);
+    ctx.fillText(winBtns[wi], W * 0.5, py + ph * 0.88);
 }
 
 // ── Lose screen ──
@@ -547,6 +759,14 @@ function gameLoop() {
 
     blobs = blobs.filter(b => !(b.type === 'blue' && now - b.born > 10000));
 
+    if (impostorWave2At > 0 && now >= impostorWave2At) {
+        blobs.push(
+            { pathIndex: Math.floor(Math.random()*3), t: 0, type: 'red', disguised: true, showingBlue: true, wobble: Math.random()*Math.PI*2, speed: 0.00050 + Math.random()*0.00010, nextToggle: now + 1000 + Math.random()*2000 },
+            { pathIndex: Math.floor(Math.random()*3), t: 0, type: 'red', disguised: true, showingBlue: true, wobble: Math.random()*Math.PI*2, speed: 0.00050 + Math.random()*0.00010, nextToggle: now + 1500 + Math.random()*2000 },
+        );
+        impostorWave2At = 0;
+    }
+
     if (now >= nextBlueSpawn) {
         blobs.push({
             pathIndex: Math.floor(Math.random() * 3),
@@ -562,11 +782,17 @@ function gameLoop() {
 
     for (const b of blobs) {
         b.wobble += 0.055;
-        if (b.type === 'red') {
+        if (b.type === 'red' || b.type === 'spider') {
             b.t += b.speed;
+            if (b.type === 'red' && b.disguised && b.t < 0.75 && now >= b.nextToggle) {
+                b.showingBlue = !b.showingBlue;
+                b.nextToggle = now + 1500 + Math.random() * 2500;
+            }
             if (b.t >= 1.0) {
                 gameOver = true;
-                loseReason = 'A red blob reached the treasure chest!';
+                loseReason = b.type === 'spider'
+                    ? 'A spider reached the treasure chest!'
+                    : 'A red blob reached the treasure chest!';
                 drawScene();
                 drawLoseScreen();
                 return;
@@ -578,8 +804,54 @@ function gameLoop() {
             if (Math.random() < 0.0008) b.dir *= -1;
         }
         const [x, y] = getPosOnPath(PATHS[b.pathIndex], b.t);
-        drawBlob(x, y, r, b.type, b.wobble);
+        if (b.type === 'spider') {
+            drawSpider(x, y, r, b.legs, b.wobble);
+        } else {
+            const visType  = (b.disguised && b.showingBlue) ? 'blue' : b.type;
+            const isHooded = b.hooded && b.t < 0.5;
+            drawBlob(x, y, r, visType, b.wobble, isHooded);
+        }
     }
+
+    // Rangers — attack enemies, cannot be fooled by disguises
+    rangers = rangers.filter(ranger => {
+        ranger.wobble += 0.055;
+        ranger.t += 0.00055;
+        if (ranger.t >= 1.0) return false;
+        if (ranger.attackCooldown > 0) {
+            ranger.attackCooldown--;
+        } else {
+            const [rx, ry] = getPosOnPath(PATHS[ranger.pathIndex], ranger.t);
+            let target = null, bestDist = H * 0.09;
+            for (const b of blobs) {
+                if (b.type !== 'red' && b.type !== 'spider') continue;
+                const [bx, by] = getPosOnPath(PATHS[b.pathIndex], b.t);
+                const d = Math.hypot(rx - bx, ry - by);
+                if (d < bestDist) { target = b; bestDist = d; }
+            }
+            if (target) {
+                const [tx, ty] = getPosOnPath(PATHS[target.pathIndex], target.t);
+                if (target.type === 'spider') {
+                    target.legs--;
+                    if (target.legs <= 0) {
+                        spawnParticles(tx, ty);
+                        blobs.splice(blobs.indexOf(target), 1);
+                        killCount++; coins++;
+                        if (killCount < KILL_TARGET) spawnRedBlob();
+                    }
+                } else {
+                    spawnParticles(tx, ty);
+                    blobs.splice(blobs.indexOf(target), 1);
+                    killCount++; coins++;
+                    if (killCount < KILL_TARGET) spawnRedBlob();
+                }
+                ranger.attackCooldown = 90;
+            }
+        }
+        const [rx, ry] = getPosOnPath(PATHS[ranger.pathIndex], ranger.t);
+        drawRanger(rx, ry, r, ranger.wobble);
+        return true;
+    });
 
     // Death particles
     particles = particles.filter(p => {
@@ -595,9 +867,9 @@ function gameLoop() {
         return p.alpha > 0;
     });
 
-    // Win check — all 30 killed and no reds remain
-    if (killCount >= KILL_TARGET && !blobs.some(b => b.type === 'red')) {
+    if (killCount >= KILL_TARGET && !blobs.some(b => b.type === 'red' || b.type === 'spider')) {
         gameOver = true;
+        gameWon  = true;
         drawScene();
         drawHUD();
         drawWinScreen();
@@ -611,8 +883,11 @@ function gameLoop() {
 canvas.style.cursor = 'crosshair';
 canvas.addEventListener('click', e => {
     if (gameOver) {
+        const wasWon = gameWon, wasLevel = level;
         gameOver = false;
+        gameWon  = false;
         particles = [];
+        level = (wasWon && wasLevel < 4) ? wasLevel + 1 : 1;
         initBlobs();
         gameLoop();
         return;
@@ -623,20 +898,43 @@ canvas.addEventListener('click', e => {
     const my = (e.clientY - rect.top) * (H / rect.height);
     const r = H * 0.024;
 
+    // Ranger buy button
+    if (rangerBtnBounds &&
+        mx >= rangerBtnBounds.x && mx <= rangerBtnBounds.x + rangerBtnBounds.w &&
+        my >= rangerBtnBounds.y && my <= rangerBtnBounds.y + rangerBtnBounds.h) {
+        if (coins >= RANGER_COST) {
+            coins -= RANGER_COST;
+            rangers.push({ pathIndex: Math.floor(Math.random()*3), t: 0, wobble: 0, attackCooldown: 0 });
+        }
+        return;
+    }
+
     for (let i = blobs.length - 1; i >= 0; i--) {
         const b = blobs[i];
         const [bx, by] = getPosOnPath(PATHS[b.pathIndex], b.t);
         if (Math.hypot(mx - bx, my - by) < r * 1.4) {
-            if (b.type === 'blue') {
-                gameOver = true;
-                loseReason = 'You hit a friendly blue blob!';
-                drawScene();
-                drawLoseScreen();
+            if (b.hooded && b.t < 0.5) break;
+            if (b.type === 'spider') {
+                b.legs--;
+                if (b.legs <= 0) {
+                    spawnParticles(bx, by);
+                    blobs.splice(i, 1);
+                    killCount++; coins++;
+                    if (killCount < KILL_TARGET) spawnRedBlob();
+                }
             } else {
-                spawnParticles(bx, by);
-                blobs.splice(i, 1);
-                killCount++;
-                if (killCount < KILL_TARGET) spawnRedBlob();
+                const appearsBlue = b.type === 'blue' || (b.disguised && b.showingBlue);
+                if (appearsBlue) {
+                    gameOver = true;
+                    loseReason = b.disguised ? 'You hit an impostor while it was disguised!' : 'You hit a friendly blue blob!';
+                    drawScene();
+                    drawLoseScreen();
+                } else {
+                    spawnParticles(bx, by);
+                    blobs.splice(i, 1);
+                    killCount++; coins++;
+                    if (killCount < KILL_TARGET) spawnRedBlob();
+                }
             }
             break;
         }
