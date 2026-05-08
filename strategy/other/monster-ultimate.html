@@ -73,10 +73,11 @@
       <div class="overlay-title">Monster Ultimate</div>
       <div class="overlay-sub">Survive the monster waves!</div>
       <div class="overlay-box">
-        <b>Arrow Keys / WASD</b> — Move &nbsp; <b>Space</b> — Shoot (auto-aims)<br>
-        <b>Weapons:</b> Pistol (default) &nbsp; Shotgun (S) &nbsp; Laser (L) &nbsp; Bomb (B)<br>
-        <b>Powerups:</b> Speed &nbsp; Shield &nbsp; Freeze &nbsp; +Life &nbsp; 2x Score<br>
-        Collect weapon pickups to swap. Run out of ammo = back to Pistol.<br>
+        <b>Arrow Keys / WASD</b> — Move<br>
+        Your weapon <b>auto-shoots</b> the nearest monster<br>
+        <b>Weapons:</b> Pistol · Shotgun · Laser · Bomb<br>
+        <b>Powerups:</b> Speed · Shield · Freeze · +Life · 2x Score<br>
+        Collect pickups scattered around the arena.<br>
         Clear all monsters to advance waves!
       </div>
       <button id="startBtn">Play</button>
@@ -94,7 +95,7 @@ const livesEl  = document.getElementById('lives');
 const waveEl   = document.getElementById('wave');
 const weaponEl = document.getElementById('weapon');
 
-const W = 630, H = 570;
+const W = 840, H = 690;
 canvas.width = W; canvas.height = H;
 
 let highScore = parseInt(localStorage.getItem('monsterUltimateHigh') || '0');
@@ -105,7 +106,7 @@ let score, lives, wave, gameActive, animFrame, tick;
 let player, bullets, monsters, pickups, particles;
 let shieldTimer, speedTimer, freezeTimer, scoreMultTimer, scoreMultiplier;
 let invincTimer, flashTimer, flashColor;
-let monstersToSpawn, spawnTimer, waveClearing;
+let monstersToSpawn, spawnTimer, waveClearing, pickupSpawnTimer;
 
 const WEAPON_DATA = {
   pistol:  { name:'Pistol',  color:'#FFD700', fireRate:18, bullet:{speed:9, size:5, damage:1, life:130, color:'#FFD700'} },
@@ -138,7 +139,7 @@ function initGame() {
   scoreMultTimer = 0; scoreMultiplier = 1;
   invincTimer = 0; flashTimer = 0; flashColor = 'rgba(255,0,0,0.3)';
   bullets = []; monsters = []; pickups = []; particles = [];
-  waveClearing = false;
+  waveClearing = false; pickupSpawnTimer = 0;
   player = {
     x: W/2, y: H/2,
     weapon: 'pistol', weaponAmmo: Infinity,
@@ -159,6 +160,9 @@ function startNextWave() {
   spawnTimer = 0;
   waveClearing = false;
   bigParticle(W/2, H/2 - 20, 'WAVE ' + wave, '#FF4444', 24);
+  // Scatter pickups at wave start
+  const count = 2 + Math.min(wave, 4);
+  for (let i = 0; i < count; i++) spawnRandomPickup();
 }
 
 function spawnMonster() {
@@ -196,7 +200,7 @@ const keys = {};
 document.addEventListener('keydown', e => {
   keys[e.key] = true;
   if (e.code) keys[e.code] = true;
-  if ([' ','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)) e.preventDefault();
+  if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)) e.preventDefault();
 });
 document.addEventListener('keyup', e => {
   keys[e.key] = false;
@@ -222,7 +226,7 @@ function updatePlayer() {
   if (player.mouthAng > 0.35 || player.mouthAng < 0.03) player.mouthDir *= -1;
 
   player.fireTimer = Math.max(0, player.fireTimer - 1);
-  if ((keys[' '] || keys['Space']) && player.fireTimer === 0) fireWeapon();
+  if (player.fireTimer === 0 && monsters.length > 0) fireWeapon();
 }
 
 function nearestMonster() {
@@ -336,7 +340,6 @@ function damageMonster(idx, dmg) {
     score += pts;
     updateHUD();
     addParticle(m.x, m.y, '+' + pts, '#FFD700', 14);
-    trySpawnPickup(m.x, m.y);
     monsters.splice(idx, 1);
   }
 }
@@ -404,15 +407,10 @@ function applyPickup(type) {
   }
 }
 
-function trySpawnPickup(x, y) {
-  if (Math.random() > 0.32) return;
-  const def = PICKUP_DEFS[Math.floor(Math.random() * PICKUP_DEFS.length)];
-  pickups.push({ x, y, type: def.type, life: 580, bob: Math.random() * Math.PI * 2 });
-}
-
 function spawnRandomPickup() {
+  if (pickups.length >= 8) return;
   const def = PICKUP_DEFS[Math.floor(Math.random() * PICKUP_DEFS.length)];
-  pickups.push({ x: rand(50, W-50), y: rand(50, H-50), type: def.type, life: 600, bob: 0 });
+  pickups.push({ x: rand(50, W-50), y: rand(50, H-50), type: def.type, life: 700, bob: Math.random() * Math.PI * 2 });
 }
 
 function updateWave() {
@@ -426,7 +424,6 @@ function updateWave() {
     const bonus = wave * 100;
     score += bonus; updateHUD();
     bigParticle(W/2, H/2, 'WAVE CLEAR! +' + bonus, '#FFD700', 22);
-    spawnRandomPickup();
     setTimeout(() => { if (gameActive) startNextWave(); }, 2800);
   }
 }
@@ -435,6 +432,8 @@ function updateTimers() {
   if (speedTimer > 0) speedTimer--;
   if (shieldTimer > 0) shieldTimer--;
   if (scoreMultTimer > 0) { scoreMultTimer--; if (!scoreMultTimer) scoreMultiplier = 1; }
+  pickupSpawnTimer++;
+  if (pickupSpawnTimer >= 480) { pickupSpawnTimer = 0; spawnRandomPickup(); }
 }
 
 function updateParticles() {

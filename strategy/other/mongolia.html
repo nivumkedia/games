@@ -353,7 +353,6 @@ function spawnRedBlob() {
 
 function initBlobs() {
     killCount = 0;
-    coins = 0;
     rangers = [];
     nextBlueSpawn = Date.now() + 4000;
     const now = Date.now();
@@ -784,9 +783,13 @@ function gameLoop() {
         b.wobble += 0.055;
         if (b.type === 'red' || b.type === 'spider') {
             b.t += b.speed;
-            if (b.type === 'red' && b.disguised && b.t < 0.75 && now >= b.nextToggle) {
-                b.showingBlue = !b.showingBlue;
-                b.nextToggle = now + 1500 + Math.random() * 2500;
+            if (b.disguised) {
+                if (b.t >= 0.75) {
+                    b.showingBlue = false; // always reveal past the 3/4 mark
+                } else if (now >= b.nextToggle) {
+                    b.showingBlue = !b.showingBlue;
+                    b.nextToggle = now + 1500 + Math.random() * 2500;
+                }
             }
             if (b.t >= 1.0) {
                 gameOver = true;
@@ -836,7 +839,7 @@ function gameLoop() {
                     if (target.legs <= 0) {
                         spawnParticles(tx, ty);
                         blobs.splice(blobs.indexOf(target), 1);
-                        killCount++; coins++;
+                        killCount += 6; coins += 6;
                         if (killCount < KILL_TARGET) spawnRedBlob();
                     }
                 } else {
@@ -888,6 +891,7 @@ canvas.addEventListener('click', e => {
         gameWon  = false;
         particles = [];
         level = (wasWon && wasLevel < 4) ? wasLevel + 1 : 1;
+        if (level === 1) coins = 0;
         initBlobs();
         gameLoop();
         return;
@@ -919,7 +923,7 @@ canvas.addEventListener('click', e => {
                 if (b.legs <= 0) {
                     spawnParticles(bx, by);
                     blobs.splice(i, 1);
-                    killCount++; coins++;
+                    killCount += 6; coins += 6;
                     if (killCount < KILL_TARGET) spawnRedBlob();
                 }
             } else {
