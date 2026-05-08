@@ -178,6 +178,21 @@ canvas {
         <div class="tb-cost">175 gold</div>
         <div class="tb-stat">Very fast · Low dmg</div>
     </div>
+    <div class="tower-btn" data-type="shotgun" style="border-color:#795548">
+        <div class="tb-name">Shotgun</div>
+        <div class="tb-cost">100 gold</div>
+        <div class="tb-stat">Cone · 5 pellets</div>
+    </div>
+    <div class="tower-btn" data-type="railgun" style="border-color:#3949AB">
+        <div class="tb-name">Railgun</div>
+        <div class="tb-cost">275 gold</div>
+        <div class="tb-stat">Pierce · Full line</div>
+    </div>
+    <div class="tower-btn" data-type="rocket" style="border-color:#c62828">
+        <div class="tb-name">Rocket</div>
+        <div class="tb-cost">225 gold</div>
+        <div class="tb-stat">Huge splash · Slow</div>
+    </div>
     <div class="tower-btn sell-btn" data-type="sell">
         <div class="tb-name">Sell</div>
         <div class="tb-cost">½ refund</div>
@@ -228,6 +243,9 @@ const TOWER_DEFS = {
     tesla:   { cost:200, range:3.0, dmg:40,  rate:0.5,  splash:0,    slow:0,   chain:3, dot:0,  color:'#F9A825', accent:'#FFF176', label:'⚡' },
     poison:  { cost:150, range:3.0, dmg:6,   rate:0.5,  splash:50,   slow:0,   chain:0, dot:3,  color:'#558B2F', accent:'#AED581', label:'☠️' },
     gatling: { cost:175, range:2.5, dmg:8,   rate:4.0,  splash:0,    slow:0,   chain:0, dot:0,  color:'#455A64', accent:'#90A4AE', label:'🔫' },
+    shotgun: { cost:100, range:1.5, dmg:30,  rate:0.8,  splash:0,    slow:0,   chain:0, dot:0,  color:'#4E342E', accent:'#A1887F', label:'💥' },
+    railgun: { cost:275, range:8.0, dmg:200, rate:0.25, splash:0,    slow:0,   chain:0, dot:0,  color:'#1A237E', accent:'#7986CB', label:'⚡' },
+    rocket:  { cost:225, range:3.5, dmg:120, rate:0.3,  splash:110,  slow:0,   chain:0, dot:0,  color:'#B71C1C', accent:'#EF9A9A', label:'🚀' },
 };
 
 // ── Enemy definitions ─────────────────────────────────
@@ -437,8 +455,31 @@ function updateTowers(dt) {
         if (!inRange.length) continue;
         const tgt=inRange[0];
         t.aimAngle=Math.atan2(tgt.y-cy,tgt.x-cx);
-        const speeds={archer:320,cannon:200,sniper:550,mortar:0,flame:190,ice:230,tesla:420,poison:160,gatling:420};
-        const sizes ={archer:4,  cannon:8,  sniper:5,  mortar:8, flame:6,  ice:6,  tesla:4,  poison:7,  gatling:3};
+        if (t.type==='shotgun') {
+            t.cooldown=1/t.rate;
+            for (const off of [-0.3,-0.15,0,0.15,0.3]) {
+                projectiles.push({x:cx,y:cy,type:'shotgun',vx:Math.cos(t.aimAngle+off),vy:Math.sin(t.aimAngle+off),
+                    dmg:t.dmg,splash:0,slowAmt:0,chainLeft:0,dot:0,color:t.accent,speed:380,size:3,
+                    angle:t.aimAngle+off,dead:false,travelMode:true,distTraveled:0,maxDist:t.range*GRID_SIZE});
+            }
+            continue;
+        }
+        if (t.type==='railgun') {
+            t.cooldown=1/t.rate;
+            const a=t.aimAngle, md=t.range*GRID_SIZE;
+            for (const e of enemies) {
+                if (e.dead) continue;
+                const dx=e.x-cx,dy=e.y-cy;
+                const along=dx*Math.cos(a)+dy*Math.sin(a);
+                const perp=Math.abs(-dx*Math.sin(a)+dy*Math.cos(a));
+                if (along>=0&&along<=md&&perp<=e.size+8) applyDamage(e,{dmg:t.dmg,slowAmt:0,dot:0});
+            }
+            projectiles.push({x:cx,y:cy,type:'railgun',ex:cx+Math.cos(a)*md,ey:cy+Math.sin(a)*md,
+                angle:a,dmg:0,splash:0,slowAmt:0,chainLeft:0,dot:0,color:t.accent,speed:0,size:0,dead:false,life:0.18});
+            continue;
+        }
+        const speeds={archer:320,cannon:200,sniper:550,mortar:0,flame:190,ice:230,tesla:420,poison:160,gatling:420,rocket:90};
+        const sizes ={archer:4,  cannon:8,  sniper:5,  mortar:8, flame:6,  ice:6,  tesla:4,  poison:7,  gatling:3, rocket:10};
         const p={
             x:cx,y:cy,target:tgt,type:t.type,
             dmg:t.dmg,splash:t.splash||0,slowAmt:t.slow||0,
@@ -455,6 +496,17 @@ function updateTowers(dt) {
 function updateProjectiles(dt) {
     for (const p of projectiles) {
         if (p.dead) continue;
+        if (p.type==='railgun') { p.life-=dt; if(p.life<=0) p.dead=true; continue; }
+        if (p.travelMode) {
+            const step=p.speed*dt;
+            p.x+=p.vx*step; p.y+=p.vy*step; p.distTraveled+=step;
+            if (p.distTraveled>=p.maxDist) { p.dead=true; continue; }
+            for (const e of enemies) {
+                if (e.dead) continue;
+                if (Math.hypot(e.x-p.x,e.y-p.y)<=e.size+p.size) { applyDamage(e,p); p.dead=true; break; }
+            }
+            continue;
+        }
         if (p.type==='mortar') {
             p.arcT=Math.min(p.arcT+dt,p.arcDur);
             const t=p.arcT/p.arcDur;
@@ -757,6 +809,48 @@ function drawTower(t) {
             ctx.beginPath(); ctx.arc(0,0,2,0,Math.PI*2); ctx.fill();
             break;
         }
+        case 'shotgun': {
+            ctx.fillStyle=t.accent; ctx.strokeStyle='#3E2723'; ctx.lineWidth=1;
+            ctx.beginPath(); ctx.roundRect(2,-7,20,5,2); ctx.fill(); ctx.stroke();
+            ctx.beginPath(); ctx.roundRect(2,2,20,5,2); ctx.fill(); ctx.stroke();
+            ctx.fillStyle=t.color;
+            ctx.beginPath(); ctx.roundRect(-12,-10,14,20,4); ctx.fill(); ctx.stroke();
+            const mf=0.25+0.75*Math.abs(Math.sin(animTime*7));
+            ctx.fillStyle=`rgba(255,200,0,${mf*0.35})`;
+            ctx.beginPath(); ctx.arc(22,0,7,0,Math.PI*2); ctx.fill();
+            break;
+        }
+        case 'railgun': {
+            const rp=0.5+0.5*Math.sin(animTime*4);
+            ctx.fillStyle=t.color; ctx.strokeStyle=t.accent; ctx.lineWidth=2;
+            ctx.beginPath(); ctx.arc(0,0,10,0,Math.PI*2); ctx.fill(); ctx.stroke();
+            ctx.fillStyle='#1A237E'; ctx.strokeStyle='#3949AB'; ctx.lineWidth=1;
+            ctx.beginPath(); ctx.roundRect(2,-3,24,6,2); ctx.fill(); ctx.stroke();
+            ctx.lineWidth=1.5;
+            for(let i=0;i<4;i++){
+                ctx.strokeStyle=`rgba(121,134,203,${rp})`;
+                ctx.beginPath(); ctx.arc(6+i*5,0,4,0,Math.PI*2); ctx.stroke();
+            }
+            ctx.fillStyle=`rgba(121,134,203,${rp})`;
+            ctx.beginPath(); ctx.arc(26,0,4,0,Math.PI*2); ctx.fill();
+            break;
+        }
+        case 'rocket': {
+            ctx.rotate(Math.sin(animTime*5)*0.04);
+            ctx.fillStyle=t.color; ctx.strokeStyle='#B71C1C'; ctx.lineWidth=1.5;
+            ctx.beginPath(); ctx.roundRect(-5,-18,12,22,3); ctx.fill(); ctx.stroke();
+            ctx.fillStyle=t.accent;
+            ctx.beginPath(); ctx.roundRect(-3,-15,8,14,2); ctx.fill();
+            ctx.fillStyle='#FF5722';
+            ctx.beginPath(); ctx.moveTo(-3,-15); ctx.lineTo(1,-22); ctx.lineTo(5,-15); ctx.closePath(); ctx.fill();
+            ctx.fillStyle='#C62828';
+            ctx.beginPath(); ctx.moveTo(-3,-5); ctx.lineTo(-9,-1); ctx.lineTo(-3,1); ctx.closePath(); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(5,-5); ctx.lineTo(11,-1); ctx.lineTo(5,1); ctx.closePath(); ctx.fill();
+            const eg=0.4+0.6*Math.abs(Math.sin(animTime*9));
+            ctx.fillStyle=`rgba(255,180,0,${eg})`;
+            ctx.beginPath(); ctx.ellipse(1,6,3,5,0,0,Math.PI*2); ctx.fill();
+            break;
+        }
     }
 
     ctx.restore();
@@ -952,7 +1046,7 @@ function drawEnemy(e) {
         : Math.sin(animTime*6+e.animOffset)*1.5;
 
     if (img) {
-        const w = s * 5.5, h = s * 5.5;
+        const w = s * 8, h = s * 8;
         if (e.type==='ghost') ctx.globalAlpha = 0.82;
         if (e.type==='zombie') ctx.rotate(Math.sin(animTime*4+e.animOffset)*0.07);
         ctx.drawImage(img, -w/2, -h/2+bob, w, h);
@@ -970,7 +1064,7 @@ function drawEnemy(e) {
     }
 
     ctx.globalAlpha = 1;
-    const bw=s*3.2, bh=4, bx=-bw/2, by=-(img ? s*1.8 : s*1.3)-8;
+    const bw=s*4, bh=4, bx=-bw/2, by=-(img ? s*4.3 : s*1.3)-6;
     if (e.hp<e.maxHp) {
         ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(bx-1,by-1,bw+2,bh+2);
         ctx.fillStyle='#F44336'; ctx.fillRect(bx,by,bw,bh);
@@ -1025,6 +1119,29 @@ function drawProjectiles() {
             case 'poison':
                 ctx.globalAlpha=0.8; ctx.fillStyle='#AED581'; ctx.beginPath(); ctx.arc(0,0,p.size,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1;
                 break;
+            case 'railgun': {
+                const alpha=Math.min(1,(p.life||0)*6);
+                ctx.globalAlpha=alpha;
+                ctx.shadowBlur=16; ctx.shadowColor='#3F51B5';
+                ctx.strokeStyle='#7986CB'; ctx.lineWidth=4;
+                ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(p.ex-p.x,p.ey-p.y); ctx.stroke();
+                ctx.strokeStyle='#E8EAF6'; ctx.lineWidth=1.5;
+                ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(p.ex-p.x,p.ey-p.y); ctx.stroke();
+                ctx.shadowBlur=0; ctx.globalAlpha=1;
+                break;
+            }
+            case 'shotgun':
+                ctx.save(); ctx.rotate(p.angle);
+                ctx.fillStyle='#FF8F00';
+                ctx.beginPath(); ctx.ellipse(0,0,p.size*2.2,p.size*0.8,0,0,Math.PI*2); ctx.fill();
+                ctx.restore(); break;
+            case 'rocket':
+                ctx.save(); ctx.rotate(p.angle);
+                ctx.fillStyle='#EF9A9A'; ctx.strokeStyle='#B71C1C'; ctx.lineWidth=1;
+                ctx.beginPath(); ctx.moveTo(p.size*2.8,0); ctx.lineTo(-p.size,p.size*1.3); ctx.lineTo(-p.size,-p.size*1.3); ctx.closePath(); ctx.fill(); ctx.stroke();
+                ctx.fillStyle='rgba(255,160,0,0.85)';
+                ctx.beginPath(); ctx.ellipse(-p.size*2.5,0,p.size*2.2,p.size*0.65,0,0,Math.PI*2); ctx.fill();
+                ctx.restore(); break;
         }
         ctx.restore();
     }

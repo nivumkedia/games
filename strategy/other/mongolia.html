@@ -319,22 +319,39 @@ function getPosOnPath(path, t) {
 // ── Blobs ──
 let blobs = [];
 let particles = [];
+let gameOver = false;
+let loseReason = '';
+let killCount = 0;
+const KILL_TARGET = 15;
+let nextBlueSpawn = Date.now() + 4000;
+
+function spawnRedBlob() {
+    blobs.push({
+        pathIndex: Math.floor(Math.random() * 3),
+        t: 0,
+        type: 'red',
+        wobble: Math.random() * Math.PI * 2,
+        speed: 0.00046 + Math.random() * 0.00016,
+    });
+}
 
 function initBlobs() {
+    killCount = 0;
+    nextBlueSpawn = Date.now() + 4000;
     blobs = [
-        // Blue wanderers — bounce back and forth along their path
-        { pathIndex: 0, t: 0.22, type: 'blue', wobble: 0.0, speed: 0.00012, dir:  1 },
-        { pathIndex: 0, t: 0.62, type: 'blue', wobble: 1.8, speed: 0.00009, dir: -1 },
-        { pathIndex: 1, t: 0.35, type: 'blue', wobble: 0.7, speed: 0.00011, dir:  1 },
-        { pathIndex: 1, t: 0.68, type: 'blue', wobble: 2.4, speed: 0.00008, dir: -1 },
-        { pathIndex: 2, t: 0.42, type: 'blue', wobble: 1.2, speed: 0.00013, dir:  1 },
-        { pathIndex: 2, t: 0.75, type: 'blue', wobble: 3.1, speed: 0.00010, dir: -1 },
+        // Blue wanderers — bounce back and forth, despawn after 10s
+        { pathIndex: 0, t: 0.22, type: 'blue', wobble: 0.0, speed: 0.00045, dir:  1, born: Date.now() },
+        { pathIndex: 0, t: 0.62, type: 'blue', wobble: 1.8, speed: 0.00035, dir: -1, born: Date.now() },
+        { pathIndex: 1, t: 0.35, type: 'blue', wobble: 0.7, speed: 0.00042, dir:  1, born: Date.now() },
+        { pathIndex: 1, t: 0.68, type: 'blue', wobble: 2.4, speed: 0.00038, dir: -1, born: Date.now() },
+        { pathIndex: 2, t: 0.42, type: 'blue', wobble: 1.2, speed: 0.00048, dir:  1, born: Date.now() },
+        { pathIndex: 2, t: 0.75, type: 'blue', wobble: 3.1, speed: 0.00040, dir: -1, born: Date.now() },
         // Lvl 1 red enemies on all three paths
-        { pathIndex: 0, t: 0.10, type: 'red',  wobble: 1.2, speed: 0.00016 },
-        { pathIndex: 1, t: 0.20, type: 'red',  wobble: 0.5, speed: 0.00014 },
-        { pathIndex: 2, t: 0.15, type: 'red',  wobble: 2.1, speed: 0.00015 },
-        { pathIndex: 0, t: 0.50, type: 'red',  wobble: 0.8, speed: 0.00013 },
-        { pathIndex: 2, t: 0.55, type: 'red',  wobble: 1.6, speed: 0.00017 },
+        { pathIndex: 0, t: 0.10, type: 'red',  wobble: 1.2, speed: 0.00055 },
+        { pathIndex: 1, t: 0.20, type: 'red',  wobble: 0.5, speed: 0.00050 },
+        { pathIndex: 2, t: 0.15, type: 'red',  wobble: 2.1, speed: 0.00052 },
+        { pathIndex: 0, t: 0.50, type: 'red',  wobble: 0.8, speed: 0.00048 },
+        { pathIndex: 2, t: 0.55, type: 'red',  wobble: 1.6, speed: 0.00058 },
     ];
 }
 
@@ -440,26 +457,129 @@ function drawScene() {
     drawTitle();
 }
 
+// ── Kill counter HUD ──
+function drawHUD() {
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.font = `bold ${H * 0.028}px "Segoe UI", sans-serif`;
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.shadowColor = 'rgba(0,0,0,0.4)';
+    ctx.shadowBlur = 6;
+    ctx.fillText(`Defeated: ${killCount} / ${KILL_TARGET}`, W * 0.02, H * 0.055);
+    ctx.restore();
+}
+
+// ── Win screen ──
+function drawWinScreen() {
+    ctx.fillStyle = 'rgba(0,0,0,0.50)';
+    ctx.fillRect(0, 0, W, H);
+
+    const pw = Math.min(420, W * 0.7), ph = H * 0.28;
+    const px = W * 0.5 - pw * 0.5, py = H * 0.5 - ph * 0.5;
+    ctx.fillStyle = 'rgba(8,30,8,0.92)';
+    roundRect(px, py, pw, ph, 14);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(50,200,80,0.6)';
+    ctx.lineWidth = 2;
+    roundRect(px, py, pw, ph, 14);
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.shadowColor = 'rgba(50,220,80,0.8)';
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = '#44ee66';
+    ctx.font = `bold ${H * 0.072}px "Segoe UI", Georgia, serif`;
+    ctx.fillText('YOU WIN!', W * 0.5, py + ph * 0.45);
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(180,255,190,0.75)';
+    ctx.font = `${H * 0.028}px "Segoe UI", sans-serif`;
+    ctx.fillText('The treasure chest is safe!', W * 0.5, py + ph * 0.68);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.font = `${H * 0.022}px "Segoe UI", sans-serif`;
+    ctx.fillText('Click anywhere to play again', W * 0.5, py + ph * 0.88);
+}
+
+// ── Lose screen ──
+function drawLoseScreen() {
+    // Dim overlay
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(0, 0, W, H);
+
+    // Panel
+    const pw = Math.min(420, W * 0.7), ph = H * 0.28;
+    const px = W * 0.5 - pw * 0.5, py = H * 0.5 - ph * 0.5;
+    ctx.fillStyle = 'rgba(30,8,8,0.92)';
+    roundRect(px, py, pw, ph, 14);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(220,50,50,0.6)';
+    ctx.lineWidth = 2;
+    roundRect(px, py, pw, ph, 14);
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.shadowColor = 'rgba(220,30,30,0.8)';
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = '#ff4444';
+    ctx.font = `bold ${H * 0.072}px "Segoe UI", Georgia, serif`;
+    ctx.fillText('YOU LOSE', W * 0.5, py + ph * 0.45);
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255,200,200,0.75)';
+    ctx.font = `${H * 0.028}px "Segoe UI", sans-serif`;
+    ctx.fillText(loseReason, W * 0.5, py + ph * 0.68);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.font = `${H * 0.022}px "Segoe UI", sans-serif`;
+    ctx.fillText('Click anywhere to try again', W * 0.5, py + ph * 0.88);
+}
+
 // ── Game loop ──
 function gameLoop() {
+    if (gameOver) return;
+
     drawScene();
+    drawHUD();
 
     const r = H * 0.024;
+    const now = Date.now();
 
-    blobs.forEach(b => {
+    blobs = blobs.filter(b => !(b.type === 'blue' && now - b.born > 10000));
+
+    if (now >= nextBlueSpawn) {
+        blobs.push({
+            pathIndex: Math.floor(Math.random() * 3),
+            t: Math.random() * 0.6,
+            type: 'blue',
+            wobble: Math.random() * Math.PI * 2,
+            speed: 0.00035 + Math.random() * 0.00015,
+            dir: Math.random() < 0.5 ? 1 : -1,
+            born: now,
+        });
+        nextBlueSpawn = now + 3000 + Math.random() * 4000;
+    }
+
+    for (const b of blobs) {
         b.wobble += 0.055;
         if (b.type === 'red') {
-            b.t = Math.min(b.t + b.speed, 1.0);
+            b.t += b.speed;
+            if (b.t >= 1.0) {
+                gameOver = true;
+                loseReason = 'A red blob reached the treasure chest!';
+                drawScene();
+                drawLoseScreen();
+                return;
+            }
         } else {
             b.t += b.speed * b.dir;
             if (b.t >= 1.0) { b.t = 1.0; b.dir = -1; }
             if (b.t <= 0.0) { b.t = 0.0; b.dir =  1; }
-            // small random nudge so they don't all feel mechanical
             if (Math.random() < 0.0008) b.dir *= -1;
         }
         const [x, y] = getPosOnPath(PATHS[b.pathIndex], b.t);
         drawBlob(x, y, r, b.type, b.wobble);
-    });
+    }
 
     // Death particles
     particles = particles.filter(p => {
@@ -475,12 +595,29 @@ function gameLoop() {
         return p.alpha > 0;
     });
 
+    // Win check — all 30 killed and no reds remain
+    if (killCount >= KILL_TARGET && !blobs.some(b => b.type === 'red')) {
+        gameOver = true;
+        drawScene();
+        drawHUD();
+        drawWinScreen();
+        return;
+    }
+
     requestAnimationFrame(gameLoop);
 }
 
-// ── Click to kill red blobs ──
+// ── Click handler ──
 canvas.style.cursor = 'crosshair';
 canvas.addEventListener('click', e => {
+    if (gameOver) {
+        gameOver = false;
+        particles = [];
+        initBlobs();
+        gameLoop();
+        return;
+    }
+
     const rect = canvas.getBoundingClientRect();
     const mx = (e.clientX - rect.left) * (W / rect.width);
     const my = (e.clientY - rect.top) * (H / rect.height);
@@ -488,11 +625,19 @@ canvas.addEventListener('click', e => {
 
     for (let i = blobs.length - 1; i >= 0; i--) {
         const b = blobs[i];
-        if (b.type !== 'red') continue;
         const [bx, by] = getPosOnPath(PATHS[b.pathIndex], b.t);
         if (Math.hypot(mx - bx, my - by) < r * 1.4) {
-            spawnParticles(bx, by);
-            blobs.splice(i, 1);
+            if (b.type === 'blue') {
+                gameOver = true;
+                loseReason = 'You hit a friendly blue blob!';
+                drawScene();
+                drawLoseScreen();
+            } else {
+                spawnParticles(bx, by);
+                blobs.splice(i, 1);
+                killCount++;
+                if (killCount < KILL_TARGET) spawnRedBlob();
+            }
             break;
         }
     }
