@@ -732,19 +732,61 @@ function rectsOverlap(a, b) {
     return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
+function respawnOnNearestPlatform() {
+    const centerX = player.x + player.w / 2;
+    const centerY = player.y + player.h / 2;
+    let bestPlatform = null;
+    let bestX = start.x;
+    let bestScore = Infinity;
+
+    platforms.forEach(platform => {
+        const spawnX = Math.max(platform.x + 8, Math.min(centerX - player.w / 2, platform.x + platform.w - player.w - 8));
+        const spawn = {
+            x: spawnX,
+            y: platform.y - player.h - 4,
+            w: player.w,
+            h: player.h
+        };
+        const blockedByHazard = hazards.some(hazard => hazard.active && rectsOverlap(spawn, hazard));
+        const blockedByLava = lavaPools.some(lava => lava.active && rectsOverlap(spawn, lava));
+        if (blockedByHazard || blockedByLava) return;
+
+        const closestX = Math.max(platform.x, Math.min(centerX, platform.x + platform.w));
+        const closestY = Math.max(platform.y, Math.min(centerY, platform.y + platform.h));
+        const dx = centerX - closestX;
+        const dy = centerY - closestY;
+        const score = dx * dx + dy * dy;
+        if (score < bestScore) {
+            bestScore = score;
+            bestPlatform = platform;
+            bestX = spawnX;
+        }
+    });
+
+    if (!bestPlatform) {
+        player.x = start.x;
+        player.y = start.y;
+        return;
+    }
+
+    player.x = bestX;
+    player.y = bestPlatform.y - player.h - 4;
+}
+
 function hurt() {
     if (player.invuln > 0 || finished) return;
     player.lives -= 1;
     player.invuln = 90;
-    player.x = Math.max(start.x, player.x - 120);
-    player.y = 450;
-    player.vx = 0;
-    player.vy = -7;
     if (player.lives <= 0) {
         finished = true;
         started = false;
         showOverlay("Run Failed", `You reached level ${levelIndex + 1} and collected ${totalCoins} coins. Try again.`, "Retry");
+        return;
     }
+    respawnOnNearestPlatform();
+    player.vx = 0;
+    player.vy = 0;
+    player.grounded = false;
 }
 
 function checkPortals() {
