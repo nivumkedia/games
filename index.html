@@ -1032,6 +1032,76 @@
             mix-blend-mode: screen;
             opacity: 0.7;
         }
+        /* === FORGOTTEN GAMES OVERLAY === */
+        #forgotten-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 5000;
+            background: rgba(0, 0, 0, 0.92);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            overflow-y: auto;
+        }
+        #forgotten-overlay.visible {
+            display: block;
+            animation: forgottenFadeIn 0.25s ease;
+        }
+        @keyframes forgottenFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .forgotten-panel {
+            max-width: 960px;
+            margin: 80px auto 60px;
+            padding: 0 32px;
+        }
+        .forgotten-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 32px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            padding-bottom: 20px;
+        }
+        .forgotten-title {
+            font-size: 1.6em;
+            font-weight: 700;
+            color: rgba(255,255,255,0.45);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-family: monospace;
+        }
+        .forgotten-close {
+            background: none;
+            border: 1px solid rgba(255,255,255,0.15);
+            color: rgba(255,255,255,0.4);
+            font-size: 1.2em;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .forgotten-close:hover {
+            border-color: rgba(255,255,255,0.4);
+            color: rgba(255,255,255,0.8);
+        }
+        .forgotten-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 20px;
+        }
+        .forgotten-card {
+            filter: grayscale(30%) brightness(0.85);
+            transition: filter 0.3s, transform 0.35s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+        .forgotten-card:hover {
+            filter: grayscale(0%) brightness(1);
+        }
     </style>
 </head>
 <body>
@@ -1131,6 +1201,17 @@
     </div>
 </div>
 
+<!-- FORGOTTEN GAMES OVERLAY -->
+<div id="forgotten-overlay" onclick="if(event.target===this)toggleForgotten()">
+    <div class="forgotten-panel">
+        <div class="forgotten-header">
+            <span class="forgotten-title">⌛ Forgotten Games</span>
+            <button class="forgotten-close" onclick="toggleForgotten()">✕</button>
+        </div>
+        <div class="forgotten-grid" id="forgotten-grid"></div>
+    </div>
+</div>
+
 <!-- GAME PLAYER -->
 <div id="game-screen">
     <div id="game-topbar">
@@ -1144,7 +1225,6 @@
 <script>
     // ===== GAMES DATA =====
     const games = [
-        { name: "Turbo Clash", icon: "\u{1F697}", desc: "Smash, flip, and outlast in a wild car arena!", tags: ["Battle", "Strategy"], color: "#ff4444", url: "car_battle_game.html", alt: "car battle game" },
         { name: "Fortress Fury", icon: "\u{1F3F0}", desc: "Build towers and defend against waves of enemies.", tags: ["Battle", "Strategy"], color: "#44ddaa", url: "tower-defense.html", alt: "tower defense" },
         { name: "Bullet Storm", icon: "\u{1F52B}", desc: "Survive waves of enemies in top-down combat.", tags: ["Battle", "Strategy"], color: "#ff5555", url: "strategy/other/top-shooter.html", alt: "top shooter" },
         { name: "Cosmic Blitz", icon: "\u{1F47E}", desc: "Blast alien ships, collect loot, and upgrade your arsenal in this side-scrolling shooter!", tags: ["Battle", "Strategy"], color: "#00c8ff", url: "strategy/other/asteroids.html", alt: "asteroids" },
@@ -1171,6 +1251,38 @@
 
     // ===== NAVBAR =====
     const categoryOrder = ["Battle", "Platformers", "Creativity", "Strategy", "Multiplayer", "Math/Brainpower", "Sushi Games", "Special", "Other", "In Progress"];
+
+    // ===== FORGOTTEN GAMES =====
+    const forgottenGames = [
+        { name: "Turbo Clash", icon: "\u{1F697}", desc: "Smash, flip, and outlast in a wild car arena!", color: "#ff4444", url: "car_battle_game.html" },
+    ];
+
+    const forgottenOverlay = document.getElementById('forgotten-overlay');
+
+    function toggleForgotten() {
+        forgottenOverlay.classList.toggle('visible');
+    }
+
+    (function renderForgottenGames() {
+        const grid = document.getElementById('forgotten-grid');
+        forgottenGames.forEach((game, i) => {
+            const card = document.createElement('div');
+            card.className = 'game-card forgotten-card';
+            card.style.setProperty('--accent', game.color);
+            card.style.animationDelay = `${i * 0.08}s, 0s`;
+            card.onclick = () => {
+                forgottenOverlay.classList.remove('visible');
+                launchGame(game);
+            };
+            card.innerHTML = `
+                <div class="game-icon">${game.icon}</div>
+                <h3>${game.name}</h3>
+                <p>${game.desc}</p>
+                <div class="play-overlay"><span class="play-btn-label">▶ Play</span></div>
+            `;
+            grid.appendChild(card);
+        });
+    })();
     const navLeft = document.getElementById('nav-left');
     let activeFilter = 'All';
     let searchQuery = '';
@@ -2062,9 +2174,17 @@
         if (e.key === 'Escape') {
             if (document.getElementById('settings-modal').classList.contains('open')) {
                 closeSettings();
+            } else if (forgottenOverlay.classList.contains('visible')) {
+                forgottenOverlay.classList.remove('visible');
             } else if (document.getElementById('game-screen').style.display === 'block') {
                 goBack();
             }
+        }
+
+        // Cmd/Ctrl+Shift+F — toggle Forgotten Games
+        if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+            e.preventDefault();
+            toggleForgotten();
         }
         // / to focus search (when not typing in an input)
         if (e.key === '/' && !['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) {

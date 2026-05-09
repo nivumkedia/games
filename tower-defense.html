@@ -1127,7 +1127,7 @@
                 gemCost: true,
                 damage: 200,
                 range: 180,
-                fireRate: 3000,
+                fireRate: 6000,
                 color: '#FF5722',
                 projectileColor: '#FF9800',
                 projectileSpeed: 0,
@@ -1518,11 +1518,22 @@
             particles: [],
             floatingTexts: [],
             pathCells: new Set(),
+            upgraderMap: new Map(),
+            bonusVersion: 0,
             paused: false,
             gameSpeed: 1,
             damageBoost: false,
             globalFreeze: 0
         };
+
+        // Rebuild the upgrader grid map — call whenever upgraders are added/removed
+        function rebuildUpgraderMap() {
+            game.upgraderMap = new Map();
+            for (const u of game.upgraders) {
+                game.upgraderMap.set(`${u.gridX},${u.gridY}`, u);
+            }
+            game.bonusVersion++;
+        }
 
         // Upgrader class
         class Upgrader {
@@ -1577,29 +1588,21 @@
             }
         }
 
-        // Get adjacent upgraders for a tower
+        // Get adjacent upgraders for a tower — O(1) via upgraderMap
         function getAdjacentUpgraders(tower) {
             const adjacent = [];
-            const directions = [
-                {dx: -1, dy: 0}, {dx: 1, dy: 0},
-                {dx: 0, dy: -1}, {dx: 0, dy: 1},
-                {dx: -1, dy: -1}, {dx: 1, dy: -1},
-                {dx: -1, dy: 1}, {dx: 1, dy: 1}
-            ];
-
-            for (const dir of directions) {
-                const checkX = tower.gridX + dir.dx;
-                const checkY = tower.gridY + dir.dy;
-                const upgrader = game.upgraders.find(u => u.gridX === checkX && u.gridY === checkY);
-                if (upgrader) {
-                    adjacent.push(upgrader);
-                }
+            const map = game.upgraderMap;
+            const gx = tower.gridX, gy = tower.gridY;
+            for (const [dx, dy] of [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]]) {
+                const u = map.get(`${gx+dx},${gy+dy}`);
+                if (u) adjacent.push(u);
             }
             return adjacent;
         }
 
-        // Calculate tower bonuses from upgraders
+        // Calculate tower bonuses from upgraders — cached per bonusVersion
         function getTowerBonuses(tower) {
+            if (tower._bonusVersion === game.bonusVersion) return tower._cachedBonuses;
             const adjacent = getAdjacentUpgraders(tower);
             const bonuses = {
                 damageMultiplier: 1,
@@ -1661,6 +1664,9 @@
                 }
             }
 
+            bonuses.hasUpgraders = adjacent.length > 0;
+            tower._cachedBonuses = bonuses;
+            tower._bonusVersion = game.bonusVersion;
             return bonuses;
         }
 
@@ -1743,22 +1749,32 @@
             }
 
             findTarget() {
-                let closest = null;
-                let closestDist = Infinity;
+                let best = null;
+                let bestPathIndex = -1;
+                let bestDistToWaypoint = Infinity;
 
-                // Apply range bonus from upgraders
                 const bonuses = getTowerBonuses(this);
                 const effectiveRange = this.range * bonuses.rangeMultiplier;
 
                 for (const enemy of game.enemies) {
                     if (enemy.isCloaked) continue;
                     const dist = Math.hypot(enemy.x - this.x, enemy.y - this.y);
-                    if (dist <= effectiveRange && dist < closestDist) {
-                        closest = enemy;
-                        closestDist = dist;
+                    if (dist > effectiveRange) continue;
+
+                    const wp = PATH[Math.min(enemy.pathIndex, PATH.length - 1)];
+                    const distToWaypoint = Math.hypot(
+                        enemy.x - (wp.x * GRID_SIZE + GRID_SIZE / 2),
+                        enemy.y - (wp.y * GRID_SIZE + GRID_SIZE / 2)
+                    );
+
+                    if (enemy.pathIndex > bestPathIndex ||
+                        (enemy.pathIndex === bestPathIndex && distToWaypoint < bestDistToWaypoint)) {
+                        best = enemy;
+                        bestPathIndex = enemy.pathIndex;
+                        bestDistToWaypoint = distToWaypoint;
                     }
                 }
-                return closest;
+                return best;
             }
 
             update(time) {
@@ -1846,10 +1862,11 @@
                     this.laserTarget = this.target;
                 } else if (this.type === 'vortex' || this.type === 'blackhole') {
                     // Vortex/Blackhole tower - pulls and damages enemies in range
-                    // Black hole: enemies become immune to its pull after 5 seconds
+                    // Black hole: enemies become immune to its pull after 4 seconds
                     const pullMult = this.type === 'blackhole' ? 4 : 1;
                     const now = performance.now();
                     if (!this._trappedEnemies) this._trappedEnemies = new Map();
+                    if (!this._lastSuck) this._lastSuck = 0;
                     for (const enemy of game.enemies) {
                         const dist = Math.hypot(enemy.x - this.x, enemy.y - this.y);
                         if (dist <= this.effectiveRange && dist > 20) {
@@ -1859,8 +1876,8 @@
                                     this._trappedEnemies.set(enemy, now);
                                 }
                                 const trappedTime = now - this._trappedEnemies.get(enemy);
-                                if (trappedTime > 5000) {
-                                    // Enemy breaks free after 5 seconds - only damage, no pull
+                                if (trappedTime > 4000) {
+                                    // Enemy breaks free after 4 seconds - only damage, no pull
                                     enemy.takeDamage(effectiveDamage * 0.05, this.type, isCrit);
                                     continue;
                                 }
@@ -1880,6 +1897,33 @@
                     if (this.type === 'blackhole') {
                         for (const [enemy] of this._trappedEnemies) {
                             if (enemy.dead) this._trappedEnemies.delete(enemy);
+                        }
+                    }
+                    // Every 10 seconds, vortex sucks in and instantly kills the nearest enemy
+                    if (this.type === 'vortex' && now - this._lastSuck >= 5000) {
+                        this._lastSuck = now;
+                        let nearest = null, nearestDist = Infinity;
+                        for (const enemy of game.enemies) {
+                            const dist = Math.hypot(enemy.x - this.x, enemy.y - this.y);
+                            if (dist <= this.effectiveRange && dist < nearestDist) {
+                                nearest = enemy;
+                                nearestDist = dist;
+                            }
+                        }
+                        if (nearest) {
+                            // Suck-in animation: snap to center then kill
+                            nearest.x = this.x;
+                            nearest.y = this.y;
+                            nearest.takeDamage(nearest.health * 999, this.type, true);
+                            for (let i = 0; i < 16; i++) {
+                                const a = (Math.PI * 2 * i) / 16;
+                                game.particles.push({
+                                    x: this.x, y: this.y,
+                                    vx: Math.cos(a) * 4, vy: Math.sin(a) * 4,
+                                    life: 25, maxLife: 25,
+                                    color: t.projectileColor, size: 7
+                                });
+                            }
                         }
                     }
                     // Vortex effect particles
@@ -2142,30 +2186,32 @@
                     ctx.setLineDash([]);
                 }
 
-                // Tower glow aura (always visible, color based on type)
-                const isGem = t.gemCost;
-                const glowColor = isGem ? t.color : t.color;
-                const glowRadius = 26;
-                const towerGlow = ctx.createRadialGradient(this.x, this.y, 12, this.x, this.y, glowRadius);
-                towerGlow.addColorStop(0, glowColor + '30');
-                towerGlow.addColorStop(1, glowColor + '00');
-                ctx.fillStyle = towerGlow;
+                // Tower glow aura — cached on tower since position never changes
+                if (!this._glowGradient) {
+                    this._glowGradient = ctx.createRadialGradient(this.x, this.y, 12, this.x, this.y, 26);
+                    this._glowGradient.addColorStop(0, t.color + '30');
+                    this._glowGradient.addColorStop(1, t.color + '00');
+                }
+                ctx.fillStyle = this._glowGradient;
                 ctx.beginPath();
-                ctx.arc(this.x, this.y, glowRadius, 0, Math.PI * 2);
+                ctx.arc(this.x, this.y, 26, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Draw bonus indicators if tower has upgraders
-                const adjacent = getAdjacentUpgraders(this);
-                if (adjacent.length > 0) {
+                // Draw bonus indicators if tower has upgraders (uses cached bonuses)
+                if (bonuses.hasUpgraders) {
                     const pulse = 0.5 + Math.sin(performance.now() / 300) * 0.5;
                     ctx.save();
                     ctx.beginPath();
                     ctx.arc(this.x, this.y, 30, 0, Math.PI * 2);
-                    const glowGradient = ctx.createRadialGradient(this.x, this.y, 18, this.x, this.y, 30);
-                    glowGradient.addColorStop(0, `rgba(255, 215, 0, ${0.3 * pulse})`);
-                    glowGradient.addColorStop(1, 'rgba(255, 215, 0, 0)');
-                    ctx.fillStyle = glowGradient;
+                    if (!this._upgraderGlowGradient) {
+                        this._upgraderGlowGradient = ctx.createRadialGradient(this.x, this.y, 18, this.x, this.y, 30);
+                        this._upgraderGlowGradient.addColorStop(0, 'rgba(255, 215, 0, 0.3)');
+                        this._upgraderGlowGradient.addColorStop(1, 'rgba(255, 215, 0, 0)');
+                    }
+                    ctx.globalAlpha = pulse;
+                    ctx.fillStyle = this._upgraderGlowGradient;
                     ctx.fill();
+                    ctx.globalAlpha = 1;
                     ctx.restore();
                 }
 
@@ -4577,6 +4623,7 @@
                 game.gold += sellValue;
                 const idx = game.upgraders.indexOf(clickedUpgrader);
                 if (idx > -1) game.upgraders.splice(idx, 1);
+                rebuildUpgraderMap();
                 playSound('sell');
                 game.floatingTexts.push({
                     x: clickedUpgrader.x,
@@ -4612,6 +4659,7 @@
                     if (game.gold >= cost) {
                         game.gold -= cost;
                         game.upgraders.push(new Upgrader(gridX, gridY, game.selectedUpgrader));
+                        rebuildUpgraderMap();
                         playSound('place_tower');
                         updateUI();
                     }
@@ -5036,6 +5084,8 @@
                 particles: [],
                 floatingTexts: [],
                 pathCells: new Set(),
+                upgraderMap: new Map(),
+                bonusVersion: 0,
                 paused: false,
                 gameSpeed: 1,
                 damageBoost: false,
@@ -5183,8 +5233,8 @@
                 ctx.fillText('Click Resume to continue', canvas.width / 2, canvas.height / 2 + 50);
             }
 
-            // Ambient particles (pollen/dandelion seeds)
-            if (!game.paused && Math.random() < 0.03) {
+            // Ambient particles (pollen/dandelion seeds) — capped to avoid array growth
+            if (!game.paused && Math.random() < 0.03 && game.particles.length < 200) {
                 const ambientColors = ['#fff', '#FFFDE7', '#F1F8E9', '#FFF9C4'];
                 game.particles.push({
                     x: Math.random() * canvas.width,
@@ -5204,11 +5254,14 @@
                 drawPlacementPreview(mouseX, mouseY);
             }
 
-            // Subtle warm vignette overlay
-            const vignette = ctx.createRadialGradient(canvas.width/2, canvas.height/2, canvas.height * 0.4, canvas.width/2, canvas.height/2, canvas.width * 0.75);
-            vignette.addColorStop(0, 'rgba(0,0,0,0)');
-            vignette.addColorStop(1, 'rgba(0,0,0,0.08)');
-            ctx.fillStyle = vignette;
+            // Subtle warm vignette overlay — gradient cached after first frame
+            if (!gameLoop._vignette) {
+                const v = ctx.createRadialGradient(canvas.width/2, canvas.height/2, canvas.height * 0.4, canvas.width/2, canvas.height/2, canvas.width * 0.75);
+                v.addColorStop(0, 'rgba(0,0,0,0)');
+                v.addColorStop(1, 'rgba(0,0,0,0.08)');
+                gameLoop._vignette = v;
+            }
+            ctx.fillStyle = gameLoop._vignette;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             // Wave number indicator on canvas
