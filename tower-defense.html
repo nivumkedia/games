@@ -1395,18 +1395,6 @@
                 lifeSteal: 0.15,
                 liveCost: 2
             },
-            bomber: {
-                name: 'Bomber',
-                health: 70,
-                speed: 1.8,
-                reward: 12,
-                color: '#FF6F00',
-                size: 14,
-                explodeOnDeath: true,
-                explosionRadius: 80,
-                explosionLiveCost: 2,
-                liveCost: 1
-            },
             leviathan: {
                 name: 'Leviathan',
                 health: 800,
@@ -2527,13 +2515,13 @@
 
         // Enemy class
         class Enemy {
-            constructor(type, waveMultiplier = 1) {
+            constructor(type, waveMultiplier = 1, speedMultiplier = 1) {
                 const e = ENEMY_TYPES[type];
                 this.type = type;
                 this.maxHealth = Math.floor(e.health * waveMultiplier);
                 this.health = this.maxHealth;
-                this.baseSpeed = e.speed;
-                this.speed = e.speed;
+                this.baseSpeed = e.speed * speedMultiplier;
+                this.speed = e.speed * speedMultiplier;
                 this.reward = e.reward;
                 this.color = e.color;
                 this.size = e.size;
@@ -2923,27 +2911,6 @@
                 const coinReward = this.reward;
                 game.coins += coinReward;
 
-                // Bomber explosion - costs extra lives
-                if (this.explodeOnDeath) {
-                    playSound('nuke');
-                    game.lives -= this.explosionLiveCost;
-                    game.floatingTexts.push({
-                        x: this.x, y: this.y - 20,
-                        text: `BOOM! -${this.explosionLiveCost}❤️`,
-                        life: 60, color: '#FF6F00', size: 20
-                    });
-                    for (let i = 0; i < 20; i++) {
-                        const angle = (Math.PI * 2 * i) / 20;
-                        game.particles.push({
-                            x: this.x, y: this.y,
-                            vx: Math.cos(angle) * (2 + Math.random() * 5),
-                            vy: Math.sin(angle) * (2 + Math.random() * 5),
-                            life: 35, maxLife: 35,
-                            color: Math.random() > 0.5 ? '#FF6F00' : '#FFD600',
-                            size: 8 + Math.random() * 6
-                        });
-                    }
-                }
 
                 // Splitter spawns smaller enemies
                 if (this.splitCount > 0) {
@@ -4334,17 +4301,9 @@
             else if (waveNum >= 30) waveBonus = 30 + (waveNum - 30) * 8;
             else if (waveNum >= 25) waveBonus = (waveNum - 25) * 5;
             const baseCount = Math.floor(5 + Math.floor(waveNum * 2)) + waveBonus;
-            // Difficulty scales much harder after wave 30
-            let difficulty;
-            if (waveNum <= 20) {
-                difficulty = 1 + waveNum * 0.2;
-            } else if (waveNum <= 35) {
-                difficulty = 5 + (waveNum - 20) * 0.5;
-            } else if (waveNum <= 50) {
-                difficulty = 12.5 + (waveNum - 35) * 1.0;
-            } else {
-                difficulty = 27.5 + (waveNum - 50) * 2.0;
-            }
+            // Exponential health and speed scaling per wave
+            const difficulty = Math.pow(1.09, waveNum - 1);
+            const speedMult = 1 + (waveNum - 1) * 0.015;
 
             // Boss waves - more bosses at higher waves
             if (waveNum % 10 === 0 && waveNum >= 10) {
@@ -4377,7 +4336,6 @@
             if (waveNum >= 14) { types.push('ninja'); weights.push(10); }
             if (waveNum >= 15) { types.push('megasplitter'); weights.push(5); }
             if (waveNum >= 16) { types.push('vampire'); weights.push(8); }
-            if (waveNum >= 18) { types.push('bomber'); weights.push(9); }
             if (waveNum >= 20) { types.push('shadow'); weights.push(7); }
             if (waveNum >= 22) { types.push('swarmqueen'); weights.push(6); }
             if (waveNum >= 25) { types.push('leviathan'); weights.push(5); }
@@ -4392,12 +4350,10 @@
             if (waveNum >= 25) {
                 const ninjaIdx = types.indexOf('ninja');
                 const vampireIdx = types.indexOf('vampire');
-                const bomberIdx = types.indexOf('bomber');
                 const shadowIdx = types.indexOf('shadow');
                 const leviathanIdx = types.indexOf('leviathan');
                 if (ninjaIdx >= 0) weights[ninjaIdx] += Math.floor(waveNum / 8);
                 if (vampireIdx >= 0) weights[vampireIdx] += Math.floor(waveNum / 8);
-                if (bomberIdx >= 0) weights[bomberIdx] += Math.floor(waveNum / 7);
                 if (shadowIdx >= 0) weights[shadowIdx] += Math.floor(waveNum / 8);
                 if (leviathanIdx >= 0) weights[leviathanIdx] += Math.floor(waveNum / 10);
             }
@@ -4431,12 +4387,6 @@
                 }
             }
 
-            // Bomber rush waves
-            if (waveNum >= 35 && waveNum % 6 === 0) {
-                for (let i = 0; i < 5 + Math.floor(waveNum / 15); i++) {
-                    enemies.push({ type: 'bomber', delay: i * 500 });
-                }
-            }
 
             for (let i = 0; i < baseCount; i++) {
                 let roll = Math.random() * totalWeight;
@@ -4460,7 +4410,7 @@
                 });
             }
 
-            return { enemies, difficulty };
+            return { enemies, difficulty, speedMult };
         }
 
         function startWave() {
@@ -4479,7 +4429,7 @@
             wave.enemies.forEach(e => {
                 setTimeout(() => {
                     if (game.lives > 0) {
-                        game.enemies.push(new Enemy(e.type, wave.difficulty));
+                        game.enemies.push(new Enemy(e.type, wave.difficulty, wave.speedMult));
                     }
                 }, e.delay);
             });
