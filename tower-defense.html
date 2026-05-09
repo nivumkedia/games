@@ -870,11 +870,6 @@
                     setTimeout(() => playSFX(300, 0.3, 'sawtooth', 0.4, 80), 200);
                     setTimeout(() => playSFX(200, 0.4, 'sawtooth', 0.5, 60), 400);
                     break;
-                case 'new_track':
-                    for(let i = 0; i < 5; i++) {
-                        setTimeout(() => playSFX(400 + i * 100, 0.1, 'sine', 0.15), i * 80);
-                    }
-                    break;
             }
         }
 
@@ -1447,93 +1442,19 @@
             }
         };
 
-        // Path waypoints - multiple tracks (all start from same entry point: left middle)
-        const TRACKS = [
-            // Track 1 (Waves 1-19): Original winding path
-            [
-                {x: -1, y: 6},
-                {x: 3, y: 6},
-                {x: 3, y: 2},
-                {x: 7, y: 2},
-                {x: 7, y: 9},
-                {x: 11, y: 9},
-                {x: 11, y: 4},
-                {x: 15, y: 4},
-                {x: 15, y: 7},
-                {x: 19, y: 7}
-            ],
-            // Track 2 (Waves 20-39): Snake pattern
-            [
-                {x: -1, y: 6},
-                {x: 2, y: 6},
-                {x: 2, y: 1},
-                {x: 16, y: 1},
-                {x: 16, y: 3},
-                {x: 2, y: 3},
-                {x: 2, y: 5},
-                {x: 16, y: 5},
-                {x: 16, y: 7},
-                {x: 2, y: 7},
-                {x: 2, y: 9},
-                {x: 16, y: 9},
-                {x: 16, y: 11},
-                {x: 19, y: 11}
-            ],
-            // Track 3 (Waves 40-59): Spiral inward
-            [
-                {x: -1, y: 6},
-                {x: 0, y: 6},
-                {x: 0, y: 0},
-                {x: 17, y: 0},
-                {x: 17, y: 11},
-                {x: 1, y: 11},
-                {x: 1, y: 2},
-                {x: 15, y: 2},
-                {x: 15, y: 9},
-                {x: 3, y: 9},
-                {x: 3, y: 4},
-                {x: 13, y: 4},
-                {x: 13, y: 7},
-                {x: 8, y: 7},
-                {x: 8, y: 5},
-                {x: 19, y: 5}
-            ],
-            // Track 4 (Waves 60-79): Complex path
-            [
-                {x: -1, y: 6},
-                {x: 4, y: 6},
-                {x: 4, y: 2},
-                {x: 8, y: 2},
-                {x: 8, y: 5},
-                {x: 12, y: 5},
-                {x: 12, y: 1},
-                {x: 6, y: 1},
-                {x: 6, y: 10},
-                {x: 14, y: 10},
-                {x: 14, y: 4},
-                {x: 19, y: 4}
-            ],
-            // Track 5 (Waves 80+): Ultimate challenge - long winding
-            [
-                {x: -1, y: 6},
-                {x: 2, y: 6},
-                {x: 2, y: 1},
-                {x: 6, y: 1},
-                {x: 6, y: 10},
-                {x: 10, y: 10},
-                {x: 10, y: 1},
-                {x: 14, y: 1},
-                {x: 14, y: 8},
-                {x: 4, y: 8},
-                {x: 4, y: 11},
-                {x: 16, y: 11},
-                {x: 16, y: 5},
-                {x: 19, y: 5}
-            ]
+        // Path waypoints
+        const PATH = [
+            {x: -1, y: 6},
+            {x: 3, y: 6},
+            {x: 3, y: 2},
+            {x: 7, y: 2},
+            {x: 7, y: 9},
+            {x: 11, y: 9},
+            {x: 11, y: 4},
+            {x: 15, y: 4},
+            {x: 15, y: 7},
+            {x: 19, y: 7}
         ];
-
-        let currentTrackIndex = 0;
-        let PATH = TRACKS[0];
 
         // Upgrader definitions
         const UPGRADER_TYPES = {
@@ -4359,8 +4280,6 @@
         // Wave system
         function generateWave(waveNum) {
             const enemies = [];
-            // More enemies on higher tracks
-            const trackMultiplier = 1 + currentTrackIndex * 0.5;
             // Exponential enemy count scaling after wave 25
             let waveBonus = 0;
             if (waveNum >= 50) waveBonus = 400 + (waveNum - 50) * 20;
@@ -4368,7 +4287,7 @@
             else if (waveNum >= 35) waveBonus = 100 + (waveNum - 35) * 12;
             else if (waveNum >= 30) waveBonus = 30 + (waveNum - 30) * 8;
             else if (waveNum >= 25) waveBonus = (waveNum - 25) * 5;
-            const baseCount = Math.floor((5 + Math.floor(waveNum * 2)) * trackMultiplier) + waveBonus;
+            const baseCount = Math.floor(5 + Math.floor(waveNum * 2)) + waveBonus;
             // Difficulty scales much harder after wave 30
             let difficulty;
             if (waveNum <= 20) {
@@ -4498,138 +4417,12 @@
             return { enemies, difficulty };
         }
 
-        function getTrackIndex(wave) {
-            if (wave >= 80) return 4;
-            if (wave >= 60) return 3;
-            if (wave >= 40) return 2;
-            if (wave >= 20) return 1;
-            return 0;
-        }
-
-        function switchTrack(newIndex) {
-            if (newIndex === currentTrackIndex) return false;
-
-            currentTrackIndex = newIndex;
-            PATH = TRACKS[newIndex];
-            calculatePathCells();
-
-            // Move towers that are now on the path to nearby empty spots
-            let movedCount = 0;
-            for (const tower of game.towers) {
-                const cellKey = `${tower.gridX},${tower.gridY}`;
-                if (game.pathCells.has(cellKey)) {
-                    // Find nearest empty spot
-                    const newPos = findNearestEmptySpot(tower.gridX, tower.gridY);
-                    if (newPos) {
-                        tower.gridX = newPos.x;
-                        tower.gridY = newPos.y;
-                        tower.x = newPos.x * GRID_SIZE + GRID_SIZE / 2;
-                        tower.y = newPos.y * GRID_SIZE + GRID_SIZE / 2;
-                        movedCount++;
-                    }
-                }
-            }
-
-            // Move upgraders that are now on the path
-            for (const upgrader of game.upgraders) {
-                const cellKey = `${upgrader.gridX},${upgrader.gridY}`;
-                if (game.pathCells.has(cellKey)) {
-                    // Find nearest empty spot adjacent to a tower
-                    const newPos = findNearestEmptySpotForUpgrader(upgrader.gridX, upgrader.gridY);
-                    if (newPos) {
-                        upgrader.gridX = newPos.x;
-                        upgrader.gridY = newPos.y;
-                        upgrader.x = newPos.x * GRID_SIZE + GRID_SIZE / 2;
-                        upgrader.y = newPos.y * GRID_SIZE + GRID_SIZE / 2;
-                    }
-                }
-            }
-
-            if (movedCount > 0) {
-                game.floatingTexts.push({
-                    x: canvas.width / 2,
-                    y: canvas.height / 2 + 40,
-                    text: `${movedCount} towers relocated!`,
-                    life: 120,
-                    color: '#2196F3',
-                    size: 20
-                });
-            }
-
-            return true;
-        }
-
-        function findNearestEmptySpot(startX, startY) {
-            // Search in expanding squares
-            for (let radius = 1; radius <= 10; radius++) {
-                for (let dx = -radius; dx <= radius; dx++) {
-                    for (let dy = -radius; dy <= radius; dy++) {
-                        if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
-                        const x = startX + dx;
-                        const y = startY + dy;
-                        if (x >= 0 && x < COLS && y >= 0 && y < ROWS) {
-                            const cellKey = `${x},${y}`;
-                            const isPath = game.pathCells.has(cellKey);
-                            const hasTower = game.towers.some(t => t.gridX === x && t.gridY === y);
-                            const hasUpgrader = game.upgraders.some(u => u.gridX === x && u.gridY === y);
-                            if (!isPath && !hasTower && !hasUpgrader) {
-                                return { x, y };
-                            }
-                        }
-                    }
-                }
-            }
-            return null;
-        }
-
-        function findNearestEmptySpotForUpgrader(startX, startY) {
-            // Search in expanding squares, but must be adjacent to a tower
-            for (let radius = 1; radius <= 10; radius++) {
-                for (let dx = -radius; dx <= radius; dx++) {
-                    for (let dy = -radius; dy <= radius; dy++) {
-                        if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
-                        const x = startX + dx;
-                        const y = startY + dy;
-                        if (x >= 0 && x < COLS && y >= 0 && y < ROWS) {
-                            const cellKey = `${x},${y}`;
-                            const isPath = game.pathCells.has(cellKey);
-                            const hasTower = game.towers.some(t => t.gridX === x && t.gridY === y);
-                            const hasUpgrader = game.upgraders.some(u => u.gridX === x && u.gridY === y);
-                            const isAdjacentToTower = game.towers.some(t => {
-                                const tdx = Math.abs(t.gridX - x);
-                                const tdy = Math.abs(t.gridY - y);
-                                return (tdx <= 1 && tdy <= 1 && !(tdx === 0 && tdy === 0));
-                            });
-                            if (!isPath && !hasTower && !hasUpgrader && isAdjacentToTower) {
-                                return { x, y };
-                            }
-                        }
-                    }
-                }
-            }
-            return null;
-        }
-
         function startWave() {
             if (game.waveInProgress) return;
 
             initAudio(); // Initialize audio on first interaction
             game.wave++;
             playSound('wave_start');
-
-            // Check for track change
-            const newTrackIndex = getTrackIndex(game.wave);
-            if (switchTrack(newTrackIndex)) {
-                playSound('new_track');
-                game.floatingTexts.push({
-                    x: canvas.width / 2,
-                    y: canvas.height / 2,
-                    text: `NEW TRACK ${newTrackIndex + 1}!`,
-                    life: 150,
-                    color: '#E040FB',
-                    size: 48
-                });
-            }
 
             game.waveInProgress = true;
             game.selectedTower = null;
@@ -5008,7 +4801,6 @@
                 lives: game.lives,
                 wave: game.wave,
                 damageBoost: false,
-                trackIndex: currentTrackIndex,
                 towers: game.towers.map(t => ({
                     gridX: t.gridX,
                     gridY: t.gridY,
@@ -5068,12 +4860,7 @@
                 game.selectedTower = null;
                 game.selectedUpgrader = null;
 
-                // Restore track
-                if (saveData.trackIndex !== undefined) {
-                    currentTrackIndex = saveData.trackIndex;
-                    PATH = TRACKS[currentTrackIndex];
-                    calculatePathCells();
-                }
+                calculatePathCells();
 
                 // Rebuild towers
                 game.towers = saveData.towers.map(t => {
@@ -5232,10 +5019,6 @@
         });
 
         function resetGame() {
-            // Reset to first track
-            currentTrackIndex = 0;
-            PATH = TRACKS[0];
-
             game = {
                 coins: 100,
                 gems: 0,

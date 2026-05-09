@@ -339,7 +339,7 @@
             <button class="device-tab active" id="tabDesktop" onclick="selectDevice('desktop')">Desktop</button>
             <button class="device-tab" id="tabMobile" onclick="selectDevice('mobile')">Mobile</button>
         </div>
-        <div class="device-info" id="deviceInfo">Arrow Keys to move, Up to jump, Space to brake</div>
+        <div class="device-info" id="deviceInfo">Arrow Keys or WASD to move, Up/W to jump, Space to brake</div>
 
         <div style="display:flex;gap:12px;justify-content:center;align-items:center">
             <button id="startButton">START BATTLE!</button>
@@ -524,12 +524,12 @@
         </div>
     </div>
 
-    <canvas id="gameCanvas" width="1400" height="900"></canvas>
+    <canvas id="gameCanvas" width="1400" height="900" tabindex="0"></canvas>
 
     <div id="info">
         <div id="status">TURBO CLASH - Last Car Standing Wins!</div>
         <div class="controls">
-            Arrow Keys: Move | Arrow Up: Jump | Space: Brake | Press R to restart<br>
+            Arrow Keys / WASD: Move | Up/W: Jump | Space: Brake | Press R to restart<br>
             WARNING: 4 seconds idle = ELIMINATION!
         </div>
     </div>
@@ -1057,6 +1057,7 @@
             cameraShakeY = 0;
             arenaLeft = 0;
             arenaRight = canvas.width;
+            canvas.focus();
             if (animFrameId) cancelAnimationFrame(animFrameId);
             gameLoop();
         }
@@ -1068,15 +1069,17 @@
             // Reset idle timer when player presses game control keys
             if (gameStarted && !gameOver && player.alive &&
                 (e.key === 'ArrowUp' || e.key === 'ArrowDown' ||
-                 e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === ' ')) {
+                 e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === ' ' ||
+                 e.key === 'w' || e.key === 'a' || e.key === 's' || e.key === 'd')) {
                 lastKeyPressTime = gameTimer;
             }
 
-            e.preventDefault();
+            if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) {
+                e.preventDefault();
+            }
         });
         window.addEventListener('keyup', (e) => {
             keys[e.key] = false;
-            e.preventDefault();
         });
 
         // Device mode selection
@@ -1091,7 +1094,7 @@
             document.getElementById('tabMobile').classList.toggle('active', mode === 'mobile');
             const info = document.getElementById('deviceInfo');
             if (mode === 'desktop') {
-                info.textContent = 'Arrow Keys to move, Up to jump, Space to brake';
+                info.textContent = 'Arrow Keys or WASD to move, Up/W to jump, Space to brake';
             } else {
                 info.textContent = 'Touch & drag to pull your car. Tap above car to jump. Car can still be knocked around!';
             }
@@ -1169,6 +1172,7 @@
         }
 
         canvas.addEventListener('mousedown', (e) => {
+            canvas.focus();
             if (deviceMode !== 'mobile') return;
             if (!gameStarted || gameOver) return;
 
@@ -1199,6 +1203,10 @@
         canvas.addEventListener('mouseleave', () => {
             touchActive = false;
             touchTarget = null;
+        });
+
+        canvas.addEventListener('click', () => {
+            canvas.focus();
         });
 
         // Touch restart button
@@ -2426,17 +2434,17 @@
                         car.vx *= 0.85;
                     }
                 } else {
-                    // Desktop keyboard controls
-                    if (keys['ArrowRight']) {
+                    // Desktop keyboard controls (arrow keys or WASD)
+                    if (keys['ArrowRight'] || keys['d']) {
                         car.vx += car.acceleration;
                     }
-                    if (keys['ArrowLeft']) {
+                    if (keys['ArrowLeft'] || keys['a']) {
                         car.vx -= car.acceleration;
                     }
                     if (keys[' '] && car.onGround) {
                         car.vx *= 0.85;
                     }
-                    if (keys['ArrowUp'] && car.onGround) {
+                    if ((keys['ArrowUp'] || keys['w']) && car.onGround) {
                         car.vy = car.jumpPower;
                         car.onGround = false;
                     }
