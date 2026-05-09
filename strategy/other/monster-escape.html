@@ -185,7 +185,7 @@ function buildMap() {
 function countDots(m){return m.reduce((s,r)=>s+r.filter(c=>c===2||c===3||c===4||c===5).length,0);}
 
 function initGame() {
-  map=buildMap(); score=0; lives=3; level=1;
+  map=buildMap(); buildOffscreenCaches(); score=0; lives=3; level=1;
   particles=[]; tick=0; flashTimer=0;
   powerTimer=0; speedTimer=0; freezeTimer=0;
   updateHUD(); spawnEntities(); gameActive=true;
@@ -223,6 +223,7 @@ function updatePlayer(){
   const cell=map[player.row][player.col];
   if(cell===2){
     map[player.row][player.col]=0; score+=10; updateHUD();
+    clearDotCell(player.col,player.row);
     addParticle(player.col,player.row,'+10','#FFD700');
   } else if(cell===3){
     map[player.row][player.col]=0; score+=50; updateHUD();
@@ -291,7 +292,7 @@ function checkCollisions(){
 
 function checkWin(){
   if(countDots(map)===0){
-    level++;updateHUD();map=buildMap();spawnEntities();
+    level++;updateHUD();map=buildMap();buildOffscreenCaches();spawnEntities();
     powerTimer=0;speedTimer=0;freezeTimer=0;
   }
 }
@@ -319,6 +320,69 @@ function isWall(c,r){
 
 // Pre-baked grass floor pattern (like tag game)
 let floorPattern = null;
+
+// Offscreen caches rebuilt once per level
+let bgCanvas = null, dotCanvas = null, dotCtx_ = null;
+let animatedPellets = [];
+
+function buildOffscreenCaches() {
+  const W = MAP_COLS*CELL, H = MAP_ROWS*CELL;
+  bgCanvas = document.createElement('canvas');
+  bgCanvas.width = W; bgCanvas.height = H;
+  const bctx = bgCanvas.getContext('2d');
+  // Floor pattern for bctx
+  const pc = document.createElement('canvas');
+  pc.width = 60; pc.height = 60;
+  const px = pc.getContext('2d');
+  px.fillStyle='#7cc87a'; px.fillRect(0,0,60,60);
+  px.fillStyle='#72c070'; px.fillRect(0,0,30,30); px.fillRect(30,30,30,30);
+  px.fillStyle='rgba(255,255,255,0.06)';
+  for(let i=0;i<12;i++){const dx=(i*13+3)%60,dy=(i*19+7)%60;px.fillRect(dx,dy,1,1);}
+  px.strokeStyle='rgba(0,0,0,0.04)'; px.lineWidth=0.5;
+  for(let i=0;i<60;i+=20){px.beginPath();px.moveTo(i,0);px.lineTo(i,60);px.stroke();px.beginPath();px.moveTo(0,i);px.lineTo(60,i);px.stroke();}
+  const pat = bctx.createPattern(pc,'repeat');
+  for(let r=0;r<MAP_ROWS;r++) for(let c=0;c<MAP_COLS;c++){
+    const x=c*CELL,y=r*CELL;
+    if(WALL_MAP[r][c]===1){
+      const border=(c===0||r===0||c===MAP_COLS-1||r===MAP_ROWS-1);
+      if(!border){bctx.fillStyle='rgba(0,0,0,0.32)';bctx.fillRect(x+3,y+3,CELL,CELL);}
+      const wg=bctx.createLinearGradient(x,y,x,y+CELL);
+      wg.addColorStop(0,'#c4a97d');wg.addColorStop(0.5,'#b09060');wg.addColorStop(1,'#9a7b50');
+      bctx.fillStyle=wg; bctx.fillRect(x,y,CELL,CELL);
+      const top=!isWall(c,r-1),bot=!isWall(c,r+1);
+      bctx.fillStyle='rgba(0,0,0,0.09)';
+      if(top||bot){for(let bx=x+10;bx<x+CELL-4;bx+=20)bctx.fillRect(bx,y,1,CELL);}
+      else{for(let by=y+10;by<y+CELL-4;by+=20)bctx.fillRect(x,by,CELL,1);}
+      bctx.fillStyle='rgba(255,255,255,0.18)';
+      bctx.fillRect(x,y,CELL,2); bctx.fillRect(x,y,2,CELL);
+      bctx.fillStyle='rgba(0,0,0,0.28)';
+      bctx.fillRect(x,y+CELL-2,CELL,2); bctx.fillRect(x+CELL-2,y,2,CELL);
+      if(!border){bctx.strokeStyle='rgba(0,0,0,0.18)';bctx.lineWidth=1;bctx.strokeRect(x+.5,y+.5,CELL-1,CELL-1);}
+    } else {
+      bctx.fillStyle=pat; bctx.fillRect(x,y,CELL,CELL);
+    }
+  }
+  dotCanvas = document.createElement('canvas');
+  dotCanvas.width = W; dotCanvas.height = H;
+  dotCtx_ = dotCanvas.getContext('2d');
+  animatedPellets = [];
+  for(let r=0;r<MAP_ROWS;r++) for(let c=0;c<MAP_COLS;c++){
+    const v=map[r][c];
+    if(v===2){
+      const cx=c*CELL+CELL/2,cy=r*CELL+CELL/2;
+      dotCtx_.fillStyle='#FFD700';
+      dotCtx_.beginPath(); dotCtx_.arc(cx,cy,4,0,Math.PI*2); dotCtx_.fill();
+      dotCtx_.fillStyle='rgba(255,255,255,0.5)';
+      dotCtx_.beginPath(); dotCtx_.arc(cx-1,cy-1,1.5,0,Math.PI*2); dotCtx_.fill();
+    } else if(v===3||v===4||v===5){
+      animatedPellets.push({col:c,row:r,type:v});
+    }
+  }
+}
+
+function clearDotCell(col,row){
+  if(dotCtx_) dotCtx_.clearRect(col*CELL,row*CELL,CELL,CELL);
+}
 function buildFloorPattern() {
   const pc = document.createElement('canvas');
   pc.width = 60; pc.height = 60;
@@ -528,21 +592,15 @@ function draw(){
   ctx.clearRect(0,0,VIEW_W,VIEW_H);
   ctx.save();
   ctx.translate(-Math.round(camX),-Math.round(camY));
-  const sc=Math.max(0,Math.floor(camX/CELL)-1);
-  const ec=Math.min(MAP_COLS-1,Math.ceil((camX+VIEW_W)/CELL)+1);
-  const sr=Math.max(0,Math.floor(camY/CELL)-1);
-  const er=Math.min(MAP_ROWS-1,Math.ceil((camY+VIEW_H)/CELL)+1);
-  for(let r=sr;r<=er;r++) for(let c=sc;c<=ec;c++){
-    const v=map[r][c];
-    if(v===1) drawWall(c,r);
-    else{
-      drawFloor(c,r);
-      if(v===2) drawDot(c,r);
-      else if(v===3) drawPellet(c,r);
-      else if(v===4) drawSpeedPellet(c,r);
-      else if(v===5) drawFreezePellet(c,r);
+  if(bgCanvas) ctx.drawImage(bgCanvas,0,0);
+  if(dotCanvas) ctx.drawImage(dotCanvas,0,0);
+  animatedPellets.forEach(p=>{
+    if(map[p.row][p.col]===p.type){
+      if(p.type===3) drawPellet(p.col,p.row);
+      else if(p.type===4) drawSpeedPellet(p.col,p.row);
+      else if(p.type===5) drawFreezePellet(p.col,p.row);
     }
-  }
+  });
   drawPlayer();
   monsters.forEach(drawMonster);
   drawParticles();

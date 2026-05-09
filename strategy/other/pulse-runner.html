@@ -153,7 +153,7 @@ body {
 <div class="overlay" id="overlay">
     <div class="panel">
         <h1>Pulse Runner</h1>
-        <p>Clear 10 levels, press buttons to disarm danger, and survive lava, drones, portals, and springs.</p>
+        <p>Use arrow keys: left/right move, up jumps, down drops faster. Clear 10 levels and disarm danger buttons.</p>
         <button class="primary-btn" id="start-btn">Start Run</button>
     </div>
 </div>
@@ -177,7 +177,7 @@ const overlay = document.getElementById("overlay");
 const startBtn = document.getElementById("start-btn");
 
 const world = { width: 4300, height: 720, gravity: 0.82 };
-const keys = { left: false, right: false, jump: false };
+const keys = { left: false, right: false, jump: false, down: false };
 let cameraX = 0;
 let started = false;
 let finished = false;
@@ -728,6 +728,13 @@ function begin() {
     canvas.focus();
 }
 
+function startFromKeyboard(code) {
+    if (overlay.style.display === "none") return false;
+    if (!["ArrowUp", "Enter", "Space"].includes(code)) return false;
+    begin();
+    return true;
+}
+
 function rectsOverlap(a, b) {
     return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
@@ -792,7 +799,13 @@ function hurt() {
 function checkPortals() {
     if (portalCooldown > 0) return;
     for (const portal of portals) {
-        if (!rectsOverlap(player, portal)) continue;
+        const portalZone = {
+            x: portal.x - 6,
+            y: portal.y - 6,
+            w: portal.w + 12,
+            h: portal.h + 12
+        };
+        if (!rectsOverlap(player, portalZone)) continue;
         const target = portals[portal.target];
         if (!target) return;
         player.x = target.x + target.w / 2 - player.w / 2;
@@ -834,7 +847,13 @@ function activateButton(button) {
 
 function checkButtons() {
     for (const button of buttons) {
-        if (button.pressed || !rectsOverlap(player, button)) continue;
+        const buttonZone = {
+            x: button.x - 10,
+            y: button.y - 12,
+            w: button.w + 20,
+            h: button.h + 22
+        };
+        if (button.pressed || !rectsOverlap(player, buttonZone)) continue;
         activateButton(button);
     }
 }
@@ -884,6 +903,7 @@ function moveAndCollide() {
     }
 
     player.vy += inWater ? world.gravity * 0.38 : world.gravity;
+    if (keys.down && !player.grounded && !inWater) player.vy += world.gravity * 0.7;
     player.vy = Math.min(player.vy, inWater ? 5.5 : 18);
 
     player.x += player.vx;
@@ -1283,16 +1303,22 @@ function setKey(code, down) {
     if (code === "ArrowLeft" || code === "KeyA") keys.left = down;
     if (code === "ArrowRight" || code === "KeyD") keys.right = down;
     if (code === "ArrowUp" || code === "Space" || code === "KeyW") keys.jump = down;
+    if (code === "ArrowDown" || code === "KeyS") keys.down = down;
 }
 
 window.addEventListener("keydown", event => {
+    if (startFromKeyboard(event.code)) {
+        event.preventDefault();
+        return;
+    }
     setKey(event.code, true);
-    if (["ArrowLeft", "ArrowRight", "ArrowUp", "Space"].includes(event.code)) event.preventDefault();
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space"].includes(event.code)) event.preventDefault();
 });
 
 window.addEventListener("keyup", event => setKey(event.code, false));
 window.addEventListener("message", event => {
     if (event.data?.type !== "game-key") return;
+    if (event.data.down && startFromKeyboard(event.data.code)) return;
     setKey(event.data.code, event.data.down);
 });
 window.addEventListener("resize", resize);
