@@ -64,7 +64,7 @@ body {
 }
 
 .panel {
-    width: min(420px, calc(100vw - 32px));
+    width: min(760px, calc(100vw - 32px));
     padding: 22px;
     border: 1px solid rgba(124, 226, 255, 0.28);
     border-radius: 8px;
@@ -103,6 +103,158 @@ body {
     background: #6ee6ff;
 }
 
+.mode-select {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 14px;
+}
+
+.mode-card {
+    border: 1px solid rgba(141, 234, 255, 0.28);
+    border-radius: 8px;
+    background: rgba(12, 28, 52, 0.82);
+    color: #eaf6ff;
+    cursor: pointer;
+    padding: 10px;
+    text-align: left;
+    font: inherit;
+    transition: border-color 0.2s, transform 0.2s, background 0.2s;
+}
+
+.mode-card:hover,
+.mode-card.selected {
+    border-color: #8deaff;
+    background: rgba(32, 198, 255, 0.15);
+    transform: translateY(-2px);
+}
+
+.mode-card.preview {
+    cursor: default;
+    opacity: 0.82;
+}
+
+.mode-card.preview:hover {
+    border-color: rgba(141, 234, 255, 0.28);
+    background: rgba(12, 28, 52, 0.82);
+    transform: none;
+}
+
+.mode-art {
+    position: relative;
+    height: 150px;
+    overflow: hidden;
+    border-radius: 7px;
+    background: linear-gradient(#162a50, #07101f);
+    margin-bottom: 10px;
+}
+
+.art-label {
+    position: absolute;
+    left: 10px;
+    top: 10px;
+    z-index: 2;
+    padding: 4px 7px;
+    border: 1px solid rgba(141, 234, 255, 0.42);
+    border-radius: 5px;
+    background: rgba(6, 16, 29, 0.78);
+    color: #eaf6ff;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 0.8px;
+}
+
+.mode-art::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 18px;
+    height: 18px;
+    background: #19365e;
+    border-top: 4px solid #42d8ff;
+}
+
+.art-player {
+    position: absolute;
+    left: 78px;
+    top: 54px;
+    width: 24px;
+    height: 34px;
+    border-radius: 7px;
+    background: #8deaff;
+    box-shadow: 0 0 14px rgba(141, 234, 255, 0.7);
+}
+
+.art-player::before,
+.art-enemy::before {
+    content: "";
+    position: absolute;
+    top: 9px;
+    left: 6px;
+    width: 4px;
+    height: 4px;
+    background: #09213a;
+    box-shadow: 9px 0 0 #09213a;
+}
+
+.art-enemy {
+    position: absolute;
+    right: 58px;
+    bottom: 36px;
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    background: #b64cff;
+    box-shadow: 0 0 14px rgba(182, 76, 255, 0.72);
+}
+
+.art-dragon {
+    position: absolute;
+    right: 28px;
+    top: 42px;
+    width: 64px;
+    height: 38px;
+    border-radius: 28px 10px 20px 18px;
+    background: #7a2cff;
+    box-shadow: 0 0 18px rgba(255, 79, 216, 0.7);
+}
+
+.art-dragon::before {
+    content: "";
+    position: absolute;
+    left: -20px;
+    top: 10px;
+    border-top: 9px solid transparent;
+    border-bottom: 9px solid transparent;
+    border-right: 26px solid #ff7a18;
+    filter: drop-shadow(0 0 10px #ff7a18);
+}
+
+.art-fire {
+    position: absolute;
+    left: 54px;
+    bottom: 36px;
+    width: 72px;
+    height: 24px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #fff2a8, #ff7a18 50%, rgba(157, 27, 0, 0.7));
+    box-shadow: 0 0 18px #ff7a18;
+}
+
+.mode-name {
+    display: block;
+    color: #8deaff;
+    font-weight: 800;
+    margin-bottom: 3px;
+}
+
+.mode-desc {
+    color: #aac7d8;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
 .touch-controls {
     position: fixed;
     left: 16px;
@@ -135,6 +287,8 @@ body {
 @media (max-width: 760px), (pointer: coarse) {
     .touch-controls { display: flex; }
     .pill { min-width: 64px; font-size: 11px; }
+    .mode-select { grid-template-columns: 1fr; }
+    .mode-art { height: 120px; }
 }
 </style>
 </head>
@@ -153,8 +307,29 @@ body {
 <div class="overlay" id="overlay">
     <div class="panel">
         <h1>Pulse Runner</h1>
-        <p>Use arrow keys: left/right move, up jumps, down drops faster. Clear 10 levels and disarm danger buttons.</p>
-        <button class="primary-btn" id="start-btn">Start Run</button>
+        <p>Pick Normal to play. Ultimate is shown as a preview for later.</p>
+        <div class="mode-select" id="mode-select">
+            <button class="mode-card selected" data-mode="normal">
+                <div class="mode-art" aria-hidden="true">
+                    <span class="art-label">NORMAL</span>
+                    <span class="art-player"></span>
+                    <span class="art-enemy"></span>
+                </div>
+                <span class="mode-name">Normal</span>
+                <span class="mode-desc">The current 10-level platformer with enemies, hazards, buttons, and portals.</span>
+            </button>
+            <div class="mode-card preview" aria-label="Ultimate preview">
+                <div class="mode-art" aria-hidden="true">
+                    <span class="art-label">ULTIMATE</span>
+                    <span class="art-fire"></span>
+                    <span class="art-player"></span>
+                    <span class="art-dragon"></span>
+                </div>
+                <span class="mode-name">Ultimate</span>
+                <span class="mode-desc">Preview: a dragon burns where the player just was.</span>
+            </div>
+        </div>
+        <button class="primary-btn" id="start-btn">Start Normal</button>
     </div>
 </div>
 
@@ -175,6 +350,7 @@ const livesEl = document.getElementById("lives");
 const timeEl = document.getElementById("time");
 const overlay = document.getElementById("overlay");
 const startBtn = document.getElementById("start-btn");
+const modeCards = [...document.querySelectorAll(".mode-card[data-mode]")];
 
 const world = { width: 4300, height: 720, gravity: 0.82 };
 const keys = { left: false, right: false, jump: false, down: false };
@@ -187,6 +363,10 @@ let levelIndex = 0;
 let totalCoins = 0;
 let portalCooldown = 0;
 let trampolineCooldown = 0;
+let selectedMode = "normal";
+let currentMode = "normal";
+let dragonFireTimer = 0;
+let trailTimer = 0;
 
 let start = { x: 90, y: 520 };
 const player = {
@@ -212,6 +392,8 @@ let coins = [];
 let portals = [];
 let trampolines = [];
 let buttons = [];
+let playerTrail = [];
+let dragonFires = [];
 let goal = { x: 4075, y: 548, w: 56, h: 102 };
 
 const baseLevelThemes = [
@@ -694,6 +876,10 @@ function loadLevel(index) {
     portals = level.portals.map(item => ({ ...item }));
     trampolines = level.trampolines.map(item => ({ ...item }));
     buttons = level.buttons.map(item => ({ ...item, pressed: false }));
+    playerTrail = [];
+    dragonFires = [];
+    dragonFireTimer = 0.8;
+    trailTimer = 0;
     player.x = start.x;
     player.y = start.y;
     player.vx = 0;
@@ -714,6 +900,12 @@ function resetGame() {
     loadLevel(levelIndex);
 }
 
+function selectMode(mode) {
+    selectedMode = "normal";
+    modeCards.forEach(card => card.classList.toggle("selected", card.dataset.mode === selectedMode));
+    startBtn.textContent = "Start Normal";
+}
+
 function showOverlay(title, copy, button) {
     overlay.querySelector("h1").textContent = title;
     overlay.querySelector("p").textContent = copy;
@@ -721,7 +913,9 @@ function showOverlay(title, copy, button) {
     overlay.style.display = "grid";
 }
 
-function begin() {
+function begin(mode = selectedMode) {
+    currentMode = "normal";
+    selectMode("normal");
     resetGame();
     started = true;
     overlay.style.display = "none";
@@ -730,6 +924,10 @@ function begin() {
 
 function startFromKeyboard(code) {
     if (overlay.style.display === "none") return false;
+    if (code === "ArrowLeft") {
+        selectMode("normal");
+        return true;
+    }
     if (!["ArrowUp", "Enter", "Space"].includes(code)) return false;
     begin();
     return true;
@@ -874,6 +1072,36 @@ function fireDroneShot(drone) {
     });
 }
 
+function updateDragon(dt) {
+    if (currentMode !== "ultimate") return;
+    trailTimer -= dt;
+    if (trailTimer <= 0) {
+        playerTrail.push({
+            x: player.x + player.w / 2,
+            y: player.y + player.h / 2
+        });
+        if (playerTrail.length > 90) playerTrail.shift();
+        trailTimer = 0.08;
+    }
+
+    dragonFireTimer -= dt;
+    if (dragonFireTimer <= 0 && playerTrail.length > 0) {
+        const targetIndex = Math.max(0, playerTrail.length - 14);
+        const target = playerTrail[targetIndex];
+        dragonFires.push({
+            x: target.x - 46,
+            y: target.y + 10,
+            w: 92,
+            h: 34,
+            life: 1.45
+        });
+        dragonFireTimer = 2.1;
+    }
+
+    dragonFires.forEach(fire => fire.life -= dt);
+    dragonFires = dragonFires.filter(fire => fire.life > 0);
+}
+
 function completeLevel() {
     const collected = coins.filter(c => c.taken).length;
     totalCoins += collected;
@@ -955,6 +1183,8 @@ function update(dt) {
         }
     });
 
+    updateDragon(dt);
+
     droneShots.forEach(shot => {
         shot.x += shot.vx * dt * 60;
         shot.y += shot.vy * dt * 60;
@@ -988,6 +1218,10 @@ function update(dt) {
     droneShots.forEach(shot => {
         const hitbox = { x: shot.x - shot.r, y: shot.y - shot.r, w: shot.r * 2, h: shot.r * 2 };
         if (rectsOverlap(player, hitbox)) hurt();
+    });
+
+    dragonFires.forEach(fire => {
+        if (rectsOverlap(player, fire)) hurt();
     });
 
     coins.forEach(coin => {
@@ -1323,6 +1557,9 @@ window.addEventListener("message", event => {
 });
 window.addEventListener("resize", resize);
 startBtn.addEventListener("click", begin);
+modeCards.forEach(card => {
+    card.addEventListener("click", () => begin("normal"));
+});
 
 document.querySelectorAll(".touch-btn").forEach(button => {
     const key = button.dataset.key;
