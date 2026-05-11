@@ -444,7 +444,7 @@ body {
                     </span>
                 </div>
                 <span class="mode-name">Ultimate</span>
-                <span class="mode-desc">A 20-level version with dragons, gears, caves, trapdoors, and powerups.</span>
+                <span class="mode-desc">A 20-level version with flying dragons, lava eruptions, gears, caves, trapdoors, and powerups.</span>
             </button>
         </div>
         <button class="primary-btn" id="start-btn">Start Normal</button>
@@ -483,8 +483,6 @@ let portalCooldown = 0;
 let trampolineCooldown = 0;
 let selectedMode = "normal";
 let currentMode = "normal";
-let dragonFireTimer = 0;
-let trailTimer = 0;
 let menuDrawn = false;
 
 let start = { x: 90, y: 520 };
@@ -511,13 +509,12 @@ let coins = [];
 let portals = [];
 let trampolines = [];
 let buttons = [];
-let playerTrail = [];
-let dragonFires = [];
-let dragons = [];
+let flyingDragons = [];
 let gears = [];
 let caves = [];
 let trapdoors = [];
 let fallingRocks = [];
+let lavaEruptions = [];
 let powerups = [];
 let activePowerups = { shield: 0, speed: 0, jump: 0, slow: 0 };
 let goal = { x: 4075, y: 548, w: 56, h: 102 };
@@ -744,11 +741,12 @@ function cloneLevel(level) {
         portals: (level.portals || []).map(item => ({ ...item })),
         trampolines: (level.trampolines || []).map(item => ({ ...item })),
         buttons: (level.buttons || []).map(item => ({ ...item })),
-        dragons: (level.dragons || []).map(item => ({ ...item })),
+        flyingDragons: (level.flyingDragons || []).map(item => ({ ...item })),
         gears: (level.gears || []).map(item => ({ ...item })),
         caves: (level.caves || []).map(item => ({ ...item })),
         trapdoors: (level.trapdoors || []).map(item => ({ ...item })),
         fallingRocks: (level.fallingRocks || []).map(item => ({ ...item })),
+        lavaEruptions: (level.lavaEruptions || []).map(item => ({ ...item })),
         powerups: (level.powerups || []).map(item => ({ ...item }))
     };
 }
@@ -818,6 +816,21 @@ function createTrapdoor(platform, offset = 0.5, tier = 0) {
     };
 }
 
+function createGateTrapdoor(platform, tier = 0) {
+    const w = Math.min(150, Math.max(96, platform.w * 0.36));
+    return {
+        x: Math.round(platform.x + Math.max(28, platform.w * 0.18)),
+        y: platform.y - 72,
+        w,
+        h: 14,
+        timer: 0,
+        reset: 0,
+        open: false,
+        fuse: Math.max(0.28, 0.52 - tier * 0.012),
+        gateTrap: true
+    };
+}
+
 function createGear(platform, offset = 0.5, tier = 0) {
     const r = Math.min(28, 18 + Math.floor(tier / 4));
     const patrol = Math.max(0, Math.min(90 + tier * 4, platform.w / 2 - r - 18));
@@ -847,12 +860,23 @@ function createCave(platform, offset = 0.5, tier = 0) {
     };
 }
 
-function createDragon(platform, offset = 0.5, tier = 0) {
+function createFlyingDragon(leftPlatform, rightPlatform, tier = 0, offset = 0) {
+    const gapStart = leftPlatform.x + leftPlatform.w;
+    const gapEnd = rightPlatform.x;
+    const centerX = Math.round(gapStart + (gapEnd - gapStart) / 2);
+    const ledgeY = Math.min(leftPlatform.y, rightPlatform.y);
     return {
-        x: Math.round(platform.x + platform.w * offset),
-        y: Math.max(92, platform.y - 132),
-        delay: Math.max(1.65, 2.8 - tier * 0.04),
-        nextFire: 0,
+        x: centerX,
+        y: Math.max(96, ledgeY - 118),
+        baseY: Math.max(96, ledgeY - 118),
+        min: Math.max(gapStart - 70, centerX - 150),
+        max: Math.min(gapEnd + 70, centerX + 150),
+        speed: 0.75 + tier * 0.025,
+        phase: offset,
+        cycle: Math.max(2.0, 3.15 - tier * 0.035),
+        warning: 0.72,
+        blast: 0.52,
+        facing: -1,
         active: true
     };
 }
@@ -864,6 +888,25 @@ function createPowerup(platform, type, offset = 0.5) {
         y: Math.max(70, platform.y - 74),
         r: 15,
         taken: false
+    };
+}
+
+function createLavaEruption(leftPlatform, rightPlatform, tier = 0, offset = 0) {
+    const gapStart = leftPlatform.x + leftPlatform.w;
+    const gapEnd = rightPlatform.x;
+    const gap = Math.max(90, gapEnd - gapStart);
+    const w = Math.min(86, Math.max(42, gap * 0.48));
+    return {
+        x: Math.round(gapStart + gap / 2 - w / 2),
+        y: Math.min(668, Math.max(leftPlatform.y, rightPlatform.y) + 28),
+        w,
+        pitW: Math.round(Math.min(gap - 18, w + 42)),
+        pitH: 30,
+        height: Math.min(310, 178 + tier * 8),
+        phase: offset,
+        cycle: Math.max(1.85, 2.75 - tier * 0.035),
+        warning: 0.54,
+        blast: Math.min(0.92, 0.58 + tier * 0.012)
     };
 }
 
@@ -1067,11 +1110,12 @@ function buildUltimateLevels(count) {
         base.waterPools = [];
         base.enemies = [];
         base.drones = [];
-        base.dragonFires = [];
         base.gears = [];
+        base.flyingDragons = [];
         base.caves = [];
         base.trapdoors = [];
         base.fallingRocks = [];
+        base.lavaEruptions = [];
         base.powerups = [];
         base.buttons = [];
         base.portals = [];
@@ -1079,6 +1123,15 @@ function buildUltimateLevels(count) {
 
         const mids = base.platforms.slice(1, -1).filter(platform => platform.w >= 160);
         const pick = offset => mids[Math.min(mids.length - 1, Math.max(0, offset % Math.max(1, mids.length)))];
+        const platformGaps = [...base.platforms]
+            .sort((a, b) => a.x - b.x)
+            .map((platform, platformIndex, sorted) => ({
+                left: platform,
+                right: sorted[platformIndex + 1],
+                gap: sorted[platformIndex + 1] ? sorted[platformIndex + 1].x - (platform.x + platform.w) : 0
+            }))
+            .filter(gap => gap.right && gap.gap >= 96 && gap.left.h < 70 && gap.right.h < 70);
+        const pickGap = offset => platformGaps[Math.min(platformGaps.length - 1, Math.max(0, offset % Math.max(1, platformGaps.length)))];
 
         if (levelNumber >= 1) {
             const platform = pick(i + 1);
@@ -1090,14 +1143,19 @@ function buildUltimateLevels(count) {
             if (platform) base.gears.push(createGear(platform, 0.55, tier));
         }
 
-        if (levelNumber >= 3) {
-            const platform = pick(i + 3);
-            if (platform) base.dragons.push(createDragon(platform, 0.45, tier));
+        if (levelNumber >= 2) {
+            const gap = pickGap(i + 2);
+            if (gap) base.flyingDragons.push(createFlyingDragon(gap.left, gap.right, tier, 0.2));
         }
 
         if (levelNumber >= 4) {
             const platform = pick(i + 4);
             if (platform) base.caves.push(createCave(platform, 0.5, tier));
+        }
+
+        if (levelNumber >= 1) {
+            const gap = pickGap(i + 1);
+            if (gap) base.lavaEruptions.push(createLavaEruption(gap.left, gap.right, tier, 0.25));
         }
 
         if (levelNumber >= 5) {
@@ -1127,8 +1185,10 @@ function buildUltimateLevels(count) {
         }
 
         if (levelNumber >= 11) {
-            const platform = pick(i + 9);
-            if (platform) base.dragons.push(createDragon(platform, 0.6, tier));
+            const gap = pickGap(i + 3);
+            if (gap) base.lavaEruptions.push(createLavaEruption(gap.left, gap.right, tier, 1.1));
+            const dragonGap = pickGap(i + 4);
+            if (dragonGap) base.flyingDragons.push(createFlyingDragon(dragonGap.left, dragonGap.right, tier, 1.35));
         }
 
         if (levelNumber >= 13) {
@@ -1139,6 +1199,8 @@ function buildUltimateLevels(count) {
         if (levelNumber >= 15) {
             const platform = pick(i + 11);
             if (platform) base.trapdoors.push(createTrapdoor(platform, 0.38, tier));
+            const gatePlatform = base.platforms[base.platforms.length - 1];
+            if (gatePlatform) base.trapdoors.push(createGateTrapdoor(gatePlatform, tier));
         }
 
         if (levelNumber >= 16) {
@@ -1149,11 +1211,15 @@ function buildUltimateLevels(count) {
         if (levelNumber >= 18) {
             const platform = pick(i + 13);
             if (platform) base.caves.push(createCave(platform, 0.32, tier));
+            const gap = pickGap(i + 5);
+            if (gap) base.lavaEruptions.push(createLavaEruption(gap.left, gap.right, tier, 1.7));
+            const dragonGap = pickGap(i + 6);
+            if (dragonGap) base.flyingDragons.push(createFlyingDragon(dragonGap.left, dragonGap.right, tier, 2.1));
         }
 
         const buttonPlatform = pick(i + 2);
         if (buttonPlatform && levelNumber >= 9) {
-            const targets = ["gears", "dragons", "trapdoors"];
+            const targets = ["gears", "flyingDragons", "trapdoors"];
             base.buttons = [createButton(buttonPlatform, targets[i % targets.length])];
         }
 
@@ -1209,17 +1275,14 @@ function loadLevel(index) {
     portals = level.portals.map(item => ({ ...item }));
     trampolines = level.trampolines.map(item => ({ ...item }));
     buttons = level.buttons.map(item => ({ ...item, pressed: false }));
-    dragons = (level.dragons || []).map(item => ({ ...item, nextFire: item.delay, active: true }));
+    flyingDragons = (level.flyingDragons || []).map(item => ({ ...item, active: true }));
     gears = (level.gears || []).map(item => ({ ...item, active: true }));
     caves = (level.caves || []).map(item => ({ ...item, nextRock: item.interval, active: true }));
     trapdoors = (level.trapdoors || []).map(item => ({ ...item, timer: 0, reset: 0, open: false, locked: false }));
     fallingRocks = [];
+    lavaEruptions = (level.lavaEruptions || []).map(item => ({ ...item, active: true }));
     powerups = (level.powerups || []).map(item => ({ ...item, taken: false }));
     activePowerups = { shield: 0, speed: 0, jump: 0, slow: 0 };
-    playerTrail = [];
-    dragonFires = [];
-    dragonFireTimer = 0.8;
-    trailTimer = 0;
     player.x = start.x;
     player.y = start.y;
     player.vx = 0;
@@ -1295,8 +1358,70 @@ function circleRectOverlap(circle, rect) {
 function blockedByUltimateHazard(rect) {
     const blockedByGear = gears.some(gear => gear.active && circleRectOverlap(gear, rect));
     const blockedByCave = caves.some(cave => cave.active && rectsOverlap(rect, cave));
-    const blockedByFire = dragonFires.some(fire => rectsOverlap(rect, fire));
-    return blockedByGear || blockedByCave || blockedByFire;
+    const blockedByEruption = lavaEruptions.some(eruption => lavaEruptionHitbox(eruption) && rectsOverlap(rect, lavaEruptionHitbox(eruption)));
+    const blockedByFlyingDragon = flyingDragons.some(dragon => {
+        const flame = flyingDragonFlameHitbox(dragon);
+        return flame && rectsOverlap(rect, flame);
+    });
+    return blockedByGear || blockedByCave || blockedByEruption || blockedByFlyingDragon;
+}
+
+function lavaEruptionPhase(eruption) {
+    return eruption.phase % eruption.cycle;
+}
+
+function lavaEruptionPower(eruption) {
+    const phase = lavaEruptionPhase(eruption);
+    if (phase < eruption.warning) return 0;
+    if (phase > eruption.warning + eruption.blast) return 0;
+    const t = (phase - eruption.warning) / eruption.blast;
+    return Math.sin(t * Math.PI);
+}
+
+function lavaEruptionHitbox(eruption) {
+    const power = lavaEruptionPower(eruption);
+    if (power <= 0.2) return null;
+    const h = eruption.height * (0.35 + power * 0.65);
+    return {
+        x: eruption.x + eruption.w * 0.16,
+        y: eruption.y - h,
+        w: eruption.w * 0.68,
+        h
+    };
+}
+
+function lavaPitHitbox(eruption) {
+    return {
+        x: eruption.x + eruption.w / 2 - eruption.pitW / 2,
+        y: eruption.y - 6,
+        w: eruption.pitW,
+        h: eruption.pitH + 34
+    };
+}
+
+function flyingDragonPhase(dragon) {
+    return dragon.phase % dragon.cycle;
+}
+
+function flyingDragonBurstPower(dragon) {
+    const phase = flyingDragonPhase(dragon);
+    if (phase < dragon.warning) return 0;
+    if (phase > dragon.warning + dragon.blast) return 0;
+    const t = (phase - dragon.warning) / dragon.blast;
+    return Math.sin(t * Math.PI);
+}
+
+function flyingDragonFlameHitbox(dragon) {
+    const power = flyingDragonBurstPower(dragon);
+    if (power <= 0.18) return null;
+    const length = 150 + power * 80;
+    const h = 30 + power * 18;
+    return {
+        x: dragon.facing < 0 ? dragon.x - length - 36 : dragon.x + 28,
+        y: dragon.y + 10 - h / 2,
+        w: length,
+        h
+    };
 }
 
 function respawnOnNearestPlatform() {
@@ -1345,7 +1470,6 @@ function hurt() {
     if (activePowerups.shield > 0) {
         activePowerups.shield = 0;
         player.invuln = 60;
-        dragonFires = [];
         return;
     }
     player.lives -= 1;
@@ -1410,10 +1534,7 @@ function activateButton(button) {
         droneShots = [];
     }
     if (button.target === "gears") gears.forEach(gear => gear.active = false);
-    if (button.target === "dragons") {
-        dragons.forEach(dragon => dragon.active = false);
-        dragonFires = [];
-    }
+    if (button.target === "flyingDragons") flyingDragons.forEach(dragon => dragon.active = false);
     if (button.target === "trapdoors") trapdoors.forEach(trapdoor => {
         trapdoor.locked = true;
         trapdoor.open = false;
@@ -1472,38 +1593,6 @@ function fireDroneShot(drone) {
     });
 }
 
-function updateDragon(dt) {
-    if (currentMode !== "ultimate") return;
-    trailTimer -= dt;
-    if (trailTimer <= 0) {
-        playerTrail.push({
-            x: player.x + player.w / 2,
-            y: player.y + player.h / 2
-        });
-        if (playerTrail.length > 90) playerTrail.shift();
-        trailTimer = 0.08;
-    }
-
-    dragons.forEach(dragon => {
-        if (!dragon.active) return;
-        dragon.nextFire -= dt;
-        if (dragon.nextFire > 0 || playerTrail.length === 0) return;
-        const targetIndex = Math.max(0, playerTrail.length - 16);
-        const target = playerTrail[targetIndex];
-        dragonFires.push({
-            x: target.x - 50,
-            y: target.y - 12,
-            w: 100,
-            h: 48,
-            life: 1.25
-        });
-        dragon.nextFire = dragon.delay;
-    });
-
-    dragonFires.forEach(fire => fire.life -= dt);
-    dragonFires = dragonFires.filter(fire => fire.life > 0);
-}
-
 function updateUltimateHazards(dt) {
     if (currentMode !== "ultimate") return;
 
@@ -1516,6 +1605,25 @@ function updateUltimateHazards(dt) {
                 gear.speed *= -1;
                 gear.x = Math.max(gear.min, Math.min(gear.max, gear.x));
             }
+        }
+    });
+
+    lavaEruptions.forEach(eruption => {
+        if (!eruption.active) return;
+        eruption.phase = (eruption.phase + dt) % eruption.cycle;
+    });
+
+    flyingDragons.forEach(dragon => {
+        if (!dragon.active) return;
+        dragon.phase = (dragon.phase + dt) % dragon.cycle;
+        dragon.y = dragon.baseY + Math.sin(elapsed * 3 + dragon.x * 0.01) * 12;
+        if (flyingDragonBurstPower(dragon) <= 0) {
+            dragon.facing = player.x + player.w / 2 < dragon.x ? -1 : 1;
+        }
+        dragon.x += dragon.speed * dragon.facing * dt * 60;
+        if (dragon.x < dragon.min || dragon.x > dragon.max) {
+            dragon.facing *= -1;
+            dragon.x = Math.max(dragon.min, Math.min(dragon.max, dragon.x));
         }
     });
 
@@ -1583,11 +1691,11 @@ function moveAndCollide() {
     const inWater = waterPools.some(water => rectsOverlap(player, water));
     const speedBoost = activePowerups.speed > 0 ? 1.28 : 1;
     const jumpBoost = activePowerups.jump > 0 ? 1.2 : 1;
-    const speed = (player.grounded ? 0.72 : 0.45) * (inWater ? 0.58 : 1) * speedBoost;
+    const speed = (player.grounded ? 1.0 : 0.7) * (inWater ? 0.68 : 1) * speedBoost;
     if (keys.left) player.vx -= speed;
     if (keys.right) player.vx += speed;
-    if (!keys.left && !keys.right) player.vx *= player.grounded ? 0.78 : 0.94;
-    const maxSpeed = (inWater ? 3.5 : 7.2) * speedBoost;
+    if (!keys.left && !keys.right) player.vx *= player.grounded ? 0.82 : 0.96;
+    const maxSpeed = (inWater ? 4.7 : 9.2) * speedBoost;
     player.vx = Math.max(-maxSpeed, Math.min(maxSpeed, player.vx));
 
     if (keys.jump && player.grounded) {
@@ -1672,7 +1780,6 @@ function update(dt) {
     if (currentMode === "ultimate") {
         updatePowerups(dt);
         const dangerDt = activePowerups.slow > 0 ? dt * 0.45 : dt;
-        updateDragon(dangerDt);
         updateUltimateHazards(dangerDt);
     }
 
@@ -1724,8 +1831,18 @@ function update(dt) {
         if (rectsOverlap(player, hitbox)) hurt();
     });
 
-    dragonFires.forEach(fire => {
-        if (rectsOverlap(player, fire)) hurt();
+    lavaEruptions.forEach(eruption => {
+        if (!eruption.active) return;
+        if (rectsOverlap(player, lavaPitHitbox(eruption))) hurt();
+        const blast = lavaEruptionHitbox(eruption);
+        if (blast && rectsOverlap(player, blast)) hurt();
+    });
+
+    flyingDragons.forEach(dragon => {
+        if (!dragon.active) return;
+        if (circleRectOverlap({ x: dragon.x, y: dragon.y + 12, r: 24 }, player)) hurt();
+        const flame = flyingDragonFlameHitbox(dragon);
+        if (flame && rectsOverlap(player, flame)) hurt();
     });
 
     coins.forEach(coin => {
@@ -1800,66 +1917,179 @@ function isVisibleX(x, w, margin = 120) {
     return x + w >= cameraX - margin && x <= cameraX + window.innerWidth + margin;
 }
 
-function drawDragonEntity(dragon) {
+function drawFlyingDragon(dragon) {
+    const power = flyingDragonBurstPower(dragon);
+    const phase = flyingDragonPhase(dragon);
+    const warning = power === 0 && phase < dragon.warning;
+    const dir = dragon.facing;
+
     ctx.save();
     ctx.translate(dragon.x, dragon.y);
-    ctx.globalAlpha = dragon.active ? 1 : 0.26;
-    ctx.fillStyle = "#1f5d3f";
+    ctx.scale(dir, 1);
+    ctx.globalAlpha = dragon.active ? 1 : 0.24;
+
+    if (warning) {
+        ctx.save();
+        ctx.globalAlpha = 0.38 + Math.sin(elapsed * 22) * 0.18;
+        ctx.strokeStyle = "#ffda6d";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(-40, 12);
+        ctx.lineTo(-190, 12);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    if (power > 0) {
+        const length = 150 + power * 80;
+        const h = 30 + power * 18;
+        ctx.save();
+        ctx.globalAlpha = 0.94;
+        ctx.shadowColor = "#ff7418";
+        ctx.shadowBlur = 18 + power * 14;
+        const flame = ctx.createLinearGradient(-44 - length, 0, -44, 0);
+        flame.addColorStop(0, "rgba(255, 62, 10, 0.15)");
+        flame.addColorStop(0.35, "#ff4516");
+        flame.addColorStop(0.68, "#ff9d18");
+        flame.addColorStop(1, "#fff4a3");
+        ctx.fillStyle = flame;
+        ctx.beginPath();
+        ctx.moveTo(-42, 12 - h / 2);
+        ctx.lineTo(-44 - length, 12);
+        ctx.lineTo(-42, 12 + h / 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+    }
+
+    ctx.fillStyle = "#256844";
     ctx.beginPath();
-    ctx.ellipse(16, 28, 32, 18, 0.05, 0, Math.PI * 2);
+    ctx.ellipse(0, 18, 28, 16, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = "#65dd75";
+    ctx.fillStyle = "#3faa63";
     ctx.beginPath();
-    ctx.moveTo(-10, 34);
-    ctx.quadraticCurveTo(-54, 42, -72, 22);
-    ctx.quadraticCurveTo(-35, 26, -4, 22);
-    ctx.fill();
-    ctx.fillStyle = "#2f9b5d";
-    ctx.beginPath();
-    ctx.moveTo(0, 24);
-    ctx.lineTo(-20, -24);
-    ctx.lineTo(22, 6);
-    ctx.lineTo(48, -18);
-    ctx.lineTo(42, 28);
+    ctx.moveTo(16, 8);
+    ctx.lineTo(4, -28);
+    ctx.lineTo(-30, 4);
+    ctx.lineTo(-50, -18);
+    ctx.lineTo(-42, 22);
     ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = "#58c86d";
+    ctx.fillStyle = "#72e580";
     ctx.beginPath();
-    ctx.ellipse(-24, 22, 22, 13, -0.25, 0, Math.PI * 2);
+    ctx.ellipse(-28, 12, 20, 12, -0.1, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = "#7eed85";
+    ctx.fillStyle = "#4fbd64";
     ctx.beginPath();
-    ctx.ellipse(-45, 18, 20, 13, -0.15, 0, Math.PI * 2);
+    ctx.moveTo(22, 23);
+    ctx.quadraticCurveTo(58, 34, 76, 15);
+    ctx.quadraticCurveTo(46, 20, 22, 13);
     ctx.fill();
-    ctx.fillStyle = "#fff1a6";
+    ctx.fillStyle = "#fff3aa";
     ctx.beginPath();
-    ctx.moveTo(-56, 6);
-    ctx.lineTo(-48, -10);
-    ctx.lineTo(-42, 8);
+    ctx.moveTo(-44, 0);
+    ctx.lineTo(-34, -13);
+    ctx.lineTo(-31, 3);
     ctx.fill();
-    ctx.fillStyle = "#fff2a8";
+    ctx.fillStyle = "#fff0a6";
     ctx.beginPath();
-    ctx.arc(-51, 15, 3, 0, Math.PI * 2);
+    ctx.arc(-42, 9, 3, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = "#0a1f18";
-    ctx.fillRect(-52, 14, 2, 4);
+    ctx.fillStyle = "#08140f";
+    ctx.fillRect(-43, 8, 2, 4);
     ctx.restore();
 }
 
 function drawUltimateHazards() {
     if (currentMode !== "ultimate") return;
+    lavaEruptions.forEach(eruption => {
+        if (!isVisibleX(eruption.x - eruption.pitW / 2, eruption.pitW + eruption.w)) return;
+        const pit = lavaPitHitbox(eruption);
+        const power = lavaEruptionPower(eruption);
+        const warning = power === 0 && lavaEruptionPhase(eruption) < eruption.warning;
+        const warningGlow = warning ? 0.35 + Math.sin(elapsed * 18) * 0.18 : 0;
+
+        ctx.save();
+        ctx.shadowColor = "#ff6a00";
+        ctx.shadowBlur = 12 + warningGlow * 18;
+        const pitGradient = ctx.createLinearGradient(0, pit.y, 0, pit.y + pit.h);
+        pitGradient.addColorStop(0, "#ffd166");
+        pitGradient.addColorStop(0.35, "#ff5b14");
+        pitGradient.addColorStop(1, "#5f0800");
+        ctx.fillStyle = pitGradient;
+        roundRect(pit.x, pit.y, pit.w, pit.h, 8);
+        ctx.fillStyle = `rgba(255, 240, 142, ${0.55 + warningGlow})`;
+        for (let x = pit.x + 10; x < pit.x + pit.w; x += 18) {
+            ctx.beginPath();
+            ctx.arc(x, pit.y + 10 + Math.sin(elapsed * 9 + x) * 4, 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        if (warning) {
+            ctx.globalAlpha = 0.7 + warningGlow;
+            ctx.fillStyle = "#ffcc55";
+            ctx.fillRect(eruption.x + eruption.w * 0.2, pit.y - 12, eruption.w * 0.6, 5);
+        }
+
+        if (power > 0) {
+            const blastHeight = eruption.height * (0.35 + power * 0.65);
+            const flame = ctx.createLinearGradient(0, eruption.y - blastHeight, 0, eruption.y);
+            flame.addColorStop(0, "rgba(255, 244, 166, 0.18)");
+            flame.addColorStop(0.2, "#fff0a4");
+            flame.addColorStop(0.52, "#ff7a18");
+            flame.addColorStop(1, "#8f1200");
+            ctx.globalAlpha = 0.96;
+            ctx.shadowBlur = 22 + power * 18;
+            ctx.fillStyle = flame;
+            ctx.beginPath();
+            ctx.moveTo(eruption.x + eruption.w * 0.12, eruption.y);
+            ctx.bezierCurveTo(
+                eruption.x - eruption.w * 0.32,
+                eruption.y - blastHeight * 0.38,
+                eruption.x + eruption.w * 0.22,
+                eruption.y - blastHeight * 0.78,
+                eruption.x + eruption.w * 0.5,
+                eruption.y - blastHeight
+            );
+            ctx.bezierCurveTo(
+                eruption.x + eruption.w * 0.94,
+                eruption.y - blastHeight * 0.76,
+                eruption.x + eruption.w * 1.3,
+                eruption.y - blastHeight * 0.35,
+                eruption.x + eruption.w * 0.88,
+                eruption.y
+            );
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.globalAlpha = 0.72;
+            ctx.fillStyle = "#fff6b8";
+            ctx.beginPath();
+            ctx.ellipse(eruption.x + eruption.w / 2, eruption.y - blastHeight * 0.42, eruption.w * 0.18, blastHeight * 0.32, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
+    });
+
     trapdoors.forEach(trapdoor => {
         if (!isVisibleX(trapdoor.x, trapdoor.w)) return;
         ctx.save();
         ctx.globalAlpha = trapdoor.open ? 0.28 : 1;
-        ctx.fillStyle = trapdoor.locked ? "#41685f" : "#8c5a35";
+        ctx.fillStyle = trapdoor.locked ? "#41685f" : trapdoor.gateTrap ? "#2a9f72" : "#8c5a35";
         roundRect(trapdoor.x, trapdoor.y, trapdoor.w, trapdoor.h, 4);
-        ctx.strokeStyle = trapdoor.locked ? "#9de8cf" : "#f2bd73";
+        ctx.strokeStyle = trapdoor.locked ? "#9de8cf" : trapdoor.gateTrap ? "#9dffd7" : "#f2bd73";
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(trapdoor.x + trapdoor.w / 2, trapdoor.y + 2);
         ctx.lineTo(trapdoor.x + trapdoor.w / 2, trapdoor.y + trapdoor.h - 2);
         ctx.stroke();
+        if (trapdoor.gateTrap && !trapdoor.open) {
+            ctx.fillStyle = "rgba(225, 255, 242, 0.85)";
+            ctx.font = "900 9px Segoe UI, Arial, sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText("GATE", trapdoor.x + trapdoor.w / 2, trapdoor.y - 6);
+            ctx.textAlign = "left";
+        }
         if (trapdoor.timer > 0 && !trapdoor.open) {
             ctx.fillStyle = "#ffdd77";
             ctx.fillRect(trapdoor.x, trapdoor.y - 5, trapdoor.w * Math.min(1, trapdoor.timer / trapdoor.fuse), 3);
@@ -1921,23 +2151,8 @@ function drawUltimateHazards() {
         ctx.restore();
     });
 
-    dragons.forEach(dragon => {
-        if (isVisibleX(dragon.x - 78, 140)) drawDragonEntity(dragon);
-    });
-
-    dragonFires.forEach(fire => {
-        if (!isVisibleX(fire.x, fire.w)) return;
-        ctx.save();
-        ctx.globalAlpha = Math.min(1, fire.life);
-        ctx.shadowColor = "#ff7418";
-        ctx.shadowBlur = 14;
-        const gradient = ctx.createRadialGradient(fire.x + fire.w * 0.62, fire.y + fire.h / 2, 4, fire.x + fire.w / 2, fire.y + fire.h / 2, fire.w * 0.58);
-        gradient.addColorStop(0, "#fff3a6");
-        gradient.addColorStop(0.35, "#ff9a18");
-        gradient.addColorStop(1, "rgba(157, 27, 0, 0.72)");
-        ctx.fillStyle = gradient;
-        roundRect(fire.x, fire.y, fire.w, fire.h, 18);
-        ctx.restore();
+    flyingDragons.forEach(dragon => {
+        if (isVisibleX(dragon.x - 240, 320)) drawFlyingDragon(dragon);
     });
 }
 
