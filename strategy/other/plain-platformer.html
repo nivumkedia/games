@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plain Platformer</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    min-height: 100vh;
+    overflow: hidden;
+    background: #0d1424;
+    color: #e9f6ff;
+    font-family: "Segoe UI", Arial, sans-serif;
+}
+
+#game {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    background: #0d1424;
+}
+
+.hud {
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    right: 184px;
+    z-index: 2;
+    padding: 8px 11px;
+    border: 1px solid rgba(144, 224, 255, 0.28);
+    border-radius: 7px;
+    background: rgba(7, 16, 31, 0.72);
+    color: #dff7ff;
+    font-size: 12px;
+    font-weight: 800;
+    pointer-events: none;
+}
+
+.shop-toggle {
+    position: fixed;
+    top: 14px;
+    right: 14px;
+    z-index: 3;
+    padding: 8px 12px;
+    border: 1px solid rgba(144, 224, 255, 0.38);
+    border-radius: 7px;
+    background: rgba(7, 16, 31, 0.82);
+    color: #dff7ff;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.save-button {
+    position: fixed;
+    top: 14px;
+    right: 78px;
+    z-index: 3;
+    min-width: 56px;
+    padding: 8px 10px;
+    border: 1px solid rgba(144, 224, 255, 0.38);
+    border-radius: 7px;
+    background: rgba(7, 16, 31, 0.82);
+    color: #dff7ff;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.shop-panel {
+    position: fixed;
+    top: 54px;
+    right: 14px;
+    z-index: 3;
+    width: min(260px, calc(100vw - 28px));
+    display: none;
+    padding: 12px;
+    border: 1px solid rgba(144, 224, 255, 0.32);
+    border-radius: 8px;
+    background: rgba(7, 16, 31, 0.92);
+    box-shadow: 0 14px 42px rgba(0, 0, 0, 0.34);
+}
+
+.shop-panel.open { display: block; }
+
+.shop-title {
+    color: #8deaff;
+    font-size: 14px;
+    font-weight: 900;
+    margin-bottom: 8px;
+}
+
+.shop-line {
+    color: #aac7d8;
+    font-size: 12px;
+    line-height: 1.35;
+    margin-bottom: 10px;
+}
+
+.shop-buy {
+    width: 100%;
+    border: 1px solid rgba(141, 234, 255, 0.58);
+    border-radius: 7px;
+    background: #20c6ff;
+    color: #06101d;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 900;
+    padding: 8px 10px;
+}
+
+.shop-buy + .shop-buy {
+    margin-top: 8px;
+}
+
+.shop-buy:disabled {
+    opacity: 0.48;
+    cursor: default;
+}
+
+.instruction-callout {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    z-index: 5;
+    max-width: min(760px, calc(100vw - 36px));
+    padding: 16px 20px;
+    border: 1px solid rgba(141, 234, 255, 0.5);
+    border-radius: 8px;
+    background: rgba(7, 16, 31, 0.94);
+    color: #e9f6ff;
+    font-size: clamp(20px, 4vw, 36px);
+    font-weight: 900;
+    line-height: 1.15;
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.4);
+}
+
+.instruction-callout.play {
+    animation: instructionZoom 2.8s ease-in-out forwards;
+}
+
+@keyframes instructionZoom {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.75);
+    }
+    16% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+    76% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform:
+            translate(calc(var(--target-x) - 50vw), calc(var(--target-y) - 50vh))
+            translate(-50%, -50%)
+            scale(0.18);
+    }
+}
+</style>
+</head>
+<body>
+<canvas id="game" tabindex="0"></canvas>
+<div class="hud" id="hud">New: Arrow keys move and jump. Press 1 to attack enemies.</div>
+<div class="instruction-callout" id="instruction-callout" aria-hidden="true"></div>
+<button class="save-button" id="save-btn">Save</button>
+<button class="shop-toggle" id="shop-toggle">Shop</button>
+<div class="shop-panel" id="shop-panel">
+    <div class="shop-title">Shop</div>
+    <div class="shop-line" id="shop-info"></div>
+    <button class="shop-buy" id="attack-upgrade-btn">Buy Attack Range</button>
+    <button class="shop-buy" id="shield-upgrade-btn">Buy Shield Time</button>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const hud = document.getElementById("hud");
+const instructionCallout = document.getElementById("instruction-callout");
+const saveBtn = document.getElementById("save-btn");
+const shopToggle = document.getElementById("shop-toggle");
+const shopPanel = document.getElementById("shop-panel");
+const shopInfo = document.getElementById("shop-info");
+const attackUpgradeBtn = document.getElementById("attack-upgrade-btn");
+const shieldUpgradeBtn = document.getElementById("shield-upgrade-btn");
+
+const world = { width: 3200, height: 720, gravity: 0.82 };
+const SAVE_KEY = "plain-platformer-save-v1";
+const keys = { left: false, right: false, jump: false, down: false };
+let cameraX = 0;
+let lastTime = 0;
+let levelIndex = 0;
+let killsThisLevel = 0;
+let killBank = 0;
+let attackUpgradeLevel = 0;
+let shieldUpgradeLevel = 0;
+let lives = null;
+let lastHudText = "";
+let shieldUnlocked = false;
+let saveResetTimer = null;
+
+let start = { x: 90, y: 520 };
+const player = {
+    x: start.x,
+    y: start.y,
+    w: 34,
+    h: 48,
+    vx: 0,
+    vy: 0,
+    grounded: false,
+    facing: 1,
+    attackTimer: 0,
+    shieldTimer: 0
+};
+
+const levels = [
+    {
+        name: "Level 1",
+        intro: "New: Arrow keys move and jump. Press 1 to attack enemies. Defeat all enemies to open the gate.",
+        width: 3200,
+        start: { x: 90, y: 520 },
+        goal: { x: 3105, y: 552, w: 56, h: 98 },
+        platforms: [
+            { x: 0, y: 650, w: 520, h: 70 },
+            { x: 650, y: 590, w: 260, h: 30 },
+            { x: 1040, y: 530, w: 250, h: 30 },
+            { x: 1430, y: 600, w: 320, h: 30 },
+            { x: 1900, y: 535, w: 270, h: 30 },
+            { x: 2300, y: 470, w: 280, h: 30 },
+            { x: 2720, y: 575, w: 310, h: 30 },
+            { x: 3090, y: 650, w: 320, h: 70 }
+        ],
+        enemies: [
+            { x: 735, y: 552, w: 30, h: 30, type: "still" },
+            { x: 1125, y: 492, w: 30, h: 30, type: "still" },
+            { x: 2010, y: 497, w: 30, h: 30, type: "still" },
+            { x: 2825, y: 537, w: 30, h: 30, type: "still" }
+        ]
+    },
+    {
+        name: "Level 2",
+        intro: "New: Jumping enemies. Attack when they are close enough.",
+        width: 3400,
+        start: { x: 90, y: 520 },
+        goal: { x: 3235, y: 552, w: 56, h: 98 },
+        platforms: [
+            { x: 0, y: 650, w: 520, h: 70 },
+            { x: 650, y: 585, w: 250, h: 30 },
+            { x: 1030, y: 520, w: 240, h: 30 },
+            { x: 1410, y: 595, w: 300, h: 30 },
+            { x: 1860, y: 540, w: 260, h: 30 },
+            { x: 2260, y: 475, w: 260, h: 30 },
+            { x: 2690, y: 575, w: 300, h: 30 },
+            { x: 3220, y: 650, w: 320, h: 70 }
+        ],
+        enemies: [
+            { x: 730, y: 547, w: 30, h: 30, type: "jumper", jumpOffset: 0 },
+            { x: 1095, y: 482, w: 30, h: 30, type: "jumper", jumpOffset: 1.4 },
+            { x: 1940, y: 502, w: 30, h: 30, type: "jumper", jumpOffset: 2.2 },
+            { x: 2760, y: 537, w: 30, h: 30, type: "jumper", jumpOffset: 0.8 }
+        ]
+    },
+    {
+        name: "Level 3",
+        intro: "New: Enemies jump at random times.",
+        width: 3600,
+        start: { x: 90, y: 520 },
+        goal: { x: 3435, y: 552, w: 56, h: 98 },
+        platforms: [
+            { x: 0, y: 650, w: 520, h: 70 },
+            { x: 640, y: 585, w: 230, h: 30 },
+            { x: 990, y: 515, w: 230, h: 30 },
+            { x: 1360, y: 585, w: 260, h: 30 },
+            { x: 1760, y: 525, w: 250, h: 30 },
+            { x: 2160, y: 455, w: 250, h: 30 },
+            { x: 2580, y: 565, w: 300, h: 30 },
+            { x: 3040, y: 505, w: 250, h: 30 },
+            { x: 3420, y: 650, w: 320, h: 70 }
+        ],
+        enemies: [
+            { x: 700, y: 547, w: 30, h: 30, type: "randomJumper" },
+            { x: 1060, y: 477, w: 30, h: 30, type: "randomJumper" },
+            { x: 1830, y: 487, w: 30, h: 30, type: "randomJumper" },
+            { x: 2230, y: 417, w: 30, h: 30, type: "randomJumper" },
+            { x: 3120, y: 467, w: 30, h: 30, type: "randomJumper" }
+        ]
+    },
+    {
+        name: "Level 4",
+        intro: "New: Enemies move in random directions.",
+        width: 3800,
+        start: { x: 90, y: 520 },
+        goal: { x: 3635, y: 552, w: 56, h: 98 },
+        platforms: [
+            { x: 0, y: 650, w: 520, h: 70 },
+            { x: 660, y: 580, w: 230, h: 30 },
+            { x: 1030, y: 505, w: 230, h: 30 },
+            { x: 1410, y: 590, w: 290, h: 30 },
+            { x: 1840, y: 520, w: 250, h: 30 },
+            { x: 2240, y: 455, w: 260, h: 30 },
+            { x: 2670, y: 560, w: 280, h: 30 },
+            { x: 3090, y: 500, w: 270, h: 30 },
+            { x: 3620, y: 650, w: 320, h: 70 }
+        ],
+        enemies: [
+            { x: 720, y: 510, w: 30, h: 30, type: "wanderer", minX: 620, maxX: 920, minY: 450, maxY: 565 },
+            { x: 1110, y: 440, w: 30, h: 30, type: "wanderer", minX: 970, maxX: 1290, minY: 370, maxY: 500 },
+            { x: 1910, y: 455, w: 30, h: 30, type: "wanderer", minX: 1780, maxX: 2110, minY: 380, maxY: 520 },
+            { x: 2310, y: 390, w: 30, h: 30, type: "wanderer", minX: 2180, maxX: 2520, minY: 320, maxY: 450 },
+            { x: 3160, y: 430, w: 30, h: 30, type: "wanderer", minX: 3020, maxX: 3380, minY: 350, maxY: 500 }
+        ]
+    },
+    {
+        name: "Level 5",
+        intro: "New: Enemies move in patterns.",
+        width: 4000,
+        start: { x: 90, y: 520 },
+        goal: { x: 3835, y: 552, w: 56, h: 98 },
+        platforms: [
+            { x: 0, y: 650, w: 520, h: 70 },
+            { x: 660, y: 580, w: 230, h: 30 },
+            { x: 1040, y: 505, w: 230, h: 30 },
+            { x: 1430, y: 590, w: 290, h: 30 },
+            { x: 1880, y: 520, w: 250, h: 30 },
+            { x: 2290, y: 455, w: 260, h: 30 },
+            { x: 2720, y: 565, w: 280, h: 30 },
+            { x: 3180, y: 500, w: 270, h: 30 },
+            { x: 3820, y: 650, w: 320, h: 70 }
+        ],
+        enemies: [
+            { x: 720, y: 510, w: 30, h: 30, type: "pattern", pattern: [[1, 0], [0, 1], [-1, 0], [0, -1]], stepTime: 0.9, speed: 2.0 },
+            { x: 1100, y: 435, w: 30, h: 30, type: "pattern", pattern: [[0, -1], [1, 0], [0, 1], [-1, 0]], stepTime: 0.8, speed: 2.1 },
+            { x: 1940, y: 450, w: 30, h: 30, type: "pattern", pattern: [[1, 0], [-1, 0], [0, -1], [0, 1]], stepTime: 0.75, speed: 2.2 },
+            { x: 2360, y: 385, w: 30, h: 30, type: "pattern", pattern: [[0, 1], [0, -1], [1, 0], [-1, 0]], stepTime: 0.85, speed: 2.0 },
+            { x: 3260, y: 430, w: 30, h: 30, type: "pattern", pattern: [[-1, 0], [0, 1], [1, 0], [0, -1]], stepTime: 0.7, speed: 2.25 }
+        ]
+    },
+    {
+        name: "Level 6",
+        intro: "New: Enemies move randomly at random times.",
+        width: 4200,
+        start: { x: 90, y: 520 },
+        goal: { x: 4035, y: 552, w: 56, h: 98 },
+        platforms: [
+            { x: 0, y: 650, w: 520, h: 70 },
+            { x: 650, y: 580, w: 230, h: 30 },
+            { x: 1030, y: 505, w: 230, h: 30 },
+            { x: 1430, y: 590, w: 290, h: 30 },
+            { x: 1880, y: 520, w: 250, h: 30 },
+            { x: 2290, y: 455, w: 260, h: 30 },
+            { x: 2730, y: 565, w: 280, h: 30 },
+            { x: 3200, y: 500, w: 270, h: 30 },
+            { x: 3620, y: 570, w: 260, h: 30 },
+            { x: 4020, y: 650, w: 320, h: 70 }
+        ],
+        enemies: [
+            { x: 720, y: 505, w: 30, h: 30, type: "chaos", minX: 610, maxX: 930, minY: 430, maxY: 570 },
+            { x: 1110, y: 430, w: 30, h: 30, type: "chaos", minX: 970, maxX: 1300, minY: 350, maxY: 505 },
+            { x: 1920, y: 445, w: 30, h: 30, type: "chaos", minX: 1780, maxX: 2140, minY: 360, maxY: 520 },
+            { x: 2370, y: 380, w: 30, h: 30, type: "chaos", minX: 2180, maxX: 2570, minY: 300, maxY: 455 },
+            { x: 3280, y: 430, w: 30, h: 30, type: "chaos", minX: 3060, maxX: 3500, minY: 340, maxY: 505 },
+            { x: 3700, y: 505, w: 30, h: 30, type: "chaos", minX: 3520, maxX: 3900, minY: 430, maxY: 570 }
+        ]
+    },
+    {
+        name: "Level 7",
+        intro: "New: Lives and sentry enemies that attack every 5 sec.",
+        width: 4400,
+        start: { x: 90, y: 520 },
+        goal: { x: 4235, y: 552, w: 56, h: 98 },
+        lives: 3,
+        platforms: [
+            { x: 0, y: 650, w: 520, h: 70 },
+            { x: 650, y: 580, w: 230, h: 30 },
+            { x: 1030, y: 505, w: 230, h: 30 },
+            { x: 1430, y: 590, w: 290, h: 30 },
+            { x: 1880, y: 520, w: 250, h: 30 },
+            { x: 2290, y: 455, w: 260, h: 30 },
+            { x: 2730, y: 565, w: 280, h: 30 },
+            { x: 3200, y: 500, w: 270, h: 30 },
+            { x: 3630, y: 570, w: 270, h: 30 },
+            { x: 4220, y: 650, w: 320, h: 70 }
+        ],
+        enemies: [
+            { x: 720, y: 505, w: 30, h: 30, type: "chaos", minX: 610, maxX: 930, minY: 430, maxY: 570 },
+            { x: 1920, y: 445, w: 30, h: 30, type: "chaos", minX: 1780, maxX: 2140, minY: 360, maxY: 520 },
+            { x: 3280, y: 430, w: 30, h: 30, type: "chaos", minX: 3060, maxX: 3500, minY: 340, maxY: 505 },
+            { x: 1105, y: 467, w: 30, h: 30, type: "sentry", attackOffset: 2.0 },
+            { x: 2358, y: 417, w: 30, h: 30, type: "sentry", attackOffset: 3.4 },
+            { x: 3710, y: 532, w: 30, h: 30, type: "sentry", attackOffset: 1.2 }
+        ]
+    },
+    {
+        name: "Level 8",
+        intro: "New: Press 2 for a shield. Jumping enemies attack every 3 sec.",
+        width: 4600,
+        start: { x: 90, y: 520 },
+        goal: { x: 4435, y: 552, w: 56, h: 98 },
+        lives: 3,
+        platforms: [
+            { x: 0, y: 650, w: 560, h: 70 },
+            { x: 690, y: 575, w: 250, h: 30 },
+            { x: 1090, y: 505, w: 250, h: 30 },
+            { x: 1500, y: 590, w: 300, h: 30 },
+            { x: 1960, y: 525, w: 270, h: 30 },
+            { x: 2390, y: 455, w: 270, h: 30 },
+            { x: 2840, y: 560, w: 290, h: 30 },
+            { x: 3300, y: 495, w: 280, h: 30 },
+            { x: 3740, y: 570, w: 280, h: 30 },
+            { x: 4420, y: 650, w: 340, h: 70 }
+        ],
+        enemies: [
+            { x: 750, y: 537, w: 30, h: 30, type: "jumpSentry", attackOffset: 1.5 },
+            { x: 1160, y: 467, w: 30, h: 30, type: "jumpSentry", attackOffset: 2.7 },
+            { x: 2040, y: 487, w: 30, h: 30, type: "jumpSentry", attackOffset: 0.5 },
+            { x: 2480, y: 417, w: 30, h: 30, type: "jumpSentry", attackOffset: 1.9 },
+            { x: 3380, y: 457, w: 30, h: 30, type: "jumpSentry", attackOffset: 2.4 },
+            { x: 3820, y: 532, w: 30, h: 30, type: "jumpSentry", attackOffset: 0.1 }
+        ]
+    },
+    {
+        name: "Level 9",
+        intro: "New: Enemy attack range is bigger.",
+        width: 4800,
+        start: { x: 90, y: 520 },
+        goal: { x: 4635, y: 552, w: 56, h: 98 },
+        lives: 3,
+        platforms: [
+            { x: 0, y: 650, w: 560, h: 70 },
+            { x: 700, y: 575, w: 240, h: 30 },
+            { x: 1100, y: 500, w: 240, h: 30 },
+            { x: 1510, y: 595, w: 280, h: 30 },
+            { x: 1940, y: 520, w: 260, h: 30 },
+            { x: 2370, y: 450, w: 260, h: 30 },
+            { x: 2800, y: 560, w: 270, h: 30 },
+            { x: 3240, y: 490, w: 270, h: 30 },
+            { x: 3690, y: 570, w: 270, h: 30 },
+            { x: 4140, y: 505, w: 260, h: 30 },
+            { x: 4620, y: 650, w: 340, h: 70 }
+        ],
+        enemies: [
+            { x: 760, y: 537, w: 30, h: 30, type: "jumpSentry", attackOffset: 1.0, attackPadX: 48, attackPadY: 40 },
+            { x: 1170, y: 462, w: 30, h: 30, type: "jumpSentry", attackOffset: 2.1, attackPadX: 48, attackPadY: 40 },
+            { x: 2015, y: 482, w: 30, h: 30, type: "jumpSentry", attackOffset: 0.4, attackPadX: 52, attackPadY: 42 },
+            { x: 2445, y: 412, w: 30, h: 30, type: "jumpSentry", attackOffset: 1.7, attackPadX: 52, attackPadY: 42 },
+            { x: 3315, y: 452, w: 30, h: 30, type: "jumpSentry", attackOffset: 2.6, attackPadX: 56, attackPadY: 44 },
+            { x: 3765, y: 532, w: 30, h: 30, type: "jumpSentry", attackOffset: 0.8, attackPadX: 56, attackPadY: 44 },
+            { x: 4215, y: 467, w: 30, h: 30, type: "jumpSentry", attackOffset: 2.3, attackPadX: 60, attackPadY: 46 }
+        ]
+    }
+];
+
+let platforms = [];
+let enemies = [];
+let goal = { x: 3105, y: 552, w: 56, h: 98 };
+
+function randomJumpDelay() {
+    return 1 + Math.random() * 2;
+}
+
+function randomMoveDelay() {
+    return 1 + Math.random() * 2;
+}
+
+function randomAnyDelay() {
+    return 0.25 + Math.random() * 2.75;
+}
+
+function chooseEnemyDirection(enemy) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 1.4 + Math.random() * 1.2;
+    enemy.vx = Math.cos(angle) * speed;
+    enemy.vy = Math.sin(angle) * speed;
+    enemy.moveTimer = randomMoveDelay();
+}
+
+function chooseChaosDirection(enemy) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 1.2 + Math.random() * 2.0;
+    enemy.vx = Math.cos(angle) * speed;
+    enemy.vy = Math.sin(angle) * speed;
+    enemy.moveTimer = randomAnyDelay();
+}
+
+function attackBox() {
+    const bonus = attackUpgradeLevel * 12;
+    return {
+        x: player.x - 18 - bonus,
+        y: player.y - 12 - bonus,
+        w: player.w + 36 + bonus * 2,
+        h: player.h + 24 + bonus * 2
+    };
+}
+
+function enemyAttackBox(enemy) {
+    const padX = enemy.attackPadX || 26;
+    const padY = enemy.attackPadY || 24;
+    return {
+        x: enemy.x - padX,
+        y: enemy.y - padY,
+        w: enemy.w + padX * 2,
+        h: enemy.h + padY * 2
+    };
+}
+
+function playerShielded() {
+    return player.shieldTimer > 0;
+}
+
+function enemyKillReward(enemy) {
+    if (enemy.type === "jumpSentry") return 3;
+    if (enemy.type === "sentry") return 2;
+    return 1;
+}
+
+function shieldDurationSeconds() {
+    return 1 + shieldUpgradeLevel * 0.5;
+}
+
+function formatSeconds(value) {
+    return Number.isInteger(value) ? `${value}` : `${value.toFixed(1)}`;
+}
+
+function clampLevel(value) {
+    return Math.max(0, Math.min(levels.length - 1, value));
+}
+
+function clampUpgrade(value) {
+    return Math.max(0, Math.min(3, value));
+}
+
+function resize() {
+    const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 1.25));
+    canvas.width = Math.floor(window.innerWidth * dpr);
+    canvas.height = Math.floor(window.innerHeight * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function rectsOverlap(a, b) {
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function loadLevel(index) {
+    const level = levels[index];
+    levelIndex = index;
+    world.width = level.width;
+    start = { ...level.start };
+    goal = { ...level.goal };
+    platforms = level.platforms.map(platform => ({ ...platform }));
+    enemies = level.enemies.map(enemy => ({
+        ...enemy,
+        baseY: enemy.y,
+        vx: 0,
+        vy: 0,
+        jumpTimer: randomJumpDelay(),
+        moveTimer: randomMoveDelay(),
+        patternIndex: 0,
+        patternTimer: enemy.stepTime || 1,
+        attackClock: enemy.attackOffset || 5,
+        attackTimer: 0
+    }));
+    enemies.forEach(enemy => {
+        if (enemy.type === "wanderer") chooseEnemyDirection(enemy);
+        if (enemy.type === "chaos") chooseChaosDirection(enemy);
+    });
+    lives = Number.isFinite(level.lives) ? level.lives : null;
+    shieldUnlocked = index >= 7;
+    killsThisLevel = 0;
+    updateHud();
+    respawn();
+}
+
+function updateHud() {
+    const level = levels[levelIndex];
+    setInstruction(level.intro || level.name);
+    updateShop();
+}
+
+function setInstruction(text) {
+    hud.textContent = text;
+    if (text === lastHudText) return;
+    lastHudText = text;
+    showInstructionCallout(text);
+}
+
+function showInstructionCallout(text) {
+    const hudRect = hud.getBoundingClientRect();
+    instructionCallout.textContent = text;
+    instructionCallout.style.setProperty("--target-x", `${hudRect.left + hudRect.width / 2}px`);
+    instructionCallout.style.setProperty("--target-y", `${hudRect.top + hudRect.height / 2}px`);
+    instructionCallout.classList.remove("play");
+    void instructionCallout.offsetWidth;
+    instructionCallout.classList.add("play");
+}
+
+function respawn() {
+    player.x = start.x;
+    player.y = start.y;
+    player.vx = 0;
+    player.vy = 0;
+    player.grounded = false;
+    player.facing = 1;
+    player.attackTimer = 0;
+    player.shieldTimer = 0;
+    cameraX = 0;
+}
+
+function takeHit() {
+    if (playerShielded()) return;
+    if (lives === null) {
+        respawn();
+        return;
+    }
+    lives -= 1;
+    if (lives <= 0) {
+        loadLevel(levelIndex);
+        return;
+    }
+    respawn();
+    updateHud();
+}
+
+function attack() {
+    player.attackTimer = 10;
+    const hitbox = attackBox();
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        if (!rectsOverlap(hitbox, enemies[i])) continue;
+        const defeatedEnemy = enemies[i];
+        enemies.splice(i, 1);
+        killsThisLevel += 1;
+        killBank += enemyKillReward(defeatedEnemy);
+        updateHud();
+    }
+}
+
+function shield() {
+    if (!shieldUnlocked) return;
+    if (playerShielded()) return;
+    player.shieldTimer = shieldDurationSeconds() * 60;
+}
+
+function attackUpgradeCost() {
+    return 10 + attackUpgradeLevel;
+}
+
+function shieldUpgradeCost() {
+    return 15 + shieldUpgradeLevel * 5;
+}
+
+function updateShop() {
+    if (attackUpgradeLevel >= 3) {
+        shopInfo.textContent = `Kills: ${killBank}. Attack range is maxed out. Shield time ${shieldUpgradeLevel}/3.`;
+        attackUpgradeBtn.textContent = "Maxed Out";
+        attackUpgradeBtn.disabled = true;
+    } else {
+        const attackCost = attackUpgradeCost();
+        attackUpgradeBtn.textContent = `Buy Attack Range (${attackCost})`;
+        attackUpgradeBtn.disabled = killBank < attackCost;
+    }
+
+    if (!shieldUnlocked) {
+        shieldUpgradeBtn.textContent = "Shield Locked";
+        shieldUpgradeBtn.disabled = true;
+    } else if (shieldUpgradeLevel >= 3) {
+        shieldUpgradeBtn.textContent = "Shield Maxed Out";
+        shieldUpgradeBtn.disabled = true;
+    } else {
+        const shieldCost = shieldUpgradeCost();
+        shieldUpgradeBtn.textContent = `Buy Shield Time (${shieldCost})`;
+        shieldUpgradeBtn.disabled = killBank < shieldCost;
+    }
+
+    const attackLine = attackUpgradeLevel >= 3
+        ? "Attack range maxed"
+        : `Attack range ${attackUpgradeLevel}/3, next ${attackUpgradeCost()} kills`;
+    const shieldLine = shieldUpgradeLevel >= 3
+        ? `Shield time maxed at ${formatSeconds(shieldDurationSeconds())} sec`
+        : shieldUnlocked
+            ? `Shield time ${shieldUpgradeLevel}/3, next ${shieldUpgradeCost()} kills`
+            : "Shield time locked until Level 8";
+    shopInfo.textContent = `Kills: ${killBank}. ${attackLine}. ${shieldLine}.`;
+}
+
+function buyAttackUpgrade() {
+    if (attackUpgradeLevel >= 3) return;
+    const cost = attackUpgradeCost();
+    if (killBank < cost) return;
+    killBank -= cost;
+    attackUpgradeLevel += 1;
+    updateHud();
+}
+
+function buyShieldUpgrade() {
+    if (!shieldUnlocked) return;
+    if (shieldUpgradeLevel >= 3) return;
+    const cost = shieldUpgradeCost();
+    if (killBank < cost) return;
+    killBank -= cost;
+    shieldUpgradeLevel += 1;
+    updateHud();
+}
+
+function saveGame() {
+    const saveData = {
+        levelIndex,
+        killBank,
+        attackUpgradeLevel,
+        shieldUpgradeLevel
+    };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
+    saveBtn.textContent = "Saved";
+    if (saveResetTimer) clearTimeout(saveResetTimer);
+    saveResetTimer = setTimeout(() => {
+        saveBtn.textContent = "Save";
+    }, 1200);
+}
+
+function loadSavedGame() {
+    let saveData = null;
+    try {
+        saveData = JSON.parse(localStorage.getItem(SAVE_KEY));
+    } catch (error) {
+        saveData = null;
+    }
+    if (!saveData || typeof saveData !== "object") return false;
+
+    killBank = Math.max(0, Number(saveData.killBank) || 0);
+    attackUpgradeLevel = clampUpgrade(Number(saveData.attackUpgradeLevel) || 0);
+    shieldUpgradeLevel = clampUpgrade(Number(saveData.shieldUpgradeLevel) || 0);
+    loadLevel(clampLevel(Number(saveData.levelIndex) || 0));
+    return true;
+}
+
+function gateUnlocked() {
+    return enemies.length === 0;
+}
+
+function completeLevel() {
+    if (!gateUnlocked()) return;
+    if (levelIndex >= levels.length - 1) {
+        loadLevel(0);
+        return;
+    }
+    loadLevel(levelIndex + 1);
+}
+
+function update() {
+    enemies.forEach(enemy => {
+        if (enemy.type === "jumper") {
+            const t = performance.now() / 1000 + enemy.jumpOffset;
+            const hop = Math.max(0, Math.sin(t * 3.4));
+            enemy.y = enemy.baseY - hop * 76;
+        }
+
+        if (enemy.type === "randomJumper") {
+            enemy.jumpTimer -= 1 / 60;
+            if (enemy.jumpTimer <= 0 && enemy.y >= enemy.baseY) {
+                enemy.vy = -14;
+                enemy.jumpTimer = randomJumpDelay();
+            }
+            enemy.vy += 0.62;
+            enemy.y += enemy.vy;
+            if (enemy.y > enemy.baseY) {
+                enemy.y = enemy.baseY;
+                enemy.vy = 0;
+            }
+        }
+
+        if (enemy.type === "jumpSentry") {
+            enemy.jumpTimer -= 1 / 60;
+            if (enemy.jumpTimer <= 0 && enemy.y >= enemy.baseY) {
+                enemy.vy = -15;
+                enemy.jumpTimer = randomJumpDelay();
+            }
+            enemy.vy += 0.66;
+            enemy.y += enemy.vy;
+            if (enemy.y > enemy.baseY) {
+                enemy.y = enemy.baseY;
+                enemy.vy = 0;
+            }
+            enemy.attackClock -= 1 / 60;
+            if (enemy.attackClock <= 0) {
+                enemy.attackTimer = 0.6;
+                enemy.attackClock = 3;
+            }
+            if (enemy.attackTimer > 0) {
+                enemy.attackTimer -= 1 / 60;
+                if (rectsOverlap(player, enemyAttackBox(enemy))) takeHit();
+            }
+        }
+
+        if (enemy.type === "wanderer") {
+            enemy.moveTimer -= 1 / 60;
+            if (enemy.moveTimer <= 0) chooseEnemyDirection(enemy);
+            enemy.x += enemy.vx;
+            enemy.y += enemy.vy;
+            if (enemy.x < enemy.minX || enemy.x + enemy.w > enemy.maxX) {
+                enemy.vx *= -1;
+                enemy.x = Math.max(enemy.minX, Math.min(enemy.maxX - enemy.w, enemy.x));
+            }
+            if (enemy.y < enemy.minY || enemy.y + enemy.h > enemy.maxY) {
+                enemy.vy *= -1;
+                enemy.y = Math.max(enemy.minY, Math.min(enemy.maxY - enemy.h, enemy.y));
+            }
+        }
+
+        if (enemy.type === "chaos") {
+            enemy.moveTimer -= 1 / 60;
+            if (enemy.moveTimer <= 0) chooseChaosDirection(enemy);
+            enemy.x += enemy.vx;
+            enemy.y += enemy.vy;
+            if (enemy.x < enemy.minX || enemy.x + enemy.w > enemy.maxX) {
+                enemy.vx *= -1;
+                enemy.x = Math.max(enemy.minX, Math.min(enemy.maxX - enemy.w, enemy.x));
+                enemy.moveTimer = Math.min(enemy.moveTimer, 0.4);
+            }
+            if (enemy.y < enemy.minY || enemy.y + enemy.h > enemy.maxY) {
+                enemy.vy *= -1;
+                enemy.y = Math.max(enemy.minY, Math.min(enemy.maxY - enemy.h, enemy.y));
+                enemy.moveTimer = Math.min(enemy.moveTimer, 0.4);
+            }
+        }
+
+        if (enemy.type === "pattern") {
+            enemy.patternTimer -= 1 / 60;
+            if (enemy.patternTimer <= 0) {
+                enemy.patternIndex = (enemy.patternIndex + 1) % enemy.pattern.length;
+                enemy.patternTimer = enemy.stepTime;
+            }
+            const direction = enemy.pattern[enemy.patternIndex];
+            enemy.x += direction[0] * enemy.speed;
+            enemy.y += direction[1] * enemy.speed;
+        }
+
+        if (enemy.type === "sentry") {
+            enemy.attackClock -= 1 / 60;
+            if (enemy.attackClock <= 0) {
+                enemy.attackTimer = 0.55;
+                enemy.attackClock = 5;
+            }
+            if (enemy.attackTimer > 0) {
+                enemy.attackTimer -= 1 / 60;
+                if (rectsOverlap(player, enemyAttackBox(enemy))) takeHit();
+            }
+        }
+    });
+
+    const speed = player.grounded ? 1.0 : 0.7;
+    if (keys.left) {
+        player.vx -= speed;
+        player.facing = -1;
+    }
+    if (keys.right) {
+        player.vx += speed;
+        player.facing = 1;
+    }
+    if (!keys.left && !keys.right) player.vx *= player.grounded ? 0.82 : 0.96;
+    player.vx = Math.max(-9.2, Math.min(9.2, player.vx));
+
+    if (keys.jump && player.grounded) {
+        player.vy = -18;
+        player.grounded = false;
+    }
+
+    player.vy += world.gravity;
+    if (keys.down && !player.grounded) player.vy += world.gravity * 0.7;
+    player.vy = Math.min(player.vy, 18);
+
+    player.x += player.vx;
+    for (const platform of platforms) {
+        if (!rectsOverlap(player, platform)) continue;
+        if (player.vx > 0) player.x = platform.x - player.w;
+        if (player.vx < 0) player.x = platform.x + platform.w;
+        player.vx = 0;
+    }
+
+    player.y += player.vy;
+    player.grounded = false;
+    for (const platform of platforms) {
+        if (!rectsOverlap(player, platform)) continue;
+        if (player.vy > 0) {
+            player.y = platform.y - player.h;
+            player.vy = 0;
+            player.grounded = true;
+        } else if (player.vy < 0) {
+            player.y = platform.y + platform.h;
+            player.vy = 0;
+        }
+    }
+
+    player.x = Math.max(0, Math.min(world.width - player.w, player.x));
+    if (player.y > world.height + 180) respawn();
+    if (player.attackTimer > 0) player.attackTimer -= 1;
+    if (player.shieldTimer > 0) player.shieldTimer -= 1;
+    if (rectsOverlap(player, goal)) completeLevel();
+
+    cameraX = Math.max(0, Math.min(world.width - window.innerWidth, player.x - window.innerWidth * 0.38));
+}
+
+function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.fill();
+}
+
+function drawBackground() {
+    const sky = ctx.createLinearGradient(0, 0, 0, window.innerHeight);
+    sky.addColorStop(0, "#0d1424");
+    sky.addColorStop(0.65, "#122845");
+    sky.addColorStop(1, "#07101c");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+}
+
+function draw() {
+    drawBackground();
+    ctx.save();
+    ctx.translate(-cameraX, 0);
+
+    platforms.forEach(platform => {
+        ctx.fillStyle = "#1b3c63";
+        roundRect(platform.x, platform.y, platform.w, platform.h, 8);
+        ctx.fillStyle = "#58d7ff";
+        ctx.fillRect(platform.x + 8, platform.y + 4, platform.w - 16, 4);
+    });
+
+    enemies.forEach(enemy => {
+        ctx.fillStyle = "#b64cff";
+        roundRect(enemy.x, enemy.y, enemy.w, enemy.h, 7);
+        ctx.fillStyle = "#f4d7ff";
+        ctx.fillRect(enemy.x + 7, enemy.y + 9, 5, 5);
+        ctx.fillRect(enemy.x + 18, enemy.y + 9, 5, 5);
+        if (enemy.type === "sentry" || enemy.type === "jumpSentry") {
+            ctx.fillStyle = "#ffd166";
+            ctx.fillRect(enemy.x + 6, enemy.y - 7, enemy.w - 12, 4);
+            if (enemy.attackTimer > 0) {
+                const hitbox = enemyAttackBox(enemy);
+                ctx.fillStyle = "rgba(255, 59, 91, 0.42)";
+                roundRect(hitbox.x, hitbox.y, hitbox.w, hitbox.h, 9);
+            }
+        }
+    });
+
+    if (player.attackTimer > 0) {
+        const hitbox = attackBox();
+        ctx.fillStyle = "rgba(255, 232, 107, 0.38)";
+        roundRect(hitbox.x, hitbox.y, hitbox.w, hitbox.h, 8);
+    }
+
+    ctx.fillStyle = gateUnlocked() ? "#49ffa8" : "#587086";
+    roundRect(goal.x, goal.y, goal.w, goal.h, 10);
+    ctx.fillStyle = "#08182b";
+    roundRect(goal.x + 12, goal.y + 16, goal.w - 24, goal.h - 32, 8);
+    ctx.strokeStyle = gateUnlocked() ? "#a3ffd4" : "#c6d4df";
+    ctx.lineWidth = 4;
+    ctx.strokeRect(goal.x + 13, goal.y + 17, goal.w - 26, goal.h - 34);
+    ctx.fillStyle = gateUnlocked() ? "#dfffea" : "#eef4ff";
+    ctx.font = "900 10px Segoe UI, Arial, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(gateUnlocked() ? "OPEN" : "LOCKED", goal.x + goal.w / 2, goal.y - 8);
+    ctx.textAlign = "left";
+
+    ctx.fillStyle = "#8deaff";
+    roundRect(player.x, player.y, player.w, player.h, 8);
+    ctx.fillStyle = "#09213a";
+    ctx.fillRect(player.x + 8, player.y + 14, 6, 6);
+    ctx.fillRect(player.x + 21, player.y + 14, 6, 6);
+    ctx.fillStyle = "#dffbff";
+    ctx.fillRect(player.x + 8, player.y + player.h - 8, 18, 4);
+
+    if (playerShielded()) {
+        ctx.strokeStyle = "rgba(126, 245, 255, 0.9)";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.ellipse(player.x + player.w / 2, player.y + player.h / 2, 31, 39, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(126, 245, 255, 0.16)";
+        ctx.beginPath();
+        ctx.ellipse(player.x + player.w / 2, player.y + player.h / 2, 31, 39, 0, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    ctx.restore();
+}
+
+function loop(now) {
+    lastTime = now;
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+function setKey(code, down) {
+    if (code === "ArrowLeft" || code === "KeyA") keys.left = down;
+    if (code === "ArrowRight" || code === "KeyD") keys.right = down;
+    if (code === "ArrowUp" || code === "Space" || code === "KeyW") keys.jump = down;
+    if (code === "ArrowDown" || code === "KeyS") keys.down = down;
+}
+
+window.addEventListener("keydown", event => {
+    if (event.code === "Digit1") {
+        attack();
+        event.preventDefault();
+        return;
+    }
+    if (event.code === "Digit2") {
+        if (!event.repeat) shield();
+        event.preventDefault();
+        return;
+    }
+    setKey(event.code, true);
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space"].includes(event.code)) event.preventDefault();
+});
+window.addEventListener("keyup", event => setKey(event.code, false));
+window.addEventListener("message", event => {
+    if (event.data?.type !== "game-key") return;
+    setKey(event.data.code, event.data.down);
+});
+window.addEventListener("resize", resize);
+shopToggle.addEventListener("click", () => {
+    shopPanel.classList.toggle("open");
+    updateShop();
+});
+saveBtn.addEventListener("click", saveGame);
+attackUpgradeBtn.addEventListener("click", buyAttackUpgrade);
+shieldUpgradeBtn.addEventListener("click", buyShieldUpgrade);
+
+resize();
+if (!loadSavedGame()) loadLevel(0);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
