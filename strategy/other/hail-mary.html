@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hail Mary — Ship Control</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Courier New', monospace;
+      background: #eef2f7;
+      color: #1a2b3c;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── INTRO SCREEN ── */
+    #intro-screen {
+      position: fixed; inset: 0;
+      background: #06080c;
+      color: #c8ddf0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      transition: opacity 1s ease;
+    }
+    #intro-screen.fade-out { opacity: 0; pointer-events: none; }
+
+    #intro-text {
+      max-width: 620px;
+      text-align: center;
+      font-size: 1.1rem;
+      line-height: 1.9;
+      min-height: 120px;
+    }
+    #intro-text .line {
+      display: block;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    #intro-text .line.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    #intro-btn {
+      margin-top: 48px;
+      padding: 12px 36px;
+      background: transparent;
+      border: 1px solid #4a8fb5;
+      color: #4a8fb5;
+      font-family: inherit;
+      font-size: 0.9rem;
+      letter-spacing: 2px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.5s, background 0.2s, color 0.2s;
+    }
+    #intro-btn.show { opacity: 1; }
+    #intro-btn:hover { background: #4a8fb5; color: #fff; }
+
+    #intro-title {
+      font-size: 2.2rem;
+      letter-spacing: 6px;
+      color: #e0eefa;
+      margin-bottom: 48px;
+      opacity: 0;
+      transition: opacity 1.2s ease;
+    }
+    #intro-title.show { opacity: 1; }
+
+    /* ── MAIN CONTROL SCREEN ── */
+    #control-screen {
+      display: none;
+      height: 100vh;
+      flex-direction: column;
+    }
+    #control-screen.visible { display: flex; }
+
+    /* Top bar */
+    #topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #1a2b3c;
+      color: #a8c8e8;
+      padding: 10px 20px;
+      font-size: 0.8rem;
+      letter-spacing: 1px;
+    }
+    #topbar .ship-name { color: #e0eefa; font-size: 1rem; letter-spacing: 3px; font-weight: bold; }
+    #topbar .mission-info { display: flex; gap: 32px; }
+    #topbar .stat { display: flex; flex-direction: column; align-items: center; }
+    #topbar .stat-label { font-size: 0.65rem; color: #6a9bbf; letter-spacing: 1px; }
+    #topbar .stat-value { font-size: 0.9rem; color: #c8ddf0; }
+    #alert-banner {
+      display: none;
+      background: #b83c2a;
+      color: #fff;
+      text-align: center;
+      padding: 6px;
+      font-size: 0.85rem;
+      letter-spacing: 1px;
+      animation: blink 1s infinite;
+    }
+    @keyframes blink { 50% { opacity: 0.6; } }
+
+    /* Mode nav */
+    #mode-nav {
+      display: flex;
+      background: #253545;
+      border-bottom: 2px solid #3a5a78;
+    }
+    .mode-btn {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      background: transparent;
+      color: #6a9bbf;
+      font-family: inherit;
+      font-size: 0.75rem;
+      letter-spacing: 2px;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all 0.15s;
+    }
+    .mode-btn:hover { color: #c8ddf0; background: #2e4460; }
+    .mode-btn.active { color: #e0eefa; border-bottom-color: #4a8fb5; background: #1f3347; }
+
+    /* Main layout */
+    #main-layout {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Side panels */
+    .side-panel {
+      width: 220px;
+      background: #f5f8fc;
+      border-right: 1px solid #c8d8e8;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+    }
+    .side-panel.right { border-right: none; border-left: 1px solid #c8d8e8; }
+
+    .panel-section h3 {
+      font-size: 0.65rem;
+      letter-spacing: 2px;
+      color: #6a9bbf;
+      margin-bottom: 10px;
+      border-bottom: 1px solid #c8d8e8;
+      padding-bottom: 4px;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+      font-size: 0.8rem;
+    }
+    .stat-row .label { color: #5a7a9a; }
+    .stat-row .value { color: #1a2b3c; font-weight: bold; }
+    .stat-row .value.ok { color: #2a7a3c; }
+    .stat-row .value.warn { color: #c07020; }
+    .stat-row .value.crit { color: #b83c2a; }
+
+    .bar-wrap { margin-bottom: 10px; }
+    .bar-label { font-size: 0.72rem; color: #5a7a9a; margin-bottom: 3px; display: flex; justify-content: space-between; }
+    .bar { height: 8px; background: #d8e8f4; border-radius: 4px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+    .bar-fill.green { background: #3aaa5c; }
+    .bar-fill.yellow { background: #e0a030; }
+    .bar-fill.red { background: #c04030; }
+    .bar-fill.blue { background: #3a7ab5; }
+
+    /* Center panel */
+    #center-panel {
+      flex: 1;
+      background: #eef2f7;
+      padding: 24px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Mode views */
+    .mode-view { display: none; }
+    .mode-view.active { display: block; }
+
+    .mode-title {
+      font-size: 0.7rem;
+      letter-spacing: 3px;
+      color: #4a8fb5;
+      margin-bottom: 20px;
+    }
+
+    /* Navigation mode */
+    .nav-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .nav-card {
+      background: #fff;
+      border: 1px solid #c8d8e8;
+      border-radius: 6px;
+      padding: 16px;
+    }
+    .nav-card h4 { font-size: 0.65rem; letter-spacing: 2px; color: #6a9bbf; margin-bottom: 12px; }
+    .big-value { font-size: 2rem; color: #1a2b3c; margin-bottom: 4px; }
+    .big-unit { font-size: 0.75rem; color: #6a9bbf; }
+
+    /* Thrust control */
+    .thrust-control { margin-top: 16px; }
+    .thrust-control label { font-size: 0.75rem; color: #5a7a9a; display: block; margin-bottom: 8px; }
+    .thrust-slider {
+      width: 100%;
+      accent-color: #4a8fb5;
+      cursor: pointer;
+    }
+    .thrust-display { font-size: 1.4rem; color: #1a2b3c; text-align: center; margin-top: 8px; }
+
+    /* Life support mode */
+    .ls-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+    .ls-card {
+      background: #fff;
+      border: 1px solid #c8d8e8;
+      border-radius: 6px;
+      padding: 16px;
+    }
+    .ls-card h4 { font-size: 0.65rem; letter-spacing: 2px; color: #6a9bbf; margin-bottom: 12px; }
+
+    /* Science mode */
+    .sci-readout {
+      background: #fff;
+      border: 1px solid #c8d8e8;
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .sci-readout h4 { font-size: 0.65rem; letter-spacing: 2px; color: #6a9bbf; margin-bottom: 12px; }
+    .readout-line { font-size: 0.82rem; margin-bottom: 6px; color: #2a3a4a; }
+    .readout-line span { color: #4a8fb5; font-weight: bold; }
+
+    /* Crisis overlay */
+    #crisis-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 20, 30, 0.85);
+      z-index: 50;
+      align-items: center;
+      justify-content: center;
+    }
+    #crisis-overlay.show { display: flex; }
+    .crisis-box {
+      background: #fff;
+      border: 2px solid #b83c2a;
+      border-radius: 8px;
+      max-width: 500px;
+      width: 90%;
+      padding: 32px;
+    }
+    .crisis-box .crisis-label {
+      font-size: 0.65rem;
+      letter-spacing: 3px;
+      color: #b83c2a;
+      margin-bottom: 8px;
+    }
+    .crisis-box h2 { font-size: 1.3rem; color: #1a2b3c; margin-bottom: 16px; }
+    .crisis-box p { font-size: 0.88rem; color: #3a5a7a; line-height: 1.7; margin-bottom: 20px; }
+    .crisis-choices { display: flex; flex-direction: column; gap: 10px; }
+    .crisis-choice {
+      padding: 12px 16px;
+      border: 1px solid #c8d8e8;
+      border-radius: 4px;
+      background: #f5f8fc;
+      font-family: inherit;
+      font-size: 0.83rem;
+      color: #1a2b3c;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .crisis-choice:hover { background: #ddeaf8; border-color: #4a8fb5; }
+
+    /* Log panel */
+    #ship-log {
+      background: #fff;
+      border: 1px solid #c8d8e8;
+      border-radius: 6px;
+      padding: 14px;
+      max-height: 160px;
+      overflow-y: auto;
+    }
+    #ship-log h4 { font-size: 0.65rem; letter-spacing: 2px; color: #6a9bbf; margin-bottom: 10px; }
+    .log-entry {
+      font-size: 0.78rem;
+      color: #3a5a7a;
+      margin-bottom: 5px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid #eef2f7;
+    }
+    .log-entry .log-time { color: #9ab8d0; margin-right: 8px; }
+    .log-entry.warn .log-msg { color: #c07020; }
+    .log-entry.crit .log-msg { color: #b83c2a; font-weight: bold; }
+
+    /* Time advance button */
+    #time-btn {
+      padding: 10px 24px;
+      background: #1a2b3c;
+      color: #c8ddf0;
+      border: none;
+      font-family: inherit;
+      font-size: 0.8rem;
+      letter-spacing: 2px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background 0.15s;
+      align-self: flex-start;
+    }
+    #time-btn:hover { background: #253f5a; }
+    #time-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Comms mode */
+    .comms-area {
+      background: #fff;
+      border: 1px solid #c8d8e8;
+      border-radius: 6px;
+      padding: 16px;
+    }
+    .comms-area h4 { font-size: 0.65rem; letter-spacing: 2px; color: #6a9bbf; margin-bottom: 12px; }
+    .comms-signal { font-size: 0.82rem; color: #3a5a7a; margin-bottom: 8px; }
+    .signal-indicator {
+      display: inline-block;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      margin-right: 8px;
+      background: #aaa;
+    }
+    .signal-indicator.active { background: #3aaa5c; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+  </style>
+</head>
+<body>
+
+<!-- ── INTRO SCREEN ── -->
+<div id="intro-screen">
+  <div id="intro-title">HAIL MARY</div>
+  <div id="intro-text"></div>
+  <button id="intro-btn" onclick="advanceIntro()">[ CONTINUE ]</button>
+</div>
+
+<!-- ── CONTROL SCREEN ── -->
+<div id="control-screen">
+
+  <!-- Alert banner -->
+  <div id="alert-banner">⚠ CRISIS ALERT — IMMEDIATE ACTION REQUIRED</div>
+
+  <!-- Top bar -->
+  <div id="topbar">
+    <div class="ship-name">HAIL MARY</div>
+    <div class="mission-info">
+      <div class="stat"><span class="stat-label">MISSION DAY</span><span class="stat-value" id="hud-day">—</span></div>
+      <div class="stat"><span class="stat-label">YEAR</span><span class="stat-value" id="hud-year">—</span></div>
+      <div class="stat"><span class="stat-label">SPEED</span><span class="stat-value" id="hud-speed">—</span></div>
+      <div class="stat"><span class="stat-label">DIST TO TAU CETI</span><span class="stat-value" id="hud-dist">—</span></div>
+      <div class="stat"><span class="stat-label">CREW</span><span class="stat-value" id="hud-crew" style="color:#b83c2a">—</span></div>
+    </div>
+  </div>
+
+  <!-- Mode nav -->
+  <div id="mode-nav">
+    <button class="mode-btn active" onclick="setMode('navigation')">NAVIGATION</button>
+    <button class="mode-btn" onclick="setMode('drive')">DRIVE</button>
+    <button class="mode-btn" onclick="setMode('lifesupport')">LIFE SUPPORT</button>
+    <button class="mode-btn" onclick="setMode('science')">SCIENCE</button>
+    <button class="mode-btn" onclick="setMode('comms')">COMMS</button>
+  </div>
+
+  <!-- Main layout -->
+  <div id="main-layout">
+
+    <!-- Left panel: navigation stats -->
+    <div class="side-panel">
+      <div class="panel-section">
+        <h3>TRAJECTORY</h3>
+        <div class="stat-row"><span class="label">Heading</span><span class="value" id="s-heading">Tau Ceti</span></div>
+        <div class="stat-row"><span class="label">Thrust</span><span class="value" id="s-thrust">1.5 g</span></div>
+        <div class="stat-row"><span class="label">Phase</span><span class="value" id="s-phase">Accel.</span></div>
+      </div>
+      <div class="panel-section">
+        <h3>SHIP STATUS</h3>
+        <div class="stat-row"><span class="label">Hull</span><span class="value ok" id="s-hull">NOMINAL</span></div>
+        <div class="stat-row"><span class="label">Spin grav.</span><span class="value" id="s-spin">ON  (1.0 g)</span></div>
+        <div class="stat-row"><span class="label">Temp (ext)</span><span class="value" id="s-temp">2.7 K</span></div>
+      </div>
+      <div class="panel-section">
+        <h3>FUEL</h3>
+        <div class="bar-wrap">
+          <div class="bar-label"><span>Astrophage</span><span id="fuel-pct">84%</span></div>
+          <div class="bar"><div class="bar-fill blue" id="fuel-bar" style="width:84%"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center panel -->
+    <div id="center-panel">
+
+      <!-- NAVIGATION MODE -->
+      <div class="mode-view active" id="view-navigation">
+        <div class="mode-title">NAVIGATION CONTROL</div>
+        <div class="nav-grid">
+          <div class="nav-card">
+            <h4>VELOCITY</h4>
+            <div class="big-value" id="nav-speed">0.012 c</div>
+            <div class="big-unit">fraction of light speed</div>
+          </div>
+          <div class="nav-card">
+            <h4>DISTANCE TO TAU CETI</h4>
+            <div class="big-value" id="nav-dist">11.887</div>
+            <div class="big-unit">light-years remaining</div>
+          </div>
+          <div class="nav-card">
+            <h4>TIME ELAPSED</h4>
+            <div class="big-value" id="nav-elapsed">Year 1, Day 1</div>
+            <div class="big-unit">ship time</div>
+          </div>
+          <div class="nav-card">
+            <h4>ETA</h4>
+            <div class="big-value" id="nav-eta">~2.8 yr</div>
+            <div class="big-unit">estimated arrival</div>
+          </div>
+        </div>
+        <div class="nav-card" style="margin-top:16px">
+          <h4>THRUST CONTROL</h4>
+          <div class="thrust-control">
+            <label>Drive thrust: <span id="thrust-label">1.50 g</span></label>
+            <input type="range" class="thrust-slider" id="thrust-slider" min="0" max="150" value="150" oninput="updateThrust(this.value)">
+            <div class="thrust-display" id="thrust-display">1.50 g — ACCELERATING</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DRIVE MODE -->
+      <div class="mode-view" id="view-drive">
+        <div class="mode-title">DRIVE SYSTEMS</div>
+        <div class="nav-grid">
+          <div class="nav-card">
+            <h4>ASTROPHAGE FUEL</h4>
+            <div class="big-value" id="drive-fuel">84%</div>
+            <div class="big-unit">of original mass remaining</div>
+          </div>
+          <div class="nav-card">
+            <h4>DRIVE OUTPUT</h4>
+            <div class="big-value" id="drive-output">152 PW</div>
+            <div class="big-unit">petawatts (exhaust)</div>
+          </div>
+          <div class="nav-card">
+            <h4>SPIN SECTION</h4>
+            <div class="big-value" id="spin-status">ENGAGED</div>
+            <div class="big-unit">1.00 g artificial gravity</div>
+            <button style="margin-top:12px;padding:6px 16px;font-family:inherit;font-size:0.75rem;cursor:pointer;border:1px solid #4a8fb5;background:#f5f8fc;color:#4a8fb5;border-radius:3px;" onclick="toggleSpin()">TOGGLE SPIN</button>
+          </div>
+          <div class="nav-card">
+            <h4>ENGINE TEMP</h4>
+            <div class="big-value" id="engine-temp">2,847°</div>
+            <div class="big-unit">Kelvin — nominal</div>
+          </div>
+        </div>
+        <div class="nav-card" style="margin-top:16px">
+          <h4>DECELERATION PHASE</h4>
+          <div class="readout-line">Flip-and-burn scheduled: <span id="flip-date">Year 1, Day 183</span></div>
+          <div class="readout-line">At flip: speed will be <span id="flip-speed">0.092 c</span></div>
+          <div class="readout-line">Decel phase duration: <span>~1.4 years</span></div>
+        </div>
+      </div>
+
+      <!-- LIFE SUPPORT MODE -->
+      <div class="mode-view" id="view-lifesupport">
+        <div class="mode-title">LIFE SUPPORT SYSTEMS</div>
+        <div class="ls-grid">
+          <div class="ls-card">
+            <h4>OXYGEN</h4>
+            <div class="bar-wrap">
+              <div class="bar-label"><span>Stored O₂</span><span id="o2-pct">92%</span></div>
+              <div class="bar"><div class="bar-fill green" id="o2-bar" style="width:92%"></div></div>
+            </div>
+            <div class="stat-row"><span class="label">Cabin concentration</span><span class="value ok">21.1%</span></div>
+            <div class="stat-row"><span class="label">Consumption rate</span><span class="value">0.84 kg/day</span></div>
+          </div>
+          <div class="ls-card">
+            <h4>CO₂ SCRUBBERS</h4>
+            <div class="bar-wrap">
+              <div class="bar-label"><span>Scrubber capacity</span><span id="co2-pct">78%</span></div>
+              <div class="bar"><div class="bar-fill green" id="co2-bar" style="width:78%"></div></div>
+            </div>
+            <div class="stat-row"><span class="label">CO₂ level</span><span class="value ok">0.04%</span></div>
+            <div class="stat-row"><span class="label">Status</span><span class="value ok" id="co2-status">NOMINAL</span></div>
+          </div>
+          <div class="ls-card">
+            <h4>FOOD SUPPLY</h4>
+            <div class="bar-wrap">
+              <div class="bar-label"><span>Remaining</span><span id="food-pct">89%</span></div>
+              <div class="bar"><div class="bar-fill green" id="food-bar" style="width:89%"></div></div>
+            </div>
+            <div class="stat-row"><span class="label">Est. days remaining</span><span class="value" id="food-days">712</span></div>
+            <div class="stat-row"><span class="label">Consumption</span><span class="value">2,200 kcal/day</span></div>
+          </div>
+          <div class="ls-card">
+            <h4>WATER RECYCLING</h4>
+            <div class="bar-wrap">
+              <div class="bar-label"><span>Reserve tank</span><span id="water-pct">95%</span></div>
+              <div class="bar"><div class="bar-fill blue" id="water-bar" style="width:95%"></div></div>
+            </div>
+            <div class="stat-row"><span class="label">Recycling efficiency</span><span class="value ok">98.7%</span></div>
+            <div class="stat-row"><span class="label">Status</span><span class="value ok">NOMINAL</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCIENCE MODE -->
+      <div class="mode-view" id="view-science">
+        <div class="mode-title">SCIENTIFIC INSTRUMENTS</div>
+        <div class="sci-readout">
+          <h4>ASTROPHAGE ANALYSIS</h4>
+          <div class="readout-line">Tau Ceti luminosity deficit: <span id="sci-deficit">~0.97%</span></div>
+          <div class="readout-line">Sol baseline (pre-mission): <span>~0.10%</span> — Astrophage now consuming more</div>
+          <div class="readout-line">Astrophage reproduction temp: <span>96.415°C</span> (precise to 3 decimal)</div>
+          <div class="readout-line">Known travel medium: <span>Star corona → open space</span></div>
+        </div>
+        <div class="sci-readout">
+          <h4>STELLAR SPECTROSCOPY</h4>
+          <div class="readout-line">Tau Ceti distance: <span id="sci-dist-ly">11.887 ly</span></div>
+          <div class="readout-line">Tau Ceti type: <span>G8V — slightly smaller than Sol</span></div>
+          <div class="readout-line">IR sensor status: <span class="value ok">OPERATIONAL</span></div>
+          <div class="readout-line">Petrovascope reading: <span id="sci-petro">Calibrating...</span></div>
+        </div>
+        <div class="sci-readout">
+          <h4>EXTERNAL SENSORS</h4>
+          <div class="readout-line">Unknown signals detected: <span id="sci-signals">None</span></div>
+          <div class="readout-line">Debris / collision risk: <span class="value ok">Negligible</span></div>
+          <div class="readout-line">Interstellar medium density: <span>0.3 atoms/cm³</span></div>
+        </div>
+      </div>
+
+      <!-- COMMS MODE -->
+      <div class="mode-view" id="view-comms">
+        <div class="mode-title">COMMUNICATIONS</div>
+        <div class="comms-area">
+          <h4>EARTH LINK — DEEP SPACE RELAY</h4>
+          <div class="comms-signal">
+            <span class="signal-indicator"></span>
+            Signal to Earth: <strong>INTERRUPTED</strong> (light-lag: <span id="comms-lag">11.9 years</span>)
+          </div>
+          <div class="comms-signal" style="margin-top:8px;color:#9ab8d0;font-size:0.8rem;">
+            Last transmission from Earth received: Mission Day 0 (pre-launch)
+          </div>
+        </div>
+        <div class="comms-area" style="margin-top:16px">
+          <h4>PROXIMITY RADIO TELESCOPE</h4>
+          <div class="comms-signal">
+            <span class="signal-indicator" id="radio-indicator"></span>
+            Status: <span id="radio-status">Scanning. No signals detected.</span>
+          </div>
+          <div style="margin-top:12px;font-size:0.78rem;color:#9ab8d0;">
+            Monitoring frequency range: 0.1 MHz — 300 GHz
+          </div>
+        </div>
+      </div>
+
+      <!-- Ship log -->
+      <div id="ship-log">
+        <h4>SHIP LOG</h4>
+        <div id="log-entries"></div>
+      </div>
+
+      <!-- Time advance -->
+      <button id="time-btn" onclick="advanceTime()">ADVANCE 30 DAYS ▶</button>
+
+    </div>
+
+    <!-- Right panel: life support quick stats -->
+    <div class="side-panel right">
+      <div class="panel-section">
+        <h3>LIFE SUPPORT</h3>
+        <div class="bar-wrap">
+          <div class="bar-label"><span>O₂</span><span id="r-o2">92%</span></div>
+          <div class="bar"><div class="bar-fill green" id="r-o2-bar" style="width:92%"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-label"><span>CO₂ scrubber</span><span id="r-co2">78%</span></div>
+          <div class="bar"><div class="bar-fill green" id="r-co2-bar" style="width:78%"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-label"><span>Food</span><span id="r-food">89%</span></div>
+          <div class="bar"><div class="bar-fill green" id="r-food-bar" style="width:89%"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-label"><span>Water</span><span id="r-water">95%</span></div>
+          <div class="bar"><div class="bar-fill blue" id="r-water-bar" style="width:95%"></div></div>
+        </div>
+      </div>
+      <div class="panel-section">
+        <h3>ALERTS</h3>
+        <div id="alert-list" style="font-size:0.78rem;color:#9ab8d0;">No active alerts.</div>
+      </div>
+      <div class="panel-section">
+        <h3>CREW</h3>
+        <div style="font-size:0.78rem;color:#3a5a7a;line-height:1.7;">
+          <div>Commander Yao — <span style="color:#b83c2a">DECEASED</span></div>
+          <div>Dr. Ilyukhina — <span style="color:#b83c2a">DECEASED</span></div>
+          <div>Dr. Grace — <span style="color:#2a7a3c">ACTIVE</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── CRISIS OVERLAY ── -->
+<div id="crisis-overlay">
+  <div class="crisis-box">
+    <div class="crisis-label">CRISIS EVENT</div>
+    <h2 id="crisis-title">—</h2>
+    <p id="crisis-desc">—</p>
+    <div class="crisis-choices" id="crisis-choices"></div>
+  </div>
+</div>
+
+<script>
+// ── GAME STATE ──
+const state = {
+  day: 1, year: 1,
+  totalDays: 1,
+  speed: 0.012,          // fraction of c
+  distLY: 11.887,        // light-years to Tau Ceti
+  fuel: 84,
+  o2: 92, co2Scrubber: 78, food: 89, water: 95,
+  thrust: 1.5,           // g
+  spinOn: true,
+  phase: 'accel',        // accel | coast | decel | arrived
+  missionComplete: false,
+  crisisActive: false,
+  petroscopeCalibrated: false,
+};
+
+// ── INTRO SEQUENCE ──
+const introLines = [
+  "Your eyes open.",
+  "White ceiling. Antiseptic smell. Tubes in your arm.",
+  "You try to move. Your muscles scream in protest.",
+  "You've been asleep for a very long time.",
+  "A screen flickers on above you.",
+  "MISSION STATUS: ACTIVE",
+  "You are the sole surviving crew member of the Hail Mary.",
+  "Your mission: reach the star Tau Ceti.",
+  "Find out why it's losing energy. Save Earth.",
+  "You don't remember volunteering.",
+];
+
+let introStep = 0;
+let introInterval = null;
+
+function startIntro() {
+  document.getElementById('intro-title').classList.add('show');
+  autoAdvanceLines();
+}
+
+function autoAdvanceLines() {
+  if (introStep >= introLines.length) {
+    setTimeout(() => document.getElementById('intro-btn').classList.add('show'), 300);
+    return;
+  }
+  showNextLine();
+  setTimeout(autoAdvanceLines, 600);
+}
+
+function showNextLine() {
+  const container = document.getElementById('intro-text');
+  if (introStep < introLines.length) {
+    const span = document.createElement('span');
+    span.className = 'line';
+    span.textContent = introLines[introStep];
+    container.appendChild(span);
+    requestAnimationFrame(() => requestAnimationFrame(() => span.classList.add('show')));
+    introStep++;
+  }
+}
+
+function advanceIntro() {
+  if (introStep < introLines.length) {
+    showNextLine();
+  } else {
+    // Transition to control screen
+    const intro = document.getElementById('intro-screen');
+    intro.classList.add('fade-out');
+    setTimeout(() => {
+      intro.style.display = 'none';
+      document.getElementById('control-screen').classList.add('visible');
+      updateHUD();
+      addLog('System boot complete. All primary systems online.', 'ok');
+      addLog('Crew status: 2 deceased (cryo failure). 1 survivor.', 'warn');
+      addLog('Mission objective loaded: Analyze astrophage at Tau Ceti.', 'ok');
+      scheduleCrisis();
+    }, 1000);
+  }
+}
+
+window.onload = startIntro;
+
+// ── MODE SWITCHING ──
+function setMode(mode) {
+  document.querySelectorAll('.mode-btn').forEach((b, i) => {
+    b.classList.toggle('active', ['navigation','drive','lifesupport','science','comms'][i] === mode);
+  });
+  document.querySelectorAll('.mode-view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + mode).classList.add('active');
+}
+
+// ── HUD UPDATE ──
+function updateHUD() {
+  document.getElementById('hud-day').textContent = state.day;
+  document.getElementById('hud-year').textContent = state.year;
+  document.getElementById('hud-speed').textContent = state.speed.toFixed(3) + ' c';
+  document.getElementById('hud-dist').textContent = Math.max(0, state.distLY).toFixed(3) + ' ly';
+  document.getElementById('hud-crew').textContent = '1 / 3';
+
+  // Left panel
+  document.getElementById('s-thrust').textContent = state.thrust.toFixed(2) + ' g';
+  document.getElementById('s-phase').textContent =
+    state.phase === 'accel' ? 'Accelerating' :
+    state.phase === 'coast' ? 'Coasting' :
+    state.phase === 'decel' ? 'Decelerating' : 'ARRIVED';
+  document.getElementById('s-spin').textContent = state.spinOn ? 'ON  (1.0 g)' : 'OFF';
+  setBar('fuel-bar', 'fuel-pct', state.fuel, 'blue');
+
+  // Navigation view
+  document.getElementById('nav-speed').textContent = state.speed.toFixed(4) + ' c';
+  document.getElementById('nav-dist').textContent = Math.max(0, state.distLY).toFixed(3);
+  document.getElementById('nav-elapsed').textContent = `Year ${state.year}, Day ${state.day}`;
+  const etaYears = state.speed > 0 ? (state.distLY / (state.speed * 365.25)) : 999;
+  document.getElementById('nav-eta').textContent = etaYears > 99 ? '---' : `~${etaYears.toFixed(1)} yr`;
+
+  // Drive view
+  document.getElementById('drive-fuel').textContent = state.fuel.toFixed(1) + '%';
+  document.getElementById('drive-output').textContent = Math.round(state.thrust * 101) + ' PW';
+  document.getElementById('spin-status').textContent = state.spinOn ? 'ENGAGED' : 'DISENGAGED';
+  document.getElementById('flip-date').textContent = `Year 1, Day 183`;
+
+  // Life support view + right panel
+  updateLS();
+
+  // Science view
+  document.getElementById('sci-dist-ly').textContent = Math.max(0, state.distLY).toFixed(3) + ' ly';
+  if (state.totalDays > 60 && !state.petroscopeCalibrated) {
+    state.petroscopeCalibrated = true;
+    document.getElementById('sci-petro').textContent = 'Astrophage density: 2.4 × 10⁹ / cm³ (Tau Ceti band)';
+  }
+}
+
+function updateLS() {
+  const resources = [
+    ['o2', state.o2, 'green'],
+    ['co2', state.co2Scrubber, state.co2Scrubber < 30 ? 'red' : 'green'],
+    ['food', state.food, state.food < 30 ? 'red' : state.food < 50 ? 'yellow' : 'green'],
+    ['water', state.water, 'blue'],
+  ];
+  resources.forEach(([key, val, color]) => {
+    setBar(`${key}-bar`, `${key}-pct`, val, color);
+    setBar(`r-${key}-bar`, `r-${key}`, val, color);
+  });
+  document.getElementById('food-days').textContent = Math.round(state.food * 8);
+  document.getElementById('co2-status').textContent = state.co2Scrubber < 20 ? 'CRITICAL' :
+    state.co2Scrubber < 40 ? 'WARNING' : 'NOMINAL';
+}
+
+function setBar(barId, pctId, value, color) {
+  const bar = document.getElementById(barId);
+  const pct = document.getElementById(pctId);
+  const v = Math.max(0, Math.min(100, value));
+  if (bar) { bar.style.width = v + '%'; bar.className = `bar-fill ${color}`; }
+  if (pct) pct.textContent = Math.round(v) + '%';
+}
+
+// ── THRUST CONTROL ──
+function updateThrust(val) {
+  state.thrust = val / 100;
+  document.getElementById('thrust-label').textContent = state.thrust.toFixed(2) + ' g';
+  document.getElementById('thrust-display').textContent =
+    state.thrust === 0 ? '0.00 g — ENGINES OFF' :
+    state.phase === 'decel' ? state.thrust.toFixed(2) + ' g — DECELERATING' :
+    state.thrust.toFixed(2) + ' g — ACCELERATING';
+  updateHUD();
+}
+
+// ── SPIN TOGGLE ──
+function toggleSpin() {
+  state.spinOn = !state.spinOn;
+  addLog(state.spinOn ? 'Spin section engaged. Artificial gravity restored.' : 'Spin section disengaged. Zero-g mode.', 'ok');
+  updateHUD();
+}
+
+// ── TIME ADVANCE ──
+function advanceTime() {
+  if (state.crisisActive || state.missionComplete) return;
+  const btn = document.getElementById('time-btn');
+  btn.disabled = true;
+
+  const days = 30;
+  state.totalDays += days;
+  state.day += days;
+  while (state.day > 365) { state.day -= 365; state.year++; }
+
+  // Physics
+  if (state.phase === 'accel') {
+    const accel = state.thrust * 0.000025;
+    state.speed = Math.min(state.speed + accel * days, 0.12);
+    state.distLY -= state.speed * days / 365.25;
+    state.fuel -= state.thrust * 0.18 * days / 30;
+
+    if (state.speed >= 0.10 && state.distLY > 6) {
+      state.phase = 'coast';
+      addLog('Maximum cruise velocity reached. Drive throttled back.', 'ok');
+    }
+    if (state.distLY <= 6 && state.phase !== 'decel') {
+      state.phase = 'decel';
+      addLog('Flip-and-burn initiated. Decelerating toward Tau Ceti.', 'warn');
+    }
+  } else if (state.phase === 'coast') {
+    state.distLY -= state.speed * days / 365.25;
+    state.fuel -= 0.05 * days / 30;
+    if (state.distLY <= 6) { state.phase = 'decel'; addLog('Beginning deceleration burn.', 'warn'); }
+  } else if (state.phase === 'decel') {
+    const decel = state.thrust * 0.000022;
+    state.speed = Math.max(state.speed - decel * days, 0.001);
+    state.distLY -= state.speed * days / 365.25;
+    state.fuel -= state.thrust * 0.18 * days / 30;
+  }
+
+  if (state.distLY <= 0.01) {
+    state.distLY = 0;
+    state.phase = 'arrived';
+    state.speed = 0;
+    addLog('Tau Ceti system reached. Beginning astrophage analysis.', 'ok');
+    state.missionComplete = true;
+    btn.textContent = 'MISSION COMPLETE';
+  }
+
+  // Resource decay (slow)
+  state.o2 = Math.max(0, state.o2 - 0.4 * days / 30);
+  state.co2Scrubber = Math.max(0, state.co2Scrubber - 0.6 * days / 30);
+  state.food = Math.max(0, state.food - 0.9 * days / 30);
+  state.water = Math.max(0, state.water - 0.1 * days / 30);
+  state.fuel = Math.max(0, state.fuel);
+
+  addLog(`Advanced ${days} days. Distance remaining: ${Math.max(0, state.distLY).toFixed(3)} ly.`, 'ok');
+
+  updateHUD();
+  checkAlerts();
+  if (!state.missionComplete) {
+    btn.disabled = false;
+    scheduleCrisis();
+  }
+}
+
+// ── ALERTS ──
+function checkAlerts() {
+  const alerts = [];
+  if (state.fuel < 20) alerts.push('LOW FUEL');
+  if (state.o2 < 25) alerts.push('LOW OXYGEN');
+  if (state.co2Scrubber < 20) alerts.push('CO₂ SCRUBBER FAILING');
+  if (state.food < 15) alerts.push('CRITICAL FOOD SHORTAGE');
+  const list = document.getElementById('alert-list');
+  if (alerts.length > 0) {
+    list.innerHTML = alerts.map(a => `<div style="color:#b83c2a;margin-bottom:4px;">▲ ${a}</div>`).join('');
+  } else {
+    list.innerHTML = '<span style="color:#9ab8d0">No active alerts.</span>';
+  }
+}
+
+// ── CRISIS SYSTEM ──
+const crises = [
+  {
+    id: 'co2_spike',
+    title: 'CO₂ Scrubber Malfunction',
+    desc: 'Scrubber bank 2 has failed. CO₂ levels are rising. You have limited time to respond before cognitive impairment.',
+    choices: [
+      { text: 'Manually cycle scrubber — labor-intensive but effective.', effect: () => { state.co2Scrubber += 15; addLog('Scrubber bank 2 manually repaired. CO₂ normalized.', 'ok'); } },
+      { text: 'Reduce activity, use backup filter — buys time, partial fix.', effect: () => { state.co2Scrubber += 6; addLog('Backup filter deployed. Partial CO₂ mitigation.', 'warn'); } },
+      { text: 'Vent cabin atmosphere briefly and repressurize — risky.', effect: () => { state.co2Scrubber += 25; state.o2 -= 8; addLog('Emergency vent procedure complete. O₂ reserves depleted.', 'warn'); } },
+    ]
+  },
+  {
+    id: 'fuel_leak',
+    title: 'Astrophage Containment Anomaly',
+    desc: 'Containment field in fuel bay 3 is fluctuating. A breach could irradiate the aft section and contaminate the drive.',
+    choices: [
+      { text: 'Isolate bay 3 — lose that fuel reserve, but safe.', effect: () => { state.fuel -= 12; addLog('Bay 3 isolated. 12% fuel lost as precaution.', 'warn'); } },
+      { text: 'Attempt manual re-seal — dangerous, keeps the fuel.', effect: () => { const success = Math.random() > 0.35; if (success) { addLog('Containment field re-sealed successfully.', 'ok'); } else { state.fuel -= 22; addLog('Re-seal attempt failed. Significant fuel loss.', 'crit'); } } },
+      { text: 'Boost containment field power — draws from life support.', effect: () => { state.co2Scrubber -= 10; state.o2 -= 5; addLog('Containment boosted at life-support expense.', 'warn'); } },
+    ]
+  },
+  {
+    id: 'sensor_ping',
+    title: 'Unknown Signal Detected',
+    desc: 'Proximity radio telescope has detected a repeating signal at 198.4 THz. It does not match any known natural source. It is close.',
+    choices: [
+      { text: 'Broadcast response on same frequency — make contact.', effect: () => { document.getElementById('radio-indicator').classList.add('active'); document.getElementById('radio-status').textContent = 'Signal contact established. Source: unknown vessel.'; addLog('Broadcast sent. Signal source responding. Nature: unknown.', 'ok'); } },
+      { text: 'Passive observation only — log and monitor.', effect: () => { addLog('Signal logged. Passive monitoring engaged. No response sent.', 'ok'); } },
+      { text: 'Alter course to avoid signal source.', effect: () => { state.fuel -= 8; addLog('Course corrected. Signal source avoided. 8% fuel used.', 'warn'); } },
+    ]
+  },
+  {
+    id: 'nav_drift',
+    title: 'Navigation Drift Detected',
+    desc: 'Stellar positioning shows the ship has drifted 0.003° off trajectory — small now, catastrophic at current distance.',
+    choices: [
+      { text: 'Fire attitude thrusters — precise correction.', effect: () => { state.fuel -= 4; addLog('Trajectory corrected via attitude thrusters. On course.', 'ok'); } },
+      { text: 'Recalculate trajectory — let the drift continue, new angle.', effect: () => { addLog('Trajectory recalculated. Course updated. ETA adjusted +0.2 years.', 'warn'); } },
+    ]
+  },
+];
+
+const triggeredCrises = new Set();
+
+function scheduleCrisis() {
+  const available = crises.filter(c => !triggeredCrises.has(c.id));
+  if (available.length === 0) return;
+  if (state.totalDays < 60) return; // no crises in first 60 days
+  if (Math.random() < 0.45) {
+    const crisis = available[Math.floor(Math.random() * available.length)];
+    triggerCrisis(crisis);
+  }
+}
+
+function triggerCrisis(crisis) {
+  triggeredCrises.add(crisis.id);
+  state.crisisActive = true;
+  document.getElementById('crisis-title').textContent = crisis.title;
+  document.getElementById('crisis-desc').textContent = crisis.desc;
+  document.getElementById('alert-banner').style.display = 'block';
+  addLog(`CRISIS: ${crisis.title}`, 'crit');
+
+  const choicesEl = document.getElementById('crisis-choices');
+  choicesEl.innerHTML = '';
+  crisis.choices.forEach(choice => {
+    const btn = document.createElement('button');
+    btn.className = 'crisis-choice';
+    btn.textContent = choice.text;
+    btn.onclick = () => resolveCrisis(choice);
+    choicesEl.appendChild(btn);
+  });
+
+  document.getElementById('crisis-overlay').classList.add('show');
+}
+
+function resolveCrisis(choice) {
+  choice.effect();
+  document.getElementById('crisis-overlay').classList.remove('show');
+  document.getElementById('alert-banner').style.display = 'none';
+  state.crisisActive = false;
+  document.getElementById('time-btn').disabled = false;
+  updateHUD();
+  checkAlerts();
+}
+
+// ── LOG ──
+function addLog(msg, type = 'ok') {
+  const container = document.getElementById('log-entries');
+  const entry = document.createElement('div');
+  entry.className = `log-entry ${type === 'warn' || type === 'crit' ? type : ''}`;
+  entry.innerHTML = `<span class="log-time">Y${state.year}D${state.day}</span><span class="log-msg">${msg}</span>`;
+  container.insertBefore(entry, container.firstChild);
+  while (container.children.length > 20) container.removeChild(container.lastChild);
+}
+</script>
+</body>
+</html>

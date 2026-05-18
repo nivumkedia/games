@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Urbafier</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(160deg, #87CEEB 0%, #C8E6C9 100%);
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            user-select: none;
+            overflow: hidden;
+        }
+
+        /* ── Top bar ─────────────────────────────────────── */
+        #top-bar {
+            position: fixed;
+            top: 16px; left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255,255,255,0.95);
+            border-radius: 20px;
+            padding: 10px 20px;
+            font-size: 20px; font-weight: 800; color: #333;
+            box-shadow: 0 3px 14px rgba(0,0,0,0.13);
+            display: flex; flex-direction: column; align-items: center; gap: 8px;
+            min-width: 240px;
+        }
+        #top-row { display: flex; align-items: center; gap: 16px; }
+        .hud-stat { display: flex; align-items: center; gap: 5px; font-size: 18px; }
+        #score-row { width: 100%; display: flex; flex-direction: column; gap: 4px; }
+        #score-label { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; color: #888; }
+        #xp-bar-wrap { width: 100%; height: 8px; background: #eee; border-radius: 6px; overflow: hidden; }
+        #xp-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #66BB6A, #AED581);
+            border-radius: 6px;
+            transition: width 0.4s cubic-bezier(0.34,1.56,0.64,1);
+        }
+        @keyframes levelUp {
+            0%   { transform: translateX(-50%) scale(1); }
+            40%  { transform: translateX(-50%) scale(1.08); }
+            100% { transform: translateX(-50%) scale(1); }
+        }
+        #top-bar.level-up-anim { animation: levelUp 0.4s ease; }
+
+        /* ── Grid ────────────────────────────────────────── */
+        #grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 2px;
+            background: rgba(0,0,0,0.12);
+            border-radius: 18px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+        #grid.build-mode { cursor: crosshair; }
+
+        .tile {
+            width: 66px; height: 66px;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            cursor: pointer; position: relative;
+            transition: transform 0.1s;
+        }
+        .tile:active { transform: scale(0.93); }
+
+        .tile.empty   { background: #7CC44E; }
+        .tile.empty .tile-label { font-size: 9px; font-weight: 700; color: rgba(255,255,255,0.9); margin-top: 3px; }
+
+        .tile.growing { background: #D7F0C8; }
+        .tile.growing .tile-timer { font-size: 9px; font-weight: 700; color: #555; margin-top: 2px; }
+        .tile.growing .tile-label { font-size: 8px; font-weight: 700; color: #1565C0; margin-top: 1px; }
+
+        .tile.ready   { background: #B9F0B0; }
+        .tile.ready .tile-label { font-size: 9px; font-weight: 800; color: #1B5E20; margin-top: 2px; }
+
+        .tile.locked  { background: #6B3A2A; cursor: pointer; }
+        .tile.hidden  { background: transparent; cursor: default; pointer-events: none; visibility: hidden; }
+
+        /* House tiles */
+        .tile.house-main {
+            background: #FFCC70; cursor: default;
+            position: relative; z-index: 2; overflow: visible;
+        }
+        .tile.house-main .house-icon {
+            position: absolute; left: 0; top: 0;
+            width: 134px; height: 134px; /* 66 + 2px gap + 66 */
+            display: flex; align-items: center; justify-content: center;
+            font-size: 80px;
+            pointer-events: none;
+        }
+        .tile.house-part {
+            background: #FFCC70; cursor: default;
+            position: relative; z-index: 1;
+        }
+
+        /* Build preview overlays */
+        .tile.preview-ok   { outline: 3px solid #43A047; outline-offset: -3px; background: rgba(76,175,80,0.35) !important; }
+        .tile.preview-bad  { outline: 3px solid #E53935; outline-offset: -3px; background: rgba(229,57,53,0.25) !important; }
+
+        .progress-wrap { width: 48px; height: 4px; background: #ccc; border-radius: 3px; margin-top: 4px; overflow: hidden; }
+        .progress-fill { height: 100%; background: #43A047; border-radius: 3px; transition: width 0.5s linear; }
+
+        @keyframes pulse-border {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(67,160,71,0.5); }
+            50%       { box-shadow: 0 0 0 5px rgba(67,160,71,0); }
+        }
+        .tile.ready { animation: pulse-border 1.4s ease-in-out infinite; }
+
+        @keyframes tileReveal {
+            from { opacity: 0; transform: scale(0.5); }
+            to   { opacity: 1; transform: scale(1); }
+        }
+        .tile.reveal { animation: tileReveal 0.35s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+
+        /* ── Floating popup ──────────────────────────────── */
+        .popup {
+            position: fixed; font-size: 15px; font-weight: 800;
+            pointer-events: none; z-index: 99;
+            animation: floatUp 1.1s ease-out forwards;
+        }
+        @keyframes floatUp {
+            0%   { opacity: 1; transform: translateY(0) scale(1); }
+            20%  { transform: translateY(-10px) scale(1.18); }
+            100% { opacity: 0; transform: translateY(-56px) scale(0.9); }
+        }
+
+        /* ── Bottom bar ──────────────────────────────────── */
+        #bottom-bar {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            height: 62px;
+            background: rgba(255,255,255,0.97);
+            box-shadow: 0 -2px 12px rgba(0,0,0,0.1);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            z-index: 50;
+        }
+        .bar-btn {
+            background: none;
+            border: 2.5px solid #ddd;
+            border-radius: 14px;
+            padding: 7px 16px;
+            cursor: pointer;
+            font-size: 20px;
+            font-weight: 700;
+            color: #555;
+            transition: all 0.15s;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .bar-btn:hover  { border-color: #aaa; transform: translateY(-2px); }
+        .bar-btn.active { background: #FFF3E0; border-color: #FF9800; color: #E65100; }
+
+        /* ── Build panel ─────────────────────────────────── */
+        #build-panel {
+            position: fixed;
+            bottom: 62px; left: 50%;
+            transform: translateX(-50%) translateY(calc(100% + 62px));
+            width: 380px; max-width: 95vw;
+            background: #fff;
+            border-radius: 20px 20px 0 0;
+            box-shadow: 0 -4px 24px rgba(0,0,0,0.14);
+            transition: transform 0.32s cubic-bezier(0.34,1.1,0.64,1);
+            z-index: 49;
+            overflow: hidden;
+        }
+        #build-panel.open {
+            transform: translateX(-50%) translateY(0);
+        }
+        #panel-tabs {
+            display: flex;
+            border-bottom: 2px solid #f0f0f0;
+            padding: 0 12px;
+            background: #fafafa;
+        }
+        .tab-btn {
+            padding: 12px 16px;
+            background: none; border: none;
+            font-size: 13px; font-weight: 700; color: #999;
+            cursor: pointer; border-bottom: 3px solid transparent;
+            margin-bottom: -2px; transition: all 0.15s;
+        }
+        .tab-btn.active { color: #E65100; border-bottom-color: #FF9800; }
+        .tab-content { padding: 14px 16px; display: none; }
+        .tab-content.active { display: block; }
+
+        .build-item {
+            display: flex; align-items: center; gap: 12px;
+            padding: 10px 12px;
+            border: 2.5px solid #eee;
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.15s;
+            margin-bottom: 8px;
+        }
+        .build-item:hover { border-color: #FF9800; background: #FFF8F0; }
+        .build-item.selected { border-color: #FF9800; background: #FFF3E0; }
+        .build-item-icon { font-size: 28px; }
+        .build-item-info { flex: 1; }
+        .build-item-name { font-size: 14px; font-weight: 800; color: #222; }
+        .build-item-desc { font-size: 11px; color: #888; margin-top: 2px; }
+        .build-item-cost {
+            font-size: 13px; font-weight: 800;
+            color: #E65100;
+            background: #FFF3E0;
+            padding: 5px 10px;
+            border-radius: 10px;
+        }
+        .build-item.locked-item { opacity: 0.45; cursor: not-allowed; }
+        .build-item.locked-item:hover { border-color: #eee; background: none; }
+
+        /* ── Achievements ────────────────────────────────── */
+        .achievement {
+            position: fixed; left: 50%;
+            transform: translateX(-50%);
+            background: #fff; border-radius: 16px;
+            padding: 12px 20px;
+            box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+            display: flex; align-items: center; gap: 12px;
+            z-index: 200;
+            animation: achieveIn 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards;
+            min-width: 240px;
+        }
+        .achievement.hide { animation: achieveOut 0.35s ease-in forwards; }
+        .achievement-icon { font-size: 32px; }
+        .achievement-text { display: flex; flex-direction: column; gap: 2px; }
+        .achievement-title { font-size: 11px; font-weight: 700; color: #FFA000; text-transform: uppercase; letter-spacing: 0.5px; }
+        .achievement-body  { font-size: 15px; font-weight: 800; color: #222; }
+        @keyframes achieveIn {
+            from { opacity: 0; transform: translateX(-50%) translateY(20px) scale(0.9); }
+            to   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+        }
+        @keyframes achieveOut {
+            from { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+            to   { opacity: 0; transform: translateX(-50%) translateY(-16px) scale(0.92); }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div id="top-bar">
+    <div id="top-row">
+        <div class="hud-stat">🪙 <span id="coins">50</span></div>
+        <div class="hud-stat">👥 <span id="population">0</span></div>
+    </div>
+    <div id="score-row">
+        <div id="score-label">
+            <span>Lv <span id="level">1</span></span>
+            <span><span id="score">0</span> / <span id="score-needed">10</span></span>
+        </div>
+        <div id="xp-bar-wrap"><div id="xp-bar-fill" style="width:0%"></div></div>
+    </div>
+</div>
+
+<!-- Grid -->
+<div id="grid"></div>
+
+<!-- Bottom bar (unlocks at level 3) -->
+<div id="bottom-bar">
+    <button class="bar-btn" id="construct-btn" onclick="toggleBuildPanel()">
+        🔨 <span style="font-size:13px">Build</span>
+    </button>
+</div>
+
+<!-- Build panel -->
+<div id="build-panel">
+    <div id="panel-tabs">
+        <button class="tab-btn active" onclick="switchTab('housing')">🏠 Housing</button>
+    </div>
+    <div id="tab-housing" class="tab-content active">
+        <div class="build-item" id="item-small-house" onclick="selectBuilding('small_house')">
+            <div class="build-item-icon">🏠</div>
+            <div class="build-item-info">
+                <div class="build-item-name">Small House</div>
+                <div class="build-item-desc">2×2 tiles &nbsp;·&nbsp; +2 👥 &nbsp;·&nbsp; +15 score</div>
+            </div>
+            <div class="build-item-cost">20🪙</div>
+        </div>
+    </div>
+</div>
+
+<script>
+const GROW_MS    = 60000;
+const PLANT_COST = 10;
+const SPEED_COST = 5;
+const HARVEST    = 13;
+
+// 8×8 grid. Ring = distance of tile from center 2×2 (rows 3-4, cols 3-4).
+function tileRing(i) {
+    const r = Math.floor(i / 8), c = i % 8;
+    return Math.max(Math.max(0, 3-r, r-4), Math.max(0, 3-c, c-4));
+}
+const RINGS = [[], [], [], []];
+for (let i = 0; i < 64; i++) RINGS[tileRing(i)].push(i);
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let coins      = 50;
+let population = 0;
+let score      = 0;
+let level      = 1;
+let firstHarvest = true;
+
+// tile values: 'hidden' | 'locked' | null (empty) | { state:'growing'|'ready'|'house', ... }
+const tiles = Array.from({ length: 64 }, (_, i) => tileRing(i) === 0 ? null : 'hidden');
+
+// Build mode
+let buildMode        = null;   // null or 'small_house'
+let buildPanelOpen   = false;
+let buildHoverTiles  = [];
+let buildHoverValid  = false;
+
+// ── Achievement queue ─────────────────────────────────────────────────────────
+const aq = [];
+let aqRunning = false;
+function showAchievement(icon, body) {
+    aq.push({ icon, body });
+    if (!aqRunning) drainAq();
+}
+function drainAq() {
+    if (!aq.length) { aqRunning = false; return; }
+    aqRunning = true;
+    const { icon, body } = aq.shift();
+    const el = document.createElement('div');
+    el.className = 'achievement';
+    el.style.bottom = '80px';
+    el.innerHTML = `<div class="achievement-icon">${icon}</div>
+        <div class="achievement-text">
+            <div class="achievement-title">Achievement</div>
+            <div class="achievement-body">${body}</div>
+        </div>`;
+    document.body.appendChild(el);
+    setTimeout(() => {
+        el.classList.add('hide');
+        setTimeout(() => { el.remove(); drainAq(); }, 350);
+    }, 2200);
+}
+
+// ── HUD ───────────────────────────────────────────────────────────────────────
+function updateCoins()      { document.getElementById('coins').textContent = coins; }
+function updatePopulation() { document.getElementById('population').textContent = population; }
+
+function scoreNeeded() { return level * 10; }
+
+function addScore(amount) {
+    score += amount;
+    let leveled = false;
+    while (score >= scoreNeeded()) {
+        score -= scoreNeeded();
+        level++;
+        leveled = true;
+        onLevelUp(level);
+    }
+    document.getElementById('level').textContent = level;
+    document.getElementById('score').textContent = score;
+    document.getElementById('score-needed').textContent = scoreNeeded();
+    document.getElementById('xp-bar-fill').style.width = `${(score / scoreNeeded()) * 100}%`;
+    if (leveled) {
+        const bar = document.getElementById('top-bar');
+        bar.classList.remove('level-up-anim');
+        void bar.offsetWidth;
+        bar.classList.add('level-up-anim');
+    }
+}
+
+function onLevelUp(newLevel) {
+    // Every level up gives +10 coins
+    coins += 10;
+    updateCoins();
+    popup(document.getElementById('top-bar'), '+10🪙', '#43A047');
+
+    showAchievement('⭐', `Level ${newLevel}!`);
+
+    if (newLevel === 2) revealRings([1]);
+    if (newLevel === 3) {
+        revealRings([2, 3]);
+        document.getElementById('bottom-bar').style.display = 'flex';
+        showAchievement('🔨', 'Construction unlocked!');
+    }
+}
+
+// ── Ring reveal ───────────────────────────────────────────────────────────────
+function revealRings(ringNums) {
+    ringNums.forEach(rn => {
+        const ring = [...RINGS[rn]].sort(() => Math.random() - 0.5);
+        const farmable = new Set([ring[0], ring[1]]);
+        RINGS[rn].forEach((idx, pos) => {
+            tiles[idx] = farmable.has(idx) ? null : 'locked';
+            setTimeout(() => renderTile(idx, true), pos * 30);
+        });
+    });
+}
+
+// ── Popup ─────────────────────────────────────────────────────────────────────
+function popup(el, text, color) {
+    const rect = el.getBoundingClientRect();
+    const p = document.createElement('div');
+    p.className = 'popup';
+    p.textContent = text;
+    p.style.color = color;
+    p.style.left = `${rect.left + rect.width / 2 - 24}px`;
+    p.style.top  = `${rect.top  + rect.height / 2 - 20}px`;
+    document.body.appendChild(p);
+    setTimeout(() => p.remove(), 1100);
+}
+
+// ── Tile interaction ──────────────────────────────────────────────────────────
+function clickTile(i) {
+    if (buildMode) {
+        if (tiles[i] !== 'locked') return; // must click a brown tile
+        placeBuildingAt(i);
+        return;
+    }
+
+    const t  = tiles[i];
+    if (t === 'hidden' || t === 'locked') return;
+    if (t && t.state === 'house') return;
+    const el = document.getElementById(`tile-${i}`);
+
+    if (t === null) {
+        if (coins < PLANT_COST) { popup(el, 'Need 10🪙', '#F44336'); return; }
+        coins -= PLANT_COST;
+        tiles[i] = { state: 'growing', plantedAt: Date.now() };
+        popup(el, '-10🪙', '#FF9800');
+    } else if (t.state === 'growing') {
+        if (coins < SPEED_COST) { popup(el, 'Need 5🪙', '#F44336'); return; }
+        coins -= SPEED_COST;
+        tiles[i] = { state: 'ready' };
+        popup(el, '⚡ Ready!', '#2196F3');
+    } else if (t.state === 'ready') {
+        coins += HARVEST;
+        tiles[i] = null;
+        popup(el, `+${HARVEST}🪙`, '#43A047');
+        addScore(5);
+        if (firstHarvest) {
+            firstHarvest = false;
+            showAchievement('🌿', 'You harvested!');
+            setTimeout(() => showAchievement('🪙', 'You earned money!'), 2600);
+        }
+    }
+
+    updateCoins();
+    renderTile(i);
+}
+
+// ── Build mode ────────────────────────────────────────────────────────────────
+function selectBuilding(type) {
+    buildMode = type;
+    document.getElementById('item-small-house').classList.toggle('selected', type === 'small_house');
+    closeBuildPanel();
+    document.getElementById('grid').classList.add('build-mode');
+}
+
+function exitBuildMode() {
+    buildMode = null;
+    document.getElementById('grid').classList.remove('build-mode');
+    document.getElementById('item-small-house').classList.remove('selected');
+    clearBuildPreview();
+}
+
+function get2x2(i) {
+    const r = Math.floor(i / 8), c = i % 8;
+    if (r > 6 || c > 6) return null;
+    return [i, i + 1, i + 8, i + 9];
+}
+
+function showBuildPreview(i) {
+    clearBuildPreview();
+    const block = get2x2(i);
+    if (!block) return;
+    const valid = block.every(j => tiles[j] === 'locked');
+    buildHoverTiles = block;
+    buildHoverValid = valid;
+    block.forEach(j => {
+        document.getElementById(`tile-${j}`).classList.add(valid ? 'preview-ok' : 'preview-bad');
+    });
+}
+
+function clearBuildPreview() {
+    buildHoverTiles.forEach(j => {
+        const el = document.getElementById(`tile-${j}`);
+        if (el) el.classList.remove('preview-ok', 'preview-bad');
+    });
+    buildHoverTiles = [];
+    buildHoverValid = false;
+}
+
+function placeBuildingAt(i) {
+    const block = get2x2(i);
+    if (!block) return;
+    const valid = block.every(j => j >= 0 && j < 64 && tiles[j] === 'locked');
+    if (!valid) return;
+
+    if (buildMode === 'small_house') {
+        if (coins < 20) {
+            popup(document.getElementById(`tile-${i}`), 'Need 20🪙', '#F44336');
+            return;
+        }
+        coins -= 20;
+        population += 2;
+        clearBuildPreview();
+        exitBuildMode();
+
+        const [tl, tr, bl, br] = block;
+        tiles[tl] = { state: 'house', role: 'main' };
+        tiles[tr] = { state: 'house', role: 'part' };
+        tiles[bl] = { state: 'house', role: 'part' };
+        tiles[br] = { state: 'house', role: 'part' };
+        block.forEach(j => renderTile(j));
+
+        updateCoins();
+        updatePopulation();
+        addScore(15);  // 5 from population + 10 from house
+        popup(document.getElementById(`tile-${tl}`), '+15 score', '#7B1FA2');
+    }
+}
+
+// ── Build panel ───────────────────────────────────────────────────────────────
+function toggleBuildPanel() {
+    buildPanelOpen ? closeBuildPanel() : openBuildPanel();
+}
+function openBuildPanel() {
+    exitBuildMode();
+    buildPanelOpen = true;
+    document.getElementById('build-panel').classList.add('open');
+    document.getElementById('construct-btn').classList.add('active');
+}
+function closeBuildPanel() {
+    buildPanelOpen = false;
+    document.getElementById('build-panel').classList.remove('open');
+    document.getElementById('construct-btn').classList.remove('active');
+}
+
+function switchTab(id) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    document.querySelector(`[onclick="switchTab('${id}')"]`).classList.add('active');
+    document.getElementById(`tab-${id}`).classList.add('active');
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderTile(i, reveal = false) {
+    const el = document.getElementById(`tile-${i}`);
+    const t  = tiles[i];
+
+    el.className = 'tile' + (reveal ? ' reveal' : '');
+
+    if (t === 'hidden') {
+        el.className += ' hidden'; el.innerHTML = '';
+    } else if (t === 'locked') {
+        el.className += ' locked'; el.innerHTML = '';
+    } else if (t === null) {
+        el.className += ' empty';
+        el.innerHTML = `<div style="font-size:20px">🌱</div><div class="tile-label">Plant·10🪙</div>`;
+    } else if (t.state === 'growing') {
+        const elapsed   = Date.now() - t.plantedAt;
+        const progress  = Math.min(elapsed / GROW_MS, 1);
+        const remaining = Math.ceil((GROW_MS - elapsed) / 1000);
+        const sz        = Math.round(16 + 10 * progress);
+        el.className += ' growing';
+        el.innerHTML = `
+            <div style="font-size:${sz}px">🌱</div>
+            <div class="tile-timer">${remaining}s</div>
+            <div class="progress-wrap"><div class="progress-fill" style="width:${progress*100}%"></div></div>
+            <div class="tile-label">⚡5🪙</div>`;
+    } else if (t.state === 'ready') {
+        el.className += ' ready';
+        el.innerHTML = `<div style="font-size:30px">🌿</div><div class="tile-label">+${HARVEST}🪙</div>`;
+    } else if (t.state === 'house') {
+        if (t.role === 'main') {
+            el.className += ' house-main';
+            el.innerHTML = `<div class="house-icon">🏠</div>`;
+        } else {
+            el.className += ' house-part'; el.innerHTML = '';
+        }
+    }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+const gridEl = document.getElementById('grid');
+for (let i = 0; i < 64; i++) {
+    const el = document.createElement('div');
+    el.id = `tile-${i}`;
+    el.addEventListener('click', () => clickTile(i));
+    el.addEventListener('mouseenter', () => { if (buildMode) showBuildPreview(i); });
+    gridEl.appendChild(el);
+    renderTile(i);
+}
+gridEl.addEventListener('mouseleave', () => { if (buildMode) clearBuildPreview(); });
+
+// Close panel when clicking outside
+document.addEventListener('click', e => {
+    if (buildPanelOpen &&
+        !document.getElementById('build-panel').contains(e.target) &&
+        !document.getElementById('bottom-bar').contains(e.target)) {
+        closeBuildPanel();
+    }
+});
+
+// Escape cancels build mode
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { exitBuildMode(); closeBuildPanel(); }
+});
+
+updateCoins();
+updatePopulation();
+
+// ── Tick ──────────────────────────────────────────────────────────────────────
+setInterval(() => {
+    const now = Date.now();
+    tiles.forEach((t, i) => {
+        if (t && typeof t === 'object' && t.state === 'growing') {
+            if (now - t.plantedAt >= GROW_MS) tiles[i] = { state: 'ready' };
+            renderTile(i);
+        }
+    });
+}, 500);
+</script>
+</body>
+</html>
