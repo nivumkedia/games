@@ -181,6 +181,7 @@ body {
     <div class="shop-line" id="shop-info"></div>
     <button class="shop-buy" id="attack-upgrade-btn">Buy Attack Range</button>
     <button class="shop-buy" id="shield-upgrade-btn">Buy Shield Time</button>
+    <button class="shop-buy" id="archery-upgrade-btn">Buy Archery Range</button>
 </div>
 
 <script>
@@ -194,6 +195,7 @@ const shopPanel = document.getElementById("shop-panel");
 const shopInfo = document.getElementById("shop-info");
 const attackUpgradeBtn = document.getElementById("attack-upgrade-btn");
 const shieldUpgradeBtn = document.getElementById("shield-upgrade-btn");
+const archeryUpgradeBtn = document.getElementById("archery-upgrade-btn");
 
 const world = { width: 3200, height: 720, gravity: 0.82 };
 const SAVE_KEY = "plain-platformer-save-v1";
@@ -205,10 +207,13 @@ let killsThisLevel = 0;
 let killBank = 0;
 let attackUpgradeLevel = 0;
 let shieldUpgradeLevel = 0;
+let archeryRangeLevel = 0;
 let lives = null;
 let lastHudText = "";
 let shieldUnlocked = false;
 let duckUnlocked = false;
+let archeryUnlocked = false;
+let archeryReady = false;
 let saveResetTimer = null;
 
 let start = { x: 90, y: 520 };
@@ -590,12 +595,47 @@ const levels = [
             { x: 4535, y: 467, w: 30, h: 30, type: "shieldArcher", attackOffset: 2.8, shootRange: 840 },
             { x: 4970, y: 402, w: 30, h: 30, type: "shieldArcher", attackOffset: 0.3, shootRange: 840 }
         ]
+    },
+    {
+        name: "Level 14",
+        intro: "New: Press 4, then click where you want to shoot.",
+        width: 5800,
+        start: { x: 90, y: 520 },
+        goal: { x: 5635, y: 552, w: 56, h: 98 },
+        lives: 3,
+        platforms: [
+            { x: 0, y: 650, w: 560, h: 70 },
+            { x: 720, y: 575, w: 270, h: 30 },
+            { x: 1160, y: 500, w: 270, h: 30 },
+            { x: 1620, y: 590, w: 310, h: 30 },
+            { x: 2110, y: 520, w: 290, h: 30 },
+            { x: 2590, y: 450, w: 290, h: 30 },
+            { x: 3070, y: 560, w: 310, h: 30 },
+            { x: 3560, y: 490, w: 300, h: 30 },
+            { x: 4050, y: 570, w: 300, h: 30 },
+            { x: 4540, y: 505, w: 290, h: 30 },
+            { x: 5000, y: 440, w: 280, h: 30 },
+            { x: 5620, y: 650, w: 360, h: 70 }
+        ],
+        enemies: [
+            { x: 825, y: 537, w: 30, h: 30, type: "shieldArcher", attackOffset: 1.0, shootRange: 780 },
+            { x: 1240, y: 462, w: 30, h: 30, type: "aimArcher", attackOffset: 2.4, shootRange: 800 },
+            { x: 1715, y: 552, w: 30, h: 30, type: "jumpSentry", attackOffset: 1.6, attackPadX: 50, attackPadY: 42 },
+            { x: 2200, y: 482, w: 30, h: 30, type: "shieldArcher", attackOffset: 0.5, shootRange: 820 },
+            { x: 2680, y: 412, w: 30, h: 30, type: "shieldArcher", attackOffset: 2.0, shootRange: 820 },
+            { x: 3165, y: 522, w: 30, h: 30, type: "aimArcher", attackOffset: 1.3, shootRange: 840 },
+            { x: 3650, y: 452, w: 30, h: 30, type: "jumpSentry", attackOffset: 2.7, attackPadX: 52, attackPadY: 44 },
+            { x: 4145, y: 532, w: 30, h: 30, type: "shieldArcher", attackOffset: 0.9, shootRange: 860 },
+            { x: 4630, y: 467, w: 30, h: 30, type: "aimArcher", attackOffset: 2.1, shootRange: 860 },
+            { x: 5090, y: 402, w: 30, h: 30, type: "shieldArcher", attackOffset: 0.2, shootRange: 880 }
+        ]
     }
 ];
 
 let platforms = [];
 let enemies = [];
 let arrows = [];
+let playerArrows = [];
 let goal = { x: 3105, y: 552, w: 56, h: 98 };
 
 function randomJumpDelay() {
@@ -673,6 +713,18 @@ function enemyKillReward(enemy) {
     return 1;
 }
 
+function playerArcheryRange() {
+    return [720, 1440, 2160][archeryRangeLevel] || 720;
+}
+
+function defeatEnemy(index) {
+    const defeatedEnemy = enemies[index];
+    enemies.splice(index, 1);
+    killsThisLevel += 1;
+    killBank += enemyKillReward(defeatedEnemy);
+    updateHud();
+}
+
 function shootArrow(enemy) {
     const playerCenter = player.x + player.w / 2;
     const enemyCenter = enemy.x + enemy.w / 2;
@@ -702,6 +754,29 @@ function shootArrow(enemy) {
         distance: 0,
         maxDistance: enemy.shootRange || 680
     });
+}
+
+function firePlayerArrow(clientX, clientY) {
+    if (!archeryUnlocked || !archeryReady) return;
+    const startX = player.x + player.w / 2;
+    const startY = player.y + player.h / 2;
+    const targetX = clientX + cameraX;
+    const targetY = clientY;
+    const dx = targetX - startX;
+    const dy = targetY - startY;
+    const distance = Math.max(1, Math.hypot(dx, dy));
+    const speed = 12;
+    playerArrows.push({
+        x: startX,
+        y: startY,
+        w: 34,
+        h: 6,
+        vx: (dx / distance) * speed,
+        vy: (dy / distance) * speed,
+        distance: 0,
+        maxDistance: playerArcheryRange()
+    });
+    archeryReady = false;
 }
 
 function shieldDurationSeconds() {
@@ -757,7 +832,10 @@ function loadLevel(index) {
     lives = Number.isFinite(level.lives) ? level.lives : null;
     shieldUnlocked = index >= 7;
     duckUnlocked = index >= 10;
+    archeryUnlocked = index >= 13;
+    archeryReady = false;
     arrows = [];
+    playerArrows = [];
     killsThisLevel = 0;
     updateHud();
     respawn();
@@ -818,11 +896,7 @@ function attack() {
     const hitbox = attackBox();
     for (let i = enemies.length - 1; i >= 0; i--) {
         if (!rectsOverlap(hitbox, enemies[i])) continue;
-        const defeatedEnemy = enemies[i];
-        enemies.splice(i, 1);
-        killsThisLevel += 1;
-        killBank += enemyKillReward(defeatedEnemy);
-        updateHud();
+        defeatEnemy(i);
     }
 }
 
@@ -838,6 +912,10 @@ function attackUpgradeCost() {
 
 function shieldUpgradeCost() {
     return 15 + shieldUpgradeLevel * 5;
+}
+
+function archeryUpgradeCost() {
+    return archeryRangeLevel === 0 ? 30 : 40;
 }
 
 function updateShop() {
@@ -863,6 +941,19 @@ function updateShop() {
         shieldUpgradeBtn.disabled = killBank < shieldCost;
     }
 
+    if (!archeryUnlocked) {
+        archeryUpgradeBtn.textContent = "Archery Locked";
+        archeryUpgradeBtn.disabled = true;
+    } else if (archeryRangeLevel >= 2) {
+        archeryUpgradeBtn.textContent = "Archery Maxed Out";
+        archeryUpgradeBtn.disabled = true;
+    } else {
+        const archeryCost = archeryUpgradeCost();
+        const nextRange = archeryRangeLevel + 2;
+        archeryUpgradeBtn.textContent = `Buy ${nextRange}-Platform Shot (${archeryCost})`;
+        archeryUpgradeBtn.disabled = killBank < archeryCost;
+    }
+
     const attackLine = attackUpgradeLevel >= 3
         ? "Attack range maxed"
         : `Attack range ${attackUpgradeLevel}/3, next ${attackUpgradeCost()} kills`;
@@ -871,7 +962,12 @@ function updateShop() {
         : shieldUnlocked
             ? `Shield time ${shieldUpgradeLevel}/3, next ${shieldUpgradeCost()} kills`
             : "Shield time locked until Level 8";
-    shopInfo.textContent = `Kills: ${killBank}. ${attackLine}. ${shieldLine}.`;
+    const archeryLine = archeryRangeLevel >= 2
+        ? "Archery range maxed at 3 platforms"
+        : archeryUnlocked
+            ? `Archery range ${archeryRangeLevel + 1} platform, next ${archeryUpgradeCost()} kills`
+            : "Archery range locked until Level 14";
+    shopInfo.textContent = `Kills: ${killBank}. ${attackLine}. ${shieldLine}. ${archeryLine}.`;
 }
 
 function buyAttackUpgrade() {
@@ -893,12 +989,23 @@ function buyShieldUpgrade() {
     updateHud();
 }
 
+function buyArcheryUpgrade() {
+    if (!archeryUnlocked) return;
+    if (archeryRangeLevel >= 2) return;
+    const cost = archeryUpgradeCost();
+    if (killBank < cost) return;
+    killBank -= cost;
+    archeryRangeLevel += 1;
+    updateHud();
+}
+
 function saveGame() {
     const saveData = {
         levelIndex,
         killBank,
         attackUpgradeLevel,
-        shieldUpgradeLevel
+        shieldUpgradeLevel,
+        archeryRangeLevel
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
     saveBtn.textContent = "Saved";
@@ -920,6 +1027,7 @@ function loadSavedGame() {
     killBank = Math.max(0, Number(saveData.killBank) || 0);
     attackUpgradeLevel = clampUpgrade(Number(saveData.attackUpgradeLevel) || 0);
     shieldUpgradeLevel = clampUpgrade(Number(saveData.shieldUpgradeLevel) || 0);
+    archeryRangeLevel = Math.max(0, Math.min(2, Number(saveData.archeryRangeLevel) || 0));
     loadLevel(clampLevel(Number(saveData.levelIndex) || 0));
     return true;
 }
@@ -1093,6 +1201,23 @@ function update() {
         }
     }
 
+    for (let i = playerArrows.length - 1; i >= 0; i--) {
+        const arrow = playerArrows[i];
+        arrow.x += arrow.vx;
+        arrow.y += arrow.vy;
+        arrow.distance += Math.hypot(arrow.vx, arrow.vy);
+        if (arrow.distance > arrow.maxDistance || arrow.x < -80 || arrow.x > world.width + 80) {
+            playerArrows.splice(i, 1);
+            continue;
+        }
+        for (let enemyIndex = enemies.length - 1; enemyIndex >= 0; enemyIndex--) {
+            if (!rectsOverlap(arrow, enemies[enemyIndex])) continue;
+            playerArrows.splice(i, 1);
+            defeatEnemy(enemyIndex);
+            break;
+        }
+    }
+
     const speed = player.grounded ? 1.0 : 0.7;
     if (keys.left) {
         player.vx -= speed;
@@ -1230,6 +1355,22 @@ function draw() {
         ctx.restore();
     });
 
+    playerArrows.forEach(arrow => {
+        const angle = Math.atan2(arrow.vy, arrow.vx);
+        ctx.save();
+        ctx.translate(arrow.x + arrow.w / 2, arrow.y + arrow.h / 2);
+        ctx.rotate(angle);
+        ctx.fillStyle = "#49ffa8";
+        roundRect(-arrow.w / 2, -arrow.h / 2, arrow.w, arrow.h, 3);
+        ctx.fillStyle = "#dfffea";
+        ctx.beginPath();
+        ctx.moveTo(arrow.w / 2 + 8, 0);
+        ctx.lineTo(arrow.w / 2, -7);
+        ctx.lineTo(arrow.w / 2, 7);
+        ctx.fill();
+        ctx.restore();
+    });
+
     if (player.attackTimer > 0) {
         const hitbox = attackBox();
         ctx.fillStyle = "rgba(255, 232, 107, 0.38)";
@@ -1259,6 +1400,19 @@ function draw() {
     ctx.fillRect(player.x + 21, drawY + 12, 6, 6);
     ctx.fillStyle = "#dffbff";
     ctx.fillRect(player.x + 8, player.y + player.h - 8, 18, 4);
+
+    if (archeryReady) {
+        ctx.strokeStyle = "#49ffa8";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(player.x + player.w / 2, player.y + player.h / 2, 34, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = "#dfffea";
+        ctx.font = "900 10px Segoe UI, Arial, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("CLICK", player.x + player.w / 2, player.y - 10);
+        ctx.textAlign = "left";
+    }
 
     if (playerShielded()) {
         ctx.strokeStyle = "rgba(126, 245, 255, 0.9)";
@@ -1301,8 +1455,16 @@ window.addEventListener("keydown", event => {
         event.preventDefault();
         return;
     }
+    if (event.code === "Digit4") {
+        if (archeryUnlocked && !event.repeat) archeryReady = true;
+        event.preventDefault();
+        return;
+    }
     setKey(event.code, true);
     if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space", "Digit3"].includes(event.code)) event.preventDefault();
+});
+canvas.addEventListener("click", event => {
+    firePlayerArrow(event.clientX, event.clientY);
 });
 window.addEventListener("keyup", event => setKey(event.code, false));
 window.addEventListener("message", event => {
@@ -1317,9 +1479,10 @@ shopToggle.addEventListener("click", () => {
 saveBtn.addEventListener("click", saveGame);
 attackUpgradeBtn.addEventListener("click", buyAttackUpgrade);
 shieldUpgradeBtn.addEventListener("click", buyShieldUpgrade);
+archeryUpgradeBtn.addEventListener("click", buyArcheryUpgrade);
 
 resize();
-if (!loadSavedGame()) loadLevel(0);
+loadLevel(13);
 requestAnimationFrame(loop);
 </script>
 </body>
