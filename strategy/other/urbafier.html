@@ -312,6 +312,19 @@
             to { opacity: 0; transform: scale(1.04); pointer-events: none; }
         }
 
+        /* ── Supply bar on tile ────────────── */
+        .supply-bar-wrap {
+            position: absolute; bottom: 0; left: 0; right: 0; height: 4px;
+            background: rgba(0,0,0,0.10); z-index: 6; pointer-events: none;
+        }
+        .supply-bar-fill { height: 100%; transition: width 0.8s linear; }
+        .supply-empty-overlay {
+            position: absolute; inset: 0;
+            background: rgba(244,67,54,0.22);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px; pointer-events: none; z-index: 7;
+        }
+
         /* ── Upgrade badge on tile ─────────── */
         .upgrade-badge {
             position: absolute; top: 2px; left: 2px;
@@ -769,6 +782,26 @@ const BUILDING_DEFS = {
     hyperloop:       { name:'Hyperloop',       emoji:'🛸', cost:12000, cols:4, rows:4, pop:0, score:0, unlockLevel:15, incomeFlat:900, incomeMs:60000 },
 };
 
+// ── Building categories & supply config ───────────────────────────────────────
+const BUILDING_CATEGORY = {};
+['small_house','house','cottage','townhouse','villa','apartment','condo','penthouse','mansion','estate','palace','skyscraper']
+    .forEach(t => BUILDING_CATEGORY[t] = 'housing');
+['small_office','large_office','bank','mall','tech_campus','factory','research_lab','financial_hub','convention_hall','stock_exchange','power_plant','megacorp_hq']
+    .forEach(t => BUILDING_CATEGORY[t] = 'working');
+['chicken_coop','cow_barn','sheep_pen','pig_pen','beehive','fish_pond','orchard','wheat_farm','dairy_farm','vineyard','greenhouse','mega_farm']
+    .forEach(t => BUILDING_CATEGORY[t] = 'farming');
+['bus_stop','taxi_stand','subway_station','train_station','airport','ferry_terminal','monorail_hub','seaport','spaceport','hyperloop']
+    .forEach(t => BUILDING_CATEGORY[t] = 'transport');
+
+const SUPPLY_CONFIG = {
+    housing:   { label: 'Workers',     emoji: '👷', drainMs: 300000 }, // 5 min
+    working:   { label: 'Maintenance', emoji: '🔧', drainMs: 180000 }, // 3 min
+    farming:   { label: 'Feed',        emoji: '🌾', drainMs: 240000 }, // 4 min
+    transport: { label: 'Supplies',    emoji: '📦', drainMs: 120000 }, // 2 min
+};
+
+function restockCost(def) { return Math.max(5, Math.round(def.cost * 0.10)); }
+
 // 80×80 grid. Center 2×2 at rows 39–40, cols 39–40.
 // Ring = Chebyshev distance from center block.
 function tileRing(i) {
@@ -935,10 +968,29 @@ function showUpgradePanel(tileIdx) {
         ? `<button class="up-btn upgrade" onclick="upgradeBuilding()" ${coins < cost ? 'disabled' : ''}>⬆ Upgrade · ${cost}🪙</button>`
         : `<div style="color:#43A047;font-weight:800;font-size:13px;padding:4px 0">✓ Fully Upgraded (Lv ${max})</div>`;
 
+    const cat = BUILDING_CATEGORY[t.buildingType];
+    const supplyConf = cat ? SUPPLY_CONFIG[cat] : null;
+    const supply = t.supplyLevel ?? 100;
+    const supplyColor = supply > 60 ? '#4CAF50' : supply > 25 ? '#FFC107' : '#F44336';
+    const rCost = restockCost(def);
+    const supplySection = supplyConf ? `
+        <div style="width:100%;margin:4px 0">
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:#888;font-weight:700;margin-bottom:3px">
+                <span>${supplyConf.emoji} ${supplyConf.label}</span>
+                <span style="color:${supplyColor};font-weight:800">${Math.round(supply)}%</span>
+            </div>
+            <div style="width:100%;height:7px;background:#eee;border-radius:5px;overflow:hidden">
+                <div style="width:${supply}%;height:100%;background:${supplyColor};border-radius:5px;transition:width 0.4s"></div>
+            </div>
+        </div>
+        <button class="up-btn" style="background:#1565C0;color:#fff;margin-bottom:2px" onclick="restockBuilding()" ${coins < rCost ? 'disabled' : ''}>${supplyConf.emoji} Restock · ${rCost}🪙</button>
+    ` : '';
+
     document.getElementById('upgrade-panel').innerHTML = `
         <div style="font-size:30px">${def.emoji}</div>
         <div style="font-weight:800;font-size:16px;color:#222">${def.name}</div>
         <div style="font-size:11px;color:#aaa;font-weight:700">Level ${lvl + 1} / ${max + 1}</div>
+        ${supplySection}
         <div style="font-size:12px;color:#555;margin:4px 0 2px">${statLine}</div>
         ${collectBtn}
         ${upgradeBtn}
@@ -984,6 +1036,21 @@ function upgradeBuilding() {
         updatePopulation();
     }
     updateCoins();
+    renderTile(upgradePanelTile);
+    showUpgradePanel(upgradePanelTile);
+}
+
+function restockBuilding() {
+    if (upgradePanelTile < 0) return;
+    const t = tiles[upgradePanelTile];
+    const def = BUILDING_DEFS[t.buildingType];
+    const cost = restockCost(def);
+    if (coins < cost) return;
+    coins -= cost;
+    t.supplyLevel = 100;
+    t.lastSupplyDrain = Date.now();
+    updateCoins();
+    popup(document.getElementById(`tile-${upgradePanelTile}`), `${SUPPLY_CONFIG[BUILDING_CATEGORY[t.buildingType]]?.emoji} Restocked!`, '#1565C0');
     renderTile(upgradePanelTile);
     showUpgradePanel(upgradePanelTile);
 }
@@ -1187,6 +1254,7 @@ function placeBuildingAt(i) {
         const tdata = { state: 'house', role: idx === 0 ? 'main' : 'part', buildingType: type, upgradeLevel: 0 };
         if (idx === 0 && BUILDING_DEFS[type].incomeMs) tdata.lastIncome = Date.now();
         if (idx === 0 && BUILDING_DEFS[type].produceMs) tdata.lastProduced = Date.now();
+        if (idx === 0) { tdata.supplyLevel = 100; tdata.lastSupplyDrain = Date.now(); }
         tiles[j] = tdata;
         renderTile(j);
     });
@@ -1264,7 +1332,11 @@ function renderTile(i, reveal = false) {
                 }
             }
             const upgBadge = (t.upgradeLevel || 0) > 0 ? `<div class="upgrade-badge">★${t.upgradeLevel}</div>` : '';
-            el.innerHTML = `<div class="house-icon" style="width:${iconW}px;height:${iconH}px;font-size:${fontSize}px">${def.emoji}</div>${timerHTML}${upgBadge}`;
+            const supply = t.supplyLevel ?? 100;
+            const supplyColor = supply > 60 ? '#4CAF50' : supply > 25 ? '#FFC107' : '#F44336';
+            const supplyBar = `<div class="supply-bar-wrap"><div class="supply-bar-fill" style="width:${supply}%;background:${supplyColor}"></div></div>`;
+            const emptyOverlay = supply <= 0 ? `<div class="supply-empty-overlay">⚠️</div>` : '';
+            el.innerHTML = `<div class="house-icon" style="width:${iconW}px;height:${iconH}px;font-size:${fontSize}px">${def.emoji}</div>${timerHTML}${upgBadge}${supplyBar}${emptyOverlay}`;
         } else {
             el.className += ' house-part'; el.innerHTML = '';
         }
@@ -1362,7 +1434,8 @@ setInterval(() => {
 
     const allHouseCount = tiles.filter(t =>
         t && typeof t === 'object' && t.state === 'house' &&
-        t.role === 'main' && (BUILDING_DEFS[t.buildingType]?.pop ?? 0) > 0
+        t.role === 'main' && (BUILDING_DEFS[t.buildingType]?.pop ?? 0) > 0 &&
+        (t.supplyLevel ?? 100) > 0
     ).length;
 
     tiles.forEach((t, i) => {
@@ -1377,28 +1450,41 @@ setInterval(() => {
         if (t.state === 'house' && t.role === 'main') {
             const def = BUILDING_DEFS[t.buildingType];
 
+            // Drain supply
+            const supplyConf = SUPPLY_CONFIG[BUILDING_CATEGORY[t.buildingType]];
+            if (supplyConf) {
+                const elapsed = now - (t.lastSupplyDrain || now);
+                t.lastSupplyDrain = now;
+                t.supplyLevel = Math.max(0, (t.supplyLevel ?? 100) - (elapsed / supplyConf.drainMs) * 100);
+            }
+
+            const hasSupply = (t.supplyLevel ?? 100) > 0;
+
             if (def.incomeMs && now - (t.lastIncome || 0) >= def.incomeMs) {
                 t.lastIncome = now;
-                let income = def.incomeFlat || 0;
-                if (def.incomePerHouse) {
-                    const cnt = def.countsHouseType
-                        ? tiles.filter(x => x?.state === 'house' && x?.role === 'main' && x?.buildingType === def.countsHouseType).length
-                        : allHouseCount;
-                    income += def.incomePerHouse * cnt;
-                }
-                income = Math.round(income * (1 + 0.4 * (t.upgradeLevel || 0)));
-                if (income > 0) {
-                    coins += income;
-                    updateCoins();
-                    popup(document.getElementById(`tile-${i}`), `+${income}🪙`, '#FFD700');
+                if (hasSupply) {
+                    let income = def.incomeFlat || 0;
+                    if (def.incomePerHouse) {
+                        const cnt = def.countsHouseType
+                            ? tiles.filter(x => x?.state === 'house' && x?.role === 'main' && x?.buildingType === def.countsHouseType).length
+                            : allHouseCount;
+                        income += def.incomePerHouse * cnt;
+                    }
+                    income = Math.round(income * (1 + 0.4 * (t.upgradeLevel || 0)));
+                    if (income > 0) {
+                        coins += income;
+                        updateCoins();
+                        popup(document.getElementById(`tile-${i}`), `+${income}🪙`, '#FFD700');
+                    }
                 }
             }
 
-            if (def.produceMs && !t.productReady && now - (t.lastProduced || 0) >= def.produceMs) {
+            if (def.produceMs && !t.productReady && hasSupply && now - (t.lastProduced || 0) >= def.produceMs) {
                 t.productReady = true;
             }
+            if (def.produceMs && !hasSupply) t.lastProduced = now;
 
-            if (def.incomeMs || def.produceMs) renderTile(i);
+            if (def.incomeMs || def.produceMs || supplyConf) renderTile(i);
         }
     });
 }, 500);
