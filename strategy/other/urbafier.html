@@ -305,12 +305,49 @@
             transition: transform 0.15s, box-shadow 0.15s;
         }
         #start-btn:hover { transform: scale(1.06); box-shadow: 0 8px 32px rgba(67,160,71,0.55); }
+        #tutorial-btn {
+            padding: 10px 28px; font-size: 15px; font-weight: 700;
+            background: rgba(255,255,255,0.22); color: #fff;
+            border: 2px solid rgba(255,255,255,0.55); border-radius: 50px;
+            cursor: pointer; transition: all 0.15s;
+            animation: title-pop 0.7s 0.45s cubic-bezier(0.34,1.56,0.64,1) both;
+        }
+        #tutorial-btn:hover { background: rgba(255,255,255,0.35); transform: scale(1.04); }
         #start-screen.hide {
             animation: screen-out 0.5s ease-in forwards;
         }
         @keyframes screen-out {
             to { opacity: 0; transform: scale(1.04); pointer-events: none; }
         }
+
+        /* ── Tutorial ──────────────────────── */
+        #tut-blocker {
+            position: fixed; inset: 0; z-index: 499; display: none;
+            background: rgba(0,0,0,0.48);
+        }
+        #tut-spotlight {
+            position: fixed; z-index: 501; border-radius: 14px; display: none;
+            box-shadow: 0 0 0 9999px rgba(0,0,0,0.52);
+            pointer-events: none;
+            transition: left 0.35s ease, top 0.35s ease, width 0.35s ease, height 0.35s ease;
+        }
+        #tut-card {
+            position: fixed; z-index: 502; left: 50%; transform: translateX(-50%);
+            background: #fff; border-radius: 20px; padding: 20px 22px 18px;
+            max-width: 310px; width: 88%; text-align: center; display: none;
+            box-shadow: 0 6px 30px rgba(0,0,0,0.25);
+        }
+        @keyframes cardIn {
+            from { opacity: 0; transform: translateX(-50%) scale(0.88) translateY(14px); }
+            to   { opacity: 1; transform: translateX(-50%) scale(1) translateY(0); }
+        }
+        .tut-next {
+            display: block; width: 100%; margin-top: 14px; padding: 12px;
+            font-size: 15px; font-weight: 800; border: none; border-radius: 12px;
+            background: linear-gradient(135deg, #43A047, #66BB6A);
+            color: #fff; cursor: pointer; transition: transform 0.15s;
+        }
+        .tut-next:hover { transform: scale(1.04); }
 
         /* ── Supply bar on tile ────────────── */
         .supply-bar-wrap {
@@ -677,6 +714,10 @@
 <div id="upgrade-overlay" onclick="hideUpgradePanel()"></div>
 <div id="upgrade-panel"></div>
 
+<div id="tut-blocker"></div>
+<div id="tut-spotlight"></div>
+<div id="tut-card"></div>
+
 <!-- ── Start screen ── -->
 <div id="start-screen">
     <div id="start-city">
@@ -711,10 +752,164 @@
         <div id="start-title">Urbafier</div>
         <div id="start-sub">Build your city from the ground up</div>
         <button id="start-btn" onclick="startGame()">▶ Start</button>
+        <button id="tutorial-btn" onclick="openTutorial()">? How to Play</button>
     </div>
 </div>
 
 <script>
+// ── Tutorial (interactive spotlight) ──────────────────────────────────────────
+const TUT_STEPS = [
+    { spot: 'center',    icon: '🌱', title: 'Your Starting Land',
+      body: 'These 4 green tiles are your starting farm. Tap any one to plant your first crop for 10🪙!',
+      waitFor: 'plant' },
+    { spot: 'planted',   icon: '⏱️', title: 'Crop Growing!',
+      body: 'Nice! It normally takes 60 seconds — speeding it up for you now...',
+      autoNext: 2200, readyPlanted: true },
+    { spot: 'planted',   icon: '✅', title: 'Tap to Harvest!',
+      body: 'Your crop is pulsing — it\'s ready! Tap it to collect coins and score.',
+      waitFor: 'harvest' },
+    { spot: '#top-bar',  icon: '⭐', title: 'Score & XP',
+      body: 'See that XP bar? Harvesting fills it. Fill it to level up — you\'ll unlock new land rings and new buildings!',
+      next: true },
+    { spot: null, icon: '🔨', title: 'Buildings',
+      body: 'At Level 3 the <b>Build</b> button appears at the bottom.<br><br>🏠 <b>Housing</b> — adds population<br>🏢 <b>Working</b> — earns income over time<br>🐔 <b>Farming</b> — produce goods to collect<br>🚌 <b>Transport</b> — steady income (Lv 6)',
+      next: true },
+    { spot: null, icon: '📦', title: 'Supply Management',
+      body: 'Every building has a colored bar at its base. When it runs empty, the building <b>stops working</b>. Tap any building and pay coins to restock it before that happens!',
+      next: true },
+    { spot: null, icon: '⬆️', title: 'Upgrades',
+      body: 'Tap any placed building to open its panel and upgrade it — up to 5 levels for more income, more population, or bigger harvests.',
+      next: true },
+    { spot: null, icon: '🔴', title: 'New Building Alerts',
+      body: 'When buildings unlock, a red dot appears on the Build button. Follow it — Build → tab → item — to see what\'s new. Tapping the item clears the dot.',
+      next: true },
+    { spot: '#save-btn', icon: '💾', title: 'Save Your City',
+      body: 'Tap Save anytime to keep your progress. Use ↺ to reset. Now go build the greatest city ever!',
+      done: true },
+];
+
+let tutActive = false;
+let tutStepIdx = 0;
+let tutWaiting = null;
+let tutPlantedTile = -1;
+let tutAutoTimer = null;
+
+function getTutRect(spot) {
+    if (!spot) return null;
+    if (spot === 'center') {
+        const tl = document.getElementById(`tile-${39*80+39}`);
+        const br = document.getElementById(`tile-${40*80+40}`);
+        if (!tl || !br) return null;
+        const r1 = tl.getBoundingClientRect(), r2 = br.getBoundingClientRect();
+        return { left: r1.left, top: r1.top, right: r2.right, bottom: r2.bottom };
+    }
+    if (spot === 'planted' && tutPlantedTile >= 0) {
+        const el = document.getElementById(`tile-${tutPlantedTile}`);
+        return el ? el.getBoundingClientRect() : null;
+    }
+    const el = document.querySelector(spot);
+    return el ? el.getBoundingClientRect() : null;
+}
+
+function showTutStep() {
+    const step = TUT_STEPS[tutStepIdx];
+    if (!step) { closeTutorial(); return; }
+
+    const pad = 12;
+    const rect = getTutRect(step.spot);
+    const spotlight = document.getElementById('tut-spotlight');
+    const blocker   = document.getElementById('tut-blocker');
+    const card      = document.getElementById('tut-card');
+
+    if (rect) {
+        spotlight.style.cssText = `display:block;left:${rect.left-pad}px;top:${rect.top-pad}px;width:${rect.right-rect.left+pad*2}px;height:${rect.bottom-rect.top+pad*2}px`;
+        blocker.style.display = 'none';
+    } else {
+        spotlight.style.display = 'none';
+        blocker.style.display = 'block';
+    }
+
+    card.style.display = 'block';
+    card.style.animation = 'none'; void card.offsetWidth;
+    card.style.animation = 'cardIn 0.32s cubic-bezier(0.34,1.56,0.64,1)';
+
+    const btns = step.next ? `<button class="tut-next" onclick="tutAdvance()">Next →</button>` :
+                 step.done ? `<button class="tut-next" onclick="closeTutorial()">Start Playing! 🏙️</button>` : '';
+    card.innerHTML = `
+        <div style="font-size:40px;margin-bottom:8px">${step.icon}</div>
+        <div style="font-weight:900;font-size:18px;color:#222;margin-bottom:8px">${step.title}</div>
+        <div style="font-size:13px;color:#555;line-height:1.65;text-align:left">${step.body}</div>
+        ${btns}
+    `;
+
+    // Position card above or below spotlight
+    const CARD_H = 200;
+    if (rect && rect.bottom + 20 + CARD_H < window.innerHeight) {
+        card.style.top = `${rect.bottom + pad + 14}px`; card.style.bottom = '';
+    } else if (rect && rect.top - 20 - CARD_H > 0) {
+        card.style.top = `${rect.top - pad - 14 - CARD_H}px`; card.style.bottom = '';
+    } else {
+        card.style.top = ''; card.style.bottom = '90px';
+    }
+
+    tutWaiting = step.waitFor || null;
+
+    if (tutAutoTimer) { clearTimeout(tutAutoTimer); tutAutoTimer = null; }
+    if (step.autoNext) {
+        if (step.readyPlanted) {
+            setTimeout(() => {
+                if (tutPlantedTile >= 0 && tiles[tutPlantedTile]?.state === 'growing') {
+                    tiles[tutPlantedTile] = { state: 'ready', cropType: tiles[tutPlantedTile].cropType || 'grass' };
+                    renderTile(tutPlantedTile);
+                    // Update spotlight position on new tile state
+                    const r = getTutRect('planted');
+                    if (r) document.getElementById('tut-spotlight').style.cssText =
+                        `display:block;left:${r.left-pad}px;top:${r.top-pad}px;width:${r.right-r.left+pad*2}px;height:${r.bottom-r.top+pad*2}px`;
+                }
+            }, step.autoNext - 700);
+        }
+        tutAutoTimer = setTimeout(() => tutAdvance(), step.autoNext);
+    }
+}
+
+function tutAdvance() {
+    if (tutAutoTimer) { clearTimeout(tutAutoTimer); tutAutoTimer = null; }
+    tutWaiting = null;
+    tutStepIdx++;
+    showTutStep();
+}
+
+function closeTutorial() {
+    tutActive = false; tutWaiting = null;
+    if (tutAutoTimer) { clearTimeout(tutAutoTimer); tutAutoTimer = null; }
+    document.getElementById('tut-spotlight').style.display = 'none';
+    document.getElementById('tut-blocker').style.display = 'none';
+    document.getElementById('tut-card').style.display = 'none';
+}
+
+function openTutorial() {
+    // Dismiss start screen and enter the game
+    const ss = document.getElementById('start-screen');
+    if (ss) { ss.classList.add('hide'); setTimeout(() => ss.remove(), 500); }
+    window.scrollTo({
+        left: (document.body.scrollWidth - window.innerWidth) / 2,
+        top:  (document.body.scrollHeight - window.innerHeight) / 2,
+    });
+    tutActive = true; tutStepIdx = 0; tutPlantedTile = -1;
+    setTimeout(() => showTutStep(), 600); // wait for scroll to settle
+}
+
+// ── Start screen ───────────────────────────────────────────────────────────────
+function startGame() {
+    const ss = document.getElementById('start-screen');
+    ss.classList.add('hide');
+    setTimeout(() => ss.remove(), 500);
+    window.scrollTo({
+        left: (document.body.scrollWidth - window.innerWidth) / 2,
+        top:  (document.body.scrollHeight - window.innerHeight) / 2,
+    });
+}
+
 // ── Constants ──────────────────────────────────────────────────────────────────
 const GROW_MS    = 60000;
 const PLANT_COST = 10;
@@ -744,18 +939,18 @@ const BUILDING_DEFS = {
     palace:          { name:'Palace',          emoji:'⛩️', cost:3500,  cols:4, rows:4, pop:80,  score:1200, unlockLevel:14 },
     skyscraper:      { name:'Skyscraper',      emoji:'🌆', cost:6000,  cols:3, rows:5, pop:130, score:2000, unlockLevel:15 },
     // ── Working ──────────────────────────────────────────────────────────────────
-    small_office:    { name:'Small Office',    emoji:'🏢', cost:30,    cols:2, rows:2, pop:0, score:0, unlockLevel:4,  incomePerHouse:15, incomeMs:60000, countsHouseType:null    },
-    large_office:    { name:'Large Office',    emoji:'🏬', cost:60,    cols:3, rows:2, pop:0, score:0, unlockLevel:5,  incomePerHouse:15, incomeMs:30000, countsHouseType:'house'  },
+    small_office:    { name:'Small Office',    emoji:'🏢', cost:30,    cols:2, rows:2, pop:0, score:0, unlockLevel:4,  incomePerHouse:5, incomeMs:60000, countsHouseType:null    },
+    large_office:    { name:'Large Office',    emoji:'🏬', cost:60,    cols:3, rows:2, pop:0, score:0, unlockLevel:5,  incomePerHouse:5, incomeMs:30000, countsHouseType:'house'  },
     bank:            { name:'Bank',            emoji:'🏦', cost:90,    cols:2, rows:2, pop:0, score:0, unlockLevel:6,  incomeFlat:20,  incomeMs:45000 },
-    mall:            { name:'Mall',            emoji:'🏪', cost:160,   cols:3, rows:3, pop:0, score:0, unlockLevel:7,  incomePerHouse:20, incomeMs:60000, countsHouseType:null    },
+    mall:            { name:'Mall',            emoji:'🏪', cost:160,   cols:3, rows:3, pop:0, score:0, unlockLevel:7,  incomePerHouse:5, incomeMs:60000, countsHouseType:null    },
     tech_campus:     { name:'Tech Campus',     emoji:'💻', cost:280,   cols:3, rows:2, pop:0, score:0, unlockLevel:8,  incomeFlat:55,  incomeMs:60000 },
-    factory:         { name:'Factory',         emoji:'🏭', cost:450,   cols:3, rows:3, pop:0, score:0, unlockLevel:9,  incomePerHouse:25, incomeMs:45000, countsHouseType:null    },
+    factory:         { name:'Factory',         emoji:'🏭', cost:450,   cols:3, rows:3, pop:0, score:0, unlockLevel:9,  incomePerHouse:5, incomeMs:45000, countsHouseType:null    },
     research_lab:    { name:'Research Lab',    emoji:'🔬', cost:700,   cols:2, rows:3, pop:0, score:0, unlockLevel:10, incomeFlat:90,  incomeMs:60000 },
-    financial_hub:   { name:'Financial Hub',   emoji:'💹', cost:1100,  cols:3, rows:3, pop:0, score:0, unlockLevel:11, incomePerHouse:35, incomeMs:30000, countsHouseType:null    },
+    financial_hub:   { name:'Financial Hub',   emoji:'💹', cost:1100,  cols:3, rows:3, pop:0, score:0, unlockLevel:11, incomePerHouse:5, incomeMs:30000, countsHouseType:null    },
     convention_hall: { name:'Convention Hall', emoji:'🎪', cost:1700,  cols:4, rows:3, pop:0, score:0, unlockLevel:12, incomeFlat:200, incomeMs:60000 },
-    stock_exchange:  { name:'Stock Exchange',  emoji:'📈', cost:2800,  cols:3, rows:3, pop:0, score:0, unlockLevel:13, incomePerHouse:50, incomeMs:30000, countsHouseType:null    },
+    stock_exchange:  { name:'Stock Exchange',  emoji:'📈', cost:2800,  cols:3, rows:3, pop:0, score:0, unlockLevel:13, incomePerHouse:5, incomeMs:30000, countsHouseType:null    },
     power_plant:     { name:'Power Plant',     emoji:'⚡', cost:4500,  cols:4, rows:3, pop:0, score:0, unlockLevel:14, incomeFlat:300, incomeMs:45000 },
-    megacorp_hq:     { name:'Megacorp HQ',     emoji:'🌐', cost:8000,  cols:4, rows:4, pop:0, score:0, unlockLevel:15, incomeFlat:200, incomePerHouse:80, incomeMs:30000, countsHouseType:null },
+    megacorp_hq:     { name:'Megacorp HQ',     emoji:'🌐', cost:8000,  cols:4, rows:4, pop:0, score:0, unlockLevel:15, incomeFlat:200, incomePerHouse:5, incomeMs:30000, countsHouseType:null },
     // ── Farming ──────────────────────────────────────────────────────────────────
     chicken_coop:    { name:'Chicken Coop',    emoji:'🐔', cost:40,    cols:2, rows:2, pop:0, score:20,  unlockLevel:5,  produceMs:60000,  productEmoji:'🥚', productCoins:15  },
     cow_barn:        { name:'Cow Barn',        emoji:'🐄', cost:70,    cols:3, rows:2, pop:0, score:30,  unlockLevel:5,  produceMs:90000,  productEmoji:'🥛', productCoins:25  },
@@ -1172,6 +1367,7 @@ function clickTile(i) {
         coins -= PLANT_COST;
         tiles[i] = { state: 'growing', plantedAt: Date.now(), cropType: currentCrop };
         popup(el, '-10🪙', '#FF9800');
+        if (tutWaiting === 'plant') { tutPlantedTile = i; tutWaiting = null; setTimeout(() => tutAdvance(), 500); }
     } else if (t.state === 'growing') {
         if (coins < SPEED_COST) { popup(el, 'Need 5🪙', '#F44336'); return; }
         coins -= SPEED_COST;
@@ -1182,6 +1378,7 @@ function clickTile(i) {
         coins += crop.harvest; tiles[i] = null;
         popup(el, `+${crop.harvest}🪙`, '#43A047');
         addScore(crop.score);
+        if (tutWaiting === 'harvest') { tutWaiting = null; setTimeout(() => tutAdvance(), 600); }
         if (firstHarvest) {
             firstHarvest = false;
             showAchievement('🌿', 'You harvested!');
@@ -1421,13 +1618,6 @@ if (loadGame()) {
     updateCoins(); updatePopulation();
 }
 
-requestAnimationFrame(() => {
-    window.scrollTo({
-        left: (document.body.scrollWidth - window.innerWidth) / 2,
-        top:  (document.body.scrollHeight - window.innerHeight) / 2,
-    });
-});
-
 // ── Tick ───────────────────────────────────────────────────────────────────────
 setInterval(() => {
     const now = Date.now();
@@ -1436,7 +1626,7 @@ setInterval(() => {
         t && typeof t === 'object' && t.state === 'house' &&
         t.role === 'main' && (BUILDING_DEFS[t.buildingType]?.pop ?? 0) > 0 &&
         (t.supplyLevel ?? 100) > 0
-    ).length;
+    ).reduce((sum, t) => sum + (BUILDING_DEFS[t.buildingType]?.pop ?? 0), 0);
 
     tiles.forEach((t, i) => {
         if (!t || typeof t !== 'object') return;
@@ -1466,7 +1656,8 @@ setInterval(() => {
                     let income = def.incomeFlat || 0;
                     if (def.incomePerHouse) {
                         const cnt = def.countsHouseType
-                            ? tiles.filter(x => x?.state === 'house' && x?.role === 'main' && x?.buildingType === def.countsHouseType).length
+                            ? tiles.filter(x => x?.state === 'house' && x?.role === 'main' && x?.buildingType === def.countsHouseType && (x.supplyLevel ?? 100) > 0)
+                                   .reduce((s, x) => s + (BUILDING_DEFS[x.buildingType]?.pop ?? 0), 0)
                             : allHouseCount;
                         income += def.incomePerHouse * cnt;
                     }
