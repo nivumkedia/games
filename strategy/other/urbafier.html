@@ -10,7 +10,7 @@
             background: linear-gradient(160deg, #87CEEB 0%, #C8E6C9 100%);
             font-family: 'Segoe UI', Tahoma, sans-serif;
             display: flex; align-items: center; justify-content: center;
-            min-height: 100vh; user-select: none;
+            min-height: 100vh; min-width: max-content; user-select: none;
             overflow: auto; padding: 96px 24px 80px; box-sizing: border-box;
         }
 
@@ -348,6 +348,29 @@
             color: #fff; cursor: pointer; transition: transform 0.15s;
         }
         .tut-next:hover { transform: scale(1.04); }
+
+        /* ── Companion guide card ─────────── */
+        #companion-card {
+            position: fixed; bottom: 76px; right: 12px; width: 230px;
+            background: #fff; border-radius: 18px; padding: 16px 14px 14px;
+            display: none; box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+            z-index: 400; text-align: center;
+        }
+        @keyframes compIn {
+            from { opacity: 0; transform: translateY(10px) scale(0.94); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .comp-close {
+            position: absolute; top: 8px; right: 10px; background: none;
+            border: none; font-size: 18px; color: #bbb; cursor: pointer; line-height: 1; padding: 0;
+        }
+        .comp-close:hover { color: #888; }
+        .comp-opt {
+            display: block; width: 100%; margin-top: 7px; padding: 8px 10px;
+            background: #FFF3E0; border: 2px solid #FF9800; border-radius: 10px;
+            font-weight: 700; font-size: 12px; color: #E65100; cursor: pointer; text-align: left;
+        }
+        .comp-opt:hover { background: #FFE0B2; }
 
         /* ── Supply bar on tile ────────────── */
         .supply-bar-wrap {
@@ -717,6 +740,7 @@
 <div id="tut-blocker"></div>
 <div id="tut-spotlight"></div>
 <div id="tut-card"></div>
+<div id="companion-card"></div>
 
 <!-- ── Start screen ── -->
 <div id="start-screen">
@@ -759,39 +783,168 @@
 <script>
 // ── Tutorial (interactive spotlight) ──────────────────────────────────────────
 const TUT_STEPS = [
-    { spot: 'center',    icon: '🌱', title: 'Your Starting Land',
-      body: 'These 4 green tiles are your starting farm. Tap any one to plant your first crop for 10🪙!',
+    { spot: 'center',     icon: '🌱', title: 'Your Starting Land',
+      body: 'These 4 green tiles are your farm. Tap any one to plant your first crop for 10🪙!',
       waitFor: 'plant' },
-    { spot: 'planted',   icon: '⏱️', title: 'Crop Growing!',
-      body: 'Nice! It normally takes 60 seconds — speeding it up for you now...',
+    { spot: 'planted',    icon: '⏱️', title: 'Crop Growing!',
+      body: 'Growing! Speeding it up for you...',
       autoNext: 2200, readyPlanted: true },
-    { spot: 'planted',   icon: '✅', title: 'Tap to Harvest!',
-      body: 'Your crop is pulsing — it\'s ready! Tap it to collect coins and score.',
+    { spot: 'planted',    icon: '✅', title: 'Tap to Harvest!',
+      body: 'Your crop is pulsing — tap it to collect coins and score!',
       waitFor: 'harvest' },
-    { spot: '#top-bar',  icon: '⭐', title: 'Score & XP',
-      body: 'See that XP bar? Harvesting fills it. Fill it to level up — you\'ll unlock new land rings and new buildings!',
+    { spot: 'center',     icon: '🌾', title: 'Keep Planting!',
+      body: 'Nice! Plant and harvest your tiles to fill the XP bar. Reach <b>Level 2</b> to unlock more land!',
+      waitFor: 'level2' },
+    { spot: '#top-bar',   icon: '⭐', title: 'Level 2!',
+      body: 'New land unlocked! Keep going — reach <b>Level 3</b> to unlock the Build button and start placing buildings.',
+      autoNext: 3500 },
+    { spot: 'center',     icon: '🏗️', title: 'Almost There!',
+      body: 'Keep planting and harvesting. You\'re close to Level 3 — that\'s when the fun really starts!',
+      waitFor: 'level3' },
+    { spot: '#bottom-bar', icon: '🔨', title: 'Build Unlocked!',
+      body: 'See that Build button at the bottom? Tap it to open the building panel!',
+      waitFor: 'build-open' },
+    { spot: '#item-small-house', icon: '🏠', title: 'Place a Small House',
+      body: 'Tap <b>Small House</b> to select it, then tap any green tile on the grid to place it!',
+      waitFor: 'building-placed', preferAbove: true, onShow: () => switchTab('housing') },
+    { spot: 'placed',      icon: '📦', title: 'Supply Management',
+      body: 'See the colored bar at the building\'s base? When it empties it <b>stops earning</b>. <b>Click the house</b> to open its panel and restock!',
+      waitFor: 'building-clicked' },
+    { spot: 'placed',      icon: '⬆️', title: 'Upgrades',
+      body: 'Now <b>click the house again</b> — you can upgrade it up to 5 levels for more income and population!',
+      waitFor: 'building-clicked' },
+    { spot: null,          icon: '🔴', title: 'New Building Alerts',
+      body: 'When new buildings unlock, a red dot appears on Build. Follow it — Build → tab → item — to find what\'s new.',
       next: true },
-    { spot: null, icon: '🔨', title: 'Buildings',
-      body: 'At Level 3 the <b>Build</b> button appears at the bottom.<br><br>🏠 <b>Housing</b> — adds population<br>🏢 <b>Working</b> — earns income over time<br>🐔 <b>Farming</b> — produce goods to collect<br>🚌 <b>Transport</b> — steady income (Lv 6)',
-      next: true },
-    { spot: null, icon: '📦', title: 'Supply Management',
-      body: 'Every building has a colored bar at its base. When it runs empty, the building <b>stops working</b>. Tap any building and pay coins to restock it before that happens!',
-      next: true },
-    { spot: null, icon: '⬆️', title: 'Upgrades',
-      body: 'Tap any placed building to open its panel and upgrade it — up to 5 levels for more income, more population, or bigger harvests.',
-      next: true },
-    { spot: null, icon: '🔴', title: 'New Building Alerts',
-      body: 'When buildings unlock, a red dot appears on the Build button. Follow it — Build → tab → item — to see what\'s new. Tapping the item clears the dot.',
-      next: true },
-    { spot: '#save-btn', icon: '💾', title: 'Save Your City',
-      body: 'Tap Save anytime to keep your progress. Use ↺ to reset. Now go build the greatest city ever!',
+    { spot: '#save-btn',   icon: '💾', title: "You're Ready!",
+      body: 'Save often with the 💾 button. Now go build the greatest city ever! 🏙️',
       done: true },
 ];
+
+// ── Companion mode ─────────────────────────────────────────────────────────────
+let companionActive = false;
+let companionGoal = null;
+let companionSupplyWarned = new Set();
+let companionCoinMilestone = 100;
+let lastCompanionCheck = 0;
+
+function showCompanion(icon, title, body, options = []) {
+    const card = document.getElementById('companion-card');
+    const optHtml = options.map(o =>
+        `<button class="comp-opt" onclick="${o.fn}">${o.label}</button>`
+    ).join('');
+    card.innerHTML = `
+        <button class="comp-close" onclick="dismissCompanion()">✕</button>
+        <div style="font-size:28px;margin-bottom:5px">${icon}</div>
+        <div style="font-weight:900;font-size:14px;color:#222;margin-bottom:5px">${title}</div>
+        <div style="font-size:12px;color:#555;line-height:1.55;text-align:left">${body}</div>
+        ${optHtml}
+    `;
+    card.style.display = 'block';
+    card.style.animation = 'none'; void card.offsetWidth;
+    card.style.animation = 'compIn 0.3s ease';
+}
+
+function dismissCompanion() {
+    document.getElementById('companion-card').style.display = 'none';
+}
+
+function startCompanionMode() {
+    closeTutorial();
+    companionActive = true;
+    setTimeout(() => {
+        showCompanion('🗺️', "What's Your Goal?", "I'll tailor my tips to what you want. Pick one:", [
+            { label: '💰 Maximize my income', fn: "setCompanionGoal('income')" },
+            { label: '🏙️ Build a huge city', fn: "setCompanionGoal('city')" },
+            { label: '🔓 Unlock everything fast', fn: "setCompanionGoal('unlock')" },
+        ]);
+    }, 300);
+}
+
+function setCompanionGoal(goal) {
+    companionGoal = goal;
+    dismissCompanion();
+    setTimeout(() => {
+        if (goal === 'income')  showCompanion('💰', 'Income Strategy', 'Place <b>offices</b> next to houses — they earn 5🪙 per population. Keep supply bars topped up and upgrade buildings to multiply earnings!');
+        if (goal === 'city')    showCompanion('🏙️', 'City Builder', 'Variety scores big! Mix housing, offices, and farms. Level up by planting crops to unlock more rings and new building types.');
+        if (goal === 'unlock')  showCompanion('🔓', 'Unlock Fast', 'Plant crops fast to level up. <b>Beans</b> unlock at Lv 4 and grow quicker than Grass — switching pays off!', [
+            { label: '🌱 How do I switch crops?', fn: "showCompanion('🌱','Crop Switcher','See the crop icon at the bottom-left of your screen? Tap it to cycle through your unlocked crop types!')" },
+        ]);
+    }, 200);
+}
+
+function companionOnLevelUp(newLevel) {
+    if (!companionActive) return;
+    const tips = {
+        4: { icon: '🫘', title: 'Beans Unlocked!', body: 'Beans grow faster than Grass — switch crops from the bottom-left icon for quicker XP gains!', options: [] },
+        5: { icon: '🐔', title: 'Farming Tab!', body: 'The <b>Farm</b> tab appeared in Build. Chicken coops and cow barns produce goods over time — great income diversification.' },
+        6: { icon: '🚌', title: 'Transit Unlocked!', body: 'Bus stops and train stations unlock huge late-game income. Build up housing first so population is high when you place them!' },
+        8: { icon: '🏢', title: 'Bigger Buildings!', body: 'Larger, more profitable buildings are now available in the Build panel. Plan bigger plots — they\'re worth it.' },
+        10: { icon: '🌆', title: 'Mid-Game!', body: 'You\'re doing great! At this point, keep a mix of: houses (pop), offices (income), and farms (goods). What do you need most?', options: [
+            { label: '💰 More income tips', fn: "showCompanion('💰','Income Boost','Upgrade your offices first — each level multiplies the pop multiplier. Also make sure supply bars stay full!')" },
+            { label: '👥 Grow population', fn: "showCompanion('👥','Population Growth','Upgrade houses for +25% pop each level. More pop = more office income. Condos and townhouses give big pop bonuses!')" },
+        ]},
+    };
+    const tip = tips[newLevel];
+    if (tip) setTimeout(() => showCompanion(tip.icon, tip.title, tip.body, tip.options || []), 1500);
+}
+
+function companionSuggestBuilding() {
+    const pop = tiles.filter(t => t?.state === 'house' && t?.role === 'main').reduce((s, t) => s + (BUILDING_DEFS[t.buildingType]?.pop ?? 0), 0);
+    const offices = tiles.filter(t => t?.state === 'house' && t?.role === 'main' && BUILDING_CATEGORY[t.buildingType] === 'working').length;
+    if (pop > 0 && offices === 0) {
+        showCompanion('🏢', 'Try an Office!', 'You have population but no offices. Offices earn <b>5🪙 per population per tick</b> — that\'s solid passive income!');
+    } else if (offices > 0 && pop < offices * 4) {
+        showCompanion('🏠', 'Add More Houses', 'Your offices need more population to earn well. Place or upgrade houses to push your population higher!');
+    } else {
+        showCompanion('🏗️', 'Keep Expanding!', 'Mix it up — try a farm building or a transit stop. Variety boosts your score and unlocks more content.');
+    }
+}
+
+function companionTickCheck(now) {
+    if (!companionActive) return;
+    if (document.getElementById('companion-card').style.display !== 'none') return;
+    if (now - lastCompanionCheck < 4000) return;
+    lastCompanionCheck = now;
+
+    // Supply warning: fire when any building first drops below 25%
+    for (let i = 0; i < tiles.length; i++) {
+        const t = tiles[i];
+        if (t && typeof t === 'object' && t.state === 'house' && t.role === 'main') {
+            const sl = t.supplyLevel ?? 100;
+            if (sl > 0 && sl < 25 && !companionSupplyWarned.has(i)) {
+                companionSupplyWarned.add(i);
+                const def = BUILDING_DEFS[t.buildingType];
+                const sc = SUPPLY_CONFIG[BUILDING_CATEGORY[t.buildingType]];
+                showCompanion('⚠️', 'Low Supply!', `Your <b>${def.name}</b> is almost out of ${sc.emoji} ${sc.label}! Click it to open its panel and hit Restock before it stops earning.`);
+                return;
+            }
+            if (sl > 60 && companionSupplyWarned.has(i)) companionSupplyWarned.delete(i);
+        }
+    }
+
+    // Coin milestone
+    if (coins >= companionCoinMilestone) {
+        const milestone = companionCoinMilestone;
+        companionCoinMilestone = milestone < 300 ? Math.round(milestone * 2.5) : milestone + 500;
+        if (companionGoal === 'income') {
+            showCompanion('💰', `${milestone}🪙 Saved!`, 'Nice stash! Want tips on what to do with it?', [
+                { label: '⬆️ Upgrade a building', fn: "showCompanion('⬆️','Upgrading','Tap any building on your grid to open its panel, then press Upgrade. Each level increases income and population by ~25%!')" },
+                { label: '🏗️ What should I place next?', fn: 'companionSuggestBuilding()' },
+            ]);
+        } else if (milestone <= 250) {
+            showCompanion('💵', `${milestone}🪙!`, 'Coins are stacking up! Spend on upgrades (tap a building) or new buildings from the Build menu.', [
+                { label: '🏗️ What should I build?', fn: 'companionSuggestBuilding()' },
+            ]);
+        }
+    }
+}
 
 let tutActive = false;
 let tutStepIdx = 0;
 let tutWaiting = null;
 let tutPlantedTile = -1;
+let tutPlacedTile = -1;
 let tutAutoTimer = null;
 
 function getTutRect(spot) {
@@ -805,6 +958,10 @@ function getTutRect(spot) {
     }
     if (spot === 'planted' && tutPlantedTile >= 0) {
         const el = document.getElementById(`tile-${tutPlantedTile}`);
+        return el ? el.getBoundingClientRect() : null;
+    }
+    if (spot === 'placed' && tutPlacedTile >= 0) {
+        const el = document.getElementById(`tile-${tutPlacedTile}`);
         return el ? el.getBoundingClientRect() : null;
     }
     const el = document.querySelector(spot);
@@ -821,12 +978,13 @@ function showTutStep() {
     const blocker   = document.getElementById('tut-blocker');
     const card      = document.getElementById('tut-card');
 
+    const needsBlock = !rect && !step.waitFor && !step.autoNext;
     if (rect) {
         spotlight.style.cssText = `display:block;left:${rect.left-pad}px;top:${rect.top-pad}px;width:${rect.right-rect.left+pad*2}px;height:${rect.bottom-rect.top+pad*2}px`;
         blocker.style.display = 'none';
     } else {
         spotlight.style.display = 'none';
-        blocker.style.display = 'block';
+        blocker.style.display = needsBlock ? 'block' : 'none';
     }
 
     card.style.display = 'block';
@@ -834,7 +992,10 @@ function showTutStep() {
     card.style.animation = 'cardIn 0.32s cubic-bezier(0.34,1.56,0.64,1)';
 
     const btns = step.next ? `<button class="tut-next" onclick="tutAdvance()">Next →</button>` :
-                 step.done ? `<button class="tut-next" onclick="closeTutorial()">Start Playing! 🏙️</button>` : '';
+                 step.done ? `
+                    <button class="tut-next" onclick="startCompanionMode()" style="background:linear-gradient(135deg,#FF6F00,#FFA726)">Keep Guiding Me 🗺️</button>
+                    <button class="tut-next" onclick="closeTutorial()" style="background:linear-gradient(135deg,#1565C0,#42A5F5);margin-top:6px">I've Got It! 🏙️</button>
+                 ` : '';
     card.innerHTML = `
         <div style="font-size:40px;margin-bottom:8px">${step.icon}</div>
         <div style="font-weight:900;font-size:18px;color:#222;margin-bottom:8px">${step.title}</div>
@@ -844,13 +1005,17 @@ function showTutStep() {
 
     // Position card above or below spotlight
     const CARD_H = 200;
-    if (rect && rect.bottom + 20 + CARD_H < window.innerHeight) {
+    if (rect && step.preferAbove && rect.top - 20 - CARD_H > 0) {
+        card.style.top = `${rect.top - pad - 14 - CARD_H}px`; card.style.bottom = '';
+    } else if (rect && !step.preferAbove && rect.bottom + 20 + CARD_H < window.innerHeight) {
         card.style.top = `${rect.bottom + pad + 14}px`; card.style.bottom = '';
     } else if (rect && rect.top - 20 - CARD_H > 0) {
         card.style.top = `${rect.top - pad - 14 - CARD_H}px`; card.style.bottom = '';
     } else {
         card.style.top = ''; card.style.bottom = '90px';
     }
+
+    if (step.onShow) step.onShow();
 
     tutWaiting = step.waitFor || null;
 
@@ -887,16 +1052,20 @@ function closeTutorial() {
     document.getElementById('tut-card').style.display = 'none';
 }
 
+function enableScrollLock() {
+    lockedScrollX = Math.round((document.body.scrollWidth - window.innerWidth) / 2);
+    lockedScrollY = Math.round((document.body.scrollHeight - window.innerHeight) / 2);
+    window.scrollTo({ left: lockedScrollX, top: lockedScrollY });
+    scrollLocked = true;
+}
+function disableScrollLock() { scrollLocked = false; }
+
 function openTutorial() {
-    // Dismiss start screen and enter the game
     const ss = document.getElementById('start-screen');
     if (ss) { ss.classList.add('hide'); setTimeout(() => ss.remove(), 500); }
-    window.scrollTo({
-        left: (document.body.scrollWidth - window.innerWidth) / 2,
-        top:  (document.body.scrollHeight - window.innerHeight) / 2,
-    });
-    tutActive = true; tutStepIdx = 0; tutPlantedTile = -1;
-    setTimeout(() => showTutStep(), 600); // wait for scroll to settle
+    if (!firstUpgradeDone) enableScrollLock();
+    tutActive = true; tutStepIdx = 0; tutPlantedTile = -1; tutPlacedTile = -1;
+    setTimeout(() => showTutStep(), 600);
 }
 
 // ── Start screen ───────────────────────────────────────────────────────────────
@@ -904,7 +1073,7 @@ function startGame() {
     const ss = document.getElementById('start-screen');
     ss.classList.add('hide');
     setTimeout(() => ss.remove(), 500);
-    window.scrollTo({
+    if (!firstUpgradeDone) enableScrollLock(); else window.scrollTo({
         left: (document.body.scrollWidth - window.innerWidth) / 2,
         top:  (document.body.scrollHeight - window.innerHeight) / 2,
     });
@@ -1012,6 +1181,10 @@ let population = 0;
 let score      = 0;
 let level      = 1;
 let firstHarvest = true;
+let firstUpgradeDone = false;
+let scrollLocked = false;
+let lockedScrollX = 0, lockedScrollY = 0;
+let resettingScroll = false;
 let buildMode  = null;
 let currentCrop = 'grass';
 let buildPanelOpen = false;
@@ -1123,6 +1296,7 @@ function updateNotifBadges() {
 }
 
 function showUpgradePanel(tileIdx) {
+    if (tutWaiting === 'building-clicked') { tutWaiting = null; setTimeout(() => tutAdvance(), 500); }
     upgradePanelTile = tileIdx;
     const t = tiles[tileIdx];
     const def = BUILDING_DEFS[t.buildingType];
@@ -1275,6 +1449,9 @@ function applyBuildingUnlocks() {
 }
 
 function onLevelUp(newLevel) {
+    if (tutWaiting === 'level2' && newLevel >= 2) { tutWaiting = null; setTimeout(() => tutAdvance(), 700); }
+    if (tutWaiting === 'level3' && newLevel >= 3) { tutWaiting = null; setTimeout(() => tutAdvance(), 700); }
+    companionOnLevelUp(newLevel);
     coins += 10; updateCoins();
     popup(document.getElementById('top-bar'), '+10🪙', '#43A047');
     showAchievement('⭐', `Level ${newLevel}!`);
@@ -1283,6 +1460,11 @@ function onLevelUp(newLevel) {
         revealRings([2, 3]);
         document.getElementById('bottom-bar').style.display = 'flex';
         showAchievement('🔨', 'Construction unlocked!');
+        if (!firstUpgradeDone) {
+            firstUpgradeDone = true;
+            disableScrollLock();
+            showAchievement('🌍', 'World unlocked! Scroll to explore.');
+        }
     }
     if (newLevel === 4) {
         revealRings([4, 5]);
@@ -1457,11 +1639,13 @@ function placeBuildingAt(i) {
     });
     updateCoins(); updatePopulation(); addScore(def.score);
     popup(document.getElementById(`tile-${block[0]}`), `+${def.score} score`, '#7B1FA2');
+    if (tutWaiting === 'building-placed') { tutPlacedTile = block[0]; tutWaiting = null; closeBuildPanel(); setTimeout(() => tutAdvance(), 700); }
 }
 
 // ── Build panel ────────────────────────────────────────────────────────────────
 function toggleBuildPanel() { buildPanelOpen ? closeBuildPanel() : openBuildPanel(); }
 function openBuildPanel() {
+    if (tutWaiting === 'build-open') { tutWaiting = null; setTimeout(() => tutAdvance(), 400); }
     exitBuildMode(); buildPanelOpen = true;
     document.getElementById('build-panel').classList.add('open');
     document.getElementById('construct-btn').classList.add('active');
@@ -1543,7 +1727,7 @@ function renderTile(i, reveal = false) {
 // ── Save / Load ────────────────────────────────────────────────────────────────
 function saveGame() {
     localStorage.setItem('urbafier', JSON.stringify({
-        coins, population, score, level, firstHarvest, currentCrop,
+        coins, population, score, level, firstHarvest, firstUpgradeDone, currentCrop,
         tiles: [...tiles], unseenBuildings: [...unlockedUnseenBuildings]
     }));
     const btn = document.getElementById('save-btn');
@@ -1568,6 +1752,7 @@ function loadGame() {
         score = d.score ?? 0;
         level = d.level ?? 1;
         firstHarvest = d.firstHarvest ?? true;
+        firstUpgradeDone = d.firstUpgradeDone ?? false;
         currentCrop = d.currentCrop ?? 'grass';
         if (d.tiles) d.tiles.forEach((t, i) => { tiles[i] = t; });
         unlockedUnseenBuildings = new Set(d.unseenBuildings || []);
@@ -1608,6 +1793,13 @@ document.addEventListener('click', e => {
         !document.getElementById('build-panel').contains(e.target) &&
         !document.getElementById('bottom-bar').contains(e.target)) closeBuildPanel();
 });
+window.addEventListener('scroll', () => {
+    if (!scrollLocked || resettingScroll) return;
+    resettingScroll = true;
+    window.scrollTo({ left: lockedScrollX, top: lockedScrollY });
+    requestAnimationFrame(() => { resettingScroll = false; });
+});
+
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { exitBuildMode(); closeBuildPanel(); }
 });
@@ -1678,6 +1870,7 @@ setInterval(() => {
             if (def.incomeMs || def.produceMs || supplyConf) renderTile(i);
         }
     });
+    companionTickCheck(now);
 }, 500);
 </script>
 </body>
