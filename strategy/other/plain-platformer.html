@@ -206,6 +206,60 @@ body {
 
 .character-select.hidden { display: none; }
 
+.lose-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 22px;
+    background:
+        radial-gradient(circle at 50% 30%, rgba(255, 79, 114, 0.18), transparent 34%),
+        rgba(3, 9, 18, 0.86);
+}
+
+.lose-screen.hidden { display: none; }
+
+.lose-panel {
+    width: min(420px, calc(100vw - 32px));
+    padding: 18px;
+    border: 1px solid rgba(255, 123, 123, 0.52);
+    border-radius: 8px;
+    background: rgba(26, 8, 17, 0.94);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.52), inset 0 1px rgba(255, 255, 255, 0.08);
+    text-align: center;
+}
+
+.lose-title {
+    color: #ffd6d6;
+    font-size: 28px;
+    font-weight: 900;
+    margin-bottom: 8px;
+}
+
+.lose-line {
+    color: #ffc0c8;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.4;
+    margin-bottom: 14px;
+}
+
+.lose-button {
+    width: 100%;
+    border: 1px solid rgba(255, 214, 214, 0.62);
+    border-radius: 7px;
+    background: linear-gradient(180deg, #ff7b7b, #e13e5b);
+    color: #190812;
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 900;
+    padding: 10px 12px;
+    box-shadow: inset 0 1px rgba(255, 255, 255, 0.35);
+}
+
 .character-panel {
     width: min(860px, calc(100vw - 28px));
     max-height: calc(100vh - 44px);
@@ -641,7 +695,7 @@ body {
 </head>
 <body>
 <canvas id="game" tabindex="0"></canvas>
-<div class="hud" id="hud">New: Arrow keys move and jump. Press 1 to attack enemies.</div>
+<div class="hud" id="hud">New: Arrow keys or WASD move. Press 1/J to attack enemies.</div>
 <div class="lives-counter" id="lives-counter">Lives 40</div>
 <div class="instruction-callout" id="instruction-callout" aria-hidden="true"></div>
 <button class="reset-button" id="reset-btn">Reset</button>
@@ -745,6 +799,13 @@ body {
         </div>
     </div>
 </div>
+<div class="lose-screen hidden" id="lose-screen">
+    <div class="lose-panel">
+        <div class="lose-title">You Lost</div>
+        <div class="lose-line" id="lose-line">You ran out of lives.</div>
+        <button class="lose-button" id="try-again-btn">Try Again</button>
+    </div>
+</div>
 
 <script>
 const canvas = document.getElementById("game");
@@ -762,10 +823,14 @@ const shieldUpgradeBtn = document.getElementById("shield-upgrade-btn");
 const archeryUpgradeBtn = document.getElementById("archery-upgrade-btn");
 const characterSelect = document.getElementById("character-select");
 const characterButtons = Array.from(document.querySelectorAll(".character-card"));
+const loseScreen = document.getElementById("lose-screen");
+const loseLine = document.getElementById("lose-line");
+const tryAgainBtn = document.getElementById("try-again-btn");
 
 const world = { width: 3200, height: 720, gravity: 0.82 };
 const SAVE_KEY = "plain-platformer-save-v1";
 const STARTING_LIVES = 40;
+const ADVANCED_COMBAT_START_LEVEL = 17;
 const keys = { left: false, right: false, jump: false, down: false, duck: false, block: false };
 const characters = {
     azure: {
@@ -893,6 +958,7 @@ let archeryUnlocked = false;
 let archeryReady = false;
 let saveResetTimer = null;
 let gameStarted = false;
+let gameOver = false;
 let currentCharacterId = "azure";
 let combatEffects = [];
 let heavyUnlocked = false;
@@ -921,7 +987,7 @@ const player = {
 const levels = [
     {
         name: "Level 1",
-        intro: "New: Arrow keys move and jump. Press 1 to attack enemies. Defeat all enemies to open the gate.",
+        intro: "New: Arrow keys or WASD move. Press 1/J to attack enemies. Defeat all enemies to open the gate.",
         width: 3200,
         start: { x: 90, y: 520 },
         goal: { x: 3105, y: 552, w: 56, h: 98 },
@@ -1097,7 +1163,7 @@ const levels = [
     },
     {
         name: "Level 8",
-        intro: "New: Press 2 for a timed sword block. Jumping enemies attack every 3 sec.",
+        intro: "New: Press 2/K for a timed sword block. Jumping enemies attack every 3 sec.",
         width: 4600,
         start: { x: 90, y: 520 },
         goal: { x: 4435, y: 552, w: 56, h: 98 },
@@ -1186,7 +1252,7 @@ const levels = [
     },
     {
         name: "Level 11",
-        intro: "New: Press 3 to duck under archer shots. Archers shoot from one platform away.",
+        intro: "New: Press 3/I to duck under archer shots. Archers shoot from one platform away.",
         width: 5200,
         start: { x: 90, y: 520 },
         goal: { x: 5035, y: 552, w: 56, h: 98 },
@@ -1286,7 +1352,7 @@ const levels = [
     },
     {
         name: "Level 14",
-        intro: "New: Press 4, then click where you want to shoot.",
+        intro: "New: Press 4/L, then click where you want to shoot.",
         width: 5800,
         start: { x: 90, y: 520 },
         goal: { x: 5635, y: 552, w: 56, h: 98 },
@@ -1680,8 +1746,10 @@ function chooseCharacter(characterId) {
     currentCharacterId = characterId;
     applyCharacterBuild();
     respawn();
+    gameOver = false;
     gameStarted = true;
     characterSelect.classList.add("hidden");
+    loseScreen.classList.add("hidden");
     syncCharacterSelect();
 }
 
@@ -1801,17 +1869,18 @@ function updateCombatEffects() {
 
 function assignEnemyArmor(enemy, index) {
     if (enemy.armor) return enemy.armor;
-    if (index >= 13 && (enemy.type === "archer" || enemy.type === "aimArcher" || enemy.type === "shieldArcher" || enemy.type === "jumpArcher")) return "ranged";
-    if (index >= 15 && enemy.type === "bigFlyer") return "pierce";
-    if (index >= 7 && (enemy.type === "sentry" || enemy.type === "jumpSentry" || enemy.type === "chaosSentry")) return "heavy";
-    if (index >= 4 && (enemy.type === "pattern" || enemy.type === "chaos" || enemy.type === "wanderer")) return "combo";
+    if (index < ADVANCED_COMBAT_START_LEVEL) return null;
+    if (enemy.type === "archer" || enemy.type === "aimArcher" || enemy.type === "shieldArcher" || enemy.type === "jumpArcher") return "ranged";
+    if (enemy.type === "bigFlyer") return "pierce";
+    if (enemy.type === "sentry" || enemy.type === "jumpSentry" || enemy.type === "chaosSentry") return "heavy";
+    if (enemy.type === "pattern" || enemy.type === "chaos" || enemy.type === "wanderer") return "combo";
     return null;
 }
 
 function enemyWeaponTierForLevel(index) {
-    if (index >= 15) return 3;
-    if (index >= 10) return 2;
-    if (index >= 6) return 1;
+    if (index >= ADVANCED_COMBAT_START_LEVEL + 2) return 3;
+    if (index >= ADVANCED_COMBAT_START_LEVEL + 1) return 2;
+    if (index >= ADVANCED_COMBAT_START_LEVEL) return 1;
     return 0;
 }
 
@@ -1903,6 +1972,8 @@ function rectsOverlap(a, b) {
 function loadLevel(index, resetLives = false) {
     const level = levels[index];
     levelIndex = index;
+    gameOver = false;
+    loseScreen.classList.add("hidden");
     world.width = level.width;
     start = { ...level.start };
     goal = { ...level.goal };
@@ -1931,9 +2002,9 @@ function loadLevel(index, resetLives = false) {
     shieldUnlocked = index >= 7;
     duckUnlocked = index >= 10;
     archeryUnlocked = index >= 13;
-    heavyUnlocked = index >= 4;
-    spearUnlocked = index >= 9;
-    slamUnlocked = index >= 15;
+    heavyUnlocked = index >= ADVANCED_COMBAT_START_LEVEL;
+    spearUnlocked = index >= ADVANCED_COMBAT_START_LEVEL + 1;
+    slamUnlocked = index >= ADVANCED_COMBAT_START_LEVEL + 2;
     archeryReady = false;
     arrows = [];
     playerArrows = [];
@@ -1948,9 +2019,9 @@ function loadLevel(index, resetLives = false) {
 function updateHud() {
     const level = levels[levelIndex];
     let extra = "";
-    if (heavyUnlocked && levelIndex === 4) extra = " New: Press 5 for a heavy slash that breaks heavy armor.";
-    if (spearUnlocked && levelIndex === 9) extra = " New: Press 6 for a spear thrust that pierces armor.";
-    if (slamUnlocked && levelIndex === 15) extra = " New: Press 7 while grounded for a ground slam.";
+    if (heavyUnlocked && levelIndex === ADVANCED_COMBAT_START_LEVEL) extra = " New: Press 5/U for a heavy slash that breaks heavy armor.";
+    if (spearUnlocked && levelIndex === ADVANCED_COMBAT_START_LEVEL + 1) extra = " New: Press 6/I for a spear thrust that pierces armor.";
+    if (slamUnlocked && levelIndex === ADVANCED_COMBAT_START_LEVEL + 2) extra = " New: Press 7/O while grounded for a ground slam.";
     setInstruction(`${level.intro || level.name}${extra}`);
     updateLivesCounter();
     updateShop();
@@ -1996,11 +2067,29 @@ function takeHit(source = null) {
     if (swordBlocksHit(source)) return;
     lives -= 1;
     if (lives <= 0) {
-        loadLevel(levelIndex, true);
+        showLoseScreen();
         return;
     }
     respawn();
     updateLivesCounter();
+}
+
+function showLoseScreen() {
+    lives = 0;
+    updateLivesCounter();
+    gameStarted = false;
+    gameOver = true;
+    archeryReady = false;
+    shopPanel.classList.remove("open");
+    loseLine.textContent = `You ran out of lives on ${levels[levelIndex].name}.`;
+    loseScreen.classList.remove("hidden");
+}
+
+function retryAfterLoss() {
+    loseScreen.classList.add("hidden");
+    gameOver = false;
+    gameStarted = true;
+    loadLevel(levelIndex, true);
 }
 
 function attack() {
@@ -2145,12 +2234,14 @@ function resetProgress() {
     archeryRangeLevel = 0;
     currentCharacterId = "azure";
     gameStarted = false;
+    gameOver = false;
     shopPanel.classList.remove("open");
+    loseScreen.classList.add("hidden");
     characterSelect.classList.remove("hidden");
     if (saveResetTimer) clearTimeout(saveResetTimer);
     saveBtn.textContent = "Save";
     lastHudText = "";
-    loadLevel(0);
+    loadLevel(0, true);
     syncCharacterSelect();
 }
 
@@ -3134,33 +3225,49 @@ function loop(now) {
     requestAnimationFrame(loop);
 }
 
+function isAttackKey(code) {
+    return code === "Digit1" || code === "KeyJ";
+}
+
+function isBlockKey(code) {
+    return code === "Digit2" || code === "KeyK";
+}
+
+function isDuckKey(code) {
+    return code === "Digit3" || code === "KeyI";
+}
+
+function isArcheryKey(code) {
+    return code === "Digit4" || code === "KeyL";
+}
+
 function setKey(code, down) {
     if (code === "ArrowLeft" || code === "KeyA") keys.left = down;
     if (code === "ArrowRight" || code === "KeyD") keys.right = down;
     if (code === "ArrowUp" || code === "Space" || code === "KeyW") keys.jump = down;
     if (code === "ArrowDown" || code === "KeyS") keys.down = down;
-    if (code === "Digit3") keys.duck = down;
+    if (isDuckKey(code)) keys.duck = down;
 }
 
 window.addEventListener("keydown", event => {
     if (!gameStarted) return;
-    if (event.code === "Digit1") {
+    if (isAttackKey(event.code)) {
         attack();
         event.preventDefault();
         return;
     }
-    if (event.code === "Digit2") {
+    if (isBlockKey(event.code)) {
         if (!event.repeat) shield();
         event.preventDefault();
         return;
     }
-    if (event.code === "Digit4") {
+    if (isArcheryKey(event.code)) {
         if (archeryUnlocked && !event.repeat) archeryReady = true;
         event.preventDefault();
         return;
     }
     setKey(event.code, true);
-    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space", "Digit3"].includes(event.code)) event.preventDefault();
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space", "Digit3", "KeyI"].includes(event.code)) event.preventDefault();
 });
 canvas.addEventListener("click", event => {
     if (!gameStarted) return;
@@ -3178,6 +3285,7 @@ shopToggle.addEventListener("click", () => {
 });
 resetBtn.addEventListener("click", resetProgress);
 saveBtn.addEventListener("click", saveGame);
+tryAgainBtn.addEventListener("click", retryAfterLoss);
 attackUpgradeBtn.addEventListener("click", buyAttackUpgrade);
 shieldUpgradeBtn.addEventListener("click", buyShieldUpgrade);
 archeryUpgradeBtn.addEventListener("click", buyArcheryUpgrade);
