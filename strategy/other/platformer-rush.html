@@ -80,27 +80,10 @@ body {
     pointer-events: none;
 }
 
-.shop-toggle {
-    position: fixed;
-    top: 14px;
-    right: 14px;
-    z-index: 3;
-    padding: 8px 12px;
-    border: 1px solid rgba(144, 224, 255, 0.38);
-    border-radius: 7px;
-    background: rgba(7, 16, 31, 0.86);
-    color: #dff7ff;
-    cursor: pointer;
-    font: inherit;
-    font-size: 12px;
-    font-weight: 900;
-    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.2), inset 0 1px rgba(255, 255, 255, 0.08);
-}
-
 .save-button {
     position: fixed;
     top: 14px;
-    right: 78px;
+    right: 14px;
     z-index: 3;
     min-width: 56px;
     padding: 8px 10px;
@@ -118,7 +101,7 @@ body {
 .reset-button {
     position: fixed;
     top: 14px;
-    right: 138px;
+    right: 78px;
     z-index: 3;
     min-width: 62px;
     padding: 8px 10px;
@@ -136,59 +119,6 @@ body {
 .reset-button:hover {
     border-color: rgba(255, 171, 171, 0.76);
     background: rgba(107, 20, 28, 0.94);
-}
-
-.shop-panel {
-    position: fixed;
-    top: 54px;
-    right: 14px;
-    z-index: 3;
-    width: min(260px, calc(100vw - 28px));
-    display: none;
-    padding: 12px;
-    border: 1px solid rgba(144, 224, 255, 0.32);
-    border-radius: 8px;
-    background: rgba(7, 16, 31, 0.94);
-    box-shadow: 0 18px 46px rgba(0, 0, 0, 0.42), inset 0 1px rgba(255, 255, 255, 0.08);
-}
-
-.shop-panel.open { display: block; }
-
-.shop-title {
-    color: #8deaff;
-    font-size: 14px;
-    font-weight: 900;
-    margin-bottom: 8px;
-}
-
-.shop-line {
-    color: #aac7d8;
-    font-size: 12px;
-    line-height: 1.35;
-    margin-bottom: 10px;
-}
-
-.shop-buy {
-    width: 100%;
-    border: 1px solid rgba(141, 234, 255, 0.58);
-    border-radius: 7px;
-    background: linear-gradient(180deg, #53e0ff, #1bb8f2);
-    color: #06101d;
-    cursor: pointer;
-    font: inherit;
-    font-size: 12px;
-    font-weight: 900;
-    padding: 8px 10px;
-    box-shadow: inset 0 1px rgba(255, 255, 255, 0.35);
-}
-
-.shop-buy + .shop-buy {
-    margin-top: 8px;
-}
-
-.shop-buy:disabled {
-    opacity: 0.48;
-    cursor: default;
 }
 
 .instruction-callout {
@@ -1273,14 +1203,6 @@ body {
 <div class="instruction-callout" id="instruction-callout" aria-hidden="true"></div>
 <button class="reset-button" id="reset-btn">Reset</button>
 <button class="save-button" id="save-btn">Save</button>
-<button class="shop-toggle" id="shop-toggle">Shop</button>
-<div class="shop-panel" id="shop-panel">
-    <div class="shop-title">Shop</div>
-    <div class="shop-line" id="shop-info"></div>
-    <button class="shop-buy" id="attack-upgrade-btn">Buy Attack Range</button>
-    <button class="shop-buy" id="shield-upgrade-btn">Buy Sword Block Time</button>
-    <button class="shop-buy" id="archery-upgrade-btn">Buy Archery Range</button>
-</div>
 <div class="rush-title-screen" id="rush-title-screen">
     <div class="rush-title-panel">
         <div class="rush-title" aria-label="Platformer Rush">
@@ -1470,12 +1392,6 @@ const livesCounter = document.getElementById("lives-counter");
 const instructionCallout = document.getElementById("instruction-callout");
 const resetBtn = document.getElementById("reset-btn");
 const saveBtn = document.getElementById("save-btn");
-const shopToggle = document.getElementById("shop-toggle");
-const shopPanel = document.getElementById("shop-panel");
-const shopInfo = document.getElementById("shop-info");
-const attackUpgradeBtn = document.getElementById("attack-upgrade-btn");
-const shieldUpgradeBtn = document.getElementById("shield-upgrade-btn");
-const archeryUpgradeBtn = document.getElementById("archery-upgrade-btn");
 const rushTitleScreen = document.getElementById("rush-title-screen");
 const rushStartBtn = document.getElementById("rush-start-btn");
 const rushSetupScreen = document.getElementById("rush-setup-screen");
@@ -1495,8 +1411,8 @@ const playAgainBtn = document.getElementById("play-again-btn");
 const world = { width: 3200, height: 720, gravity: 0.82 };
 const SAVE_KEY = "platformer-rush-save-v1";
 const STARTING_LIVES = 40;
-const START_AT_NEW_STUFF = false;
-const TEST_START_LEVEL = 0;
+const START_AT_NEW_STUFF = true;
+const TEST_START_LEVEL = 12;
 const keys = { left: false, right: false, jump: false, down: false, duck: false, block: false };
 const setupChoices = { style: "regular", version: "normal", difficulty: "easy" };
 const styleDetails = {
@@ -1649,7 +1565,10 @@ let gameOver = false;
 let currentCharacterId = "azure";
 let selectedBattleVersion = "normal";
 let attackMode = false;
+let combosUnlocked = false;
+let spearKeysUnlocked = false;
 let combatEffects = [];
+const heldAttackKeys = new Set();
 
 let start = { x: 90, y: 520 };
 const player = {
@@ -1665,6 +1584,8 @@ const player = {
     attackAngle: 0,
     blockAngle: 0,
     blockFlashTimer: 0,
+    swordFreezeTimer: 0,
+    sideSlashHeld: false,
     shieldTimer: 0
 };
 
@@ -2351,6 +2272,105 @@ const battleUltimateLevels = [
             swordReach: 38,
             mustHitBack: true
         }))
+    },
+    {
+        ...battleNormalLevels[6],
+        intro: "Battle Ultimate Level 7: Sword enemies now patrol. Hold two WASD keys in attack mode for a combo slash — wider reach, hits from both directions.",
+        enemies: [
+            { x: 700, y: 505, w: 30, h: 30, type: "patrolSword", facing: -1, swordReach: 36, minX: 650, maxX: 830, vx: -1.4 },
+            { x: 1090, y: 435, w: 30, h: 30, type: "patrolSword", facing: 1,  swordReach: 36, minX: 1030, maxX: 1230, vx: 1.4 },
+            { x: 1960, y: 450, w: 30, h: 30, type: "patrolSword", facing: -1, swordReach: 36, minX: 1880, maxX: 2120, vx: -1.5 },
+            { x: 2350, y: 380, w: 30, h: 30, type: "patrolSword", facing: 1,  swordReach: 36, minX: 2290, maxX: 2500, vx: 1.5 },
+            { x: 2800, y: 490, w: 30, h: 30, type: "patrolSword", facing: -1, swordReach: 36, minX: 2730, maxX: 2980, vx: -1.4 },
+            { x: 3200, y: 430, w: 30, h: 30, type: "patrolSword", facing: 1,  swordReach: 36, minX: 3100, maxX: 3380, vx: 1.6 },
+            { x: 3720, y: 500, w: 30, h: 30, type: "patrolSword", facing: -1, swordReach: 36, minX: 3630, maxX: 3900, vx: -1.4 }
+        ]
+    },
+    {
+        ...battleNormalLevels[7],
+        intro: "Battle Ultimate Level 8: Sword enemies can jump and slash by moving their swords up and down. Wait out the swing, get behind them, then attack.",
+        enemies: [
+            { x: 760, y: 537, w: 30, h: 30, type: "jumpSword", facing: -1, swordReach: 34, jumpOffset: 0, attackOffset: 1.0 },
+            { x: 1160, y: 467, w: 30, h: 30, type: "jumpSword", facing: 1, swordReach: 34, jumpOffset: 1.1, attackOffset: 1.7 },
+            { x: 2040, y: 487, w: 30, h: 30, type: "jumpSword", facing: -1, swordReach: 36, jumpOffset: 2.0, attackOffset: 0.5 },
+            { x: 2480, y: 417, w: 30, h: 30, type: "jumpSword", facing: 1, swordReach: 36, jumpOffset: 0.6, attackOffset: 2.1 },
+            { x: 3380, y: 457, w: 30, h: 30, type: "jumpSword", facing: -1, swordReach: 38, jumpOffset: 1.6, attackOffset: 1.3 },
+            { x: 3820, y: 532, w: 30, h: 30, type: "jumpSword", facing: 1, swordReach: 38, jumpOffset: 2.5, attackOffset: 0.2 }
+        ]
+    },
+    {
+        ...battleNormalLevels[8],
+        intro: "Battle Ultimate Level 9: Swords switch front and back every 5 seconds. Watch the blade side, then attack from the open side.",
+        enemies: [
+            { x: 760, y: 537, w: 30, h: 30, type: "flipSword", facing: -1, swordReach: 38, flipOffset: 0 },
+            { x: 1170, y: 462, w: 30, h: 30, type: "flipSword", facing: 1, swordReach: 38, flipOffset: 1.2 },
+            { x: 2015, y: 482, w: 30, h: 30, type: "flipSword", facing: -1, swordReach: 40, flipOffset: 2.4 },
+            { x: 2445, y: 412, w: 30, h: 30, type: "flipSword", facing: 1, swordReach: 40, flipOffset: 3.6 },
+            { x: 3315, y: 452, w: 30, h: 30, type: "flipSword", facing: -1, swordReach: 42, flipOffset: 0.8 },
+            { x: 3765, y: 532, w: 30, h: 30, type: "flipSword", facing: 1, swordReach: 42, flipOffset: 2.0 },
+            { x: 4215, y: 467, w: 30, h: 30, type: "flipSword", facing: -1, swordReach: 44, flipOffset: 3.2 }
+        ]
+    },
+    {
+        ...battleNormalLevels[9],
+        intro: "Battle Ultimate Level 10: Enemies do bigger, quicker up-down slashes. Cross behind during the tiny reset window.",
+        enemies: [
+            { x: 760, y: 505, w: 30, h: 30, type: "quickSlashSword", facing: -1, swordReach: 54, attackOffset: 0.4 },
+            { x: 1175, y: 435, w: 30, h: 30, type: "quickSlashSword", facing: 1, swordReach: 54, attackOffset: 0.9 },
+            { x: 2050, y: 450, w: 30, h: 30, type: "quickSlashSword", facing: -1, swordReach: 58, attackOffset: 1.3 },
+            { x: 2500, y: 380, w: 30, h: 30, type: "quickSlashSword", facing: 1, swordReach: 58, attackOffset: 0.1 },
+            { x: 2950, y: 490, w: 30, h: 30, type: "quickSlashSword", facing: -1, swordReach: 60, attackOffset: 0.7 },
+            { x: 3415, y: 420, w: 30, h: 30, type: "quickSlashSword", facing: 1, swordReach: 60, attackOffset: 1.1 },
+            { x: 3875, y: 500, w: 30, h: 30, type: "quickSlashSword", facing: -1, swordReach: 62, attackOffset: 0.2 },
+            { x: 4315, y: 435, w: 30, h: 30, type: "quickSlashSword", facing: 1, swordReach: 62, attackOffset: 1.5 }
+        ]
+    },
+    {
+        ...battleNormalLevels[10],
+        intro: "Battle Ultimate Level 11: Enemies slash up and down on both sides. Wait for the double slash to end, then strike from either side.",
+        enemies: [
+            { x: 790, y: 537, w: 30, h: 30, type: "bothSlashSword", swordReach: 46, attackOffset: 0.4 },
+            { x: 1185, y: 467, w: 30, h: 30, type: "bothSlashSword", swordReach: 48, attackOffset: 1.0 },
+            { x: 1320, y: 467, w: 30, h: 30, type: "bothSlashSword", swordReach: 48, attackOffset: 1.6 },
+            { x: 2110, y: 482, w: 30, h: 30, type: "bothSlashSword", swordReach: 50, attackOffset: 0.1 },
+            { x: 2565, y: 412, w: 30, h: 30, type: "bothSlashSword", swordReach: 50, attackOffset: 1.3 },
+            { x: 3060, y: 522, w: 30, h: 30, type: "bothSlashSword", swordReach: 52, attackOffset: 0.7 },
+            { x: 3505, y: 452, w: 30, h: 30, type: "bothSlashSword", swordReach: 52, attackOffset: 1.9 },
+            { x: 4025, y: 532, w: 30, h: 30, type: "bothSlashSword", swordReach: 54, attackOffset: 0.9 },
+            { x: 4460, y: 467, w: 30, h: 30, type: "bothSlashSword", swordReach: 54, attackOffset: 1.5 }
+        ]
+    },
+    {
+        ...battleNormalLevels[11],
+        intro: "Battle Ultimate Level 12: Enemies move back and forth while slashing up and down quickly. Time the pass, then counter from behind.",
+        enemies: [
+            { x: 800, y: 537, w: 30, h: 30, type: "patrolQuickSlashSword", facing: -1, swordReach: 48, minX: 710, maxX: 930, vx: -1.8, attackOffset: 0.2 },
+            { x: 1210, y: 462, w: 30, h: 30, type: "patrolQuickSlashSword", facing: 1, swordReach: 50, minX: 1140, maxX: 1360, vx: 1.9, attackOffset: 0.8 },
+            { x: 1675, y: 552, w: 30, h: 30, type: "patrolQuickSlashSword", facing: -1, swordReach: 50, minX: 1585, maxX: 1850, vx: -2.0, attackOffset: 1.3 },
+            { x: 2160, y: 482, w: 30, h: 30, type: "patrolQuickSlashSword", facing: 1, swordReach: 52, minX: 2070, maxX: 2340, vx: 2.0, attackOffset: 0.5 },
+            { x: 2635, y: 412, w: 30, h: 30, type: "patrolQuickSlashSword", facing: -1, swordReach: 52, minX: 2540, maxX: 2810, vx: -2.1, attackOffset: 1.0 },
+            { x: 3115, y: 522, w: 30, h: 30, type: "patrolQuickSlashSword", facing: 1, swordReach: 54, minX: 3020, maxX: 3330, vx: 2.1, attackOffset: 0.1 },
+            { x: 3575, y: 452, w: 30, h: 30, type: "patrolQuickSlashSword", facing: -1, swordReach: 54, minX: 3490, maxX: 3770, vx: -2.2, attackOffset: 0.7 },
+            { x: 4055, y: 532, w: 30, h: 30, type: "patrolQuickSlashSword", facing: 1, swordReach: 56, minX: 3970, maxX: 4170, vx: 2.0, attackOffset: 1.4 },
+            { x: 4535, y: 467, w: 30, h: 30, type: "patrolQuickSlashSword", facing: -1, swordReach: 56, minX: 4450, maxX: 4630, vx: -2.0, attackOffset: 0.4 },
+            { x: 4925, y: 402, w: 30, h: 30, type: "patrolQuickSlashSword", facing: 1, swordReach: 58, minX: 4850, maxX: 5100, vx: 2.2, attackOffset: 1.1 }
+        ]
+    },
+    {
+        ...battleNormalLevels[12],
+        intro: "Battle Ultimate Level 13: Enemies thrust their sword forward like a spear. New: hold E to slash, a wide side swing that can freeze swords. Press R to spear, a straight thrust that kills what it reaches.",
+        enemies: [
+            { x: 805, y: 537, w: 30, h: 30, type: "spearSword", facing: -1, swordReach: 80, attackOffset: 0.4 },
+            { x: 1215, y: 462, w: 30, h: 30, type: "spearSword", facing: 1, swordReach: 82, attackOffset: 1.2 },
+            { x: 1675, y: 552, w: 30, h: 30, type: "spearSword", facing: -1, swordReach: 84, attackOffset: 2.0 },
+            { x: 2160, y: 482, w: 30, h: 30, type: "spearSword", facing: 1, swordReach: 86, attackOffset: 0.8 },
+            { x: 2635, y: 412, w: 30, h: 30, type: "spearSword", facing: -1, swordReach: 88, attackOffset: 1.6 },
+            { x: 3120, y: 522, w: 30, h: 30, type: "spearSword", facing: 1, swordReach: 90, attackOffset: 0.2 },
+            { x: 3580, y: 452, w: 30, h: 30, type: "spearSword", facing: -1, swordReach: 92, attackOffset: 1.0 },
+            { x: 4060, y: 532, w: 30, h: 30, type: "spearSword", facing: 1, swordReach: 94, attackOffset: 1.8 },
+            { x: 4535, y: 467, w: 30, h: 30, type: "spearSword", facing: -1, swordReach: 96, attackOffset: 0.6 },
+            { x: 4970, y: 402, w: 30, h: 30, type: "spearSword", facing: 1, swordReach: 98, attackOffset: 1.4 }
+        ]
     }
 ];
 
@@ -2419,7 +2439,7 @@ function swordBlockReach() {
     return 176 + Math.max(0, currentCharacter().swordReachBonus || 0) * 1.3 + (currentCharacter().shieldBonus || 0) * 28;
 }
 
-function spawnSwordTrail(angle) {
+function spawnSwordTrail(angle, reach = swordReach()) {
     const grip = swordGripPoint(angle, "attack");
     combatEffects.push({
         type: "slash",
@@ -2428,7 +2448,7 @@ function spawnSwordTrail(angle) {
         angle,
         life: 14,
         maxLife: 14,
-        reach: swordReach()
+        reach
     });
 }
 
@@ -2527,6 +2547,20 @@ function enemyBackExposed(enemy) {
     return facing * (playerCenter.x - enemyCenter.x) < 0;
 }
 
+function enemySlashType(enemy) {
+    return enemy.type === "jumpSword" ||
+        enemy.type === "quickSlashSword" ||
+        enemy.type === "bothSlashSword" ||
+        enemy.type === "patrolQuickSlashSword";
+}
+
+function enemySlashYOffset(enemy) {
+    if (!enemySlashType(enemy) || enemy.attackTimer <= 0) return 0;
+    const duration = enemy.slashDuration || 0.42;
+    const progress = 1 - Math.max(0, Math.min(1, enemy.attackTimer / duration));
+    return -18 + progress * 36;
+}
+
 function directionalHit(enemy, angle, reach, thickness) {
     const playerCenter = centerOf(player);
     const enemyCenter = centerOf(enemy);
@@ -2542,12 +2576,22 @@ function directionalHit(enemy, angle, reach, thickness) {
 function guardSwordBox(enemy) {
     const facing = enemy.facing || -1;
     const reach = enemy.swordReach || 38;
+    const armLen = 13;
+    const thrust = enemy.type === "spearSword" && enemy.attackTimer > 0 ? enemy.spearThrust || 28 : 0;
+    const armRootX = facing > 0 ? enemy.x + enemy.w - 2 : enemy.x + 2;
+    const gripX = armRootX + facing * (armLen + thrust);
     return {
-        x: facing > 0 ? enemy.x + enemy.w - 2 : enemy.x - reach + 2,
-        y: enemy.y + enemy.h * 0.38,
+        x: Math.min(gripX, gripX + facing * reach),
+        y: enemy.y + enemy.h * 0.32 + enemySlashYOffset(enemy),
         w: reach,
-        h: 9
+        h: 12
     };
+}
+
+function bothSwordBoxes(enemy) {
+    const left = { ...enemy, facing: -1 };
+    const right = { ...enemy, facing: 1 };
+    return [guardSwordBox(left), guardSwordBox(right)];
 }
 
 function radialHit(enemy, radius) {
@@ -2853,16 +2897,29 @@ function loadLevel(index, resetLives = false) {
     enemies = level.enemies.map(enemy => ({
         ...enemy,
         baseY: enemy.y,
-        vx: 0,
-        vy: 0,
+        vx: enemy.vx || 0,
+        vy: enemy.vy || 0,
         jumpTimer: randomJumpDelay(),
         moveTimer: randomMoveDelay(),
         patternIndex: 0,
         patternTimer: enemy.stepTime || 1,
         attackClock: enemy.attackOffset || 5,
-        attackTimer: 0
+        attackTimer: 0,
+        freezeTimer: 0
     }));
     enemies.forEach(enemy => {
+        if (enemy.type === "guardSword" || enemy.type === "patrolSword" || enemy.type === "jumpSword" || enemy.type === "flipSword" || enemy.type === "quickSlashSword" || enemy.type === "bothSlashSword" || enemy.type === "patrolQuickSlashSword" || enemy.type === "spearSword") {
+            let bestY = world.height - enemy.h;
+            platforms.forEach(p => {
+                if (p.y > enemy.y && p.y < bestY + enemy.h && enemy.x + enemy.w > p.x && enemy.x < p.x + p.w) {
+                    bestY = p.y - enemy.h;
+                }
+            });
+            enemy.y = bestY;
+            enemy.baseY = bestY;
+            enemy.mustHitBack = enemy.type !== "bothSlashSword";
+            enemy.initialFacing = enemy.facing || -1;
+        }
         if (enemy.type === "wanderer") chooseEnemyDirection(enemy);
         if (enemy.type === "chaos" || enemy.type === "chaosSentry" || enemy.type === "bigFlyer") chooseChaosDirection(enemy);
     });
@@ -2870,6 +2927,9 @@ function loadLevel(index, resetLives = false) {
     shieldUnlocked = index >= 7;
     duckUnlocked = index >= 10;
     archeryUnlocked = index >= 13;
+    combosUnlocked = realSwordControlsActive() && index >= 6;
+    spearKeysUnlocked = realSwordControlsActive() && index >= 12;
+    heldAttackKeys.clear();
     archeryReady = false;
     arrows = [];
     playerArrows = [];
@@ -2884,7 +2944,6 @@ function updateHud() {
     const level = levels[levelIndex];
     setInstruction(level.intro || level.name);
     updateLivesCounter();
-    updateShop();
 }
 
 function updateLivesCounter() {
@@ -2919,6 +2978,8 @@ function respawn() {
     player.attackAngle = defaultSwordAngle();
     player.blockAngle = defaultSwordAngle();
     player.blockFlashTimer = 0;
+    player.swordFreezeTimer = 0;
+    player.sideSlashHeld = false;
     player.shieldTimer = 0;
     cameraX = 0;
 }
@@ -2940,9 +3001,7 @@ function showLoseScreen() {
     gameStarted = false;
     gameOver = true;
     archeryReady = false;
-    localStorage.removeItem(SAVE_KEY);
-    shopPanel.classList.remove("open");
-    loseLine.textContent = `You ran out of lives on ${levels[levelIndex].name}. Restart from Level 1 with no upgrades.`;
+    loseLine.textContent = `You ran out of lives on ${levels[levelIndex].name}. Restart from Level 1.`;
     loseScreen.classList.remove("hidden");
 }
 
@@ -2973,7 +3032,6 @@ function showWinScreen() {
     gameOver = true;
     archeryReady = false;
     localStorage.removeItem(SAVE_KEY);
-    shopPanel.classList.remove("open");
     winLine.textContent = `You cleared all ${levels.length} levels with ${lives} lives left.`;
     winScreen.classList.remove("hidden");
 }
@@ -3008,102 +3066,111 @@ function attackDirectionForKey(code) {
     return null;
 }
 
+function thrustDirectionForKey(code) {
+    if (code === "KeyR") return player.facing >= 0 ? 0 : Math.PI;
+    return null;
+}
+
+function sideSlashBox(angle, reach = swordReach() + 32, thickness = swordThickness() + 16) {
+    const origin = swordGripPoint(angle, "attack");
+    return {
+        x: angle === 0 ? origin.x : origin.x - reach,
+        y: origin.y - thickness / 2,
+        w: reach,
+        h: thickness
+    };
+}
+
+function activeEnemySwordBoxes(enemy) {
+    if (enemy.freezeTimer > 0 || enemy.attackTimer <= 0) return [];
+    if (enemy.type === "bothSlashSword") return bothSwordBoxes(enemy);
+    if (enemy.type === "jumpSword" || enemy.type === "quickSlashSword" || enemy.type === "patrolQuickSlashSword" || enemy.type === "spearSword") {
+        return [guardSwordBox(enemy)];
+    }
+    return [];
+}
+
+function enemySideSlashActive(enemy) {
+    return enemy.attackTimer > 0 && enemySlashType(enemy);
+}
+
+function freezeSwordClash(enemy, angle) {
+    const clash = centerOf(enemy);
+    enemy.freezeTimer = 42;
+    player.swordFreezeTimer = 42;
+    player.attackTimer = 42;
+    player.attackAngle = angle;
+    spawnHitSparks(clash.x, clash.y, angle, "#8deaff");
+    combatEffects.push({
+        type: "ring",
+        x: clash.x,
+        y: clash.y,
+        life: 18,
+        maxLife: 18,
+        color: "#8deaff"
+    });
+}
+
+function sideSlashAttack() {
+    const angle = player.facing >= 0 ? 0 : Math.PI;
+    const reach = swordReach() + 32;
+    const thickness = swordThickness() + 16;
+    player.attackTimer = 16;
+    player.attackAngle = angle;
+
+    const slashBox = sideSlashBox(angle, reach, thickness);
+    const clashEnemy = enemies.find(enemy => activeEnemySwordBoxes(enemy).some(box => rectsOverlap(slashBox, box)));
+    if (clashEnemy) {
+        freezeSwordClash(clashEnemy, angle);
+    }
+}
+
+function updateHeldSideSlash() {
+    if (!player.sideSlashHeld || !attackMode || !spearKeysUnlocked || player.swordFreezeTimer > 0) return;
+    sideSlashAttack();
+}
+
+function thrustAttack(angle) {
+    player.attackTimer = 18;
+    player.attackAngle = angle;
+    if (Math.cos(angle) > 0.2) player.facing = 1;
+    if (Math.cos(angle) < -0.2) player.facing = -1;
+    const reach = swordReach() + 58;
+    const thickness = Math.max(18, swordThickness() * 0.55);
+    spawnSwordTrail(angle, reach);
+    const thrustBox = sideSlashBox(angle, reach, thickness);
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        const pokesSideSlash = enemySideSlashActive(enemies[i])
+            && activeEnemySwordBoxes(enemies[i]).some(box => rectsOverlap(thrustBox, box));
+        if (!directionalHit(enemies[i], angle, reach, thickness) && !pokesSideSlash) continue;
+        const enemyCenter = centerOf(enemies[i]);
+        defeatEnemy(i);
+        spawnHitSparks(enemyCenter.x, enemyCenter.y, angle, pokesSideSlash ? "#ffd166" : "#8deaff");
+    }
+}
+
+function comboAttack(angles) {
+    player.attackTimer = 20;
+    const avgX = angles.reduce((s, a) => s + Math.cos(a), 0);
+    const avgY = angles.reduce((s, a) => s + Math.sin(a), 0);
+    player.attackAngle = Math.atan2(avgY, avgX);
+    if (Math.cos(player.attackAngle) > 0.2) player.facing = 1;
+    if (Math.cos(player.attackAngle) < -0.2) player.facing = -1;
+    angles.forEach(angle => spawnSwordTrail(angle));
+    const reach = swordReach() + 22;
+    const thick = swordThickness() + 10;
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        if (!angles.some(angle => directionalHit(enemies[i], angle, reach, thick))) continue;
+        if (!enemyBackExposed(enemies[i])) continue;
+        const enemyCenter = centerOf(enemies[i]);
+        defeatEnemy(i);
+        spawnHitSparks(enemyCenter.x, enemyCenter.y, player.attackAngle, "#49ffa8");
+    }
+}
+
 function setAttackMode(enabled) {
     attackMode = enabled;
     attackModeBadge.classList.toggle("hidden", !enabled);
-}
-
-function attackUpgradeCost() {
-    return 10 + attackUpgradeLevel;
-}
-
-function shieldUpgradeCost() {
-    return 15 + shieldUpgradeLevel * 5;
-}
-
-function archeryUpgradeCost() {
-    return archeryRangeLevel === 0 ? 30 : 40;
-}
-
-function updateShop() {
-    if (attackUpgradeLevel >= 3) {
-        shopInfo.textContent = `Kills: ${killBank}. Attack range is maxed out. Sword block time ${shieldUpgradeLevel}/3.`;
-        attackUpgradeBtn.textContent = "Maxed Out";
-        attackUpgradeBtn.disabled = true;
-    } else {
-        const attackCost = attackUpgradeCost();
-        attackUpgradeBtn.textContent = `Buy Attack Range (${attackCost})`;
-        attackUpgradeBtn.disabled = killBank < attackCost;
-    }
-
-    if (!shieldUnlocked) {
-        shieldUpgradeBtn.textContent = "Sword Block Locked";
-        shieldUpgradeBtn.disabled = true;
-    } else if (shieldUpgradeLevel >= 3) {
-        shieldUpgradeBtn.textContent = "Sword Block Maxed";
-        shieldUpgradeBtn.disabled = true;
-    } else {
-        const shieldCost = shieldUpgradeCost();
-        shieldUpgradeBtn.textContent = `Buy Sword Block Time (${shieldCost})`;
-        shieldUpgradeBtn.disabled = killBank < shieldCost;
-    }
-
-    if (!archeryUnlocked) {
-        archeryUpgradeBtn.textContent = "Archery Locked";
-        archeryUpgradeBtn.disabled = true;
-    } else if (archeryRangeLevel >= 2) {
-        archeryUpgradeBtn.textContent = "Archery Maxed Out";
-        archeryUpgradeBtn.disabled = true;
-    } else {
-        const archeryCost = archeryUpgradeCost();
-        const nextRange = archeryRangeLevel + 2;
-        archeryUpgradeBtn.textContent = `Buy ${nextRange}-Platform Shot (${archeryCost})`;
-        archeryUpgradeBtn.disabled = killBank < archeryCost;
-    }
-
-    const attackLine = attackUpgradeLevel >= 3
-        ? "Attack range maxed"
-        : `Attack range ${attackUpgradeLevel}/3, next ${attackUpgradeCost()} kills`;
-    const shieldLine = shieldUpgradeLevel >= 3
-        ? `Sword block maxed at ${formatSeconds(shieldDurationSeconds())} sec`
-        : shieldUnlocked
-            ? `Sword block time ${shieldUpgradeLevel}/3, next ${shieldUpgradeCost()} kills`
-            : "Sword block time locked until Level 8";
-    const archeryLine = archeryRangeLevel >= 2
-        ? "Archery range maxed at 3 platforms"
-        : archeryUnlocked
-            ? `Archery range ${archeryRangeLevel + 1} platform, next ${archeryUpgradeCost()} kills`
-            : "Archery range locked until Level 14";
-    shopInfo.textContent = `Kills: ${killBank}. ${attackLine}. ${shieldLine}. ${archeryLine}.`;
-}
-
-function buyAttackUpgrade() {
-    if (attackUpgradeLevel >= 3) return;
-    const cost = attackUpgradeCost();
-    if (killBank < cost) return;
-    killBank -= cost;
-    attackUpgradeLevel += 1;
-    updateHud();
-}
-
-function buyShieldUpgrade() {
-    if (!shieldUnlocked) return;
-    if (shieldUpgradeLevel >= 3) return;
-    const cost = shieldUpgradeCost();
-    if (killBank < cost) return;
-    killBank -= cost;
-    shieldUpgradeLevel += 1;
-    updateHud();
-}
-
-function buyArcheryUpgrade() {
-    if (!archeryUnlocked) return;
-    if (archeryRangeLevel >= 2) return;
-    const cost = archeryUpgradeCost();
-    if (killBank < cost) return;
-    killBank -= cost;
-    archeryRangeLevel += 1;
-    updateHud();
 }
 
 function saveGame() {
@@ -3111,10 +3178,6 @@ function saveGame() {
         selectedBattleVersion,
         levelIndex,
         lives,
-        killBank,
-        attackUpgradeLevel,
-        shieldUpgradeLevel,
-        archeryRangeLevel,
         currentCharacterId
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
@@ -3139,7 +3202,6 @@ function resetProgress() {
     useBattleVersion("normal");
     gameStarted = false;
     gameOver = false;
-    shopPanel.classList.remove("open");
     loseScreen.classList.add("hidden");
     winScreen.classList.add("hidden");
     rushTitleScreen.classList.remove("hidden");
@@ -3161,14 +3223,22 @@ function loadSavedGame() {
     }
     if (!saveData || typeof saveData !== "object") return false;
 
-    killBank = Math.max(0, Number(saveData.killBank) || 0);
-    attackUpgradeLevel = clampUpgrade(Number(saveData.attackUpgradeLevel) || 0);
-    shieldUpgradeLevel = clampUpgrade(Number(saveData.shieldUpgradeLevel) || 0);
-    archeryRangeLevel = Math.max(0, Math.min(2, Number(saveData.archeryRangeLevel) || 0));
+    killBank = 0;
+    attackUpgradeLevel = 0;
+    shieldUpgradeLevel = 0;
+    archeryRangeLevel = 0;
     lives = Math.max(1, Math.min(STARTING_LIVES, Number(saveData.lives) || STARTING_LIVES));
     if (characters[saveData.currentCharacterId]) currentCharacterId = saveData.currentCharacterId;
     useBattleVersion(saveData.selectedBattleVersion);
     loadLevel(clampLevel(Number(saveData.levelIndex) || 0));
+    gameStarted = true;
+    gameOver = false;
+    rushTitleScreen.classList.add("hidden");
+    rushSetupScreen.classList.add("hidden");
+    characterSelect.classList.add("hidden");
+    loseScreen.classList.add("hidden");
+    winScreen.classList.add("hidden");
+    syncCharacterSelect();
     return true;
 }
 
@@ -3183,10 +3253,18 @@ function completeLevel() {
         return;
     }
     loadLevel(levelIndex + 1);
+    saveGame();
 }
 
 function update() {
+    updateHeldSideSlash();
+
     enemies.forEach(enemy => {
+        if (enemy.freezeTimer > 0) {
+            enemy.freezeTimer -= 1;
+            return;
+        }
+
         if (enemy.type === "jumper") {
             const t = performance.now() / 1000 + enemy.jumpOffset;
             const hop = Math.max(0, Math.sin(t * 3.4));
@@ -3365,6 +3443,109 @@ function update() {
         if (enemy.type === "guardSword" && rectsOverlap(player, guardSwordBox(enemy))) {
             takeHit(enemy);
         }
+
+        if (enemy.type === "patrolSword") {
+            enemy.x += enemy.vx;
+            if (enemy.x <= enemy.minX) {
+                enemy.x = enemy.minX;
+                enemy.vx = Math.abs(enemy.vx);
+                enemy.facing = 1;
+            }
+            if (enemy.x + enemy.w >= enemy.maxX) {
+                enemy.x = enemy.maxX - enemy.w;
+                enemy.vx = -Math.abs(enemy.vx);
+                enemy.facing = -1;
+            }
+            if (rectsOverlap(player, guardSwordBox(enemy))) takeHit(enemy);
+        }
+
+        if (enemy.type === "jumpSword") {
+            const t = performance.now() / 1000 + (enemy.jumpOffset || 0);
+            const hop = Math.max(0, Math.sin(t * 2.8));
+            enemy.y = enemy.baseY - hop * 82;
+            enemy.attackClock -= 1 / 60;
+            if (enemy.attackClock <= 0) {
+                enemy.attackTimer = 0.34;
+                enemy.slashDuration = 0.34;
+                enemy.attackClock = 2.4;
+            }
+            if (enemy.attackTimer > 0) {
+                enemy.attackTimer -= 1 / 60;
+                if (rectsOverlap(player, guardSwordBox(enemy))) takeHit(enemy);
+            }
+        }
+
+        if (enemy.type === "flipSword") {
+            const phase = Math.floor((performance.now() / 1000 + (enemy.flipOffset || 0)) / 5);
+            enemy.facing = phase % 2 === 0 ? (enemy.initialFacing || -1) : -(enemy.initialFacing || -1);
+            if (rectsOverlap(player, guardSwordBox(enemy))) takeHit(enemy);
+        }
+
+        if (enemy.type === "quickSlashSword") {
+            enemy.attackClock -= 1 / 60;
+            if (enemy.attackClock <= 0) {
+                enemy.attackTimer = 0.46;
+                enemy.slashDuration = 0.46;
+                enemy.attackClock = 1.15;
+            }
+            if (enemy.attackTimer > 0) {
+                enemy.attackTimer -= 1 / 60;
+                if (rectsOverlap(player, guardSwordBox(enemy))) takeHit(enemy);
+            }
+        }
+
+        if (enemy.type === "bothSlashSword") {
+            enemy.attackClock -= 1 / 60;
+            if (enemy.attackClock <= 0) {
+                enemy.attackTimer = 0.42;
+                enemy.slashDuration = 0.42;
+                enemy.attackClock = 1.45;
+            }
+            if (enemy.attackTimer > 0) {
+                enemy.attackTimer -= 1 / 60;
+                if (bothSwordBoxes(enemy).some(box => rectsOverlap(player, box))) takeHit(enemy);
+            }
+        }
+
+        if (enemy.type === "patrolQuickSlashSword") {
+            enemy.x += enemy.vx;
+            if (enemy.x <= enemy.minX) {
+                enemy.x = enemy.minX;
+                enemy.vx = Math.abs(enemy.vx);
+                enemy.facing = 1;
+            }
+            if (enemy.x + enemy.w >= enemy.maxX) {
+                enemy.x = enemy.maxX - enemy.w;
+                enemy.vx = -Math.abs(enemy.vx);
+                enemy.facing = -1;
+            }
+            enemy.attackClock -= 1 / 60;
+            if (enemy.attackClock <= 0) {
+                enemy.attackTimer = 0.4;
+                enemy.slashDuration = 0.4;
+                enemy.attackClock = 1.05;
+            }
+            if (enemy.attackTimer > 0) {
+                enemy.attackTimer -= 1 / 60;
+                if (rectsOverlap(player, guardSwordBox(enemy))) takeHit(enemy);
+            }
+        }
+
+        if (enemy.type === "spearSword") {
+            enemy.attackClock -= 1 / 60;
+            if (enemy.attackClock <= 0) {
+                enemy.attackTimer = 0.5;
+                enemy.attackClock = 2.1;
+                enemy.spearThrust = 34;
+            }
+            if (enemy.attackTimer > 0) {
+                enemy.attackTimer -= 1 / 60;
+                enemy.spearThrust = Math.max(0, 34 * (enemy.attackTimer / 0.5));
+                if (rectsOverlap(player, guardSwordBox(enemy))) takeHit(enemy);
+            } else {
+                enemy.spearThrust = 0;
+            }
+        }
     });
 
     for (let i = arrows.length - 1; i >= 0; i--) {
@@ -3452,7 +3633,13 @@ function update() {
 
     player.x = Math.max(0, Math.min(world.width - player.w, player.x));
     if (player.y > world.height + 180) takeHit();
-    if (player.attackTimer > 0) player.attackTimer -= 1;
+    if (player.swordFreezeTimer > 0) {
+        player.swordFreezeTimer -= 1;
+    } else if (player.sideSlashHeld && attackMode && spearKeysUnlocked) {
+        player.attackTimer = 16;
+    } else if (player.attackTimer > 0) {
+        player.attackTimer -= 1;
+    }
     if (player.shieldTimer > 0) player.shieldTimer -= 1;
     if (player.blockFlashTimer > 0) player.blockFlashTimer -= 1;
     updateCombatEffects();
@@ -3698,7 +3885,7 @@ function drawSword(angle, active, mode = "attack") {
 }
 
 function enemyHasSword(enemy) {
-    return enemy.type === "sentry" || enemy.type === "jumpSentry" || enemy.type === "chaosSentry" || enemy.type === "bigFlyer";
+    return enemy.type === "sentry" || enemy.type === "jumpSentry" || enemy.type === "chaosSentry" || enemy.type === "bigFlyer" || activeEnemySwordBoxes(enemy).length > 0;
 }
 
 function enemySwordAngle(enemy) {
@@ -3751,34 +3938,53 @@ function drawEnemySword(enemy) {
     ctx.restore();
 }
 
-function drawGuardSword(enemy) {
-    const box = guardSwordBox(enemy);
-    const facing = enemy.facing || -1;
-    const gripX = facing > 0 ? enemy.x + enemy.w - 4 : enemy.x + 4;
-    const gripY = box.y + box.h / 2;
+function drawGuardSword(enemy, facingOverride = null) {
+    const facing = facingOverride || enemy.facing || -1;
+    const reach = enemy.swordReach || 38;
+    const armLen = 13;
+    const thrust = enemy.type === "spearSword" && enemy.attackTimer > 0 ? enemy.spearThrust || 28 : 0;
+    const armY = Math.round(enemy.y + enemy.h * 0.42 + enemySlashYOffset(enemy));
+    const armRootX = facing > 0 ? enemy.x + enemy.w - 2 : enemy.x + 2;
+    const gripX = armRootX + facing * (armLen + thrust);
+    const tipX = gripX + facing * reach;
 
     ctx.save();
-    ctx.translate(gripX, gripY);
-    ctx.scale(facing, 1);
-    ctx.shadowColor = "rgba(255, 209, 102, 0.48)";
-    ctx.shadowBlur = 8;
-    ctx.fillStyle = "#49311b";
-    roundRect(-3, -6, 7, 12, 3);
-    const blade = ctx.createLinearGradient(-enemy.swordReach, 0, 0, 0);
-    blade.addColorStop(0, "#ffffff");
-    blade.addColorStop(0.48, "#b9d7e8");
-    blade.addColorStop(1, "#fff1aa");
-    ctx.fillStyle = blade;
+
+    // Arm connecting body to grip
+    ctx.shadowColor = "rgba(0,0,0,0.28)";
+    ctx.shadowBlur = 5;
+    ctx.shadowOffsetY = 3;
+    ctx.fillStyle = "#6025b0";
+    roundRect(Math.min(armRootX, gripX) - 1, armY - 5, armLen + 2, 10, 4);
+
+    // Blade
+    ctx.shadowColor = "rgba(255, 209, 102, 0.55)";
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 0;
+    const bladeGrad = ctx.createLinearGradient(tipX, 0, gripX, 0);
+    bladeGrad.addColorStop(0, "#ffffff");
+    bladeGrad.addColorStop(0.5, "#b9d7e8");
+    bladeGrad.addColorStop(1, "#fff1aa");
+    ctx.fillStyle = bladeGrad;
     ctx.beginPath();
-    ctx.moveTo(-enemy.swordReach, 0);
-    ctx.lineTo(-8, -5);
-    ctx.lineTo(4, -2);
-    ctx.lineTo(4, 2);
-    ctx.lineTo(-8, 5);
+    ctx.moveTo(tipX, armY);
+    ctx.lineTo(gripX + facing * -4, armY - 5);
+    ctx.lineTo(gripX + facing * 4, armY - 2);
+    ctx.lineTo(gripX + facing * 4, armY + 2);
+    ctx.lineTo(gripX + facing * -4, armY + 5);
     ctx.closePath();
     ctx.fill();
+
+    // Crossguard
+    ctx.shadowBlur = 4;
     ctx.fillStyle = "#ffd166";
-    roundRect(-8, -8, 5, 16, 3);
+    roundRect(gripX - 3, armY - 9, 6, 18, 3);
+
+    // Handle
+    ctx.shadowColor = "transparent";
+    ctx.fillStyle = "#49311b";
+    roundRect(gripX - 4, armY - 5, 8, 10, 3);
+
     ctx.restore();
 }
 
@@ -4038,11 +4244,44 @@ function draw() {
                 ctx.fillRect(enemy.x + 8, enemy.y - 8, 14, 5);
             }
         }
-        if (enemy.type === "guardSword") {
-            drawGuardSword(enemy);
-            const hitbox = guardSwordBox(enemy);
-            ctx.fillStyle = "rgba(255, 59, 91, 0.18)";
-            roundRect(hitbox.x, hitbox.y, hitbox.w, hitbox.h, 5);
+        if (enemy.type === "guardSword" || enemy.type === "patrolSword" || enemy.type === "jumpSword" || enemy.type === "flipSword" || enemy.type === "quickSlashSword" || enemy.type === "bothSlashSword" || enemy.type === "patrolQuickSlashSword" || enemy.type === "spearSword") {
+            if (enemy.type === "bothSlashSword") {
+                drawGuardSword(enemy, -1);
+                drawGuardSword(enemy, 1);
+            } else {
+                drawGuardSword(enemy);
+            }
+            const timedSlash = enemy.type === "jumpSword" || enemy.type === "quickSlashSword" || enemy.type === "bothSlashSword" || enemy.type === "patrolQuickSlashSword" || enemy.type === "spearSword";
+            const showHitbox = !timedSlash || enemy.attackTimer > 0;
+            if (showHitbox) {
+                const hitboxes = enemy.type === "bothSlashSword" ? bothSwordBoxes(enemy) : [guardSwordBox(enemy)];
+                ctx.fillStyle = timedSlash ? "rgba(255, 59, 91, 0.34)" : "rgba(255, 59, 91, 0.18)";
+                hitboxes.forEach(hitbox => roundRect(hitbox.x, hitbox.y, hitbox.w, hitbox.h, 5));
+            }
+            if (enemy.type === "jumpSword") {
+                ctx.fillStyle = "#49ffa8";
+                ctx.fillRect(enemy.x + 8, enemy.y - 8, 14, 5);
+            }
+            if (enemy.type === "flipSword") {
+                ctx.fillStyle = "#ffd166";
+                ctx.fillRect(enemy.x + 8, enemy.y - 8, 14, 5);
+            }
+            if (enemy.type === "quickSlashSword") {
+                ctx.fillStyle = "#ff8fb3";
+                ctx.fillRect(enemy.x + 7, enemy.y - 8, 16, 5);
+            }
+            if (enemy.type === "patrolQuickSlashSword") {
+                ctx.fillStyle = "#ff8fb3";
+                ctx.fillRect(enemy.x + 5, enemy.y - 8, 20, 5);
+            }
+            if (enemy.type === "bothSlashSword") {
+                ctx.fillStyle = "#b8f7ff";
+                ctx.fillRect(enemy.x + 6, enemy.y - 8, 18, 5);
+            }
+            if (enemy.type === "spearSword") {
+                ctx.fillStyle = "#ffd166";
+                ctx.fillRect(enemy.x + 4, enemy.y - 8, 22, 5);
+            }
         }
         if (enemy.type === "sentry" || enemy.type === "jumpSentry" || enemy.type === "chaosSentry") {
             ctx.fillStyle = "#ffd166";
@@ -4209,8 +4448,13 @@ window.addEventListener("keydown", event => {
     if (!gameStarted) return;
     if (realSwordControlsActive()) {
         const attackAngle = attackDirectionForKey(event.code);
+        const thrustAngle = thrustDirectionForKey(event.code);
         if (event.code === "Digit1") {
             setAttackMode(true);
+            event.preventDefault();
+            return;
+        }
+        if (["Digit2", "Digit3", "Digit4", "KeyK", "KeyI", "KeyL", "KeyJ"].includes(event.code)) {
             event.preventDefault();
             return;
         }
@@ -4218,8 +4462,29 @@ window.addEventListener("keydown", event => {
             event.preventDefault();
             return;
         }
+        if (event.code === "KeyE") {
+            if (attackMode && spearKeysUnlocked) {
+                player.sideSlashHeld = true;
+                sideSlashAttack();
+            }
+            event.preventDefault();
+            return;
+        }
+        if (thrustAngle !== null) {
+            if (attackMode && spearKeysUnlocked && !event.repeat) thrustAttack(thrustAngle);
+            event.preventDefault();
+            return;
+        }
         if (attackAngle !== null) {
-            if (attackMode && !event.repeat) attack(attackAngle);
+            if (!event.repeat) heldAttackKeys.add(event.code);
+            if (attackMode && !event.repeat) {
+                const angles = [...heldAttackKeys].map(k => attackDirectionForKey(k)).filter(a => a !== null);
+                if (angles.length > 1) {
+                    if (combosUnlocked) comboAttack(angles);
+                } else {
+                    attack(attackAngle);
+                }
+            }
             event.preventDefault();
             return;
         }
@@ -4240,22 +4505,25 @@ window.addEventListener("keydown", event => {
         return;
     }
     setKey(event.code, true);
-    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space", "Digit3", "KeyI", "KeyW", "KeyA", "KeyS", "KeyD"].includes(event.code)) event.preventDefault();
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space", "Digit3", "KeyI", "KeyW", "KeyA", "KeyS", "KeyD", "KeyE", "KeyR"].includes(event.code)) event.preventDefault();
 });
 canvas.addEventListener("click", event => {
     if (!gameStarted) return;
     firePlayerArrow(event.clientX, event.clientY);
 });
-window.addEventListener("keyup", event => setKey(event.code, false));
+window.addEventListener("keyup", event => {
+    heldAttackKeys.delete(event.code);
+    if (event.code === "KeyE") {
+        player.sideSlashHeld = false;
+        if (player.swordFreezeTimer <= 0) player.attackTimer = 0;
+    }
+    setKey(event.code, false);
+});
 window.addEventListener("message", event => {
     if (event.data?.type !== "game-key") return;
     setKey(event.data.code, event.data.down);
 });
 window.addEventListener("resize", resize);
-shopToggle.addEventListener("click", () => {
-    shopPanel.classList.toggle("open");
-    updateShop();
-});
 resetBtn.addEventListener("click", resetProgress);
 saveBtn.addEventListener("click", saveGame);
 tryAgainBtn.addEventListener("click", retryAfterLoss);
@@ -4265,9 +4533,6 @@ setupStartBtn.addEventListener("click", startSetupRun);
 setupOptionButtons.forEach(button => {
     button.addEventListener("click", () => chooseSetupOption(button));
 });
-attackUpgradeBtn.addEventListener("click", buyAttackUpgrade);
-shieldUpgradeBtn.addEventListener("click", buyShieldUpgrade);
-archeryUpgradeBtn.addEventListener("click", buyArcheryUpgrade);
 characterButtons.forEach(button => {
     button.addEventListener("click", () => chooseCharacter(button.dataset.character));
 });
@@ -4276,7 +4541,13 @@ resize();
 syncSetupChoices();
 if (START_AT_NEW_STUFF) {
     localStorage.removeItem(SAVE_KEY);
+    useBattleVersion("ultimate");
     loadLevel(clampLevel(TEST_START_LEVEL), true);
+    currentCharacterId = "azure";
+    gameStarted = true;
+    rushTitleScreen.classList.add("hidden");
+    rushSetupScreen.classList.add("hidden");
+    characterSelect.classList.add("hidden");
 } else if (!loadSavedGame()) {
     loadLevel(0, true);
 }
