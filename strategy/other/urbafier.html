@@ -448,6 +448,8 @@
     <div id="top-row">
         <div class="hud-stat">🪙 <span id="coins">50</span></div>
         <div class="hud-stat">👥 <span id="population">0</span></div>
+        <div class="hud-stat">🔧 <span id="maintenance-count">0</span></div>
+        <div class="hud-stat">📦 <span id="produce-count">0</span></div>
     </div>
     <div id="score-row">
         <div id="score-label">
@@ -864,20 +866,188 @@ function startCompanionMode() {
 function setCompanionGoal(goal) {
     companionGoal = goal;
     dismissCompanion();
-    setTimeout(() => {
-        if (goal === 'income')  showCompanion('💰', 'Income Strategy', 'Place <b>offices</b> next to houses — they earn 5🪙 per population. Keep supply bars topped up and upgrade buildings to multiply earnings!');
-        if (goal === 'city')    showCompanion('🏙️', 'City Builder', 'Variety scores big! Mix housing, offices, and farms. Level up by planting crops to unlock more rings and new building types.');
-        if (goal === 'unlock')  showCompanion('🔓', 'Unlock Fast', 'Plant crops fast to level up. <b>Beans</b> unlock at Lv 4 and grow quicker than Grass — switching pays off!', [
-            { label: '🌱 How do I switch crops?', fn: "showCompanion('🌱','Crop Switcher','See the crop icon at the bottom-left of your screen? Tap it to cycle through your unlocked crop types!')" },
-        ]);
-    }, 200);
+    setTimeout(() => startCompanionGuide(), 300);
+}
+
+// ── Companion step-by-step guide ───────────────────────────────────────────────
+const COMPANION_GUIDE = [
+    { icon: '🌾', title: 'Farm for Level 4!',
+      body: 'Offices unlock at <b>Level 4</b> — you\'re almost there! Keep planting and harvesting every tile. Each harvest earns score. Fill all your land!',
+      waitFor: 'comp-level4' },
+    { icon: '🫘', title: 'Switch to Beans!',
+      body: 'Beans just unlocked — they\'re faster than Grass! Tap the <b>crop icon at the bottom-left</b> to switch to beans.',
+      waitFor: 'comp-switched-beans' },
+    { icon: '🏢', title: 'Build an Office',
+      body: 'Open <b>Build</b> (bottom button), go to the <b>Working</b> tab, and place a <b>Small Office</b>. Offices earn 5🪙 per population each tick!',
+      waitFor: 'comp-office-placed' },
+    { icon: '🔍', title: 'Tap the Office',
+      body: 'Tap the office you just placed to open its panel and see its stats.',
+      waitFor: 'comp-building-tapped' },
+    { icon: '🔧', title: 'About Maintenance',
+      body: 'See the 🔧 bar? Offices need <b>Maintenance</b> to keep earning. You earn 3🔧 every harvest. When the bar runs low, tap the office and press <b>Restock</b> before it stops!' },
+    { icon: '📈', title: 'The Core Loop',
+      body: '<b>Farm → earn Maintenance → restock offices.</b> Keep that cycle going and your income never stops! Now push toward <b>Level 5</b>.' },
+    { icon: '🏠', title: 'Grow Your Population',
+      body: 'Place another <b>House</b> from Build → Housing. More population = higher office income every tick!',
+      waitFor: 'comp-house-placed' },
+    { icon: '⬆️', title: 'Upgrade Something',
+      body: 'Tap any building and press <b>Upgrade</b>. Each level boosts income and population by ~25%. Upgrading early pays off fast!',
+      waitFor: 'comp-upgraded' },
+    { icon: '🌍', title: 'Push to Level 5',
+      body: 'Keep farming and building. <b>Level 5</b> unlocks new land rings and more buildings to explore!',
+      waitFor: 'comp-level5' },
+    { icon: '🏗️', title: 'Keep Expanding',
+      body: 'You have new land! Fill it with a mix of housing and offices. More buildings = more income = more maintenance needed. Stay on top of restocking!',
+      waitFor: 'comp-level7' },
+    { icon: '🎉', title: "You've Got It!",
+      body: 'You know the full loop — farm, build, restock, upgrade, expand. I\'ll still pop in with tips when big things happen. Now go build that city! 🏙️',
+      done: true },
+];
+
+const GOAL_GUIDES = {
+    income: [
+        { icon: '🏢', title: 'Build 3 Offices',
+          body: 'Place two more offices. The more offices you have, the more income your population generates every tick!',
+          waitFor: 'goal-offices-3' },
+        { icon: '👥', title: 'Reach 10 Population',
+          body: 'Place or upgrade houses until your population hits <b>10+</b>. More people = more coin per office tick!',
+          waitFor: 'goal-pop-10' },
+        { icon: '⬆️', title: 'Upgrade an Office to Lv 3',
+          body: 'Tap an office and upgrade it three times. Each level boosts its earnings significantly!',
+          waitFor: 'goal-office-lv3' },
+        { icon: '🔧', title: 'Stockpile Maintenance',
+          body: 'Farm until you have <b>15+ Maintenance</b> saved up. A reserve means your offices never go dark mid-session.',
+          waitFor: 'goal-maint-15' },
+        { icon: '🏦', title: 'Reach Level 5',
+          body: 'Level 5 unlocks the <b>Large Office</b> — much higher earnings. Keep farming!',
+          waitFor: 'goal-level5-i' },
+        { icon: '💰', title: 'Place a Large Office',
+          body: 'Open Build → Working and place a <b>Large Office</b>. Upgrade it and watch your income soar!',
+          waitFor: 'goal-large-office' },
+        { icon: '🎯', title: 'Income Mastered!',
+          body: 'Multiple upgraded offices, stable maintenance, growing population — you\'ve built a money machine! 💰',
+          done: true },
+    ],
+    city: [
+        { icon: '🏗️', title: 'Fill Your Land — 5 Buildings',
+          body: 'Place buildings until you have <b>5 total</b> on your grid. Mix housing and offices for best results!',
+          waitFor: 'goal-buildings-5' },
+        { icon: '🌍', title: 'Reach Level 6',
+          body: 'Level 6 unlocks the <b>Transit</b> tab and new land. Keep farming and building!',
+          waitFor: 'goal-level6-c' },
+        { icon: '🚌', title: 'Place a Transit Building',
+          body: 'Open Build → Transit and place a <b>Bus Stop</b> or <b>Taxi Stand</b>. Transit adds major variety to your city!',
+          waitFor: 'goal-transit-c' },
+        { icon: '⭐', title: 'Hit 500 Score',
+          body: 'Keep placing buildings and upgrading. Aim for <b>500 total score</b> — you\'re building a real city!',
+          waitFor: 'goal-score-500' },
+        { icon: '🏆', title: 'Hit 1000 Score',
+          body: 'The city is growing! Push to <b>1000 score</b>. Bigger buildings at higher levels give huge score bonuses.',
+          waitFor: 'goal-score-1000' },
+        { icon: '🎯', title: 'City Builder!',
+          body: 'Your city is thriving! Keep expanding — there\'s always more land to unlock and buildings to discover. 🏙️',
+          done: true },
+    ],
+    unlock: [
+        { icon: '🔓', title: 'Reach Level 6',
+          body: 'Level 6 unlocks the <b>Transit</b> tab — a whole new building category. Farm faster with Beans!',
+          waitFor: 'goal-level6-u' },
+        { icon: '🚌', title: 'Place a Transit Building',
+          body: 'Go to Build → Transit and place anything. Each category you unlock opens new mechanics!',
+          waitFor: 'goal-transit-u' },
+        { icon: '🔓', title: 'Reach Level 8',
+          body: 'Level 8 unlocks <b>bigger, more powerful</b> buildings in every category. Keep going!',
+          waitFor: 'goal-level8-u' },
+        { icon: '🏢', title: 'Place a New Tier Building',
+          body: 'Check the Build panel — new buildings unlocked! Place any building that requires <b>Level 7 or higher</b>.',
+          waitFor: 'goal-newbuild-u' },
+        { icon: '🔓', title: 'Reach Level 10',
+          body: 'Level 10 is the mid-game milestone. More land rings, more buildings, more of everything!',
+          waitFor: 'goal-level10-u' },
+        { icon: '🎯', title: 'Unlock Hunter!',
+          body: 'You\'ve unlocked an impressive roster of buildings! Keep leveling — the highest-tier structures are still out there. 🔓',
+          done: true },
+    ],
+};
+
+let companionGuideActive = false;
+let companionGuideIdx = 0;
+let companionWaiting = null;
+let compLastOfficeTile = -1;
+let currentGuideSteps = null;
+
+function startCompanionGuide() {
+    currentGuideSteps = COMPANION_GUIDE;
+    companionGuideActive = true;
+    companionGuideIdx = 0;
+    showCompanionStep();
+}
+
+function startGoalGuide() {
+    currentGuideSteps = GOAL_GUIDES[companionGoal] || null;
+    if (!currentGuideSteps) { endCompanionGuide(); return; }
+    companionGuideActive = true;
+    companionGuideIdx = 0;
+    companionWaiting = null;
+    dismissCompanion();
+    setTimeout(() => showCompanionStep(), 300);
+}
+
+function showCompanionStep() {
+    if (!companionGuideActive || !currentGuideSteps) return;
+    const step = currentGuideSteps[companionGuideIdx];
+    if (!step) { endCompanionGuide(); return; }
+
+    companionWaiting = step.waitFor || null;
+    const isMainGuide = currentGuideSteps === COMPANION_GUIDE;
+    const label = isMainGuide ? 'GUIDE' : { income: '💰 INCOME PATH', city: '🏙️ CITY PATH', unlock: '🔓 UNLOCK PATH' }[companionGoal] || 'GUIDE';
+    const progress = `<div style="font-size:10px;color:#bbb;margin-bottom:5px;font-weight:700">${label} · ${companionGuideIdx + 1} / ${currentGuideSteps.length}</div>`;
+
+    let btns = [];
+    if (step.done) {
+        if (isMainGuide && GOAL_GUIDES[companionGoal]) btns.push({ label: 'Keep Going! →', fn: 'startGoalGuide()' });
+        btns.push({ label: isMainGuide ? 'Finish Guide ✓' : 'Goal Complete! 🎉', fn: 'endCompanionGuide()' });
+    } else {
+        btns.push({ label: 'Got it! →', fn: 'advanceCompanionGuide()' });
+    }
+
+    const card = document.getElementById('companion-card');
+    const optHtml = btns.map(o => `<button class="comp-opt" onclick="${o.fn}">${o.label}</button>`).join('');
+    card.innerHTML = `
+        <div style="font-size:26px;margin-bottom:4px">${step.icon}</div>
+        ${progress}
+        <div style="font-weight:900;font-size:14px;color:#222;margin-bottom:5px">${step.title}</div>
+        <div style="font-size:12px;color:#555;line-height:1.55;text-align:left">${step.body}</div>
+        ${optHtml}
+    `;
+    card.style.display = 'block';
+    card.style.animation = 'none'; void card.offsetWidth;
+    card.style.animation = 'compIn 0.3s ease';
+}
+
+function advanceCompanionGuide() {
+    companionWaiting = null;
+    companionGuideIdx++;
+    setTimeout(() => showCompanionStep(), 400);
+}
+
+function endCompanionGuide() {
+    const wasGoalGuide = currentGuideSteps !== COMPANION_GUIDE;
+    companionGuideActive = false;
+    companionWaiting = null;
+    currentGuideSteps = null;
+    dismissCompanion();
+    const msg = wasGoalGuide
+        ? 'Goal complete! You\'ve mastered your path. I\'ll still chime in with important tips. Keep building! 🏙️'
+        : 'You\'re on your own now — but I\'ll still pop up when something important happens. Good luck! 💪';
+    setTimeout(() => showCompanion('🏙️', wasGoalGuide ? 'Goal Reached!' : 'Guided Tour Complete!', msg), 400);
 }
 
 function companionOnLevelUp(newLevel) {
     if (!companionActive) return;
     const tips = {
         4: { icon: '🫘', title: 'Beans Unlocked!', body: 'Beans grow faster than Grass — switch crops from the bottom-left icon for quicker XP gains!', options: [] },
-        5: { icon: '🐔', title: 'Farming Tab!', body: 'The <b>Farm</b> tab appeared in Build. Chicken coops and cow barns produce goods over time — great income diversification.' },
+        5: { icon: '🌾', title: 'Farming Reminder!', body: 'Keep harvesting! Every crop you harvest gives +3 🔧 Maintenance — your offices and factories need it to keep earning.' },
         6: { icon: '🚌', title: 'Transit Unlocked!', body: 'Bus stops and train stations unlock huge late-game income. Build up housing first so population is high when you place them!' },
         8: { icon: '🏢', title: 'Bigger Buildings!', body: 'Larger, more profitable buildings are now available in the Build panel. Plan bigger plots — they\'re worth it.' },
         10: { icon: '🌆', title: 'Mid-Game!', body: 'You\'re doing great! At this point, keep a mix of: houses (pop), offices (income), and farms (goods). What do you need most?', options: [
@@ -903,6 +1073,22 @@ function companionSuggestBuilding() {
 
 function companionTickCheck(now) {
     if (!companionActive) return;
+    // Guide-mode: check waiting events that need polling
+    if (companionGuideActive) {
+        if (companionWaiting === 'comp-maintenance-5' && maintenance >= 5) {
+            companionWaiting = null; advanceCompanionGuide();
+        }
+        // Goal guide tick checks
+        const workingBuildings = () => tiles.filter(t => t?.state === 'house' && t?.role === 'main' && BUILDING_CATEGORY[t.buildingType] === 'working').length;
+        const totalBuildings   = () => tiles.filter(t => t?.state === 'house' && t?.role === 'main').length;
+        if (companionWaiting === 'goal-offices-3'  && workingBuildings() >= 3)          { companionWaiting = null; advanceCompanionGuide(); }
+        if (companionWaiting === 'goal-pop-10'     && population >= 10)                  { companionWaiting = null; advanceCompanionGuide(); }
+        if (companionWaiting === 'goal-maint-15'   && maintenance >= 15)                 { companionWaiting = null; advanceCompanionGuide(); }
+        if (companionWaiting === 'goal-buildings-5' && totalBuildings() >= 5)            { companionWaiting = null; advanceCompanionGuide(); }
+        if (companionWaiting === 'goal-score-500'  && score >= 500)                      { companionWaiting = null; advanceCompanionGuide(); }
+        if (companionWaiting === 'goal-score-1000' && score >= 1000)                     { companionWaiting = null; advanceCompanionGuide(); }
+        return; // Don't fire ad-hoc tips while guide is active
+    }
     if (document.getElementById('companion-card').style.display !== 'none') return;
     if (now - lastCompanionCheck < 4000) return;
     lastCompanionCheck = now;
@@ -1214,8 +1400,12 @@ function drainAq() {
 }
 
 // ── HUD ────────────────────────────────────────────────────────────────────────
-function updateCoins()      { document.getElementById('coins').textContent = coins; }
-function updatePopulation() { document.getElementById('population').textContent = population; }
+let maintenance = 0;
+let produce = 0;
+function updateCoins()        { document.getElementById('coins').textContent = coins; }
+function updatePopulation()   { document.getElementById('population').textContent = population; }
+function updateMaintenance()  { document.getElementById('maintenance-count').textContent = maintenance; }
+function updateProduce()      { document.getElementById('produce-count').textContent = produce; }
 function scoreNeeded()      { return level * 10; }
 
 function addScore(amount) {
@@ -1297,6 +1487,7 @@ function updateNotifBadges() {
 
 function showUpgradePanel(tileIdx) {
     if (tutWaiting === 'building-clicked') { tutWaiting = null; setTimeout(() => tutAdvance(), 500); }
+    if (companionWaiting === 'comp-building-tapped') { companionWaiting = null; setTimeout(() => advanceCompanionGuide(), 500); }
     upgradePanelTile = tileIdx;
     const t = tiles[tileIdx];
     const def = BUILDING_DEFS[t.buildingType];
@@ -1352,7 +1543,7 @@ function showUpgradePanel(tileIdx) {
                 <div style="width:${supply}%;height:100%;background:${supplyColor};border-radius:5px;transition:width 0.4s"></div>
             </div>
         </div>
-        <button class="up-btn" style="background:#1565C0;color:#fff;margin-bottom:2px" onclick="restockBuilding()" ${coins < rCost ? 'disabled' : ''}>${supplyConf.emoji} Restock · ${rCost}🪙</button>
+        <button class="up-btn" style="background:#1565C0;color:#fff;margin-bottom:2px" onclick="restockBuilding()" ${cat === 'working' ? (maintenance < rCost ? 'disabled' : '') : cat === 'transport' ? (produce < rCost ? 'disabled' : '') : (coins < rCost ? 'disabled' : '')}>${supplyConf.emoji} Restock · ${rCost}${cat === 'working' ? '🔧' : cat === 'transport' ? '📦' : '🪙'}</button>
     ` : '';
 
     document.getElementById('upgrade-panel').innerHTML = `
@@ -1384,8 +1575,10 @@ function collectFromPanel() {
     t.productReady = false;
     t.lastProduced = Date.now();
     coins += earned;
+    const producedAmt = Math.max(1, Math.round(earned / 8));
+    produce += producedAmt; updateProduce();
     updateCoins();
-    popup(document.getElementById(`tile-${upgradePanelTile}`), `+${earned}🪙`, '#43A047');
+    popup(document.getElementById(`tile-${upgradePanelTile}`), `+${earned}🪙  +${producedAmt}📦`, '#43A047');
     renderTile(upgradePanelTile);
     showUpgradePanel(upgradePanelTile);
 }
@@ -1406,6 +1599,8 @@ function upgradeBuilding() {
     }
     updateCoins();
     renderTile(upgradePanelTile);
+    if (companionWaiting === 'comp-upgraded') { companionWaiting = null; setTimeout(() => advanceCompanionGuide(), 500); }
+    if (companionWaiting === 'goal-office-lv3' && BUILDING_CATEGORY[tiles[upgradePanelTile]?.buildingType] === 'working' && (tiles[upgradePanelTile]?.upgradeLevel ?? 0) >= 3) { companionWaiting = null; setTimeout(() => advanceCompanionGuide(), 500); }
     showUpgradePanel(upgradePanelTile);
 }
 
@@ -1413,14 +1608,23 @@ function restockBuilding() {
     if (upgradePanelTile < 0) return;
     const t = tiles[upgradePanelTile];
     const def = BUILDING_DEFS[t.buildingType];
+    const cat = BUILDING_CATEGORY[t.buildingType];
     const cost = restockCost(def);
-    if (coins < cost) return;
-    coins -= cost;
+    if (cat === 'working') {
+        if (maintenance < cost) return;
+        maintenance -= cost; updateMaintenance();
+    } else if (cat === 'transport') {
+        if (produce < cost) return;
+        produce -= cost; updateProduce();
+    } else {
+        if (coins < cost) return;
+        coins -= cost; updateCoins();
+    }
     t.supplyLevel = 100;
     t.lastSupplyDrain = Date.now();
-    updateCoins();
-    popup(document.getElementById(`tile-${upgradePanelTile}`), `${SUPPLY_CONFIG[BUILDING_CATEGORY[t.buildingType]]?.emoji} Restocked!`, '#1565C0');
+    popup(document.getElementById(`tile-${upgradePanelTile}`), `${SUPPLY_CONFIG[cat]?.emoji} Restocked!`, '#1565C0');
     renderTile(upgradePanelTile);
+    if (companionWaiting === 'comp-restocked') { companionWaiting = null; setTimeout(() => advanceCompanionGuide(), 500); }
     showUpgradePanel(upgradePanelTile);
 }
 
@@ -1451,6 +1655,14 @@ function applyBuildingUnlocks() {
 function onLevelUp(newLevel) {
     if (tutWaiting === 'level2' && newLevel >= 2) { tutWaiting = null; setTimeout(() => tutAdvance(), 700); }
     if (tutWaiting === 'level3' && newLevel >= 3) { tutWaiting = null; setTimeout(() => tutAdvance(), 700); }
+    if (companionWaiting === 'comp-level4'   && newLevel >= 4)  { companionWaiting = null; setTimeout(() => advanceCompanionGuide(), 800); }
+    if (companionWaiting === 'comp-level5'   && newLevel >= 5)  { companionWaiting = null; setTimeout(() => advanceCompanionGuide(), 800); }
+    if (companionWaiting === 'comp-level7'   && newLevel >= 7)  { companionWaiting = null; setTimeout(() => advanceCompanionGuide(), 800); }
+    if (companionWaiting === 'goal-level5-i' && newLevel >= 5)  { companionWaiting = null; setTimeout(() => advanceCompanionGuide(), 800); }
+    if (companionWaiting === 'goal-level6-c' && newLevel >= 6)  { companionWaiting = null; setTimeout(() => advanceCompanionGuide(), 800); }
+    if (companionWaiting === 'goal-level6-u' && newLevel >= 6)  { companionWaiting = null; setTimeout(() => advanceCompanionGuide(), 800); }
+    if (companionWaiting === 'goal-level8-u' && newLevel >= 8)  { companionWaiting = null; setTimeout(() => advanceCompanionGuide(), 800); }
+    if (companionWaiting === 'goal-level10-u' && newLevel >= 10) { companionWaiting = null; setTimeout(() => advanceCompanionGuide(), 800); }
     companionOnLevelUp(newLevel);
     coins += 10; updateCoins();
     popup(document.getElementById('top-bar'), '+10🪙', '#43A047');
@@ -1558,7 +1770,8 @@ function clickTile(i) {
     } else if (t.state === 'ready') {
         const crop = CROP_DEFS[t.cropType || 'grass'];
         coins += crop.harvest; tiles[i] = null;
-        popup(el, `+${crop.harvest}🪙`, '#43A047');
+        maintenance += 3; updateMaintenance();
+        popup(el, `+${crop.harvest}🪙  +3🔧`, '#43A047');
         addScore(crop.score);
         if (tutWaiting === 'harvest') { tutWaiting = null; setTimeout(() => tutAdvance(), 600); }
         if (firstHarvest) {
@@ -1576,6 +1789,7 @@ function selectCrop(type) {
     document.querySelectorAll('#tab-crops .build-item').forEach(el => el.classList.remove('selected'));
     document.getElementById(`item-crop-${type}`).classList.add('selected');
     document.getElementById('crop-grass-badge').textContent = type === 'grass' ? 'Active' : '';
+    if (companionWaiting === 'comp-switched-beans' && type === 'beans') { companionWaiting = null; setTimeout(() => advanceCompanionGuide(), 400); }
     closeBuildPanel();
 }
 
@@ -1640,6 +1854,16 @@ function placeBuildingAt(i) {
     updateCoins(); updatePopulation(); addScore(def.score);
     popup(document.getElementById(`tile-${block[0]}`), `+${def.score} score`, '#7B1FA2');
     if (tutWaiting === 'building-placed') { tutPlacedTile = block[0]; tutWaiting = null; closeBuildPanel(); setTimeout(() => tutAdvance(), 700); }
+    if (companionWaiting === 'comp-office-placed' && BUILDING_CATEGORY[type] === 'working') {
+        compLastOfficeTile = block[0]; companionWaiting = null; closeBuildPanel(); setTimeout(() => advanceCompanionGuide(), 700);
+    }
+    if (companionWaiting === 'comp-house-placed' && BUILDING_CATEGORY[type] === 'housing') {
+        companionWaiting = null; closeBuildPanel(); setTimeout(() => advanceCompanionGuide(), 700);
+    }
+    if (companionWaiting === 'goal-transit-c'   && BUILDING_CATEGORY[type] === 'transport') { companionWaiting = null; closeBuildPanel(); setTimeout(() => advanceCompanionGuide(), 700); }
+    if (companionWaiting === 'goal-transit-u'   && BUILDING_CATEGORY[type] === 'transport') { companionWaiting = null; closeBuildPanel(); setTimeout(() => advanceCompanionGuide(), 700); }
+    if (companionWaiting === 'goal-large-office' && type === 'large_office')                 { companionWaiting = null; closeBuildPanel(); setTimeout(() => advanceCompanionGuide(), 700); }
+    if (companionWaiting === 'goal-newbuild-u'  && (BUILDING_DEFS[type]?.unlockLevel ?? 0) >= 7) { companionWaiting = null; closeBuildPanel(); setTimeout(() => advanceCompanionGuide(), 700); }
 }
 
 // ── Build panel ────────────────────────────────────────────────────────────────
@@ -1727,7 +1951,7 @@ function renderTile(i, reveal = false) {
 // ── Save / Load ────────────────────────────────────────────────────────────────
 function saveGame() {
     localStorage.setItem('urbafier', JSON.stringify({
-        coins, population, score, level, firstHarvest, firstUpgradeDone, currentCrop,
+        coins, population, score, level, firstHarvest, firstUpgradeDone, currentCrop, maintenance, produce,
         tiles: [...tiles], unseenBuildings: [...unlockedUnseenBuildings]
     }));
     const btn = document.getElementById('save-btn');
@@ -1754,6 +1978,8 @@ function loadGame() {
         firstHarvest = d.firstHarvest ?? true;
         firstUpgradeDone = d.firstUpgradeDone ?? false;
         currentCrop = d.currentCrop ?? 'grass';
+        maintenance = d.maintenance ?? 0;
+        produce = d.produce ?? 0;
         if (d.tiles) d.tiles.forEach((t, i) => { tiles[i] = t; });
         unlockedUnseenBuildings = new Set(d.unseenBuildings || []);
         return true;
@@ -1761,7 +1987,7 @@ function loadGame() {
 }
 
 function applyLoadedState() {
-    updateCoins(); updatePopulation();
+    updateCoins(); updatePopulation(); updateMaintenance(); updateProduce();
     document.getElementById('level').textContent = level;
     document.getElementById('score').textContent = score;
     document.getElementById('score-needed').textContent = scoreNeeded();
