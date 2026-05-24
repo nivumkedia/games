@@ -37,6 +37,30 @@ body {
     font-size: 12px;
     font-weight: 800;
     pointer-events: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#hud-text {
+    flex: 1;
+}
+
+.attack-mode-badge {
+    flex-shrink: 0;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #ff8fb3, #e13e5b);
+    color: #1a0010;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    box-shadow: 0 0 10px rgba(225, 62, 91, 0.5), inset 0 1px rgba(255, 255, 255, 0.3);
+}
+
+.attack-mode-badge.hidden {
+    display: none;
 }
 
 .lives-counter {
@@ -1244,7 +1268,7 @@ body {
 </head>
 <body>
 <canvas id="game" tabindex="0"></canvas>
-<div class="hud" id="hud">New: Arrow keys or WASD move. Press 1/J to attack enemies.</div>
+<div class="hud" id="hud"><span id="hud-text">New: Arrow keys or WASD move. Press 1/J to attack enemies.</span><span class="attack-mode-badge hidden" id="attack-mode-badge">⚔ Attack Mode</span></div>
 <div class="lives-counter" id="lives-counter">Lives 40</div>
 <div class="instruction-callout" id="instruction-callout" aria-hidden="true"></div>
 <button class="reset-button" id="reset-btn">Reset</button>
@@ -1440,6 +1464,8 @@ body {
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const hud = document.getElementById("hud");
+const hudText = document.getElementById("hud-text");
+const attackModeBadge = document.getElementById("attack-mode-badge");
 const livesCounter = document.getElementById("lives-counter");
 const instructionCallout = document.getElementById("instruction-callout");
 const resetBtn = document.getElementById("reset-btn");
@@ -2603,7 +2629,7 @@ function chooseSetupOption(button) {
 function useBattleVersion(version) {
     selectedBattleVersion = version === "ultimate" ? "ultimate" : "normal";
     levels = selectedBattleVersion === "ultimate" ? battleUltimateLevels : battleNormalLevels;
-    attackMode = false;
+    setAttackMode(false);
 }
 
 function realSwordControlsActive() {
@@ -2848,7 +2874,7 @@ function loadLevel(index, resetLives = false) {
     arrows = [];
     playerArrows = [];
     combatEffects = [];
-    attackMode = false;
+    setAttackMode(false);
     killsThisLevel = 0;
     updateHud();
     respawn();
@@ -2866,7 +2892,7 @@ function updateLivesCounter() {
 }
 
 function setInstruction(text) {
-    hud.textContent = text;
+    hudText.textContent = text;
     if (text === lastHudText) return;
     lastHudText = text;
     showInstructionCallout(text);
@@ -2984,9 +3010,7 @@ function attackDirectionForKey(code) {
 
 function setAttackMode(enabled) {
     attackMode = enabled;
-    if (realSwordControlsActive() && enabled) {
-        setInstruction("Attack mode: W/A/S/D slash up/left/down/right. Arrow keys still move.");
-    }
+    attackModeBadge.classList.toggle("hidden", !enabled);
 }
 
 function attackUpgradeCost() {
