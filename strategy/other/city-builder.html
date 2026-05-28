@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CityBuilder</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap');
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: 'Nunito', 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    background: linear-gradient(180deg, #4fc3f7 0%, #81d4fa 25%, #b3e5fc 50%, #c8e6c9 75%, #a5d6a7 100%);
+    display: flex; flex-direction: column; align-items: center;
+    padding: 10px 14px 24px; gap: 9px;
+    user-select: none; overflow-x: hidden;
+}
+
+/* ── sky ── */
+.sky { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+.sun { position:absolute; top:18px; right:60px; width:56px; height:56px; background:radial-gradient(circle,#fff9c4 0%,#ffee58 55%,#ffd600 100%); border-radius:50%; box-shadow:0 0 0 10px rgba(255,236,64,0.25),0 0 0 22px rgba(255,236,64,0.12),0 0 60px rgba(255,220,0,0.3); animation:sunPulse 3s ease-in-out infinite; }
+@keyframes sunPulse { 0%,100%{box-shadow:0 0 0 10px rgba(255,236,64,0.25),0 0 0 22px rgba(255,236,64,0.12),0 0 60px rgba(255,220,0,0.3)} 50%{box-shadow:0 0 0 14px rgba(255,236,64,0.3),0 0 0 30px rgba(255,236,64,0.14),0 0 80px rgba(255,220,0,0.4)} }
+.cloud { position:absolute; background:white; border-radius:999px; opacity:0.85; animation:cloudDrift linear infinite; }
+.cloud::before,.cloud::after { content:''; position:absolute; background:white; border-radius:50%; }
+@keyframes cloudDrift { from{transform:translateX(0)} to{transform:translateX(110vw)} }
+body > * { position: relative; z-index: 1; }
+
+/* ── title ── */
+h1 { font-size:28px; font-weight:900; color:#1a5276; letter-spacing:2px; text-shadow:0 3px 0 rgba(255,255,255,0.7),0 1px 12px rgba(0,0,0,0.12); animation:titleBounce 0.6s cubic-bezier(0.22,1,0.36,1) both; }
+@keyframes titleBounce { from{transform:translateY(-30px) scale(0.8);opacity:0} to{transform:translateY(0) scale(1);opacity:1} }
+
+/* ── top bar ── */
+.top-bar { display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.72); border-radius:16px; padding:7px 16px; width:100%; max-width:960px; backdrop-filter:blur(8px); border:2px solid rgba(255,255,255,0.9); box-shadow:0 4px 20px rgba(0,0,0,0.1); }
+.player-score { display:flex; flex-direction:column; align-items:center; border-radius:12px; padding:5px 12px; transition:background 0.3s; }
+.player-score.active { background:rgba(100,200,100,0.2); }
+.ps-label { font-size:10px; font-weight:800; letter-spacing:1.5px; text-transform:uppercase; }
+.ps-score { font-size:20px; font-weight:900; color:#1a5276; }
+.ps-score.pop { animation:statPop 0.3s cubic-bezier(0.22,1,0.36,1); }
+@keyframes statPop { 0%,100%{transform:scale(1)} 50%{transform:scale(1.35)} }
+.vs-sep { font-size:16px; font-weight:900; color:#aaa; }
+.stat { display:flex; flex-direction:column; align-items:center; }
+.stat-label { font-size:10px; font-weight:800; color:#5d8a3c; letter-spacing:1.5px; text-transform:uppercase; }
+.stat-value { font-size:20px; font-weight:900; color:#1a5276; }
+.sep { flex:1; }
+#phase-text { font-size:11px; font-weight:800; color:#1565c0; text-align:right; max-width:180px; line-height:1.3; }
+
+/* ── city ── */
+.city-section { width:100%; max-width:960px; display:flex; flex-direction:column; gap:4px; }
+.city-player-label { font-size:11px; font-weight:800; letter-spacing:1px; text-transform:uppercase; padding:0 4px; }
+.city-wrap { width:100%; background:rgba(255,255,255,0.45); border-radius:16px; border:2px solid rgba(255,255,255,0.85); box-shadow:0 4px 20px rgba(0,0,0,0.08); overflow:hidden; transition:box-shadow 0.2s; }
+.city-wrap.upgrade-mode { box-shadow:0 4px 20px rgba(0,0,0,0.08),0 0 0 3px #ff9800; }
+.city-ground { height:14px; background:linear-gradient(180deg,#81c784,#4caf50); border-top:2px solid #388e3c; }
+.city-area { min-height:90px; max-height:160px; padding:8px 10px 0; display:flex; align-items:flex-end; gap:5px; flex-wrap:wrap; overflow-y:auto; }
+.city-area.upgrade-mode .building { cursor:crosshair; }
+.city-area.upgrade-mode .building:hover { filter:drop-shadow(0 6px 16px rgba(255,152,0,0.7)) brightness(1.12) !important; }
+.city-area.empty-msg { align-items:center; justify-content:center; min-height:90px; }
+.empty-label { color:#7dab5a; font-size:13px; font-style:italic; padding-bottom:14px; }
+
+.building { display:flex; flex-direction:column; align-items:center; cursor:pointer; line-height:1; filter:drop-shadow(0 4px 10px rgba(0,0,0,0.2)); animation:buildingDrop 0.55s cubic-bezier(0.34,1.56,0.64,1) both; transform-origin:bottom center; }
+.building:hover { filter:drop-shadow(0 6px 16px rgba(0,0,0,0.28)) brightness(1.06); }
+@keyframes buildingDrop { from{transform:scale(0.4) translateY(40px);opacity:0} to{transform:scale(1) translateY(0);opacity:1} }
+.building.bob { animation:buildingDrop 0.55s cubic-bezier(0.34,1.56,0.64,1) both,buildingBob 3s ease-in-out infinite; }
+@keyframes buildingBob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
+.building-label { font-size:10px; font-weight:800; color:#2d4a1e; margin-top:2px; white-space:nowrap; text-shadow:0 1px 0 rgba(255,255,255,0.8); }
+@keyframes upgradeFlash { 0%{filter:drop-shadow(0 0 0 rgba(255,152,0,0)) brightness(1)} 30%{filter:drop-shadow(0 0 24px rgba(255,152,0,1)) brightness(1.4)} 100%{filter:drop-shadow(0 4px 10px rgba(0,0,0,0.2)) brightness(1)} }
+.building.just-upgraded { animation:upgradeFlash 0.7s ease-out both; }
+
+/* opponent mini-city */
+.opp-city-wrap { width:100%; background:rgba(255,255,255,0.3); border-radius:12px; border:2px solid rgba(255,255,255,0.7); overflow:hidden; opacity:0.85; }
+.opp-city-area { min-height:54px; padding:6px 8px 0; display:flex; align-items:flex-end; gap:4px; flex-wrap:wrap; overflow:hidden; }
+.opp-city-area.empty-msg { align-items:center; justify-content:center; }
+.opp-ground { height:10px; background:linear-gradient(180deg,#81c784,#4caf50); border-top:2px solid #388e3c; }
+
+/* ── play area ── */
+.play-area { width:100%; max-width:960px; background:rgba(255,255,255,0.6); border-radius:18px; border:2px solid rgba(255,255,255,0.9); padding:13px; display:flex; gap:12px; align-items:flex-start; box-shadow:0 4px 24px rgba(0,0,0,0.08); }
+
+/* ── deck ── */
+.deck-zone { display:flex; flex-direction:column; align-items:center; gap:5px; flex-shrink:0; }
+.zone-label { font-size:10px; font-weight:800; letter-spacing:1.5px; text-transform:uppercase; color:#5d8a3c; text-align:center; }
+.deck-stack { position:relative; width:64px; height:90px; cursor:pointer; transition:transform 0.15s; }
+.deck-stack:hover:not(.empty) { transform:scale(1.06) rotate(-2deg); }
+.deck-stack:active:not(.empty) { transform:scale(0.95); }
+.deck-card-back { position:absolute; width:64px; height:90px; border-radius:10px; background:linear-gradient(135deg,#1565c0,#0d47a1,#1a237e); border:3px solid rgba(255,255,255,0.35); box-shadow:0 4px 12px rgba(0,0,0,0.3); display:flex; align-items:center; justify-content:center; font-size:20px; overflow:hidden; }
+.deck-card-back::after { content:''; position:absolute; inset:5px; border:1.5px solid rgba(255,255,255,0.2); border-radius:7px; }
+.deck-card-back:nth-child(1){transform:translate(-3px,-3px) rotate(-2deg)}
+.deck-card-back:nth-child(2){transform:translate(-1.5px,-1.5px) rotate(-1deg)}
+.deck-card-back:nth-child(3){transform:translate(0,0)}
+.deck-stack.empty { opacity:0.3; cursor:not-allowed; }
+.deck-stack.empty:hover { transform:none; }
+.deck-sub { font-size:11px; font-weight:800; color:#1a5276; }
+.deck-hint { font-size:10px; font-weight:700; color:#5d8a3c; text-align:center; }
+
+/* ── hand ── */
+.hand-zone { flex:1; display:flex; flex-direction:column; gap:8px; min-width:0; }
+.hand-cards { display:flex; gap:6px; flex-wrap:wrap; }
+
+.card { width:64px; height:90px; border-radius:10px; border:3px solid rgba(255,255,255,0.6); display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:27px; font-weight:900; cursor:pointer; transition:transform 0.18s cubic-bezier(0.22,1,0.36,1),box-shadow 0.18s; box-shadow:0 4px 12px rgba(0,0,0,0.15),inset 0 1px rgba(255,255,255,0.5); position:relative; overflow:hidden; }
+.card::before { content:''; position:absolute; top:0; left:0; right:0; height:45%; background:linear-gradient(180deg,rgba(255,255,255,0.3),transparent); border-radius:8px 8px 0 0; pointer-events:none; }
+.card .pip { position:absolute; font-size:10px; font-weight:900; opacity:0.7; line-height:1; }
+.card .pip-tl { top:4px; left:6px; }
+.card .pip-br { bottom:4px; right:6px; transform:rotate(180deg); }
+.card .type-tag { position:absolute; bottom:3px; left:50%; transform:translateX(-50%); font-size:8px; font-weight:900; padding:1px 4px; border-radius:999px; line-height:1.5; white-space:nowrap; }
+.card:hover { transform:translateY(-6px) rotate(-1deg); box-shadow:0 10px 24px rgba(0,0,0,0.2); }
+.card.selected { transform:translateY(-18px) rotate(1deg) scale(1.05); box-shadow:0 14px 32px rgba(0,0,0,0.22); border-color:white; }
+.card.just-drawn { animation:cardDraw 0.4s cubic-bezier(0.22,1,0.36,1) both; }
+@keyframes cardDraw { 0%{transform:translateY(30px) scale(0.7) rotate(-8deg);opacity:0} 100%{transform:none;opacity:1} }
+.card.slot { background:rgba(255,255,255,0.28) !important; border:2.5px dashed rgba(100,160,100,0.4) !important; cursor:default; box-shadow:none; }
+.card.slot:hover { transform:none; }
+.card[data-v="1"] {background:linear-gradient(145deg,#ffcdd2,#ef9a9a);color:#c62828}
+.card[data-v="2"] {background:linear-gradient(145deg,#ffe0b2,#ffcc80);color:#e65100}
+.card[data-v="3"] {background:linear-gradient(145deg,#fff9c4,#fff176);color:#f57f17}
+.card[data-v="4"] {background:linear-gradient(145deg,#dcedc8,#aed581);color:#558b2f}
+.card[data-v="5"] {background:linear-gradient(145deg,#b2dfdb,#80cbc4);color:#00695c}
+.card[data-v="6"] {background:linear-gradient(145deg,#b3e5fc,#81d4fa);color:#01579b}
+.card[data-v="7"] {background:linear-gradient(145deg,#fff9c4,#ffe082);color:#e65100}
+.card[data-v="8"] {background:linear-gradient(145deg,#d1c4e9,#b39ddb);color:#4527a0}
+.card[data-v="9"] {background:linear-gradient(145deg,#e1bee7,#ce93d8);color:#6a1b9a}
+.card[data-v="10"]{background:linear-gradient(145deg,#fce4ec,#f48fb1);color:#880e4f}
+.card[data-v="11"]{background:linear-gradient(145deg,#d7ccc8,#bcaaa4);color:#4e342e}
+.card[data-v="12"]{background:linear-gradient(145deg,#cfd8dc,#b0bec5);color:#263238}
+.card[data-v="13"]{background:linear-gradient(145deg,#c8e6c9,#a5d6a7);color:#1b5e20}
+
+.hint { font-size:12px; font-weight:700; color:#5d8a3c; min-height:18px; }
+.hint.good{color:#2e7d32} .hint.bad{color:#c62828}
+.btn-row { display:flex; gap:7px; flex-wrap:wrap; }
+button { padding:8px 18px; border-radius:999px; border:none; font:inherit; font-size:13px; font-weight:900; cursor:pointer; transition:transform 0.14s cubic-bezier(0.22,1,0.36,1),box-shadow 0.14s; box-shadow:0 5px 0 rgba(0,0,0,0.22); letter-spacing:0.5px; }
+button:hover:not(:disabled){transform:translateY(-3px);box-shadow:0 8px 0 rgba(0,0,0,0.18)}
+button:active:not(:disabled){transform:translateY(3px);box-shadow:0 2px 0 rgba(0,0,0,0.22)}
+button:disabled{opacity:0.38;cursor:not-allowed;transform:none;box-shadow:none}
+#btn-play{background:linear-gradient(180deg,#69f0ae,#00c853);color:#003300;box-shadow:0 5px 0 #007a33}
+#btn-play:hover:not(:disabled){box-shadow:0 8px 0 #007a33}
+#btn-skip{background:linear-gradient(180deg,#ffe57f,#ffd600);color:#4a3000;box-shadow:0 5px 0 #c6a000}
+#btn-skip:hover:not(:disabled){box-shadow:0 8px 0 #c6a000}
+#btn-to-mix{background:linear-gradient(180deg,#ffcc80,#ff9800);color:#4a1a00;box-shadow:0 5px 0 #bf6000;font-size:12px;padding:7px 13px}
+#btn-to-mix:hover:not(:disabled){box-shadow:0 8px 0 #bf6000}
+
+/* ── mix zone ── */
+.mix-zone { display:flex; flex-direction:column; align-items:center; gap:5px; flex-shrink:0; width:80px; }
+.mix-pile { width:76px; min-height:56px; max-height:160px; border-radius:11px; border:2.5px dashed #ffb74d; background:rgba(255,183,77,0.12); display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding:4px; gap:3px; position:relative; overflow-y:auto; }
+.mix-pile-empty { font-size:20px; opacity:0.35; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); }
+.mix-pile-card { width:68px; height:30px; border-radius:6px; border:2px solid rgba(255,255,255,0.6); display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:900; box-shadow:0 2px 5px rgba(0,0,0,0.12); cursor:pointer; transition:transform 0.12s; flex-shrink:0; }
+.mix-pile-card:hover{transform:translateY(-2px)}
+.mix-pile-card.sel{transform:translateY(-3px) scale(1.06);outline:2px solid #ff9800;border-color:white}
+.mix-count { font-size:11px; font-weight:800; color:#e65100; }
+.mix-hint { font-size:9px; font-weight:700; color:#9c4a00; text-align:center; min-height:12px; }
+#btn-mix-go { background:linear-gradient(180deg,#b2dfdb,#00897b); color:#002620; box-shadow:0 4px 0 #004d40; font-size:11px; padding:6px 8px; width:100%; }
+#btn-mix-go:hover:not(:disabled){box-shadow:0 6px 0 #004d40}
+
+/* ── piles bar ── */
+.piles-bar { width:100%; max-width:960px; background:rgba(255,255,255,0.6); border-radius:16px; border:2px solid rgba(255,255,255,0.9); padding:10px 14px; display:flex; gap:8px; box-shadow:0 4px 20px rgba(0,0,0,0.08); }
+.pile-slot { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; min-width:0; }
+.pile-slot-label { font-size:9px; font-weight:800; letter-spacing:1px; text-transform:uppercase; text-align:center; line-height:1.3; }
+.pile-slot-area { width:100%; min-height:46px; border-radius:9px; border:2.5px dashed; display:flex; flex-wrap:wrap; gap:3px; padding:4px; position:relative; }
+.pile-slot-empty { font-size:16px; opacity:0.28; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); pointer-events:none; }
+.pile-card { width:40px; height:30px; border-radius:5px; border:2px solid rgba(255,255,255,0.65); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:900; cursor:pointer; transition:transform 0.12s,box-shadow 0.12s; box-shadow:0 2px 5px rgba(0,0,0,0.12); position:relative; }
+.pile-card:hover{transform:translateY(-3px) scale(1.1);box-shadow:0 5px 10px rgba(0,0,0,0.18)}
+#cancel-upg { background:linear-gradient(180deg,#ef9a9a,#e53935); color:white; box-shadow:0 3px 0 #b71c1c; font-size:10px; padding:5px 10px; display:none; }
+#cancel-upg.show{display:inline-flex}
+#cancel-upg:hover:not(:disabled){box-shadow:0 5px 0 #b71c1c}
+.pile-slot-hint { font-size:9px; font-weight:700; text-align:center; min-height:12px; line-height:1.3; }
+
+/* ── sparkles ── */
+.sparkle{position:fixed;pointer-events:none;font-size:20px;z-index:100;animation:sparkleFly 0.9s cubic-bezier(0.22,1,0.36,1) forwards}
+@keyframes sparkleFly{0%{transform:translate(0,0) scale(1) rotate(0deg);opacity:1}100%{transform:translate(var(--dx),var(--dy)) scale(0) rotate(var(--dr));opacity:0}}
+
+/* ── toast ── */
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);background:rgba(30,30,30,0.92);color:white;padding:10px 24px;border-radius:999px;font-size:13px;font-weight:800;z-index:500;pointer-events:none;opacity:0;transition:opacity 0.2s,transform 0.2s}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── player switch overlay ── */
+#player-switch{display:none;position:fixed;inset:0;background:rgba(0,50,100,0.6);backdrop-filter:blur(6px);align-items:center;justify-content:center;z-index:400}
+#player-switch.show{display:flex}
+.switch-panel{background:linear-gradient(160deg,#e3f2fd,#f1f8e9);border-radius:24px;padding:40px 56px;text-align:center;box-shadow:0 28px 72px rgba(0,0,0,0.35),0 0 0 4px white;display:flex;flex-direction:column;gap:14px;animation:panelPop 0.45s cubic-bezier(0.22,1,0.36,1) both}
+.switch-panel h2{font-size:32px;font-weight:900;color:#1a5276}
+.switch-panel p{font-size:14px;font-weight:700;color:#555}
+.switch-panel button{background:linear-gradient(180deg,#69f0ae,#00c853);color:#003300;box-shadow:0 5px 0 #007a33;font-size:16px}
+.switch-panel button:hover{box-shadow:0 8px 0 #007a33}
+
+/* ── building popup ── */
+#building-popup{display:none;position:fixed;inset:0;background:rgba(0,40,80,0.45);backdrop-filter:blur(4px);align-items:center;justify-content:center;z-index:150}
+#building-popup.show{display:flex}
+.popup-panel{background:linear-gradient(160deg,#fffde7,#e8f5e9);border-radius:20px;padding:24px 32px;min-width:240px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3),0 0 0 3px white;display:flex;flex-direction:column;gap:8px;animation:panelPop 0.35s cubic-bezier(0.22,1,0.36,1) both}
+.popup-panel h3{font-size:18px;font-weight:900;color:#1a5276}
+.popup-cards{display:flex;gap:5px;justify-content:center;flex-wrap:wrap}
+.popup-card{width:40px;height:56px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;box-shadow:0 3px 8px rgba(0,0,0,0.15);border:2px solid rgba(255,255,255,0.6)}
+.popup-stat{font-size:13px;font-weight:800;color:#555}
+.popup-stat span{color:#1a5276}
+.popup-close{margin-top:4px;background:linear-gradient(180deg,#ef9a9a,#e53935);color:white;box-shadow:0 4px 0 #b71c1c}
+.popup-close:hover{box-shadow:0 6px 0 #b71c1c}
+
+/* ── action picker ── */
+#action-picker{display:none;position:fixed;inset:0;background:rgba(0,40,80,0.5);backdrop-filter:blur(5px);align-items:center;justify-content:center;z-index:300}
+#action-picker.show{display:flex}
+.action-panel{background:linear-gradient(160deg,#fffde7,#e8f5e9);border-radius:20px;padding:20px 26px;min-width:270px;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,0.32),0 0 0 3px white;display:flex;flex-direction:column;gap:9px;animation:panelPop 0.35s cubic-bezier(0.22,1,0.36,1) both}
+.action-panel h3{font-size:16px;font-weight:900;color:#1a5276}
+.action-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.action-btn{padding:8px 6px;border-radius:10px;border:none;font:inherit;font-size:12px;font-weight:900;cursor:pointer;transition:transform 0.14s,box-shadow 0.14s;display:flex;flex-direction:column;align-items:center;gap:2px;box-shadow:0 4px 0 rgba(0,0,0,0.18);line-height:1.2}
+.action-btn:hover{transform:translateY(-2px);box-shadow:0 6px 0 rgba(0,0,0,0.15)}
+.action-btn:active{transform:translateY(2px)}
+.action-btn .ab-icon{font-size:19px}
+.action-btn .ab-desc{font-size:9px;opacity:0.7;font-weight:700}
+.action-cancel{background:linear-gradient(180deg,#ef9a9a,#e53935);color:white;box-shadow:0 4px 0 #b71c1c;margin-top:4px}
+.action-cancel:hover{box-shadow:0 6px 0 #b71c1c}
+
+/* ── game over ── */
+#gameover{display:none;position:fixed;inset:0;background:rgba(0,60,120,0.55);backdrop-filter:blur(6px);align-items:center;justify-content:center;z-index:200}
+#gameover.show{display:flex}
+.gameover-panel{background:linear-gradient(160deg,#e3f2fd,#f1f8e9);border-radius:24px;padding:36px 48px;text-align:center;box-shadow:0 28px 72px rgba(0,0,0,0.35),0 0 0 3px white;display:flex;flex-direction:column;gap:11px;animation:panelPop 0.5s cubic-bezier(0.22,1,0.36,1) both}
+@keyframes panelPop{from{transform:scale(0.6) rotate(-4deg);opacity:0}to{transform:scale(1) rotate(0deg);opacity:1}}
+.gameover-panel h2{font-size:30px;font-weight:900;color:#1a5276}
+.go-scores{display:flex;gap:20px;justify-content:center;flex-wrap:wrap}
+.go-player{display:flex;flex-direction:column;align-items:center;background:rgba(255,255,255,0.5);border-radius:14px;padding:14px 22px;gap:4px}
+.go-player .go-name{font-size:12px;font-weight:800;color:#888;letter-spacing:1px;text-transform:uppercase}
+.go-player .go-score{font-size:42px;font-weight:900;color:#2e7d32;line-height:1}
+.go-player .go-detail{font-size:11px;font-weight:700;color:#888}
+.go-winner{font-size:18px;font-weight:900;color:#1a5276}
+.gameover-panel button{margin-top:6px;background:linear-gradient(180deg,#42a5f5,#1565c0);color:white;box-shadow:0 5px 0 #0d3c7a}
+.gameover-panel button:hover{box-shadow:0 8px 0 #0d3c7a}
+</style>
+</head>
+<body>
+
+<div class="sky">
+    <div class="sun"></div>
+    <div class="cloud" style="top:6%;left:-180px;width:140px;height:38px;animation-duration:28s;animation-delay:-6s"><div style="position:absolute;width:70px;height:58px;border-radius:50%;background:white;top:-30px;left:22px"></div><div style="position:absolute;width:48px;height:44px;border-radius:50%;background:white;top:-20px;left:58px"></div></div>
+    <div class="cloud" style="top:14%;left:-220px;width:180px;height:44px;animation-duration:38s;animation-delay:-18s"><div style="position:absolute;width:80px;height:66px;border-radius:50%;background:white;top:-36px;left:30px"></div><div style="position:absolute;width:56px;height:48px;border-radius:50%;background:white;top:-24px;left:90px"></div></div>
+</div>
+
+<h1>🏙️ CityBuilder</h1>
+
+<div class="top-bar">
+    <div class="player-score active" id="p0-score-box">
+        <div class="ps-label" style="color:#2e7d32">Player 1</div>
+        <div class="ps-score" id="p0-score">0</div>
+    </div>
+    <div class="vs-sep">vs</div>
+    <div class="player-score" id="p1-score-box">
+        <div class="ps-label" style="color:#1565c0">Player 2</div>
+        <div class="ps-score" id="p1-score">0</div>
+    </div>
+    <div class="sep"></div>
+    <div class="stat"><span class="stat-label">Turn</span><span class="stat-value" id="turn">1</span></div>
+    <div class="sep"></div>
+    <span id="phase-text">Click the deck!</span>
+</div>
+
+<!-- Cities -->
+<div class="city-section">
+    <div class="city-player-label" id="cur-city-label" style="color:#2e7d32">🏙️ Player 1's City</div>
+    <div class="city-wrap" id="city-wrap">
+        <div class="city-area empty-msg" id="city-area">
+            <span class="empty-label">Your city will appear here…</span>
+        </div>
+        <div class="city-ground"></div>
+    </div>
+    <div class="city-player-label" id="opp-city-label" style="color:#1565c0;opacity:0.7">🏙️ Player 2's City</div>
+    <div class="opp-city-wrap">
+        <div class="opp-city-area empty-msg" id="opp-city-area">
+            <span class="empty-label" style="font-size:11px">No buildings yet</span>
+        </div>
+        <div class="opp-ground"></div>
+    </div>
+</div>
+
+<div class="play-area">
+    <div class="deck-zone">
+        <div class="zone-label">Deck</div>
+        <div class="deck-stack" id="deck-stack">
+            <div class="deck-card-back">🂠</div>
+            <div class="deck-card-back">🂠</div>
+            <div class="deck-card-back">🂠</div>
+        </div>
+        <div class="deck-sub"><span id="deck-count">52</span> cards</div>
+        <div class="deck-hint" id="draws-left">Draw 5</div>
+    </div>
+
+    <div class="hand-zone">
+        <div class="zone-label" style="color:#5d8a3c">Hand — draw <span id="draw-num">1</span> of 2</div>
+        <div class="hand-cards" id="hand-cards"></div>
+        <div class="hint" id="hint">Click the deck to draw 5 cards.</div>
+        <div class="btn-row">
+            <button id="btn-play" disabled>🏗 Build!</button>
+            <button id="btn-skip" disabled>Skip →</button>
+            <button id="btn-to-mix" disabled>→ Mix Pile</button>
+        </div>
+    </div>
+
+    <div class="mix-zone">
+        <div class="zone-label" style="color:#9c4a00">Mix Pile</div>
+        <div class="mix-pile" id="mix-pile">
+            <span class="mix-pile-empty">🂠</span>
+        </div>
+        <div class="mix-count"><span id="mix-count">0</span> cards</div>
+        <div class="mix-hint" id="mix-hint">Select consecutive → Mix</div>
+        <button id="btn-mix-go" disabled>🔀 Mix!</button>
+    </div>
+</div>
+
+<!-- Type piles bar -->
+<div class="piles-bar">
+    <div class="pile-slot">
+        <div class="pile-slot-label" style="color:#7b1fa2">⬆️ Upgrades<br><small>1·2·3</small></div>
+        <div class="pile-slot-area" id="pile-upgrade" style="border-color:#ce93d8;background:rgba(206,147,216,0.1)">
+            <span class="pile-slot-empty">⬆️</span>
+        </div>
+        <button id="cancel-upg" onclick="cancelUpgrade()">✕ Cancel</button>
+        <div class="pile-slot-hint" id="hint-upgrade" style="color:#7b1fa2">Mix to earn · click to use</div>
+    </div>
+    <div class="pile-slot">
+        <div class="pile-slot-label" style="color:#c62828">⚡ Demands<br><small>4·5·6</small></div>
+        <div class="pile-slot-area" id="pile-demand" style="border-color:#ef9a9a;background:rgba(239,154,154,0.08)">
+            <span class="pile-slot-empty">⚡</span>
+        </div>
+        <div class="pile-slot-hint" style="color:#c62828">Mix to earn · click to use</div>
+    </div>
+    <div class="pile-slot">
+        <div class="pile-slot-label" style="color:#e65100">✦ Choices<br><small>7</small></div>
+        <div class="pile-slot-area" id="pile-choice" style="border-color:#ffe082;background:rgba(255,224,130,0.1)">
+            <span class="pile-slot-empty">✦</span>
+        </div>
+        <div class="pile-slot-hint" style="color:#e65100">Mix to earn · click to use</div>
+    </div>
+    <div class="pile-slot">
+        <div class="pile-slot-label" style="color:#2e7d32">🏠 Statics<br><small>8·9·10</small></div>
+        <div class="pile-slot-area" id="pile-static" style="border-color:#a5d6a7;background:rgba(165,214,167,0.1)">
+            <span class="pile-slot-empty">🏠</span>
+        </div>
+        <div class="pile-slot-hint" style="color:#2e7d32">Mix to earn · click to deploy</div>
+    </div>
+    <div class="pile-slot">
+        <div class="pile-slot-label" style="color:#1565c0">🎲 Randoms<br><small>11·12·13</small></div>
+        <div class="pile-slot-area" id="pile-random" style="border-color:#90caf9;background:rgba(144,202,249,0.08)">
+            <span class="pile-slot-empty">🎲</span>
+        </div>
+        <div class="pile-slot-hint" style="color:#1565c0">Mix to earn · click to use</div>
+    </div>
+</div>
+
+<!-- Player switch overlay -->
+<div id="player-switch">
+    <div class="switch-panel">
+        <h2 id="switch-title">Player 2's Turn!</h2>
+        <p>Pass the device to the next player.</p>
+        <p id="switch-scores" style="font-size:13px;color:#1a5276;font-weight:800"></p>
+        <button onclick="document.getElementById('player-switch').classList.remove('show')">✅ Ready!</button>
+    </div>
+</div>
+
+<!-- Building popup -->
+<div id="building-popup">
+    <div class="popup-panel">
+        <h3 id="popup-title">Building</h3>
+        <div class="popup-cards" id="popup-cards"></div>
+        <div class="popup-stat">Level: <span id="popup-level"></span></div>
+        <div class="popup-stat">Score: <span id="popup-score"></span></div>
+        <div class="popup-stat">Sequence: <span id="popup-seq"></span></div>
+        <button class="popup-close" onclick="document.getElementById('building-popup').classList.remove('show')">Close</button>
+    </div>
+</div>
+
+<!-- Action picker -->
+<div id="action-picker">
+    <div class="action-panel">
+        <h3 id="ap-title">✦ Choose an Action</h3>
+        <div class="action-grid" id="ap-grid"></div>
+        <button class="action-cancel" onclick="closeActionPicker()">✕ Cancel</button>
+    </div>
+</div>
+
+<!-- Game over -->
+<div id="gameover">
+    <div class="gameover-panel">
+        <h2>🏙️ Cities Complete!</h2>
+        <div class="go-scores" id="go-scores"></div>
+        <div class="go-winner" id="go-winner"></div>
+        <button onclick="startGame()">🔄 Play Again</button>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── deck: 1-13 × 4 = 52 ──────────────────────────────────────────────────
+const DECK_VALUES = [];
+for (let v = 1; v <= 13; v++) for (let c = 0; c < 4; c++) DECK_VALUES.push(v);
+
+// ── card type ─────────────────────────────────────────────────────────────
+function cardType(v) {
+    if (v <= 3)  return 'upgrade';
+    if (v <= 6)  return 'demand';
+    if (v === 7) return 'choice';
+    if (v <= 10) return 'static';
+    return 'random';
+}
+const TYPE_TAG = {
+    upgrade:{text:'⬆',bg:'#9c27b0',fg:'white'},
+    demand: {text:'⚡',bg:'#e53935',fg:'white'},
+    choice: {text:'✦',bg:'#f57f17',fg:'white'},
+    static: {text:'🏠',bg:'#388e3c',fg:'white'},
+    random: {text:'🎲',bg:'#1565c0',fg:'white'},
+};
+
+// ── state ─────────────────────────────────────────────────────────────────
+let deck, hand, selected, gameActive;
+let currentPlayer = 0;
+let players; // [{buildings, totalScore, mixPile, piles}, ...]
+let turn, drawPhase;
+let selectedMixIndices = new Set();
+let pendingUpgrade = null; // {effect:1|2|3}
+let actionPickerSource = null;
+
+function mkPlayer() {
+    return {
+        buildings: [], totalScore: 0, prevScore: 0, prevBuildings: 0,
+        mixPile: [],
+        piles: { upgrade:[], demand:[], choice:[], static:[], random:[] }
+    };
+}
+
+function shuffle(arr) {
+    for (let i = arr.length-1; i>0; i--) {
+        const j = Math.floor(Math.random()*(i+1));
+        [arr[i],arr[j]] = [arr[j],arr[i]];
+    }
+    return arr;
+}
+
+function p() { return players[currentPlayer]; }
+function opp() { return players[1-currentPlayer]; }
+
+function startGame() {
+    deck = shuffle([...DECK_VALUES]);
+    hand = []; selected = new Set();
+    players = [mkPlayer(), mkPlayer()];
+    currentPlayer = 0; turn = 1; drawPhase = 1;
+    selectedMixIndices = new Set(); pendingUpgrade = null; actionPickerSource = null;
+    gameActive = true;
+    document.getElementById("gameover").classList.remove("show");
+    document.getElementById("player-switch").classList.remove("show");
+    setUpgradeMode(false);
+    updatePlayerLabels();
+    renderAll();
+}
+
+// ── upgrade mode ──────────────────────────────────────────────────────────
+function setUpgradeMode(on) {
+    document.getElementById("city-wrap").classList.toggle("upgrade-mode", on);
+    document.getElementById("city-area").classList.toggle("upgrade-mode", on);
+    document.getElementById("cancel-upg").classList.toggle("show", on);
+}
+function cancelUpgrade() {
+    if (pendingUpgrade) p().piles.upgrade.push(pendingUpgrade.effect);
+    pendingUpgrade = null; setUpgradeMode(false); renderAll();
+}
+
+// ── toast ─────────────────────────────────────────────────────────────────
+let _tt = null;
+function showToast(msg, ms=2200) {
+    const el = document.getElementById("toast");
+    el.textContent = msg; el.classList.add("show");
+    clearTimeout(_tt); _tt = setTimeout(() => el.classList.remove("show"), ms);
+}
+
+// ── player labels ─────────────────────────────────────────────────────────
+function updatePlayerLabels() {
+    const names = ['Player 1','Player 2'];
+    const colors = ['#2e7d32','#1565c0'];
+    const cp = currentPlayer;
+    const op = 1-cp;
+    document.getElementById("cur-city-label").textContent = `🏙️ ${names[cp]}'s City`;
+    document.getElementById("cur-city-label").style.color = colors[cp];
+    document.getElementById("opp-city-label").textContent = `🏙️ ${names[op]}'s City`;
+    document.getElementById("opp-city-label").style.color = colors[op];
+    document.getElementById("p0-score-box").classList.toggle("active", cp === 0);
+    document.getElementById("p1-score-box").classList.toggle("active", cp === 1);
+}
+
+// ── draw ──────────────────────────────────────────────────────────────────
+document.getElementById("deck-stack").addEventListener("click", () => {
+    if (!gameActive || hand.length > 0) return;
+    if (deck.length === 0) { endGame(); return; }
+    const n = Math.min(5, deck.length);
+    for (let i = 0; i < n; i++) hand.push(deck.shift());
+    selected.clear(); renderAll(true);
+});
+
+// ── build validation ──────────────────────────────────────────────────────
+function isValidSet(vals) {
+    if (vals.length < 2 || vals.length > 5) return false;
+    const s = [...vals].sort((a,b)=>a-b);
+    const d = s[1]-s[0];
+    for (let i=2; i<s.length; i++) if (s[i]-s[i-1]!==d) return false;
+    if (vals.length < 3 && d !== 0) return false;
+    return true;
+}
+function isConsecutive(vals) {
+    if (vals.length < 2) return false;
+    const s = [...vals].sort((a,b)=>a-b);
+    for (let i=1; i<s.length; i++) if (s[i]-s[i-1]!==1) return false;
+    return true;
+}
+function selVals() { return [...selected].map(i => hand[i]); }
+
+// ── build ─────────────────────────────────────────────────────────────────
+document.getElementById("btn-play").addEventListener("click", () => {
+    const vals = selVals();
+    if (!isValidSet(vals)) return;
+    const score = vals.reduce((s,v)=>s+v,0);
+    p().buildings.push({ cards:[...vals].sort((a,b)=>a-b), score, level:vals.length });
+    p().totalScore += score;
+    [...selected].sort((a,b)=>b-a).forEach(i => hand.splice(i,1));
+    selected.clear(); spawnSparkles(); finishDraw();
+});
+
+document.getElementById("btn-skip").addEventListener("click", () => {
+    hand = []; selected.clear(); finishDraw();
+});
+
+function finishDraw() {
+    if (drawPhase === 1) {
+        drawPhase = 2;
+    } else {
+        drawPhase = 1;
+        hand = []; selected.clear(); selectedMixIndices.clear();
+        const nextP = 1 - currentPlayer;
+        const nextTurn = currentPlayer === 1 ? turn + 1 : turn;
+        currentPlayer = nextP;
+        if (nextTurn > turn) turn = nextTurn;
+        if (deck.length === 0 && p().mixPile.length === 0 && opp().mixPile.length === 0) {
+            endGame(); return;
+        }
+        updatePlayerLabels();
+        showPlayerSwitch();
+        renderAll();
+        return;
+    }
+    renderAll();
+}
+
+function showPlayerSwitch() {
+    const names = ['Player 1','Player 2'];
+    document.getElementById("switch-title").textContent = `${names[currentPlayer]}'s Turn!`;
+    const p0 = finalScore(players[0]);
+    const p1 = finalScore(players[1]);
+    document.getElementById("switch-scores").textContent =
+        `P1: ${p0.toLocaleString()} pts · P2: ${p1.toLocaleString()} pts`;
+    document.getElementById("player-switch").classList.add("show");
+}
+
+function finalScore(pl) {
+    const lvls = pl.buildings.reduce((s,b)=>s+b.level,0);
+    return lvls * pl.totalScore;
+}
+
+// ── send to mix pile ──────────────────────────────────────────────────────
+document.getElementById("btn-to-mix").addEventListener("click", () => {
+    if (selected.size === 0) return;
+    [...selected].sort((a,b)=>b-a).forEach(i => {
+        p().mixPile.push(hand[i]); hand.splice(i,1);
+    });
+    selected.clear(); renderAll();
+});
+
+// ── MIX: consecutive → smallest sacrificed to type pile, rest to hand ─────
+document.getElementById("btn-mix-go").addEventListener("click", () => {
+    const idxs = [...selectedMixIndices];
+    const vals = idxs.map(i => p().mixPile[i]);
+    if (!isConsecutive(vals)) return;
+    const sorted = [...vals].sort((a,b)=>a-b);
+    // remove from mix pile (high-to-low to preserve indices)
+    [...selectedMixIndices].sort((a,b)=>b-a).forEach(i => p().mixPile.splice(i,1));
+    // smallest goes to its TYPE pile — this is how you earn action cards!
+    const sacrificed = sorted[0];
+    p().piles[cardType(sacrificed)].push(sacrificed);
+    // rest come back to hand
+    sorted.slice(1).forEach(v => hand.push(v));
+    selectedMixIndices.clear();
+    showToast(`🔀 Mixed! Card ${sacrificed} → ${cardType(sacrificed)} pile. ${sorted.slice(1).join(',')} returned.`);
+    renderAll(false);
+});
+
+function toggleMixCard(i) {
+    selectedMixIndices.has(i) ? selectedMixIndices.delete(i) : selectedMixIndices.add(i);
+    renderMixPile();
+}
+
+// ── click card in type pile ───────────────────────────────────────────────
+function usePileCard(type, idx) {
+    if (pendingUpgrade) { showToast("Finish the current upgrade first!"); return; }
+    const v = p().piles[type][idx];
+    p().piles[type].splice(idx, 1);
+    switch(type) {
+        case 'upgrade':
+            pendingUpgrade = { effect: v };
+            setUpgradeMode(true);
+            showToast("🎯 Click a building to apply the upgrade!", 4000);
+            break;
+        case 'demand':
+            executeDemand(v); break;
+        case 'choice':
+            openActionPicker(v); break;
+        case 'static':
+            deployStatic(v); break;
+        case 'random':
+            executeRandom(v); break;
+    }
+    renderAll();
+}
+
+// ── upgrade ───────────────────────────────────────────────────────────────
+function applyUpgradeToBuilding(bIdx) {
+    if (!pendingUpgrade) return;
+    const b = p().buildings[bIdx];
+    const eff = pendingUpgrade.effect;
+    const sorted = [...b.cards].sort((a,z)=>a-z);
+    const diff = sorted.length >= 2 ? sorted[sorted.length-1]-sorted[sorted.length-2] : 0;
+    const next = sorted[sorted.length-1] + diff;
+    if (eff===1) { b.level++; b.score+=next; b.cards.push(next); p().totalScore+=next; }
+    else if (eff===2) { b.score+=next; b.cards.push(next); p().totalScore+=next; }
+    else { b.level++; }
+    const desc = eff===1?`+Lv & +${next}pts`:eff===2?`+${next}pts`:'+Level';
+    showToast(`✨ ${desc}`);
+    pendingUpgrade = null; setUpgradeMode(false);
+    const els = document.getElementById("city-area").querySelectorAll(".building");
+    if (els[bIdx]) { els[bIdx].classList.remove("just-upgraded"); void els[bIdx].offsetWidth; els[bIdx].classList.add("just-upgraded"); }
+    spawnSparkles(); renderAll();
+}
+
+// ── demand ────────────────────────────────────────────────────────────────
+function executeDemand(v) {
+    const desc = {4:'a building card',5:'an upgrade card',6:'a static card'};
+    showToast(`⚡ Demand: take ${desc[v]} from opponent — needs full 2P!`, 3000);
+}
+
+// ── static deploy ─────────────────────────────────────────────────────────
+function deployStatic(v) {
+    p().buildings.push({ cards:[v], score:v, level:1 });
+    p().totalScore += v;
+    spawnSparkles();
+    showToast(`🏠 Level 1 building placed! +${v}pts`);
+}
+
+// ── actions pool ──────────────────────────────────────────────────────────
+const ACTIONS = [
+    {id:'u1',icon:'⬆️',label:'+Lv & +Score',desc:'Upgrade building',bg:'#e1bee7',sh:'#7b1fa2'},
+    {id:'u2',icon:'📈',label:'+Score only',  desc:'Upgrade building',bg:'#b39ddb',sh:'#5e35b1'},
+    {id:'u3',icon:'🏗', label:'+Level only',  desc:'Upgrade building',bg:'#ce93d8',sh:'#7b1fa2'},
+    {id:'d4',icon:'⚡',label:'Demand Bld',   desc:'Take from opp',  bg:'#ef9a9a',sh:'#c62828'},
+    {id:'d5',icon:'💎',label:'Demand Upg',   desc:'Take from opp',  bg:'#f48fb1',sh:'#ad1457'},
+    {id:'d6',icon:'📦',label:'Demand Static', desc:'Take from opp',  bg:'#ffcc80',sh:'#e65100'},
+    {id:'st',icon:'🏠',label:'Deploy Static', desc:'Lv1 building',   bg:'#a5d6a7',sh:'#2e7d32'},
+];
+
+function applyAction(id, src) {
+    if (id==='u1') { pendingUpgrade={effect:1}; setUpgradeMode(true); showToast("🎯 Click a building!", 4000); renderAll(); }
+    else if (id==='u2') { pendingUpgrade={effect:2}; setUpgradeMode(true); showToast("🎯 Click a building!", 4000); renderAll(); }
+    else if (id==='u3') { pendingUpgrade={effect:3}; setUpgradeMode(true); showToast("🎯 Click a building!", 4000); renderAll(); }
+    else if (id==='d4') { executeDemand(4); renderAll(); }
+    else if (id==='d5') { executeDemand(5); renderAll(); }
+    else if (id==='d6') { executeDemand(6); renderAll(); }
+    else if (id==='st') { deployStatic(src); renderAll(); }
+}
+
+function executeRandom(src) {
+    const a = ACTIONS[Math.floor(Math.random()*ACTIONS.length)];
+    showToast(`🎲 Random: ${a.label}!`, 2600);
+    setTimeout(() => applyAction(a.id, src), 400);
+}
+
+function openActionPicker(src) {
+    actionPickerSource = src;
+    const grid = document.getElementById("ap-grid");
+    grid.innerHTML = '';
+    ACTIONS.forEach(a => {
+        const btn = document.createElement("button");
+        btn.className="action-btn"; btn.style.background=a.bg; btn.style.boxShadow=`0 4px 0 ${a.sh}`;
+        btn.innerHTML=`<span class="ab-icon">${a.icon}</span><span>${a.label}</span><span class="ab-desc">${a.desc}</span>`;
+        btn.addEventListener("click", () => { closeActionPicker(); applyAction(a.id, actionPickerSource); });
+        grid.appendChild(btn);
+    });
+    document.getElementById("action-picker").classList.add("show");
+}
+function closeActionPicker() { document.getElementById("action-picker").classList.remove("show"); }
+
+// ── card toggle ───────────────────────────────────────────────────────────
+function toggleCard(i) {
+    if (!gameActive) return;
+    selected.has(i) ? selected.delete(i) : (selected.size < 5 && selected.add(i));
+    renderAll();
+}
+
+// ── sparkles ──────────────────────────────────────────────────────────────
+function spawnSparkles() {
+    const emojis=['✨','⭐','🌟','💫','🎉','🏆'];
+    const rect=document.getElementById("city-area").getBoundingClientRect();
+    for (let i=0;i<8;i++) {
+        const el=document.createElement("div"); el.className="sparkle";
+        el.textContent=emojis[Math.floor(Math.random()*emojis.length)];
+        el.style.setProperty("--dx",((Math.random()-.5)*160)+"px");
+        el.style.setProperty("--dy",(-(50+Math.random()*100))+"px");
+        el.style.setProperty("--dr",((Math.random()-.5)*360)+"deg");
+        el.style.left=(rect.left+Math.random()*rect.width)+"px";
+        el.style.top=(rect.top+Math.random()*rect.height*.6)+"px";
+        el.style.animationDelay=(i*.06)+"s";
+        document.body.appendChild(el);
+        el.addEventListener("animationend",()=>el.remove());
+    }
+}
+
+// ── card bg ───────────────────────────────────────────────────────────────
+function cardBg(v) {
+    const G={1:'linear-gradient(145deg,#ffcdd2,#ef9a9a)',2:'linear-gradient(145deg,#ffe0b2,#ffcc80)',3:'linear-gradient(145deg,#fff9c4,#fff176)',4:'linear-gradient(145deg,#dcedc8,#aed581)',5:'linear-gradient(145deg,#b2dfdb,#80cbc4)',6:'linear-gradient(145deg,#b3e5fc,#81d4fa)',7:'linear-gradient(145deg,#fff9c4,#ffe082)',8:'linear-gradient(145deg,#d1c4e9,#b39ddb)',9:'linear-gradient(145deg,#e1bee7,#ce93d8)',10:'linear-gradient(145deg,#fce4ec,#f48fb1)',11:'linear-gradient(145deg,#d7ccc8,#bcaaa4)',12:'linear-gradient(145deg,#cfd8dc,#b0bec5)',13:'linear-gradient(145deg,#c8e6c9,#a5d6a7)'};
+    return G[v]||'#eee';
+}
+
+// ── render ────────────────────────────────────────────────────────────────
+function renderAll(newCard=false) {
+    renderDeck(); renderHand(newCard); renderHint();
+    renderCity(); renderOppCity(); renderMixPile(); renderAllPiles(); updateStats();
+}
+
+function renderDeck() {
+    const canDraw = gameActive && hand.length===0 && deck.length>0;
+    document.getElementById("deck-stack").classList.toggle("empty",!canDraw);
+    document.getElementById("deck-count").textContent = deck.length;
+    document.getElementById("draws-left").textContent =
+        hand.length>0 ? "build/skip first" : "Draw "+Math.min(5,deck.length);
+    document.getElementById("btn-skip").disabled = hand.length===0;
+}
+
+function renderHand(animateNew=false) {
+    const c=document.getElementById("hand-cards"); c.innerHTML="";
+    for (let i=0;i<5;i++) {
+        const el=document.createElement("div");
+        if (i<hand.length) {
+            el.className="card"+(selected.has(i)?" selected":"")+(animateNew?" just-drawn":"");
+            if (animateNew) el.style.animationDelay=(i*.07)+"s";
+            el.dataset.v=hand[i];
+            const t=TYPE_TAG[cardType(hand[i])];
+            const p1=document.createElement("span");p1.className="pip pip-tl";p1.textContent=hand[i];
+            const p2=document.createElement("span");p2.className="pip pip-br";p2.textContent=hand[i];
+            const num=document.createElement("span");num.textContent=hand[i];
+            const tag=document.createElement("span");tag.className="type-tag";tag.textContent=t.text;tag.style.background=t.bg;tag.style.color=t.fg;
+            el.append(p1,num,p2,tag);
+            el.addEventListener("click",()=>toggleCard(i));
+        } else {
+            el.className="card slot";
+        }
+        c.appendChild(el);
+    }
+    document.getElementById("draw-num").textContent=drawPhase;
+    const hasSel=selected.size>0&&hand.length>0;
+    document.getElementById("btn-to-mix").disabled=!hasSel;
+}
+
+function renderHint() {
+    const hint=document.getElementById("hint");
+    if (pendingUpgrade) { hint.textContent="🎯 Click a building to apply upgrade!"; hint.className="hint good"; document.getElementById("btn-play").disabled=true; return; }
+    if (hand.length===0) { hint.textContent="Click the deck to draw 5 cards."; hint.className="hint"; document.getElementById("btn-play").disabled=true; return; }
+    const vals=selVals();
+    if (selected.size===0) { hint.textContent="Select cards to build, or send to Mix Pile."; hint.className="hint"; document.getElementById("btn-play").disabled=true; return; }
+    const sorted=[...vals].sort((a,b)=>a-b);
+    const diff=vals.length>=2?sorted[1]-sorted[0]:null;
+    const valid=isValidSet(vals);
+    if (valid) { hint.textContent=`✅ Level ${vals.length} · diff ${diff} · +${vals.reduce((s,v)=>s+v,0)}pts`; hint.className="hint good"; }
+    else if (vals.length===1) { hint.textContent="Select 2+ more cards."; hint.className="hint"; }
+    else if (vals.length===2&&diff!==0) { hint.textContent="❌ Need 3+ unless matching."; hint.className="hint bad"; }
+    else { hint.textContent="❌ Not an arithmetic sequence."; hint.className="hint bad"; }
+    document.getElementById("btn-play").disabled=!valid;
+}
+
+function renderMixPile() {
+    const pile=document.getElementById("mix-pile");
+    document.getElementById("mix-count").textContent=p().mixPile.length;
+    const empty=pile.querySelector(".mix-pile-empty");
+    if (empty) empty.style.display=p().mixPile.length===0?"":"none";
+    pile.querySelectorAll(".mix-pile-card").forEach(c=>c.remove());
+    p().mixPile.forEach((v,i) => {
+        const c=document.createElement("div");
+        c.className="mix-pile-card"+(selectedMixIndices.has(i)?" sel":"");
+        c.style.background=cardBg(v); c.textContent=v;
+        c.addEventListener("click",()=>toggleMixCard(i));
+        pile.appendChild(c);
+    });
+    const mv=[...selectedMixIndices].map(i=>p().mixPile[i]);
+    const canMix=isConsecutive(mv);
+    document.getElementById("btn-mix-go").disabled=!canMix;
+    const hintEl=document.getElementById("mix-hint");
+    if (canMix) {
+        const sorted=[...mv].sort((a,b)=>a-b);
+        hintEl.textContent=`Mix: sacrifice ${sorted[0]} → ${cardType(sorted[0])} pile!`;
+    } else if (selectedMixIndices.size>0) {
+        hintEl.textContent="Not consecutive";
+    } else {
+        hintEl.textContent="Select consecutive cards";
+    }
+}
+
+function renderAllPiles() {
+    ['upgrade','demand','choice','static','random'].forEach(renderTypePile);
+    const hintEl=document.getElementById("hint-upgrade");
+    hintEl.textContent=pendingUpgrade?"Click a building!":p().piles.upgrade.length>0?"Click card to use":"Mix to earn";
+}
+
+function renderTypePile(type) {
+    const area=document.getElementById("pile-"+type);
+    const empty=area.querySelector(".pile-slot-empty");
+    const cards=p().piles[type];
+    if (empty) empty.style.display=cards.length===0?"":"none";
+    area.querySelectorAll(".pile-card").forEach(c=>c.remove());
+    const UL={1:"+Lv+Pts",2:"+Pts",3:"+Lv"};
+    cards.forEach((v,i)=>{
+        const c=document.createElement("div");
+        c.className="pile-card"; c.style.background=cardBg(v); c.textContent=v;
+        if (type==='upgrade') {
+            const b=document.createElement("span");
+            b.style.cssText="position:absolute;top:-4px;right:-4px;font-size:7px;font-weight:900;background:#7b1fa2;color:white;padding:1px 3px;border-radius:999px;";
+            b.textContent=UL[v]; c.appendChild(b);
+        }
+        c.addEventListener("click",()=>usePileCard(type,i));
+        area.appendChild(c);
+    });
+}
+
+// ── city render ───────────────────────────────────────────────────────────
+const BLDG_EMOJIS=[["🏠","🏡","🛖","🏚️"],["🏘️","🏠","🏡","🏠"],["🏢","🏣","🏤","🏥"],["🏙️","🏬","🏦","🏛️"]];
+const BOB=[0,.5,1,1.5,2,.25,.75,1.25,1.75,.4,.9,1.4,1.9,.6];
+function bEmoji(b,idx){const t=Math.min(b.level,5)-2;const r=BLDG_EMOJIS[Math.max(0,t)];return r[idx%r.length]}
+
+function makeBuilding(b,idx,isNew,clickFn,small=false) {
+    const wrap=document.createElement("div");
+    wrap.className="building"+(isNew?"":" bob");
+    wrap.style.animationDelay=isNew?"0s":(BOB[idx%BOB.length]+"s");
+    if (clickFn) wrap.addEventListener("click",()=>clickFn(idx));
+    const em=document.createElement("span");
+    em.style.display="block"; em.textContent=bEmoji(b,idx);
+    em.style.fontSize=(small?18:(30+Math.min(b.level,8)*8))+"px";
+    const lbl=document.createElement("div");
+    lbl.className="building-label"; lbl.textContent=`Lv${b.level}·${b.score}`;
+    if (small) lbl.style.fontSize="8px";
+    wrap.append(em,lbl); return wrap;
+}
+
+function renderCity() {
+    const area=document.getElementById("city-area");
+    area.innerHTML=""; area.classList.remove("empty-msg");
+    if (p().buildings.length===0) { area.classList.add("empty-msg"); area.innerHTML='<span class="empty-label">Your city will appear here…</span>'; return; }
+    p().buildings.forEach((b,idx)=>{
+        const isNew=idx===p().buildings.length-1;
+        const el=makeBuilding(b,idx,isNew,(i)=>{ if(pendingUpgrade) applyUpgradeToBuilding(i); else showBuildingPopup(b,i,p()); });
+        if (!isNew){el.classList.add("bob");el.style.animationDelay=BOB[idx%BOB.length]+"s";}
+        area.appendChild(el);
+    });
+}
+
+function renderOppCity() {
+    const area=document.getElementById("opp-city-area");
+    area.innerHTML=""; area.classList.remove("empty-msg");
+    const ob=opp().buildings;
+    if (ob.length===0) { area.classList.add("empty-msg"); area.innerHTML='<span class="empty-label" style="font-size:11px">No buildings yet</span>'; return; }
+    ob.forEach((b,idx)=>{ const el=makeBuilding(b,idx,false,null,true); el.style.cursor="default"; area.appendChild(el); });
+}
+
+function showBuildingPopup(b,idx,owner) {
+    const name=b.level<=3?"House":b.level<=4?"Apartment":"Tower";
+    const sorted=[...b.cards].sort((a,z)=>a-z);
+    const diff=sorted.length>=2?sorted[1]-sorted[0]:0;
+    document.getElementById("popup-title").textContent=`${name} #${idx+1}`;
+    const ce=document.getElementById("popup-cards"); ce.innerHTML="";
+    b.cards.forEach(v=>{ const c=document.createElement("div"); c.className="popup-card"; c.dataset.v=v; c.textContent=v; c.style.background=cardBg(v); ce.appendChild(c); });
+    document.getElementById("popup-level").textContent=`${b.level} (${name})`;
+    document.getElementById("popup-score").textContent=`+${b.score}pts`;
+    document.getElementById("popup-seq").textContent=diff===0?`${sorted.join(" = ")} (matching)`:`${sorted.join(" → ")} (diff +${diff})`;
+    document.getElementById("building-popup").classList.add("show");
+}
+
+function updateStats() {
+    // update both players' scores in top bar
+    players.forEach((pl,i)=>{
+        const el=document.getElementById(`p${i}-score`);
+        if (pl.totalScore!==pl.prevScore) {
+            el.textContent=pl.totalScore;
+            el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop");
+            pl.prevScore=pl.totalScore;
+        }
+    });
+    document.getElementById("turn").textContent=turn;
+    document.getElementById("phase-text").textContent=
+        pendingUpgrade?"🎯 Upgrade — click a building!":
+        drawPhase===1?"Draw 1 of 2 — your cards!":"Draw 2 of 2 — last draw!";
+}
+
+function endGame() {
+    gameActive=false;
+    const scores=players.map(pl=>({
+        lvls:pl.buildings.reduce((s,b)=>s+b.level,0),
+        pts:pl.totalScore,
+        final:0, bldgs:pl.buildings.length
+    }));
+    scores.forEach(s=>s.final=s.lvls*s.pts);
+    const container=document.getElementById("go-scores"); container.innerHTML="";
+    ['Player 1','Player 2'].forEach((name,i)=>{
+        const box=document.createElement("div"); box.className="go-player";
+        box.innerHTML=`<div class="go-name">${name}</div><div class="go-score">${scores[i].final.toLocaleString()}</div><div class="go-detail">${scores[i].lvls} lvls × ${scores[i].pts}pts · ${scores[i].bldgs} buildings</div>`;
+        container.appendChild(box);
+    });
+    const w=document.getElementById("go-winner");
+    if (scores[0].final>scores[1].final) w.textContent="🏆 Player 1 wins!";
+    else if (scores[1].final>scores[0].final) w.textContent="🏆 Player 2 wins!";
+    else w.textContent="🤝 It's a tie!";
+    document.getElementById("gameover").classList.add("show");
+    for (let i=0;i<20;i++) setTimeout(spawnSparkles,i*120);
+}
+
+startGame();
+</script>
+</body>
+</html>

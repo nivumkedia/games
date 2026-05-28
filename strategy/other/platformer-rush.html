@@ -2017,6 +2017,7 @@ let killsThisLevel = 0;
 let killBank = 0;
 let collectedSwords = 0;
 let collectedSwordTypes = { regular: 0, long: 0, thrusting: 0, spear: 0 };
+let collectedSwordStyles = {};
 let selectedSwordType = "regular";
 let equippedSwordType = "basic";
 let customSwordStats = { power: 0, length: 0, width: 0 };
@@ -3113,6 +3114,10 @@ function equippedSwordPowerBonus() {
     return (equippedSwordConfig().power || 0) * equippedSwordFit();
 }
 
+function equippedSwordSourceStyle() {
+    return collectedSwordStyles[equippedSwordType] || null;
+}
+
 function swordBlockReach() {
     return 176 + Math.max(0, currentCharacter().swordReachBonus || 0) * 1.3 + (currentCharacter().shieldBonus || 0) * 28;
 }
@@ -3416,6 +3421,7 @@ function tryUnlockCharacter(characterId) {
 function sellSword(type) {
     if (!swordSellValues[type] || (collectedSwordTypes[type] || 0) <= 0) return;
     collectedSwordTypes[type] -= 1;
+    if (collectedSwordTypes[type] <= 0) delete collectedSwordStyles[type];
     collectedSwords = Math.max(0, collectedSwords - 1);
     killBank += swordSellValues[type];
     updateKillsCounter();
@@ -3454,6 +3460,7 @@ function takeApartSword(stat) {
     if (!stats || stats[stat] === undefined || (collectedSwordTypes[selectedSwordType] || 0) <= 0) return;
     if (selectedSwordType === equippedSwordType) return;
     collectedSwordTypes[selectedSwordType] -= 1;
+    if (collectedSwordTypes[selectedSwordType] <= 0) delete collectedSwordStyles[selectedSwordType];
     collectedSwords = Math.max(0, collectedSwords - 1);
     customSwordStats[stat] += stats[stat];
     syncCharacterSelect();
@@ -3739,6 +3746,14 @@ function swordDropSpec(type) {
     return specs[type] || specs.regular;
 }
 
+function swordSourceStyle(enemy) {
+    return {
+        enemyType: enemy.type,
+        reach: enemy.swordReach || (enemy.type === "bigFlyer" ? 58 : 38),
+        big: enemy.type === "bigFlyer"
+    };
+}
+
 function dropEnemySword(enemy) {
     const type = swordDropType(enemy);
     const spec = swordDropSpec(type);
@@ -3751,6 +3766,7 @@ function dropEnemySword(enemy) {
         w: swordLength,
         h: 14,
         type,
+        sourceStyle: swordSourceStyle(enemy),
         facing,
         pulse: Math.random() * Math.PI * 2
     });
@@ -3778,6 +3794,7 @@ function updateDroppedSwords() {
         })) continue;
         collectedSwords += 1;
         collectedSwordTypes[sword.type] = (collectedSwordTypes[sword.type] || 0) + 1;
+        collectedSwordStyles[sword.type] = sword.sourceStyle || { enemyType: sword.type, reach: sword.w };
         droppedSwords.splice(i, 1);
         const spec = swordDropSpec(sword.type);
         spawnHitSparks(sword.x + sword.w / 2, sword.y + sword.h / 2, -Math.PI / 2, spec.edge);
@@ -4506,6 +4523,7 @@ function saveGame(showFeedback = true) {
         killBank,
         collectedSwords,
         collectedSwordTypes,
+        collectedSwordStyles,
         customSwordStats,
         equippedSwordType,
         attackUpgradeLevel,
@@ -4529,6 +4547,7 @@ function resetProgress() {
     killBank = 0;
     collectedSwords = 0;
     collectedSwordTypes = { regular: 0, long: 0, thrusting: 0, spear: 0 };
+    collectedSwordStyles = {};
     customSwordStats = { power: 0, length: 0, width: 0 };
     selectedSwordType = "regular";
     equippedSwordType = "basic";
@@ -4567,6 +4586,18 @@ function loadSavedGame() {
     if (saveData.collectedSwordTypes && typeof saveData.collectedSwordTypes === "object") {
         Object.keys(collectedSwordTypes).forEach(type => {
             collectedSwordTypes[type] = Math.max(0, Number(saveData.collectedSwordTypes[type]) || 0);
+        });
+    }
+    collectedSwordStyles = {};
+    if (saveData.collectedSwordStyles && typeof saveData.collectedSwordStyles === "object") {
+        Object.keys(collectedSwordTypes).forEach(type => {
+            const style = saveData.collectedSwordStyles[type];
+            if (!style || typeof style !== "object") return;
+            collectedSwordStyles[type] = {
+                enemyType: String(style.enemyType || type),
+                reach: Math.max(24, Math.min(140, Number(style.reach) || 38)),
+                big: !!style.big
+            };
         });
     }
     customSwordStats = { power: 0, length: 0, width: 0 };
@@ -5294,11 +5325,137 @@ function drawPlayerCharacter(drawY, drawH, character) {
     roundRect(headX - headSize * 0.4, headY + headSize * 0.23, headSize * 0.8, 3, 2);
 }
 
+function equippedSwordVisual() {
+    const visuals = {
+        basic: {
+            handle: "#30465b",
+            guard: "#8deaff",
+            guardGlow: "rgba(141, 234, 255, 0.55)",
+            bladeStart: "#c9f7ff",
+            bladeMid: "#7fb2c5",
+            bladeTip: "#eaffff",
+            shine: "rgba(223, 251, 255, 0.68)",
+            edgeGlow: "rgba(126, 245, 255, 0.18)",
+            bladeHalf: 4,
+            tip: 12
+        },
+        regular: {
+            handle: "#49311b",
+            guard: "#ffd166",
+            guardGlow: "rgba(255, 209, 102, 0.68)",
+            bladeStart: "#fff1aa",
+            bladeMid: "#b9d7e8",
+            bladeTip: "#ffffff",
+            shine: "rgba(255, 255, 255, 0.76)",
+            edgeGlow: "rgba(255, 209, 102, 0.2)",
+            bladeHalf: 5,
+            tip: 15,
+            enemyShape: true
+        },
+        long: {
+            handle: "#1f3348",
+            guard: "#8deaff",
+            guardGlow: "rgba(141, 234, 255, 0.74)",
+            bladeStart: "#dffbff",
+            bladeMid: "#91c3d5",
+            bladeTip: "#ffffff",
+            shine: "rgba(223, 251, 255, 0.8)",
+            edgeGlow: "rgba(126, 245, 255, 0.22)",
+            bladeHalf: 5,
+            tip: 18,
+            enemyShape: true
+        },
+        thrusting: {
+            handle: "#4b2a32",
+            guard: "#ff8fb3",
+            guardGlow: "rgba(255, 143, 179, 0.72)",
+            bladeStart: "#fff1aa",
+            bladeMid: "#d0d6de",
+            bladeTip: "#ffffff",
+            shine: "rgba(255, 255, 255, 0.82)",
+            edgeGlow: "rgba(255, 209, 102, 0.18)",
+            bladeHalf: 3,
+            tip: 20,
+            enemyShape: true
+        },
+        spear: {
+            handle: "#263041",
+            guard: "#dffbff",
+            guardGlow: "rgba(255, 143, 179, 0.72)",
+            bladeStart: "#ffeff5",
+            bladeMid: "#d9edf7",
+            bladeTip: "#ffffff",
+            shine: "rgba(255, 255, 255, 0.84)",
+            edgeGlow: "rgba(255, 143, 179, 0.2)",
+            bladeHalf: 3,
+            tip: 24,
+            enemyShape: true
+        }
+    };
+    return visuals[equippedSwordType] || visuals.basic;
+}
+
+function drawEquippedEnemySwordShape(bladeLength, visual) {
+    const sourceStyle = equippedSwordSourceStyle();
+    const sourceType = sourceStyle?.enemyType || equippedSwordType;
+    const sourceReach = sourceStyle?.reach || bladeLength;
+    const visualLength = Math.max(34, Math.min(118, sourceReach + 10 + Math.max(0, attackUpgradeLevel * 5 + customSwordStats.length * 0.25)));
+    const gripX = 13;
+    const tipX = visualLength + ((sourceType === "spearSword" || sourceType === "headSpearSword" || equippedSwordType === "spear") ? 12 : 0);
+    const bladeGrad = ctx.createLinearGradient(tipX, 0, gripX, 0);
+    bladeGrad.addColorStop(0, "#ffffff");
+    bladeGrad.addColorStop(0.5, "#b9d7e8");
+    bladeGrad.addColorStop(1, "#fff1aa");
+
+    ctx.shadowColor = visual.guardGlow;
+    ctx.shadowBlur = (sourceType === "spearSword" || sourceType === "headSpearSword" || equippedSwordType === "spear") ? 16 : 13;
+    ctx.fillStyle = bladeGrad;
+    ctx.beginPath();
+    if (sourceType === "spearSword" || sourceType === "headSpearSword" || equippedSwordType === "spear") {
+        ctx.moveTo(tipX + 14, 0);
+        ctx.lineTo(tipX - 2, -7);
+        ctx.lineTo(gripX - 4, -4);
+        ctx.lineTo(gripX + 4, -2);
+        ctx.lineTo(gripX + 4, 2);
+        ctx.lineTo(gripX - 4, 4);
+        ctx.lineTo(tipX - 2, 7);
+    } else if (sourceType === "quickSlashSword" || sourceType === "patrolQuickSlashSword" || sourceType === "swingSword" || equippedSwordType === "thrusting") {
+        ctx.moveTo(tipX + 10, 0);
+        ctx.lineTo(gripX - 4, -3);
+        ctx.lineTo(gripX + 4, -1.5);
+        ctx.lineTo(gripX + 4, 1.5);
+        ctx.lineTo(gripX - 4, 3);
+    } else {
+        ctx.moveTo(tipX, 0);
+        ctx.lineTo(gripX - 4, -5);
+        ctx.lineTo(gripX + 4, -2);
+        ctx.lineTo(gripX + 4, 2);
+        ctx.lineTo(gripX - 4, 5);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(gripX + 8, -2);
+    ctx.lineTo(tipX - 4, -1);
+    ctx.stroke();
+
+    ctx.shadowBlur = 4;
+    ctx.fillStyle = "#ffd166";
+    roundRect(gripX - 3, -9, 6, 18, 3);
+    ctx.shadowColor = "transparent";
+    ctx.fillStyle = "#49311b";
+    roundRect(gripX - 4, -5, 8, 10, 3);
+}
+
 function drawSword(angle, active, mode = "attack") {
     const grip = swordGripPoint(angle, mode);
     const originX = grip.x;
     const originY = grip.y;
     const blocking = mode === "block";
+    const visual = equippedSwordVisual();
     const bladeLength = active && !blocking ? swordReach() : Math.max(40, 48 + (currentCharacter().swordReachBonus || 0) * 0.45);
     const swingGlow = active ? (blocking ? 0.2 : 0.34) : 0.12;
     const swingProgress = active && !blocking ? 1 - player.attackTimer / 14 : 0;
@@ -5320,7 +5477,7 @@ function drawSword(angle, active, mode = "attack") {
     ctx.globalAlpha = 1;
 
     if (active) {
-        ctx.fillStyle = blocking ? `rgba(126, 245, 255, ${swingGlow})` : `rgba(255, 248, 184, ${swingGlow})`;
+        ctx.fillStyle = blocking ? `rgba(126, 245, 255, ${swingGlow})` : visual.edgeGlow;
         ctx.beginPath();
         ctx.moveTo(16, -swordThickness() / 2);
         ctx.quadraticCurveTo(bladeLength * 0.65, -swordThickness() * 0.7, bladeLength + 12, 0);
@@ -5338,31 +5495,39 @@ function drawSword(angle, active, mode = "attack") {
         }
     }
 
-    ctx.fillStyle = "#6a3f16";
-    roundRect(-9, -5, 22, 10, 4);
-    ctx.fillStyle = "#ffd166";
-    roundRect(10, -13, 7, 26, 3);
+    if (visual.enemyShape && !blocking) {
+        drawEquippedEnemySwordShape(bladeLength, visual);
+    } else {
+        ctx.fillStyle = visual.handle;
+        roundRect(-9, -5, 22, 10, 4);
+        ctx.shadowColor = visual.guardGlow;
+        ctx.shadowBlur = 4;
+        ctx.fillStyle = visual.guard;
+        roundRect(10, -13, 7, 26, 3);
+        ctx.shadowBlur = 0;
 
-    const blade = ctx.createLinearGradient(17, -5, bladeLength, 5);
-    blade.addColorStop(0, "#e7fbff");
-    blade.addColorStop(0.5, "#a9dce8");
-    blade.addColorStop(1, "#ffffff");
-    ctx.fillStyle = blade;
-    ctx.beginPath();
-    ctx.moveTo(16, -5);
-    ctx.lineTo(bladeLength, -3);
-    ctx.lineTo(bladeLength + 15, 0);
-    ctx.lineTo(bladeLength, 3);
-    ctx.lineTo(16, 5);
-    ctx.closePath();
-    ctx.fill();
+        const bladeHalf = visual.bladeHalf;
+        const blade = ctx.createLinearGradient(17, -bladeHalf, bladeLength, bladeHalf);
+        blade.addColorStop(0, visual.bladeStart);
+        blade.addColorStop(0.5, visual.bladeMid);
+        blade.addColorStop(1, visual.bladeTip);
+        ctx.fillStyle = blade;
+        ctx.beginPath();
+        ctx.moveTo(16, -bladeHalf);
+        ctx.lineTo(bladeLength, -Math.max(2, bladeHalf - 2));
+        ctx.lineTo(bladeLength + visual.tip, 0);
+        ctx.lineTo(bladeLength, Math.max(2, bladeHalf - 2));
+        ctx.lineTo(16, bladeHalf);
+        ctx.closePath();
+        ctx.fill();
 
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.72)";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(24, -2);
-    ctx.lineTo(bladeLength - 2, -1);
-    ctx.stroke();
+        ctx.strokeStyle = visual.shine;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(24, -bladeHalf * 0.42);
+        ctx.lineTo(bladeLength - 2, -Math.max(0.8, bladeHalf * 0.2));
+        ctx.stroke();
+    }
 
     ctx.fillStyle = currentCharacter().foot;
     ctx.beginPath();
