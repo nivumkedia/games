@@ -262,6 +262,29 @@ button:disabled{opacity:0.38;cursor:not-allowed;transform:none;box-shadow:none}
 .pc-btn:hover{transform:translateY(-4px) scale(1.08);box-shadow:0 10px 0 rgba(0,0,0,0.15)}
 .pc-btn:active{transform:translateY(3px);box-shadow:0 3px 0 rgba(0,0,0,0.2)}
 
+/* ── tutorial ── */
+#tut-bar{position:fixed;bottom:0;left:0;right:0;z-index:500;background:linear-gradient(180deg,#1a237e,#283593);color:white;padding:14px 20px 18px;box-shadow:0 -4px 24px rgba(0,0,0,0.35);display:none;flex-direction:column;gap:8px;animation:slideUp 0.3s ease}
+#tut-bar.show{display:flex}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.tut-top{display:flex;align-items:center;gap:12px}
+.tut-step-badge{background:rgba(255,255,255,0.18);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:900;letter-spacing:1px;white-space:nowrap}
+.tut-title{font-size:15px;font-weight:900;flex:1}
+.tut-close{background:none;border:none;color:rgba(255,255,255,0.6);font-size:18px;cursor:pointer;padding:0 4px;line-height:1}
+.tut-close:hover{color:white}
+.tut-text{font-size:13px;line-height:1.6;color:rgba(255,255,255,0.9);max-width:720px}
+.tut-demo-note{font-size:11px;background:rgba(255,255,200,0.15);border-left:3px solid #ffd54f;padding:6px 10px;border-radius:0 6px 6px 0;color:#fff9c4;margin-top:2px}
+.tut-nav{display:flex;align-items:center;gap:8px;margin-top:2px}
+.tut-btn{padding:7px 16px;border-radius:10px;border:none;font:inherit;font-size:12px;font-weight:900;cursor:pointer;transition:transform 0.1s}
+.tut-btn:active{transform:scale(0.96)}
+#tut-prev{background:rgba(255,255,255,0.15);color:white}
+#tut-prev:hover{background:rgba(255,255,255,0.25)}
+#tut-next{background:linear-gradient(180deg,#69f0ae,#00c853);color:#003300;box-shadow:0 3px 0 #007a33}
+#tut-next:hover{box-shadow:0 5px 0 #007a33}
+.tut-progress{flex:1;height:4px;background:rgba(255,255,255,0.15);border-radius:4px;overflow:hidden}
+.tut-progress-fill{height:100%;background:linear-gradient(90deg,#69f0ae,#00c853);border-radius:4px;transition:width 0.3s ease}
+.tut-highlight{outline:3px solid #ffd54f!important;outline-offset:4px;animation:tutPulse 1.2s ease-in-out infinite}
+@keyframes tutPulse{0%,100%{outline-color:#ffd54f;box-shadow:0 0 0 0 rgba(255,213,79,0.5)}50%{outline-color:#ffff00;box-shadow:0 0 0 8px rgba(255,213,79,0)}}
+
 /* ── dynamic top bar scores ── */
 #player-scores{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .player-score{display:flex;flex-direction:column;align-items:center;border-radius:11px;padding:4px 10px;transition:background 0.3s,transform 0.2s}
@@ -294,6 +317,23 @@ button:disabled{opacity:0.38;cursor:not-allowed;transform:none;box-shadow:none}
         <div id="continue-row" style="display:none">
             <button onclick="loadGame()" style="width:100%;padding:12px;border-radius:14px;border:none;font:inherit;font-size:15px;font-weight:900;cursor:pointer;background:linear-gradient(145deg,#fff9c4,#f9a825);color:#4a2000;box-shadow:0 5px 0 #c77800">💾 Continue Saved Game</button>
         </div>
+        <button onclick="startTutorial()" style="width:100%;padding:12px;border-radius:14px;border:none;font:inherit;font-size:15px;font-weight:900;cursor:pointer;background:linear-gradient(145deg,#b3e5fc,#0288d1);color:white;box-shadow:0 5px 0 #01579b">📖 How to Play</button>
+    </div>
+</div>
+
+<!-- Tutorial bar -->
+<div id="tut-bar">
+    <div class="tut-top">
+        <div class="tut-step-badge" id="tut-badge">Step 1 / 20</div>
+        <div class="tut-title" id="tut-title"></div>
+        <button class="tut-close" onclick="endTutorial()">✕</button>
+    </div>
+    <div class="tut-text" id="tut-text"></div>
+    <div class="tut-demo-note" id="tut-demo-note" style="display:none"></div>
+    <div class="tut-nav">
+        <button class="tut-btn" id="tut-prev" onclick="tutNav(-1)">← Back</button>
+        <div class="tut-progress"><div class="tut-progress-fill" id="tut-fill"></div></div>
+        <button class="tut-btn" id="tut-next" onclick="tutNav(1)">Next →</button>
     </div>
 </div>
 
@@ -1204,6 +1244,211 @@ function endGame() {
     else w.textContent=`🤝 Tie: ${winners.map(s=>s.name).join(' & ')}!`;
     document.getElementById("gameover").classList.add("show");
     for (let i=0;i<20;i++) setTimeout(spawnSparkles,i*120);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// TUTORIAL
+// ══════════════════════════════════════════════════════════════════════════
+let tutStep = -1;
+let tutHighlightEl = null;
+
+const TUT_STEPS = [
+  { title: "Welcome to CityBuilder! 🏙️",
+    text: "This tutorial walks through everything step by step with live demos. Use <b>Next →</b> and <b>← Back</b> to navigate. You can exit any time with ✕.",
+    highlight: null, demo: null },
+
+  { title: "The Deck",
+    text: "The deck sits on the left. <b>Click it to draw 5 cards</b> for your hand. You get <b>2 draws per turn</b> before it's the next player's turn.",
+    highlight: "deck-stack", demo: null },
+
+  { title: "Your Hand",
+    text: "Drawn cards appear in your hand. <b>Click cards to select them</b> — they lift up when selected. Click again to deselect.",
+    highlight: "hand-cards",
+    demo() { hand=[3,5,7,2,4]; selected.clear(); renderAll(true); },
+    note: "Demo: hand loaded with [3, 5, 7, 2, 4]" },
+
+  { title: "Arithmetic Sequences",
+    text: "To build, you need an <b>arithmetic sequence</b> — cards with the same difference between each. Examples:<br>✅ 3, 5, 7 (diff 2) &nbsp; ✅ 2, 4, 6, 8 (diff 2) &nbsp; ✅ 5, 5, 5 (diff 0)<br>❌ 1, 3, 7 &nbsp; ❌ 2, 5, 9",
+    highlight: "hand-cards",
+    demo() { hand=[3,5,7,2,4]; selected=new Set([0,1,2]); renderAll(false); },
+    note: "Demo: cards 3, 5, 7 selected — valid sequence, diff = 2" },
+
+  { title: "The Build Button",
+    text: "When your selection is a valid sequence, the <b>🏗 Build!</b> button lights up green. Click it to place a new building in your city!<br><br>You need <b>at least 2 matching cards</b> or <b>3+ cards</b> for a non-zero diff.",
+    highlight: "btn-play",
+    demo() { hand=[3,5,7,2,4]; selected=new Set([0,1,2]); renderAll(false); },
+    note: "Demo: 3, 5, 7 selected — Build! is active" },
+
+  { title: "Your City",
+    text: "Buildings appear in your city. Each shows its <b>Level</b> (number of cards) and <b>Score</b> (sum of cards).<br><br>This Lv3 building has cards 3+5+7 = <b>15 pts</b>.",
+    highlight: "city-area",
+    demo() {
+      hand=[2,4,1,9,6]; selected.clear();
+      p().buildings=[{cards:[3,5,7],score:15,level:3}];
+      p().totalScore=15; renderAll(false);
+    },
+    note: "Demo: building with [3,5,7] placed" },
+
+  { title: "Scoring",
+    text: "Your score = <b>total points × total levels</b> across all buildings.<br><br>Right now: 15 pts × 3 levels = <b>45</b>. Add more buildings and the multiplier grows!<br><br>A Lv5 building worth 25 pts = 125. Two Lv3 buildings of 15 pts each = 15+15 × 6 = <b>180</b>!",
+    highlight: "player-scores",
+    demo() {
+      hand=[2,4,1,9,6]; selected.clear();
+      p().buildings=[{cards:[3,5,7],score:15,level:3}];
+      p().totalScore=15; renderAll(false);
+    },
+    note: "Demo: 15 pts × 3 levels = 45 shown in top bar" },
+
+  { title: "Extending Buildings",
+    text: "You don't have to build new — you can <b>extend an existing building</b>! Select cards from your hand that continue the sequence, then <b>click the building</b>.<br><br>Building [3,5,7] can accept 9, 11, 1… anything that keeps the diff=2 pattern.",
+    highlight: "city-area",
+    demo() {
+      hand=[9,2,1,6,11]; selected=new Set([0]);
+      p().buildings=[{cards:[3,5,7],score:15,level:3}];
+      p().totalScore=15; renderAll(false);
+    },
+    note: "Demo: card 9 selected — click the building to extend [3,5,7] → [3,5,7,9]" },
+
+  { title: "Two Draws Per Turn",
+    text: "Each turn has <b>2 draws</b>. After your whole hand is gone (built, skipped, or sent to mix), draw again from the deck. <b>Only after both draws</b> does the turn pass to the next player.",
+    highlight: "phase-text",
+    demo() { renderAll(false); },
+    note: null },
+
+  { title: "Skip & Send to Mix",
+    text: "<b>Skip →</b> discards your whole current hand and ends that draw phase — useful when nothing is playable.<br><br><b>→ Mix Pile</b> sends selected cards to your personal Mix Pile, a storage area for earning action cards.",
+    highlight: "btn-row",
+    demo() { hand=[1,7,11,4,9]; selected=new Set([0,1,2]); renderAll(false); },
+    note: "Demo: 3 cards selected and ready to send to mix pile" },
+
+  { title: "The Mix Pile",
+    text: "Click <b>🂠 Mix Pile</b> to open your mix pile. Cards here can be mixed to earn powerful action cards. The badge shows how many you have.",
+    highlight: "btn-open-mix",
+    demo() {
+      hand=[2,8,11,4,6]; selected.clear();
+      p().mixPile=[3,4,5,9,10]; renderAll(false);
+    },
+    note: "Demo: mix pile loaded with [3, 4, 5, 9, 10]" },
+
+  { title: "Mixing Cards",
+    text: "In the mix pile, select <b>consecutive cards</b> (difference of exactly 1 between each). For example: 3, 4, 5.<br><br>When you hit <b>🔀 Mix!</b>:<br>• <b>3</b> (lowest) is <b>discarded</b><br>• <b>4 and 5</b> become <b>action cards</b> in their type piles!",
+    highlight: "btn-open-mix",
+    demo() {
+      hand=[2,8,11,4,6]; selected.clear();
+      p().mixPile=[3,4,5,9,10]; renderAll(false);
+      setTimeout(()=>openMixPopup(),200);
+    },
+    note: "Demo: mix pile open — try selecting 3, 4, 5 and see the preview!" },
+
+  { title: "Card Types & Piles",
+    text: "Card values determine their action type:<br>• <b>1–3</b> → ⬆️ Upgrade pile<br>• <b>4–6</b> → ⚡ Demand pile<br>• <b>7</b> → ✦ Choice pile<br>• <b>8–10</b> → 🏠 Static pile<br>• <b>11–13</b> → 🎲 Random pile<br><br>Cards in these piles can be used as special actions!",
+    highlight: "piles-bar",
+    demo() {
+      closeMixPopup();
+      p().piles={upgrade:[1,2,3],demand:[4,5],choice:[7],static:[8,10],random:[11]};
+      renderAll(false);
+    },
+    note: "Demo: all type piles loaded with sample cards" },
+
+  { title: "Upgrade Cards (1–3)",
+    text: "Click an upgrade card, then <b>click a building</b> to extend it automatically.<br>• <b>Card 1</b>: +Level AND +Score (adds next card in the sequence)<br>• <b>Card 2</b>: +Score only (adds value, no level bump)<br>• <b>Card 3</b>: +Level only (gains a level, score unchanged)",
+    highlight: "pile-upgrade",
+    demo() {
+      p().buildings=[{cards:[3,5,7],score:15,level:3}];
+      p().totalScore=15;
+      p().piles.upgrade=[1,2,3]; renderAll(false);
+    },
+    note: "Demo: upgrade pile has 1, 2, 3 — click one to start!" },
+
+  { title: "Demand Cards (4–6)",
+    text: "Demand cards <b>steal from opponents</b>!<br>• <b>Card 4</b>: Take a card from an opponent's building<br>• <b>Card 5</b>: Take a card from their upgrade pile<br>• <b>Card 6</b>: Take a card from their static pile<br><br>If the opponent has nothing to give, you get mix pile cards as compensation.",
+    highlight: "pile-demand",
+    demo() { p().piles.demand=[4,5,6]; renderAll(false); },
+    note: "Demo: demand pile ready" },
+
+  { title: "Choice Card (7)",
+    text: "Card <b>7</b> is the wildcard — clicking it opens a picker where you can <b>choose any action</b> from the full pool: upgrade, demand, static, or random.",
+    highlight: "pile-choice",
+    demo() { p().piles.choice=[7]; renderAll(false); },
+    note: "Demo: try clicking the 7 in the Choice pile!" },
+
+  { title: "Static Cards (8–10)",
+    text: "Static cards instantly deploy a <b>Level 1 building</b> with score = the card's value.<br><br>Card 10 → Lv1 building worth 10 pts. Fast and simple — great for boosting your level multiplier!",
+    highlight: "pile-static",
+    demo() { p().piles.static=[8,9,10]; renderAll(false); },
+    note: "Demo: static pile has 8, 9, 10 — click one to place instantly!" },
+
+  { title: "Random Cards (11–13)",
+    text: "Random cards pick a <b>random action from the pool</b> automatically. Could be anything — an upgrade, a demand, a static deploy. Risky but exciting!",
+    highlight: "pile-random",
+    demo() { p().piles.random=[11,12,13]; renderAll(false); },
+    note: "Demo: random pile ready" },
+
+  { title: "Mix Pile: Import & Swap",
+    text: "Inside the Mix Pile popup, you have two more tools:<br>• <b>→ Hand</b>: Move selected mix cards directly to your hand (no swap needed)<br>• <b>↔ Swap</b>: Select 1 hand card AND 1 mix card, then swap them",
+    highlight: "btn-open-mix",
+    demo() {
+      hand=[6,11,2,8,4]; selected=new Set([0]);
+      p().mixPile=[1,3,7,9]; renderAll(false);
+    },
+    note: "Demo: hand card 6 selected, mix pile ready — open mix pile to try swap!" },
+
+  { title: "Multiplayer",
+    text: "With <b>2–5 players</b>, each player takes a full 2-draw turn. A <b>Pass the Device</b> screen appears between turns showing all scores.<br><br>You can see all players' running scores in the <b>top bar</b> at all times. Demand cards let you disrupt leaders!",
+    highlight: "player-scores",
+    demo() { renderAll(false); },
+    note: null },
+
+  { title: "You're Ready! 🏆",
+    text: "Key tips:<br>• <b>Level multiplier is everything</b> — Lv5+ buildings explode your score<br>• <b>Mix early</b> to build up your action pile<br>• <b>Demand opponents</b> to slow them down<br>• <b>Extend buildings</b> instead of starting new ones when you can<br><br>Click ✕ to close this bar and start playing!",
+    highlight: null, demo: null },
+];
+
+function startTutorial() {
+    startGame(1);
+    tutStep = -1;
+    tutNav(1);
+}
+
+function tutNav(dir) {
+    // clear previous highlight
+    if (tutHighlightEl) { tutHighlightEl.classList.remove("tut-highlight"); tutHighlightEl=null; }
+
+    tutStep = Math.max(0, Math.min(TUT_STEPS.length-1, tutStep+dir));
+    const s = TUT_STEPS[tutStep];
+
+    // run demo
+    if (s.demo) s.demo();
+
+    // highlight
+    if (s.highlight) {
+        const el = document.getElementById(s.highlight);
+        if (el) { el.classList.add("tut-highlight"); tutHighlightEl=el; }
+    }
+
+    // update UI
+    document.getElementById("tut-badge").textContent = `Step ${tutStep+1} / ${TUT_STEPS.length}`;
+    document.getElementById("tut-title").textContent = s.title;
+    document.getElementById("tut-text").innerHTML = s.text;
+    const note = document.getElementById("tut-demo-note");
+    if (s.note) { note.textContent = "👆 " + s.note; note.style.display=""; }
+    else note.style.display="none";
+    document.getElementById("tut-fill").style.width = ((tutStep+1)/TUT_STEPS.length*100)+"%";
+    document.getElementById("tut-prev").disabled = tutStep===0;
+    document.getElementById("tut-next").textContent = tutStep===TUT_STEPS.length-1 ? "Finish ✓" : "Next →";
+    if (tutStep===TUT_STEPS.length-1) {
+        document.getElementById("tut-next").onclick = endTutorial;
+    } else {
+        document.getElementById("tut-next").onclick = ()=>tutNav(1);
+    }
+    document.getElementById("tut-bar").classList.add("show");
+}
+
+function endTutorial() {
+    if (tutHighlightEl) { tutHighlightEl.classList.remove("tut-highlight"); tutHighlightEl=null; }
+    document.getElementById("tut-bar").classList.remove("show");
+    closeMixPopup();
+    tutStep = -1;
 }
 
 function showStartScreen() {

@@ -1101,6 +1101,52 @@
         .forgotten-card:hover {
             filter: grayscale(0%) brightness(1);
         }
+    /* ── feedback popup ── */
+    #feedback-btn { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #ccc; border-radius: 6px; padding: 5px 12px; cursor: pointer; font-size: 12px; font-family: inherit; }
+    #feedback-btn:hover { background: rgba(255,255,255,0.2); color: white; }
+    .card-fb-btn { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.25); color: white; border-radius: 20px; padding: 3px 8px; font-size: 10px; font-weight: 700; cursor: pointer; z-index: 10; display: flex; align-items: center; gap: 4px; backdrop-filter: blur(4px); transition: background 0.15s; }
+    .card-fb-btn:hover { background: rgba(0,0,0,0.8); border-color: rgba(255,255,255,0.5); }
+    #fb-view-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:10000; align-items:center; justify-content:center; }
+    #fb-view-overlay.show { display:flex; }
+    #fb-view-panel { background:#1e2a3a; border:1px solid #4a9fe4; border-radius:14px; padding:20px 22px; width:320px; max-height:70vh; display:flex; flex-direction:column; gap:10px; box-shadow:0 12px 40px rgba(0,0,0,0.5); animation:fbPop 0.18s cubic-bezier(0.34,1.56,0.64,1); }
+    #fb-view-title { font-size:14px; font-weight:700; color:#4a9fe4; display:flex; align-items:center; justify-content:space-between; }
+    #fb-view-close { background:none; border:none; color:#7a9ab8; cursor:pointer; font-size:18px; line-height:1; }
+    #fb-view-close:hover { color:white; }
+    #fb-view-list { display:flex; flex-direction:column; gap:6px; overflow-y:auto; flex:1; }
+    #fb-view-list::-webkit-scrollbar { width:3px; }
+    #fb-view-list::-webkit-scrollbar-thumb { background:#2a3a4a; border-radius:2px; }
+    #feedback-popup {
+        display: none; position: absolute; bottom: 24px; right: 24px; z-index: 9999;
+        background: #1e2a3a; border: 1px solid #4a9fe4; border-radius: 12px;
+        padding: 14px 16px; width: 300px; box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+        flex-direction: column; gap: 10px;
+        animation: fbPop 0.18s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    #feedback-popup.show { display: flex; }
+    @keyframes fbPop { from { transform: scale(0.85) translateY(10px); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .fb-header { display: flex; align-items: center; justify-content: space-between; }
+    .fb-game-name { font-size: 12px; font-weight: 700; color: #4a9fe4; }
+    .fb-close { background: none; border: none; color: #7a9ab8; cursor: pointer; font-size: 16px; line-height: 1; padding: 0 2px; }
+    .fb-close:hover { color: white; }
+    .fb-pins { display: flex; flex-direction: column; gap: 5px; height: 160px; overflow-y: scroll; }
+    .fb-pins::-webkit-scrollbar { width: 3px; }
+    .fb-pins::-webkit-scrollbar-thumb { background: #2a3a4a; border-radius: 2px; }
+    .fb-pin { background: #162030; border: 1px solid #2a3a4a; border-radius: 7px; padding: 6px 9px; font-size: 11px; color: #c8ddf0; display: flex; align-items: flex-start; gap: 6px; }
+    .fb-pin-text { flex: 1; line-height: 1.4; }
+    .fb-pin-date { color: #7a9ab8; font-size: 10px; white-space: nowrap; }
+    .fb-pin-del { background: none; border: none; color: #7a9ab8; cursor: pointer; font-size: 13px; padding: 0; line-height: 1; flex-shrink: 0; }
+    .fb-pin-del:hover { color: #e53935; }
+    .fb-empty { font-size: 11px; color: #7a9ab8; text-align: center; padding: 6px 0; }
+    .fb-input-row { display: flex; gap: 6px; }
+    #fb-input {
+        flex: 1; background: #162030; border: 1px solid #2a3a4a; border-radius: 7px;
+        color: #c8ddf0; font: inherit; font-size: 12px; padding: 7px 10px; outline: none;
+        transition: border-color 0.2s;
+    }
+    #fb-input:focus { border-color: #4a9fe4; }
+    #fb-input::placeholder { color: #4a6a88; }
+    #fb-submit { background: #4a9fe4; border: none; border-radius: 7px; color: white; font: inherit; font-size: 12px; font-weight: 700; padding: 7px 12px; cursor: pointer; }
+    #fb-submit:hover { opacity: 0.85; }
     </style>
 </head>
 <body>
@@ -1216,9 +1262,22 @@
     <div id="game-topbar">
         <button id="back-btn" onclick="goBack()">Back</button>
         <span id="game-title"></span>
+        <button id="feedback-btn" onclick="toggleFeedbackPopup()" title="Feedback (Option+F)">📌 Feedback</button>
         <button id="fullscreen-btn" onclick="goFullscreen()">Fullscreen</button>
     </div>
     <iframe id="game-frame"></iframe>
+
+    <div id="feedback-popup">
+        <div class="fb-header">
+            <span class="fb-game-name" id="fb-game-name">📌</span>
+            <button class="fb-close" id="fb-close">✕</button>
+        </div>
+        <div class="fb-pins" id="fb-pins"></div>
+        <div class="fb-input-row">
+            <input id="fb-input" type="text" placeholder="Leave feedback… then press Enter" autocomplete="off">
+            <button id="fb-submit">Pin</button>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -1334,6 +1393,7 @@
             card.className = 'game-card';
             card.style.setProperty('--accent', game.color);
             card.style.animationDelay = `${i * 0.06}s, 0s`;
+            card.style.position = 'relative';
             card.onclick = () => launchGame(game);
 
             card.innerHTML = `
@@ -1343,10 +1403,24 @@
                 ${game.tags.map(t => `<span class="game-tag">${t}</span>`).join(' ')}
                 <div class="play-overlay"><span class="play-btn-label">▶ Play</span></div>
             `;
+
+            // feedback badge
+            const fbData = JSON.parse(localStorage.getItem('playmerth_feedback') || '{}');
+            const pins = fbData[game.name] || [];
+            if (pins.length > 0) {
+                const btn = document.createElement('button');
+                btn.className = 'card-fb-btn';
+                btn.innerHTML = `📌 ${pins.length}`;
+                btn.title = 'View feedback';
+                btn.addEventListener('click', e => { e.stopPropagation(); showFeedbackView(game.name); });
+                card.appendChild(btn);
+            }
+
             grid.appendChild(card);
         });
     }
 
+    window.renderGames = renderGames;
     renderGames();
 
     // ===== STATS =====
@@ -2334,6 +2408,103 @@
 
     applySkyTheme();
     setInterval(applySkyTheme, 60000);
+</script>
+
+<div id="fb-view-overlay">
+    <div id="fb-view-panel">
+        <div id="fb-view-title">
+            <span id="fb-view-game"></span>
+            <button id="fb-view-close">✕</button>
+        </div>
+        <div id="fb-view-list"></div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const STORE_KEY = 'playmerth_feedback';
+    function load() { try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch { return {}; } }
+    function save(data) { localStorage.setItem(STORE_KEY, JSON.stringify(data)); }
+
+    function currentGame() {
+        const title = document.getElementById('game-title')?.textContent?.trim();
+        return title || null;
+    }
+
+    function openPopup() {
+        const game = currentGame();
+        document.getElementById('fb-game-name').textContent = game ? `📌 ${game}` : '📌 No game loaded';
+        document.getElementById('fb-input').value = '';
+        renderPins(game);
+        document.getElementById('feedback-popup').classList.add('show');
+        setTimeout(() => document.getElementById('fb-input').focus(), 50);
+    }
+
+    function closePopup() { document.getElementById('feedback-popup').classList.remove('show'); }
+
+    window.toggleFeedbackPopup = function() {
+        document.getElementById('feedback-popup').classList.contains('show') ? closePopup() : openPopup();
+    };
+
+    function renderPins(game) {
+        const list = document.getElementById('fb-pins');
+        list.innerHTML = '';
+        if (!game) { list.innerHTML = '<div class="fb-empty">Load a game first to pin feedback.</div>'; return; }
+        const pins = load()[game] || [];
+        if (!pins.length) { list.innerHTML = '<div class="fb-empty">No feedback yet — type something below!</div>'; return; }
+        [...pins].reverse().forEach((p, ri) => {
+            const i = pins.length - 1 - ri;
+            const row = document.createElement('div');
+            row.className = 'fb-pin';
+            row.innerHTML = `<span class="fb-pin-text">${p.text}</span><span class="fb-pin-date">${p.date}</span><button class="fb-pin-del" title="Delete">×</button>`;
+            row.querySelector('.fb-pin-del').addEventListener('click', () => {
+                const d = load(); d[game].splice(i, 1); save(d); renderPins(game);
+            });
+            list.appendChild(row);
+        });
+    }
+
+    function submitFeedback() {
+        const game = currentGame();
+        if (!game) return;
+        const input = document.getElementById('fb-input');
+        const text = input.value.trim();
+        if (!text) return;
+        const data = load();
+        if (!data[game]) data[game] = [];
+        data[game].push({ text, date: new Date().toLocaleDateString('en-US', {month:'short', day:'numeric'}) });
+        save(data);
+        input.value = '';
+        renderPins(game);
+    }
+
+    document.addEventListener('keydown', e => {
+        if (e.altKey && (e.key === 'f' || e.key === 'ƒ')) {
+            e.preventDefault();
+            document.getElementById('feedback-popup').classList.contains('show') ? closePopup() : openPopup();
+        }
+        if (e.key === 'Escape') closePopup();
+    });
+    document.getElementById('fb-input').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitFeedback(); renderGames && renderGames(); } });
+    document.getElementById('fb-submit').addEventListener('click', () => { submitFeedback(); if (window.renderGames) renderGames(); });
+    document.getElementById('fb-close').addEventListener('click', closePopup);
+    document.getElementById('fb-view-close').addEventListener('click', () => document.getElementById('fb-view-overlay').classList.remove('show'));
+    document.getElementById('fb-view-overlay').addEventListener('click', e => { if (e.target === document.getElementById('fb-view-overlay')) document.getElementById('fb-view-overlay').classList.remove('show'); });
+
+    window.showFeedbackView = function(gameName) {
+        const pins = (load()[gameName] || []);
+        document.getElementById('fb-view-game').textContent = `📌 ${gameName}`;
+        const list = document.getElementById('fb-view-list');
+        list.innerHTML = '';
+        [...pins].reverse().forEach(p => {
+            const row = document.createElement('div');
+            row.className = 'fb-pin';
+            row.innerHTML = `<span class="fb-pin-text">${p.text}</span><span class="fb-pin-date">${p.date}</span>`;
+            list.appendChild(row);
+        });
+        document.getElementById('fb-view-overlay').classList.add('show');
+    };
+})();
 </script>
 </body>
 </html>
