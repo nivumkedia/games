@@ -158,6 +158,10 @@ button:disabled{opacity:0.38;cursor:not-allowed;transform:none;box-shadow:none}
 .mix-hint { flex:1; font-size:11px; font-weight:700; color:#9c4a00; }
 #btn-mix-go { background:linear-gradient(180deg,#b2dfdb,#00897b); color:#002620; box-shadow:0 4px 0 #004d40; font-size:13px; padding:9px 18px; flex-shrink:0; }
 #btn-mix-go:hover:not(:disabled) { box-shadow:0 6px 0 #004d40; }
+#btn-mix-to-hand { background:linear-gradient(180deg,#dcedc8,#558b2f); color:white; box-shadow:0 4px 0 #33691e; font-size:13px; padding:9px 14px; flex-shrink:0; }
+#btn-mix-to-hand:hover:not(:disabled) { box-shadow:0 6px 0 #33691e; }
+#btn-swap-go { background:linear-gradient(180deg,#bbdefb,#1565c0); color:white; box-shadow:0 4px 0 #0d47a1; font-size:13px; padding:9px 14px; flex-shrink:0; }
+#btn-swap-go:hover:not(:disabled) { box-shadow:0 6px 0 #0d47a1; }
 @keyframes fadeIn { from{opacity:0} to{opacity:1} }
 
 /* ── piles bar ── */
@@ -215,6 +219,21 @@ button:disabled{opacity:0.38;cursor:not-allowed;transform:none;box-shadow:none}
 .action-btn .ab-desc{font-size:9px;opacity:0.7;font-weight:700}
 .action-cancel{background:linear-gradient(180deg,#ef9a9a,#e53935);color:white;box-shadow:0 4px 0 #b71c1c;margin-top:4px}
 .action-cancel:hover{box-shadow:0 6px 0 #b71c1c}
+
+/* ── demand picker ── */
+#demand-overlay{display:none;position:fixed;inset:0;background:rgba(180,0,0,0.35);backdrop-filter:blur(5px);align-items:center;justify-content:center;z-index:350}
+#demand-overlay.show{display:flex}
+#demand-panel{background:linear-gradient(160deg,#fff3e0,#fce4ec);border-radius:20px;padding:22px 26px;min-width:300px;max-width:92vw;max-height:80vh;display:flex;flex-direction:column;gap:12px;box-shadow:0 24px 64px rgba(0,0,0,0.35),0 0 0 3px white;animation:panelPop 0.28s cubic-bezier(0.22,1,0.36,1) both;overflow-y:auto}
+#demand-panel h3{font-size:16px;font-weight:900;color:#b71c1c;text-align:center}
+.demand-opp-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.demand-opp-btn{padding:8px 16px;border-radius:12px;border:none;font:inherit;font-size:13px;font-weight:900;cursor:pointer;transition:transform 0.12s;box-shadow:0 4px 0 rgba(0,0,0,0.2)}
+.demand-opp-btn:hover{transform:translateY(-2px)}
+#demand-cards-area{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;min-height:48px}
+.demand-card{width:54px;height:68px;border-radius:10px;border:2.5px solid rgba(255,255,255,0.8);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900;cursor:pointer;transition:transform 0.12s;box-shadow:0 3px 8px rgba(0,0,0,0.15)}
+.demand-card:hover{transform:translateY(-4px) scale(1.1);box-shadow:0 8px 16px rgba(200,0,0,0.3)}
+.demand-empty{font-size:12px;color:#888;text-align:center;padding:12px}
+.demand-cancel{background:linear-gradient(180deg,#ef9a9a,#e53935);color:white;box-shadow:0 4px 0 #b71c1c;border:none;border-radius:10px;padding:8px 18px;font:inherit;font-size:13px;font-weight:900;cursor:pointer;align-self:center}
+.demand-cancel:hover{box-shadow:0 6px 0 #b71c1c}
 
 /* ── game over ── */
 #gameover{display:none;position:fixed;inset:0;background:rgba(0,60,120,0.55);backdrop-filter:blur(6px);align-items:center;justify-content:center;z-index:200}
@@ -344,6 +363,8 @@ button:disabled{opacity:0.38;cursor:not-allowed;transform:none;box-shadow:none}
         <div id="mix-popup-cards"></div>
         <div class="mix-popup-footer">
             <div class="mix-hint" id="mix-hint">Select consecutive cards to mix</div>
+            <button id="btn-mix-to-hand" disabled>→ Hand</button>
+            <button id="btn-swap-go" disabled>↔ Swap</button>
             <button id="btn-mix-go" disabled>🔀 Mix!</button>
         </div>
     </div>
@@ -417,6 +438,16 @@ button:disabled{opacity:0.38;cursor:not-allowed;transform:none;box-shadow:none}
         <h3 id="ap-title">✦ Choose an Action</h3>
         <div class="action-grid" id="ap-grid"></div>
         <button class="action-cancel" onclick="closeActionPicker()">✕ Cancel</button>
+    </div>
+</div>
+
+<!-- Demand picker -->
+<div id="demand-overlay">
+    <div id="demand-panel">
+        <h3 id="demand-title">⚡ Demand</h3>
+        <div class="demand-opp-row" id="demand-opp-row"></div>
+        <div id="demand-cards-area"></div>
+        <button class="demand-cancel" onclick="closeDemand()">✕ Cancel</button>
     </div>
 </div>
 
@@ -698,6 +729,33 @@ function toggleMixCard(i) {
     selectedMixIndices.has(i) ? selectedMixIndices.delete(i) : selectedMixIndices.add(i);
 }
 
+// ── mix pile → hand ───────────────────────────────────────────────────────
+document.getElementById("btn-mix-to-hand").addEventListener("click", () => {
+    if (selectedMixIndices.size === 0) return;
+    const idxs = [...selectedMixIndices].sort((a,b)=>b-a);
+    idxs.forEach(i => { hand.push(p().mixPile[i]); p().mixPile.splice(i,1); });
+    selectedMixIndices.clear();
+    closeMixPopup();
+    showToast(`📥 Moved ${idxs.length} card${idxs.length>1?'s':''} to hand`);
+    renderAll(false);
+});
+
+// ── swap: 1 hand card ↔ 1 mix pile card ──────────────────────────────────
+document.getElementById("btn-swap-go").addEventListener("click", () => {
+    if (selectedMixIndices.size !== 1 || selected.size !== 1) return;
+    const mixIdx = [...selectedMixIndices][0];
+    const handIdx = [...selected][0];
+    const mixVal = p().mixPile[mixIdx];
+    const handVal = hand[handIdx];
+    p().mixPile[mixIdx] = handVal;
+    hand[handIdx] = mixVal;
+    selectedMixIndices.clear();
+    selected.clear();
+    closeMixPopup();
+    showToast(`↔ Swapped hand ${handVal} ↔ mix ${mixVal}!`);
+    renderAll(false);
+});
+
 // ── click card in type pile ───────────────────────────────────────────────
 function usePileCard(type, idx) {
     if (pendingUpgrade) { showToast("Finish the current upgrade first!"); return; }
@@ -741,9 +799,103 @@ function applyUpgradeToBuilding(bIdx) {
 }
 
 // ── demand ────────────────────────────────────────────────────────────────
+let demandType = 0;
+let demandOppIdx = -1;
+
 function executeDemand(v) {
-    const desc = {4:'a building card',5:'an upgrade card',6:'a static card'};
-    showToast(`⚡ Demand: take ${desc[v]} from opponent — needs full 2P!`, 3000);
+    demandType = v;
+    demandOppIdx = -1;
+    const opponents = players.map((_,i)=>i).filter(i=>i!==currentPlayer);
+    if (opponents.length === 0) { showToast("No opponents!"); return; }
+    document.getElementById("demand-title").textContent =
+        v===4 ? "⚡ Demand a building card" :
+        v===5 ? "⚡ Demand an upgrade card" :
+                "⚡ Demand a static card";
+    // if only one opponent skip straight to showing cards
+    if (opponents.length === 1) {
+        showDemandCards(opponents[0]);
+    } else {
+        const row = document.getElementById("demand-opp-row");
+        row.innerHTML = '';
+        opponents.forEach(i => {
+            const btn = document.createElement("button");
+            btn.className = "demand-opp-btn";
+            btn.style.background = `linear-gradient(145deg,${PLAYER_COLORS[i%PLAYER_COLORS.length]}cc,${PLAYER_COLORS[i%PLAYER_COLORS.length]})`;
+            btn.style.color = "white";
+            btn.textContent = playerName(i);
+            btn.addEventListener("click", () => showDemandCards(i));
+            row.appendChild(btn);
+        });
+        document.getElementById("demand-cards-area").innerHTML = '<div class="demand-empty">Choose an opponent above</div>';
+        document.getElementById("demand-overlay").classList.add("show");
+    }
+}
+
+function showDemandCards(oppIdx) {
+    demandOppIdx = oppIdx;
+    const opp = players[oppIdx];
+    const area = document.getElementById("demand-cards-area");
+    area.innerHTML = '';
+
+    // build list of {card value, source descriptor, remove fn}
+    let options = [];
+    if (demandType === 4) {
+        // one card from each building
+        opp.buildings.forEach((b, bi) => {
+            b.cards.forEach((v, ci) => {
+                options.push({ v, remove: () => {
+                    b.cards.splice(ci, 1);
+                    b.score -= v; b.level -= 1;
+                    opp.totalScore -= v;
+                    if (b.level === 0) opp.buildings.splice(bi, 1);
+                }});
+            });
+        });
+    } else if (demandType === 5) {
+        opp.piles.upgrade.forEach((v, i) => {
+            options.push({ v, remove: () => opp.piles.upgrade.splice(i, 1) });
+        });
+    } else {
+        opp.piles.static.forEach((v, i) => {
+            options.push({ v, remove: () => opp.piles.static.splice(i, 1) });
+        });
+    }
+
+    if (options.length === 0) {
+        let cards;
+        if (demandType === 5) cards = [1,2,3];
+        else if (demandType === 6) cards = [8,9,10];
+        else cards = deck.splice(0, Math.min(3, deck.length));
+        cards.forEach(v => p().mixPile.push(v));
+        closeDemand();
+        showToast(`⚡ ${playerName(oppIdx)} has nothing! Got ${cards.join(',')} in your mix pile.`, 3500);
+        renderAll(false);
+        return;
+    } else {
+        options.forEach(opt => {
+            const c = document.createElement("div");
+            c.className = "demand-card";
+            c.style.background = cardBg(opt.v);
+            c.textContent = opt.v;
+            c.addEventListener("click", () => {
+                opt.remove();
+                hand.push(opt.v);
+                closeDemand();
+                showToast(`⚡ Took ${opt.v} from ${playerName(oppIdx)}!`);
+                renderAll(false);
+            });
+            area.appendChild(c);
+        });
+    }
+
+    // show opponent row only if multiple opponents
+    const opponents = players.map((_,i)=>i).filter(i=>i!==currentPlayer);
+    document.getElementById("demand-opp-row").style.display = opponents.length > 1 ? "" : "none";
+    document.getElementById("demand-overlay").classList.add("show");
+}
+
+function closeDemand() {
+    document.getElementById("demand-overlay").classList.remove("show");
 }
 
 // ── static deploy ─────────────────────────────────────────────────────────
@@ -908,16 +1060,20 @@ function renderMixPile() {
     const mv=[...selectedMixIndices].map(i=>p().mixPile[i]);
     const canMix=isConsecutive(mv);
     document.getElementById("btn-mix-go").disabled=!canMix;
+    document.getElementById("btn-mix-to-hand").disabled=selectedMixIndices.size===0;
+    document.getElementById("btn-swap-go").disabled=selectedMixIndices.size!==1||selected.size!==1;
     const hintEl=document.getElementById("mix-hint");
     if (canMix) {
         const sorted=[...mv].sort((a,b)=>a-b);
         const discarded=sorted[0];
         const actStr=sorted.slice(1).map(v=>`${v}→${cardType(v)}`).join(', ');
         hintEl.textContent=`Discard ${discarded} · earn: ${actStr}`;
+    } else if (selectedMixIndices.size===1 && selected.size===1) {
+        hintEl.textContent=`↔ Swap hand ${[...selected].map(i=>hand[i])[0]} ↔ mix ${p().mixPile[[...selectedMixIndices][0]]}`;
     } else if (selectedMixIndices.size>0) {
-        hintEl.textContent="Cards must be consecutive";
+        hintEl.textContent=selected.size===1?"Select a mix card to swap, or more for mixing":"Cards must be consecutive to mix";
     } else {
-        hintEl.textContent="Select consecutive cards to mix";
+        hintEl.textContent=selected.size===1?"Select a mix card to swap — or select more mix cards to mix":"Select consecutive cards to mix";
     }
 }
 
@@ -1108,7 +1264,7 @@ function loadGame() {
     showToast("💾 Game loaded!");
 }
 
-startGame();
+showStartScreen();
 </script>
 </body>
 </html>
