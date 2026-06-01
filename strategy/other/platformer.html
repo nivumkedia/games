@@ -19,6 +19,8 @@
             border: 4px solid #5D9E3C;
             border-radius: 10px;
             box-shadow: 0 0 30px rgba(93, 158, 60, 0.4);
+            max-width: 100%;
+            height: auto;
         }
         #ui { display: flex; gap: 30px; color: #2d5016; font-size: 18px; align-items: center; flex-wrap: wrap; justify-content: center; }
         #ui span { background: rgba(255,255,255,0.7); padding: 8px 16px; border-radius: 20px; border: 2px solid #5D9E3C; }
@@ -3076,5 +3078,25 @@
         generateLevel(level);
         gameLoop();
     </script>
+<script>
+/* Mobile: drag → arrow keys, tap → Space */
+(function(){
+  var ds=null,ak=new Set(),moved=false;
+  function fire(code,dn){document.dispatchEvent(new KeyboardEvent(dn?'keydown':'keyup',{code:code,key:code==='Space'?' ':code,bubbles:true,cancelable:true}));}
+  function clear(){ak.forEach(function(c){fire(c,false);});ak.clear();ds=null;}
+  function onMove(x,y){
+    if(!ds)return;
+    var dx=x-ds.x,dy=y-ds.y,th=28,nk=new Set();
+    if(Math.abs(dx)>th||Math.abs(dy)>th){moved=true;nk.add(Math.abs(dx)>Math.abs(dy)?(dx>0?'ArrowRight':'ArrowLeft'):(dy>0?'ArrowDown':'ArrowUp'));}
+    ak.forEach(function(c){if(!nk.has(c))fire(c,false);});
+    nk.forEach(function(c){if(!ak.has(c))fire(c,true);});
+    ak=nk;
+  }
+  document.addEventListener('touchstart',function(e){ds={x:e.touches[0].clientX,y:e.touches[0].clientY};moved=false;e.preventDefault();},{passive:false});
+  document.addEventListener('touchmove',function(e){onMove(e.touches[0].clientX,e.touches[0].clientY);e.preventDefault();},{passive:false});
+  document.addEventListener('touchend',function(){var m=moved;clear();moved=false;if(!m){fire('Space',true);setTimeout(function(){fire('Space',false);},80);}});
+  document.addEventListener('touchcancel',function(){clear();moved=false;});
+})();
+</script>
 </body>
 </html>

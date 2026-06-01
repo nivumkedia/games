@@ -239,6 +239,40 @@
         .build-item.locked-item { opacity: 0.45; cursor: not-allowed; }
         .lv-badge { font-size: 10px; color: #aaa; font-weight: 600; }
 
+        /* ── Worker items ──────────────────── */
+        .worker-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 12px; border: 2.5px solid #eee; border-radius: 14px;
+            margin-bottom: 8px; transition: all 0.15s;
+        }
+        .worker-item:not(.locked-item):hover { border-color: #26C6DA; background: #E0F7FA; }
+        .worker-item.locked-item { opacity: 0.45; }
+        .worker-icon { font-size: 26px; line-height: 1; }
+        .worker-info { flex: 1; }
+        .worker-name { font-size: 14px; font-weight: 800; color: #222; }
+        .worker-desc { font-size: 11px; color: #888; margin-top: 2px; }
+        .worker-salary-txt { font-size: 11px; color: #E65100; font-weight: 700; margin-top: 2px; }
+        .worker-controls { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+        .worker-adj {
+            width: 28px; height: 28px;
+            background: #f0f0f0; border: none; border-radius: 8px;
+            font-size: 16px; font-weight: 800; cursor: pointer; color: #555;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.1s;
+        }
+        .worker-adj:hover:not(:disabled) { background: #ddd; }
+        .worker-adj.hire-btn {
+            width: auto; padding: 0 10px; font-size: 12px; font-weight: 800;
+            background: #E0F7FA; color: #00838F; border: 2px solid #26C6DA; border-radius: 8px;
+            white-space: nowrap; height: 28px;
+        }
+        .worker-adj.hire-btn:hover:not(:disabled) { background: #B2EBF2; }
+        .worker-adj:disabled { opacity: 0.35; cursor: not-allowed; }
+        .worker-count-num {
+            min-width: 22px; text-align: center;
+            font-size: 15px; font-weight: 800; color: #222;
+        }
+
         /* ── Start screen ──────────────────── */
         #start-screen {
             position: fixed; inset: 0; z-index: 300;
@@ -478,6 +512,7 @@
         <button class="tab-btn" onclick="switchTab('crops')">🌱 Crops</button>
         <button class="tab-btn" id="tab-btn-farming" onclick="switchTab('farming')" style="display:none">🐔 Farm</button>
         <button class="tab-btn" id="tab-btn-transport" onclick="switchTab('transport')" style="display:none">🚌 Transit</button>
+        <button class="tab-btn" id="tab-btn-workers" onclick="switchTab('workers')" style="display:none">👷 Workers</button>
     </div>
     <!-- ── Housing ── -->
     <div id="tab-housing" class="tab-content active">
@@ -732,6 +767,64 @@
             <div class="build-item-icon">🛸</div>
             <div class="build-item-info"><div class="build-item-name">Hyperloop <span class="lv-badge">Lv 15</span></div><div class="build-item-desc">4×4 · +900🪙/60s</div></div>
             <div class="build-item-cost">12000🪙</div>
+        </div>
+    <!-- ── Workers ── -->
+    <div id="tab-workers" class="tab-content">
+        <div style="font-size:11px;color:#888;font-weight:700;margin-bottom:10px">Hire workers to automate your city. Salary is paid every minute from your 🪙 coins.</div>
+        <div id="workers-total-salary" style="background:#FFF3E0;border-radius:10px;padding:6px 12px;margin-bottom:10px;font-size:12px;font-weight:700;color:#E65100;display:none">
+            💸 Total salary: <span id="workers-salary-amt">0</span>🪙/min
+        </div>
+        <div class="worker-item" id="worker-item-farmer">
+            <div class="worker-icon">🌾</div>
+            <div class="worker-info">
+                <div class="worker-name">Farmer</div>
+                <div class="worker-desc">Auto-harvests ready crops</div>
+                <div class="worker-salary-txt">5🪙/min salary · max 5</div>
+            </div>
+            <div class="worker-controls">
+                <button class="worker-adj" id="w-minus-farmer" onclick="fireWorker('farmer')" disabled>−</button>
+                <span class="worker-count-num" id="wc-farmer">0</span>
+                <button class="worker-adj hire-btn" id="w-plus-farmer" onclick="hireWorker('farmer')" disabled>+30🪙</button>
+            </div>
+        </div>
+        <div class="worker-item locked-item" id="worker-item-mechanic">
+            <div class="worker-icon">🔧</div>
+            <div class="worker-info">
+                <div class="worker-name">Mechanic <span class="lv-badge">Lv 4</span></div>
+                <div class="worker-desc">Auto-restocks working buildings</div>
+                <div class="worker-salary-txt">8🪙/min salary · max 3</div>
+            </div>
+            <div class="worker-controls">
+                <button class="worker-adj" id="w-minus-mechanic" onclick="fireWorker('mechanic')" disabled>−</button>
+                <span class="worker-count-num" id="wc-mechanic">0</span>
+                <button class="worker-adj hire-btn" id="w-plus-mechanic" onclick="hireWorker('mechanic')" disabled>+50🪙</button>
+            </div>
+        </div>
+        <div class="worker-item locked-item" id="worker-item-collector">
+            <div class="worker-icon">📦</div>
+            <div class="worker-info">
+                <div class="worker-name">Collector <span class="lv-badge">Lv 5</span></div>
+                <div class="worker-desc">Auto-collects farm building produce</div>
+                <div class="worker-salary-txt">6🪙/min salary · max 3</div>
+            </div>
+            <div class="worker-controls">
+                <button class="worker-adj" id="w-minus-collector" onclick="fireWorker('collector')" disabled>−</button>
+                <span class="worker-count-num" id="wc-collector">0</span>
+                <button class="worker-adj hire-btn" id="w-plus-collector" onclick="hireWorker('collector')" disabled>+40🪙</button>
+            </div>
+        </div>
+        <div class="worker-item locked-item" id="worker-item-logistics">
+            <div class="worker-icon">🚚</div>
+            <div class="worker-info">
+                <div class="worker-name">Logistics <span class="lv-badge">Lv 6</span></div>
+                <div class="worker-desc">Auto-restocks transport buildings</div>
+                <div class="worker-salary-txt">10🪙/min salary · max 3</div>
+            </div>
+            <div class="worker-controls">
+                <button class="worker-adj" id="w-minus-logistics" onclick="fireWorker('logistics')" disabled>−</button>
+                <span class="worker-count-num" id="wc-logistics">0</span>
+                <button class="worker-adj hire-btn" id="w-plus-logistics" onclick="hireWorker('logistics')" disabled>+70🪙</button>
+            </div>
         </div>
     </div>
 </div>
@@ -1352,6 +1445,13 @@ const SUPPLY_CONFIG = {
 
 function restockCost(def) { return Math.max(5, Math.round(def.cost * 0.10)); }
 
+const WORKER_DEFS = {
+    farmer:    { icon: '🌾', name: 'Farmer',    hireCost: 30,  salary: 5,  unlockLevel: 3, max: 5, actMs: 2000  },
+    mechanic:  { icon: '🔧', name: 'Mechanic',  hireCost: 50,  salary: 8,  unlockLevel: 4, max: 3, actMs: 5000  },
+    collector: { icon: '📦', name: 'Collector', hireCost: 40,  salary: 6,  unlockLevel: 5, max: 3, actMs: 3000  },
+    logistics: { icon: '🚚', name: 'Logistics', hireCost: 70,  salary: 10, unlockLevel: 6, max: 3, actMs: 5000  },
+};
+
 // 80×80 grid. Center 2×2 at rows 39–40, cols 39–40.
 // Ring = Chebyshev distance from center block.
 function tileRing(i) {
@@ -1375,6 +1475,9 @@ let buildMode  = null;
 let currentCrop = 'grass';
 let buildPanelOpen = false;
 let buildHoverTiles = [];
+let workers = { farmer: 0, mechanic: 0, collector: 0, logistics: 0 };
+let workerSalaryTimers = {};
+let workerActTimers    = {};
 
 // tile: 'hidden' | 'locked' | null (empty farmable) | { state, ... }
 const tiles = Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, i) =>
@@ -1628,6 +1731,59 @@ function restockBuilding() {
     showUpgradePanel(upgradePanelTile);
 }
 
+// ── Workers ────────────────────────────────────────────────────────────────────
+function applyWorkerUnlocks() {
+    Object.entries(WORKER_DEFS).forEach(([type, def]) => {
+        if (level >= def.unlockLevel) {
+            const item = document.getElementById(`worker-item-${type}`);
+            if (item) item.classList.remove('locked-item');
+        }
+    });
+    if (level >= 3) document.getElementById('tab-btn-workers').style.display = '';
+    updateWorkerPanel();
+}
+
+function hireWorker(type) {
+    const def = WORKER_DEFS[type];
+    if (!def || level < def.unlockLevel || workers[type] >= def.max) return;
+    if (coins < def.hireCost) { popup(document.getElementById('top-bar'), `Need ${def.hireCost}🪙`, '#F44336'); return; }
+    coins -= def.hireCost;
+    workers[type]++;
+    if (!workerSalaryTimers[type]) workerSalaryTimers[type] = Date.now();
+    updateCoins();
+    updateWorkerPanel();
+    showAchievement(def.icon, `${def.name} hired!`);
+}
+
+function fireWorker(type) {
+    if (workers[type] <= 0) return;
+    workers[type]--;
+    const def = WORKER_DEFS[type];
+    const refund = Math.floor(def.hireCost / 2);
+    coins += refund;
+    if (workers[type] === 0) delete workerSalaryTimers[type];
+    updateCoins();
+    updateWorkerPanel();
+    popup(document.getElementById('top-bar'), `+${refund}🪙 refund`, '#43A047');
+}
+
+function updateWorkerPanel() {
+    let totalSalary = 0;
+    Object.entries(WORKER_DEFS).forEach(([type, def]) => {
+        totalSalary += workers[type] * def.salary;
+        const countEl = document.getElementById(`wc-${type}`);
+        if (countEl) countEl.textContent = workers[type];
+        const minusBtn = document.getElementById(`w-minus-${type}`);
+        const plusBtn  = document.getElementById(`w-plus-${type}`);
+        if (minusBtn) minusBtn.disabled = workers[type] <= 0;
+        if (plusBtn)  plusBtn.disabled  = workers[type] >= def.max || coins < def.hireCost || level < def.unlockLevel;
+    });
+    const salaryEl  = document.getElementById('workers-salary-amt');
+    const salaryRow = document.getElementById('workers-total-salary');
+    if (salaryEl) salaryEl.textContent = totalSalary;
+    if (salaryRow) salaryRow.style.display = totalSalary > 0 ? 'block' : 'none';
+}
+
 // ── Unlock helpers ─────────────────────────────────────────────────────────────
 function unlockBuildingUI(type, isNew = false) {
     const el = document.getElementById(`item-${type.replace(/_/g, '-')}`);
@@ -1650,6 +1806,7 @@ function applyBuildingUnlocks() {
     if (level >= 4) unlockCropUI('beans');
     if (level >= 5) document.getElementById('tab-btn-farming').style.display = '';
     if (level >= 6) document.getElementById('tab-btn-transport').style.display = '';
+    applyWorkerUnlocks();
 }
 
 function onLevelUp(newLevel) {
@@ -1672,6 +1829,7 @@ function onLevelUp(newLevel) {
         revealRings([2, 3]);
         document.getElementById('bottom-bar').style.display = 'flex';
         showAchievement('🔨', 'Construction unlocked!');
+        showAchievement('👷', 'Workers tab unlocked!');
         if (!firstUpgradeDone) {
             firstUpgradeDone = true;
             disableScrollLock();
@@ -1698,6 +1856,7 @@ function onLevelUp(newLevel) {
     if (newLevel === 13) revealRings([30, 31, 32]);
     if (newLevel === 14) revealRings([33, 34, 35]);
     if (newLevel === 15) revealRings([36, 37, 38]);
+    applyWorkerUnlocks();
     // Generic building unlocks for this level
     const newBuildings = Object.entries(BUILDING_DEFS).filter(([, def]) => def.unlockLevel === newLevel);
     newBuildings.forEach(([type]) => unlockBuildingUI(type, true));
@@ -1884,6 +2043,7 @@ function switchTab(id) {
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     document.querySelector(`[onclick="switchTab('${id}')"]`).classList.add('active');
     document.getElementById(`tab-${id}`).classList.add('active');
+    if (id === 'workers') updateWorkerPanel();
 }
 
 
@@ -1952,6 +2112,7 @@ function renderTile(i, reveal = false) {
 function saveGame() {
     localStorage.setItem('urbafier', JSON.stringify({
         coins, population, score, level, firstHarvest, firstUpgradeDone, currentCrop, maintenance, produce,
+        workers,
         tiles: [...tiles], unseenBuildings: [...unlockedUnseenBuildings]
     }));
     const btn = document.getElementById('save-btn');
@@ -1980,6 +2141,7 @@ function loadGame() {
         currentCrop = d.currentCrop ?? 'grass';
         maintenance = d.maintenance ?? 0;
         produce = d.produce ?? 0;
+        if (d.workers) Object.keys(workers).forEach(k => { workers[k] = d.workers[k] ?? 0; });
         if (d.tiles) d.tiles.forEach((t, i) => { tiles[i] = t; });
         unlockedUnseenBuildings = new Set(d.unseenBuildings || []);
         return true;
@@ -2096,6 +2258,93 @@ setInterval(() => {
             if (def.incomeMs || def.produceMs || supplyConf) renderTile(i);
         }
     });
+    // ── Worker salary drain (once per minute per type) ─────────────────────────
+    Object.entries(WORKER_DEFS).forEach(([type, def]) => {
+        if (workers[type] === 0) return;
+        if (!workerSalaryTimers[type]) { workerSalaryTimers[type] = now; return; }
+        if (now - workerSalaryTimers[type] >= 60000) {
+            workerSalaryTimers[type] = now;
+            const total = def.salary * workers[type];
+            coins = Math.max(0, coins - total);
+            updateCoins();
+            popup(document.getElementById('top-bar'), `-${total}🪙 salary`, '#EF5350');
+        }
+    });
+
+    // ── Farmer: auto-harvest ready crops ───────────────────────────────────────
+    if (workers.farmer > 0 && now - (workerActTimers.farmer || 0) >= WORKER_DEFS.farmer.actMs) {
+        workerActTimers.farmer = now;
+        let harvested = 0;
+        for (let i = 0; i < tiles.length && harvested < workers.farmer; i++) {
+            if (tiles[i]?.state === 'ready') {
+                const crop = CROP_DEFS[tiles[i].cropType || 'grass'];
+                coins += crop.harvest; maintenance += 3;
+                addScore(crop.score);
+                tiles[i] = null; renderTile(i);
+                harvested++;
+            }
+        }
+        if (harvested > 0) { updateCoins(); updateMaintenance(); }
+    }
+
+    // ── Mechanic: auto-restock working buildings below 30% ─────────────────────
+    if (workers.mechanic > 0 && now - (workerActTimers.mechanic || 0) >= WORKER_DEFS.mechanic.actMs) {
+        workerActTimers.mechanic = now;
+        let restocked = 0;
+        for (let i = 0; i < tiles.length && restocked < workers.mechanic; i++) {
+            const t = tiles[i];
+            if (t?.state === 'house' && t?.role === 'main' && BUILDING_CATEGORY[t.buildingType] === 'working' && (t.supplyLevel ?? 100) < 30) {
+                const cost = restockCost(BUILDING_DEFS[t.buildingType]);
+                if (maintenance >= cost) {
+                    maintenance -= cost;
+                    t.supplyLevel = 100; t.lastSupplyDrain = now;
+                    renderTile(i); restocked++;
+                }
+            }
+        }
+        if (restocked > 0) updateMaintenance();
+    }
+
+    // ── Collector: auto-collect farm building produce ───────────────────────────
+    if (workers.collector > 0 && now - (workerActTimers.collector || 0) >= WORKER_DEFS.collector.actMs) {
+        workerActTimers.collector = now;
+        let collected = 0;
+        for (let i = 0; i < tiles.length && collected < workers.collector; i++) {
+            const t = tiles[i];
+            if (t?.state === 'house' && t?.role === 'main' && BUILDING_CATEGORY[t.buildingType] === 'farming' && t.productReady) {
+                const def = BUILDING_DEFS[t.buildingType];
+                const earned = Math.round(def.productCoins * (1 + 0.5 * (t.upgradeLevel || 0)));
+                t.productReady = false; t.lastProduced = now;
+                coins += earned;
+                const amt = Math.max(1, Math.round(earned / 8));
+                produce += amt;
+                renderTile(i); collected++;
+            }
+        }
+        if (collected > 0) { updateCoins(); updateProduce(); }
+    }
+
+    // ── Logistics: auto-restock transport buildings below 30% ──────────────────
+    if (workers.logistics > 0 && now - (workerActTimers.logistics || 0) >= WORKER_DEFS.logistics.actMs) {
+        workerActTimers.logistics = now;
+        let restocked = 0;
+        for (let i = 0; i < tiles.length && restocked < workers.logistics; i++) {
+            const t = tiles[i];
+            if (t?.state === 'house' && t?.role === 'main' && BUILDING_CATEGORY[t.buildingType] === 'transport' && (t.supplyLevel ?? 100) < 30) {
+                const cost = restockCost(BUILDING_DEFS[t.buildingType]);
+                if (produce >= cost) {
+                    produce -= cost;
+                    t.supplyLevel = 100; t.lastSupplyDrain = now;
+                    renderTile(i); restocked++;
+                }
+            }
+        }
+        if (restocked > 0) updateProduce();
+    }
+
+    // Refresh workers panel button states if open
+    if (document.getElementById('tab-workers')?.classList.contains('active')) updateWorkerPanel();
+
     companionTickCheck(now);
 }, 500);
 </script>

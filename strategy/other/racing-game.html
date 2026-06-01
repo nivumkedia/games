@@ -7,7 +7,8 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#0a0a1a;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:'Courier New',monospace;overflow:hidden;color:#fff}
-#gameContainer{position:relative;width:800px;height:600px;border-radius:8px;overflow:hidden;box-shadow:0 0 60px rgba(255,68,68,0.15),0 0 120px rgba(0,0,0,0.8)}
+#gameContainer{position:relative;width:min(800px,100vw);aspect-ratio:4/3;border-radius:8px;overflow:hidden;box-shadow:0 0 60px rgba(255,68,68,0.15),0 0 120px rgba(0,0,0,0.8)}
+#gameCanvas{width:100%;height:100%}
 canvas{display:block;background:#2d5a1e;border:none}
 .screen-overlay{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10}
 #menuScreen{background:linear-gradient(135deg,rgba(10,10,30,0.97),rgba(20,5,15,0.97))}
@@ -190,6 +191,26 @@ var trackSelectEl=document.getElementById('trackSelect');
 for(let i=0;i<TRACKS.length;i++){var card=document.createElement('div');card.className='track-card'+(i===0?' selected':'');card.dataset.track=i;card.innerHTML='<canvas id="preview'+i+'" width="150" height="100"></canvas><h3>'+TRACKS[i].name+'</h3><p>'+(TRACK_DESCS[i]||'')+'</p>';trackSelectEl.appendChild(card);card.addEventListener('click',function(){document.querySelectorAll('.track-card').forEach(function(c){c.classList.remove('selected')});this.classList.add('selected');selectedTrack=parseInt(this.dataset.track)})}
 for(let i=0;i<TRACKS.length;i++)drawTrackPreview('preview'+i,i);
 requestAnimationFrame(gameLoop);
+</script>
+<script>
+/* Mobile: drag → arrow keys, tap → Space */
+(function(){
+  var ds=null,ak=new Set(),moved=false;
+  function fire(code,dn){document.dispatchEvent(new KeyboardEvent(dn?'keydown':'keyup',{code:code,key:code==='Space'?' ':code,bubbles:true,cancelable:true}));}
+  function clear(){ak.forEach(function(c){fire(c,false);});ak.clear();ds=null;}
+  function onMove(x,y){
+    if(!ds)return;
+    var dx=x-ds.x,dy=y-ds.y,th=28,nk=new Set();
+    if(Math.abs(dx)>th||Math.abs(dy)>th){moved=true;nk.add(Math.abs(dx)>Math.abs(dy)?(dx>0?'ArrowRight':'ArrowLeft'):(dy>0?'ArrowDown':'ArrowUp'));}
+    ak.forEach(function(c){if(!nk.has(c))fire(c,false);});
+    nk.forEach(function(c){if(!ak.has(c))fire(c,true);});
+    ak=nk;
+  }
+  document.addEventListener('touchstart',function(e){ds={x:e.touches[0].clientX,y:e.touches[0].clientY};moved=false;e.preventDefault();},{passive:false});
+  document.addEventListener('touchmove',function(e){onMove(e.touches[0].clientX,e.touches[0].clientY);e.preventDefault();},{passive:false});
+  document.addEventListener('touchend',function(){var m=moved;clear();moved=false;if(!m){fire('Space',true);setTimeout(function(){fire('Space',false);},80);}});
+  document.addEventListener('touchcancel',function(){clear();moved=false;});
+})();
 </script>
 </body>
 </html>
