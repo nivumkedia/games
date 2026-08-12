@@ -384,26 +384,27 @@
                         invincibleTime = 500;
                         break;
                     case 'coinRain':
+                        // Instantly grant the coin rain rewards, no jumping required
                         for (let i = 0; i < 15; i++) {
-                            collectibles.push({
-                                x: canvas.width + i * 40,
-                                y: GROUND_Y - 60 - Math.random() * 100,
-                                type: Math.random() < 0.3 ? 'gem' : 'coin',
-                                size: Math.random() < 0.3 ? 25 : 20,
-                                value: Math.random() < 0.3 ? 100 : 25,
-                                rotation: 0,
-                                collected: false
-                            });
-                        }
-                        break;
-                    case 'magnet':
-                        for (let col of collectibles) {
-                            if (!col.collected) {
-                                col.collected = true;
-                                score += col.value;
-                                coins++;
+                            const isGem = Math.random() < 0.3;
+                            score += isGem ? 100 : 25;
+                            coins++;
+                            for (let p = 0; p < 4; p++) {
+                                particles.push({
+                                    x: player.x + player.width / 2 + (Math.random() - 0.5) * 60,
+                                    y: player.y - Math.random() * 80,
+                                    vx: (Math.random() - 0.5) * 6,
+                                    vy: -Math.random() * 6 - 2,
+                                    life: 25,
+                                    color: isGem ? '#E040FB' : '#FFD700'
+                                });
                             }
                         }
+                        playSound('coin');
+                        break;
+                    case 'magnet':
+                        hasMagnet = true;
+                        magnetTime = 500;
                         break;
                 }
                 playSound('powerup');
@@ -475,10 +476,13 @@
         let slowmoTime = 0;
         let hasInvincible = false;
         let invincibleTime = 0;
+        let hasMagnet = false;
+        let magnetTime = 0;
 
         // Level system
         let currentLevel = 1;
         let portalSpawned = false;
+        let portalMissTimer = 0;
         let levelTransition = false;
         let transitionTimer = 0;
 
@@ -1143,9 +1147,12 @@
             slowmoTime = 0;
             hasInvincible = false;
             invincibleTime = 0;
+            hasMagnet = false;
+            magnetTime = 0;
             currentPlatform = null;
             currentLevel = 1;
             portalSpawned = false;
+            portalMissTimer = 0;
             levelTransition = false;
             transitionTimer = 0;
             isTutorial = false;
@@ -1322,7 +1329,7 @@
             lavaPits = [];
 
             // Bonus score and coins for entering new level
-            score += 500;
+            score += 1000;
             coins += 20;
 
             // Give player temporary invincibility
@@ -1521,6 +1528,31 @@
                     clearScreenOnPowerUpEnd();
                 }
             }
+            if (hasMagnet) {
+                magnetTime--;
+                if (magnetTime <= 0) {
+                    hasMagnet = false;
+                    clearScreenOnPowerUpEnd();
+                }
+                // Continuously pull in any coins/gems on screen
+                for (let col of collectibles) {
+                    if (!col.collected) {
+                        col.collected = true;
+                        score += col.value;
+                        coins++;
+                        for (let i = 0; i < 3; i++) {
+                            particles.push({
+                                x: col.x,
+                                y: col.y,
+                                vx: (player.x - col.x) * 0.1,
+                                vy: (player.y - col.y) * 0.1,
+                                life: 15,
+                                color: '#FFD700'
+                            });
+                        }
+                    }
+                }
+            }
             if (hasAutopilot) {
                 autopilotTime--;
                 if (autopilotTime <= 0) {
@@ -1579,6 +1611,24 @@
                             jumpPower = JUMP_VELOCITY * 1.15;
                         }
                     }
+                    // Guarantee collection — autopilot never misses a coin/gem
+                    if (!col.collected && dist < 70 && dist > -30) {
+                        col.collected = true;
+                        score += col.value;
+                        coins++;
+                        playSound(col.type);
+                        onTutorialAction('coin');
+                        for (let i = 0; i < 8; i++) {
+                            particles.push({
+                                x: col.x,
+                                y: col.y,
+                                vx: (Math.random() - 0.5) * 8,
+                                vy: (Math.random() - 0.5) * 8,
+                                life: 25,
+                                color: col.type === 'gem' ? '#E040FB' : '#FFD700'
+                            });
+                        }
+                    }
                 }
 
                 // Jump to reach platforms with coins
@@ -1604,6 +1654,12 @@
                         if (pu.y < GROUND_Y - 100) {
                             jumpPower = JUMP_VELOCITY * 1.2;
                         }
+                    }
+                    // Guarantee portal entry — autopilot never misses a portal
+                    if (pu.type === 'portal' && !pu.collected && dist < 70 && dist > -30) {
+                        pu.collected = true;
+                        playSound('portal');
+                        enterNextLevel();
                     }
                 }
 
@@ -1863,6 +1919,10 @@
 
             // Spawn portal when score reaches threshold (every 2500 points per level)
             const portalThreshold = currentLevel * 2500;
+            if (portalMissTimer > 0) {
+                portalMissTimer--;
+                if (portalMissTimer <= 0) portalSpawned = false;
+            }
             if (score >= portalThreshold && !portalSpawned && currentLevel < 5) {
                 spawnPortal();
                 portalSpawned = true;
@@ -2034,25 +2094,8 @@
                                 canDoubleJump = true;
                                 break;
                             case 'magnet':
-                                // Pull ALL coins on screen
-                                for (let col of collectibles) {
-                                    if (!col.collected) {
-                                        col.collected = true;
-                                        score += col.value;
-                                        coins++;
-                                        // Trail particles to player
-                                        for (let i = 0; i < 3; i++) {
-                                            particles.push({
-                                                x: col.x,
-                                                y: col.y,
-                                                vx: (player.x - col.x) * 0.1,
-                                                vy: (player.y - col.y) * 0.1,
-                                                life: 15,
-                                                color: '#FFD700'
-                                            });
-                                        }
-                                    }
-                                }
+                                hasMagnet = true;
+                                magnetTime = 500;
                                 break;
                             case 'slowmo':
                                 hasSlowmo = true;
@@ -2099,18 +2142,23 @@
                                 invincibleTime = 400;
                                 break;
                             case 'coinRain':
-                                // Spawn many coins
+                                // Instantly grant the coin rain rewards, no jumping required
                                 for (let i = 0; i < 15; i++) {
-                                    collectibles.push({
-                                        x: canvas.width + i * 40,
-                                        y: GROUND_Y - 60 - Math.random() * 100,
-                                        type: Math.random() < 0.3 ? 'gem' : 'coin',
-                                        size: Math.random() < 0.3 ? 25 : 20,
-                                        value: Math.random() < 0.3 ? 100 : 25,
-                                        rotation: 0,
-                                        collected: false
-                                    });
+                                    const isGem = Math.random() < 0.3;
+                                    score += isGem ? 100 : 25;
+                                    coins++;
+                                    for (let p = 0; p < 4; p++) {
+                                        particles.push({
+                                            x: player.x + player.width / 2 + (Math.random() - 0.5) * 60,
+                                            y: player.y - Math.random() * 80,
+                                            vx: (Math.random() - 0.5) * 6,
+                                            vy: -Math.random() * 6 - 2,
+                                            life: 25,
+                                            color: isGem ? '#E040FB' : '#FFD700'
+                                        });
+                                    }
                                 }
+                                playSound('coin');
                                 break;
                             case 'portal':
                                 // Enter next level!
@@ -2141,6 +2189,12 @@
                             });
                         }
                     }
+                }
+            }
+            // If the portal scrolled off-screen without being entered, queue a quick respawn
+            for (let pu of powerUps) {
+                if (pu.type === 'portal' && !pu.collected && pu.x <= -50) {
+                    portalMissTimer = 120;
                 }
             }
             powerUps = powerUps.filter(pu => pu.x > -50 && !pu.collected);
@@ -3573,6 +3627,7 @@
             if (hasSlowmo) activeList.push({ name: 'Slow-Mo', time: slowmoTime, color: '#9370DB' });
             if (hasAutopilot) activeList.push({ name: 'Autopilot', time: autopilotTime, color: '#FFD700' });
             if (hasInvincible) activeList.push({ name: 'Invincible', time: invincibleTime, color: '#FF69B4' });
+            if (hasMagnet) activeList.push({ name: 'Magnet', time: magnetTime, color: '#FF1493' });
 
             if (activeList.length > 0) {
                 const startX = canvas.width - 120;
