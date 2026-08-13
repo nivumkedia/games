@@ -108,6 +108,10 @@ canvas{display:block;width:100%;height:100%;background:#ff8fc4}
                 </div>
             </div>
             <div class="setup-row">
+                <span class="setup-label">GRAVITY</span>
+                <button id="gravityBtn" class="toggle-btn">OFF</button>
+            </div>
+            <div class="setup-row">
                 <span class="setup-label">WIN CONDITION</span>
                 <div class="pill-group" id="winCondGroup">
                     <button class="pill-btn active" data-val="firstHit">FIRST HIT</button>
@@ -211,6 +215,7 @@ const setupBackBtn = document.getElementById('setupBackBtn');
 const playBtn = document.getElementById('playBtn');
 const botsRow = document.getElementById('botsRow');
 const fullModeBtn = document.getElementById('fullModeBtn');
+const gravityBtn = document.getElementById('gravityBtn');
 const timeLimitRow = document.getElementById('timeLimitRow');
 const resultsScreen = document.getElementById('resultsScreen');
 const resultsTitle = document.getElementById('resultsTitle');
@@ -227,6 +232,8 @@ let numTrampolines = 4;
 let numBoxes = 5;
 let winCondition = 'firstHit';
 let timeLimit = 60;
+let gravityMode = false;
+let platforms = [];
 
 startBtn.addEventListener('click', () => {
     startBtn.style.display = 'none';
@@ -269,6 +276,12 @@ fullModeBtn.addEventListener('click', () => {
     fullModeBtn.classList.toggle('active', fullMode);
 });
 
+gravityBtn.addEventListener('click', () => {
+    gravityMode = !gravityMode;
+    gravityBtn.textContent = gravityMode ? 'ON' : 'OFF';
+    gravityBtn.classList.toggle('active', gravityMode);
+});
+
 playBtn.addEventListener('click', () => {
     startGame();
 });
@@ -306,7 +319,7 @@ window.addEventListener('keyup', e => {
 
 function getP1Input() {
     if (numPlayers === 2) {
-        // 2P mode: Player 1 is the arrow-key side, fire on Right Shift
+        // 2P mode: Player 1 is the arrow-key side, fire on Right Shift, Up jumps
         return {
             up: keys['arrowup'],
             down: keys['arrowdown'],
@@ -315,7 +328,7 @@ function getP1Input() {
             fire: keys['ShiftRight']
         };
     }
-    // 1P mode: either key set works, either Shift fires
+    // 1P mode: either key set works, either Shift fires, Up/W jumps
     return {
         up: keys['arrowup'] || keys['w'],
         down: keys['arrowdown'] || keys['s'],
@@ -325,7 +338,7 @@ function getP1Input() {
     };
 }
 function getP2Input() {
-    // 2P mode: Player 2 is the WASD side, fire on Left Shift
+    // 2P mode: Player 2 is the WASD side, fire on Left Shift, W jumps
     return {
         up: keys['w'],
         down: keys['s'],
@@ -366,12 +379,57 @@ function makePlayer(emoji, color, name) {
         x: W / 2, y: H / 2, angle: 0, speed: 260, size: 46,
         emoji, color, name, fireTimer: 0,
         sliced: false, sliceTimer: 0, sliceMaxTimer: 0.9,
+        vy: 0, grounded: false,
         boostTimer: 0, hits: 0, timesHit: 0
     };
 }
 
 let gameOver = false;
 let matchTimer = 0;
+
+function generatePlatforms() {
+    platforms = [];
+    const count = 11, minW = 130, maxW = 210, minH = 26, maxH = 42, gap = 34;
+    let attempts = 0;
+    while (platforms.length < count && attempts < count * 60) {
+        attempts++;
+        const w = minW + Math.random() * (maxW - minW);
+        const h = minH + Math.random() * (maxH - minH);
+        const x = 20 + Math.random() * Math.max(1, W - w - 40);
+        const y = 20 + Math.random() * Math.max(1, H - h - 40);
+        const overlaps = platforms.some(pl =>
+            x < pl.x + pl.w + gap && x + w + gap > pl.x &&
+            y < pl.y + pl.h + gap && y + h + gap > pl.y
+        );
+        if (!overlaps) platforms.push({ x, y, w, h, mossSeed: Math.random() * 1000 });
+    }
+    if (!platforms.length) {
+        platforms.push({ x: W * 0.1, y: H * 0.1, w: W * 0.8, h: H * 0.8, mossSeed: 0 });
+    }
+}
+
+function randomPlatform() {
+    return platforms[Math.floor(Math.random() * platforms.length)];
+}
+
+// Picks a random x on top of a platform's surface (pl.y), keeping an item of
+// half-width margin fully within the platform's span.
+function platformTopPoint(pl, margin) {
+    const mw = Math.min(margin, pl.w / 2 - 1);
+    return {
+        x: pl.x + mw + Math.random() * Math.max(1, pl.w - mw * 2),
+        y: pl.y
+    };
+}
+
+function spawnOnPlatformTop(entity) {
+    if (!platforms.length) return;
+    const pt = platformTopPoint(randomPlatform(), entity.size / 2 + 4);
+    entity.x = pt.x;
+    entity.y = pt.y - entity.size / 2;
+    entity.vy = 0;
+    entity.grounded = true;
+}
 
 function initGame() {
     lasers = [];
@@ -382,6 +440,9 @@ function initGame() {
     matchTimer = timeLimit;
     resultsScreen.style.display = 'none';
     matchTimerHud.style.display = winCondition === 'points' ? 'block' : 'none';
+
+    platforms = [];
+    if (gravityMode) generatePlatforms();
 
     player1 = makePlayer('🌮', '#ffb703', numPlayers === 2 ? 'P1' : 'YOU');
     player1.x = W * 0.3; player1.y = H * 0.5;
@@ -403,23 +464,34 @@ function initGame() {
         }
     }
 
+    if (gravityMode && platforms.length) getAllEntities().forEach(spawnOnPlatformTop);
+
     trampolines = [];
     for (let i = 0; i < numTrampolines; i++) {
-        trampolines.push({
-            x: W * (0.15 + Math.random() * 0.7),
-            y: H * (0.15 + Math.random() * 0.7),
-            r: 18
-        });
+        const r = 18;
+        let tx, ty;
+        if (gravityMode && platforms.length) {
+            const pt = platformTopPoint(randomPlatform(), r);
+            tx = pt.x; ty = pt.y - r;
+        } else {
+            tx = W * (0.15 + Math.random() * 0.7);
+            ty = H * (0.15 + Math.random() * 0.7);
+        }
+        trampolines.push({ x: tx, y: ty, r });
     }
 
     boxes = [];
     for (let i = 0; i < numBoxes; i++) {
         const bw = 60, bh = 60;
-        boxes.push({
-            x: W * (0.1 + Math.random() * 0.75) - bw / 2,
-            y: H * (0.1 + Math.random() * 0.75) - bh / 2,
-            w: bw, h: bh
-        });
+        let bx, by;
+        if (gravityMode && platforms.length) {
+            const pt = platformTopPoint(randomPlatform(), bw / 2 + 10);
+            bx = pt.x - bw / 2; by = pt.y - bh;
+        } else {
+            bx = W * (0.1 + Math.random() * 0.75) - bw / 2;
+            by = H * (0.1 + Math.random() * 0.75) - bh / 2;
+        }
+        boxes.push({ x: bx, y: by, w: bw, h: bh });
     }
 }
 
@@ -440,9 +512,11 @@ function findNearestTarget(entity, all) {
     return best;
 }
 
-function updatePlayerMovement(p, input, dt, target) {
-    if (p.sliced) return;
+const GRAVITY_ACCEL = 1800;
+const JUMP_VELOCITY = -1100;
+const TRAMPOLINE_BOUNCE = -980;
 
+function updateFreeMovement(p, input, dt) {
     for (const t of trampolines) {
         if (Math.hypot(p.x - t.x, p.y - t.y) < t.r + p.size / 2) {
             if (p.boostTimer <= 0) spawnSparks(p.x, p.y, '#7CFC00', 16);
@@ -466,6 +540,71 @@ function updatePlayerMovement(p, input, dt, target) {
     }
     p.x = Math.max(p.size / 2, Math.min(W - p.size / 2, p.x));
     p.y = Math.max(p.size / 2, Math.min(H - p.size / 2, p.y));
+}
+
+// Side-view platformer physics: horizontal movement only, constant downward
+// gravity, and landing collision against the top surface of each platform.
+function updateGravityMovement(p, input, dt) {
+    const footY = p.y + p.size / 2;
+    for (const t of trampolines) {
+        if (p.vy >= 0 && Math.hypot(p.x - t.x, footY - t.y) < t.r + p.size / 2) {
+            spawnSparks(p.x, footY, '#7CFC00', 16);
+            p.vy = TRAMPOLINE_BOUNCE;
+            p.grounded = false;
+        }
+    }
+
+    let dx = 0;
+    if (input.left) dx -= 1;
+    if (input.right) dx += 1;
+    if (dx !== 0) {
+        p.x += dx * p.speed * dt;
+        p.angle = dx > 0 ? 0 : Math.PI;
+    }
+    p.x = Math.max(p.size / 2, Math.min(W - p.size / 2, p.x));
+
+    if (input.up && p.grounded) {
+        p.vy = JUMP_VELOCITY;
+        p.grounded = false;
+        spawnSparks(p.x, p.y + p.size / 2, '#ffffff', 10);
+    }
+
+    const prevBottom = p.y + p.size / 2;
+    p.vy += GRAVITY_ACCEL * dt;
+    p.y += p.vy * dt;
+    const newBottom = p.y + p.size / 2;
+
+    p.grounded = false;
+    if (p.vy >= 0) {
+        for (const pl of platforms) {
+            if (p.x > pl.x - 2 && p.x < pl.x + pl.w + 2 && prevBottom <= pl.y + 1 && newBottom >= pl.y) {
+                p.y = pl.y - p.size / 2;
+                p.vy = 0;
+                p.grounded = true;
+                break;
+            }
+        }
+    }
+
+    if (p.y - p.size / 2 < 0) {
+        p.y = p.size / 2;
+        p.vy = Math.max(p.vy, 0);
+    }
+
+    if (p.y - p.size / 2 > H) {
+        p.timesHit++;
+        spawnOnPlatformTop(p);
+    }
+}
+
+function updatePlayerMovement(p, input, dt, target) {
+    if (p.sliced) return;
+
+    if (gravityMode) {
+        updateGravityMovement(p, input, dt);
+    } else {
+        updateFreeMovement(p, input, dt);
+    }
 
     for (const bx of boxes) {
         const closestX = Math.max(bx.x, Math.min(p.x, bx.x + bx.w));
@@ -583,6 +722,98 @@ function drawTrampolines() {
             ctx.lineTo(Math.cos(a) * t.r, Math.sin(a) * t.r);
             ctx.stroke();
         }
+        ctx.restore();
+    }
+}
+
+function drawPitBackground() {
+    ctx.fillStyle = '#2b1b3a';
+    ctx.fillRect(0, 0, W, H);
+}
+
+function drawPlatforms() {
+    for (const plat of platforms) {
+        ctx.save();
+
+        // Elliptical shadow underneath
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+        ctx.beginPath();
+        ctx.ellipse(plat.x + plat.w / 2, plat.y + plat.h + 5, plat.w / 2, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        let gradient = ctx.createLinearGradient(plat.x, plat.y, plat.x, plat.y + plat.h);
+        gradient.addColorStop(0, '#9B6B43');
+        gradient.addColorStop(0.5, '#8B5B33');
+        gradient.addColorStop(1, '#6B4523');
+
+        ctx.fillStyle = gradient;
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+        ctx.shadowBlur = 4;
+        ctx.beginPath();
+        ctx.roundRect(plat.x, plat.y, plat.w, plat.h, 4);
+        ctx.fill();
+        // Sharp border
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Wood plank lines
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+        ctx.lineWidth = 1;
+        for (let i = 25; i < plat.w; i += 25) {
+            ctx.beginPath();
+            ctx.moveTo(plat.x + i, plat.y);
+            ctx.lineTo(plat.x + i, plat.y + plat.h);
+            ctx.stroke();
+        }
+        // Horizontal wood grain
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
+        for (let y = 3; y < plat.h; y += 4) {
+            ctx.beginPath();
+            ctx.moveTo(plat.x, plat.y + y);
+            ctx.lineTo(plat.x + plat.w, plat.y + y);
+            ctx.stroke();
+        }
+
+        // Top highlight
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.fillRect(plat.x + 2, plat.y, plat.w - 4, 3);
+
+        // Grass/moss on top
+        ctx.fillStyle = '#228B22';
+        ctx.fillRect(plat.x, plat.y - 3, plat.w, 5);
+        // Grass tufts
+        ctx.strokeStyle = '#32AB32';
+        ctx.lineWidth = 1.5;
+        for (let i = 5; i < plat.w - 5; i += 12) {
+            const sway = Math.sin(Date.now() / 400 + i * 0.5) * 2;
+            ctx.beginPath();
+            ctx.moveTo(plat.x + i, plat.y - 3);
+            ctx.lineTo(plat.x + i + sway, plat.y - 10 - Math.random() * 3);
+            ctx.stroke();
+        }
+        // Hanging moss on edges
+        ctx.strokeStyle = 'rgba(34, 139, 34, 0.4)';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 3; i++) {
+            const vx = plat.x + 5 + i * 8;
+            const vh = 5 + Math.sin(Date.now() / 600 + i) * 2;
+            ctx.beginPath();
+            ctx.moveTo(vx, plat.y + plat.h);
+            ctx.quadraticCurveTo(vx - 2, plat.y + plat.h + vh, vx + 3, plat.y + plat.h + vh + 3);
+            ctx.stroke();
+        }
+        for (let i = 0; i < 2; i++) {
+            const vx = plat.x + plat.w - 5 - i * 8;
+            const vh = 4 + Math.sin(Date.now() / 500 + i + 2) * 2;
+            ctx.beginPath();
+            ctx.moveTo(vx, plat.y + plat.h);
+            ctx.quadraticCurveTo(vx + 2, plat.y + plat.h + vh, vx - 3, plat.y + plat.h + vh + 2);
+            ctx.stroke();
+        }
+
+        ctx.shadowBlur = 0;
         ctx.restore();
     }
 }
@@ -706,8 +937,12 @@ function updateSliced(p, dt) {
     p.sliceTimer -= dt;
     if (p.sliceTimer <= 0) {
         p.sliced = false;
-        p.x = p.size + Math.random() * (W - p.size * 2);
-        p.y = p.size + Math.random() * (H - p.size * 2);
+        if (gravityMode && platforms.length) {
+            spawnOnPlatformTop(p);
+        } else {
+            p.x = p.size + Math.random() * (W - p.size * 2);
+            p.y = p.size + Math.random() * (H - p.size * 2);
+        }
     }
 }
 
@@ -826,8 +1061,13 @@ function gameLoop(time) {
     updateShockwaves(dt);
 
     ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = '#ff8fc4';
-    ctx.fillRect(0, 0, W, H);
+    if (gravityMode) {
+        drawPitBackground();
+        drawPlatforms();
+    } else {
+        ctx.fillStyle = '#ff8fc4';
+        ctx.fillRect(0, 0, W, H);
+    }
     drawTrampolines();
     drawBoxes();
 
