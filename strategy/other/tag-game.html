@@ -377,9 +377,11 @@ const BOT_COLORS = ['#ff6b9d', '#c084fc', '#4dd0e1', '#ffb74d', '#81c784'];
 function makePlayer(emoji, color, name) {
     return {
         x: W / 2, y: H / 2, angle: 0, speed: 260, size: 46,
-        emoji, color, name, fireTimer: 0,
+        emoji, color, name,
+        timeSinceFire: 0, burstQueue: 0, burstTimer: 0,
         sliced: false, sliceTimer: 0, sliceMaxTimer: 0.9,
         vy: 0, grounded: false,
+        it: false, tagImmune: 0,
         boostTimer: 0, hits: 0, timesHit: 0
     };
 }
@@ -406,6 +408,9 @@ function generatePlatforms() {
     if (!platforms.length) {
         platforms.push({ x: W * 0.1, y: H * 0.1, w: W * 0.8, h: H * 0.8, mossSeed: 0 });
     }
+
+    // Ground platform spans the full width so players can never fall off the bottom
+    platforms.push({ x: -20, y: H - 36, w: W + 40, h: 60, mossSeed: 0 });
 }
 
 function randomPlatform() {
@@ -465,6 +470,12 @@ function initGame() {
     }
 
     if (gravityMode && platforms.length) getAllEntities().forEach(spawnOnPlatformTop);
+
+    if (gameType === 'regular') {
+        // P2 (or the first bot in 1P mode) starts as "it" and must touch someone else to pass it on
+        const all = getAllEntities();
+        if (all[1]) all[1].it = true;
+    }
 
     trampolines = [];
     for (let i = 0; i < numTrampolines; i++) {
@@ -597,6 +608,19 @@ function updateGravityMovement(p, input, dt) {
     }
 }
 
+function fireLaser(p, target) {
+    const aimAngle = Math.atan2(target.y - p.y, target.x - p.x);
+    const sx = p.x + Math.cos(aimAngle) * p.size / 2;
+    const sy = p.y + Math.sin(aimAngle) * p.size / 2;
+    lasers.push({
+        x: sx, y: sy,
+        vx: Math.cos(aimAngle) * 700,
+        vy: Math.sin(aimAngle) * 700,
+        owner: p, color: p.color, life: 1.2, trail: []
+    });
+    spawnSparks(sx, sy, p.color, 14);
+}
+
 function updatePlayerMovement(p, input, dt, target) {
     if (p.sliced) return;
 
@@ -620,19 +644,22 @@ function updatePlayerMovement(p, input, dt, target) {
         }
     }
 
-    p.fireTimer -= dt;
-    if (input.fire && p.fireTimer <= 0 && gameType === 'laser' && target) {
-        const aimAngle = Math.atan2(target.y - p.y, target.x - p.x);
-        const sx = p.x + Math.cos(aimAngle) * p.size / 2;
-        const sy = p.y + Math.sin(aimAngle) * p.size / 2;
-        lasers.push({
-            x: sx, y: sy,
-            vx: Math.cos(aimAngle) * 700,
-            vy: Math.sin(aimAngle) * 700,
-            owner: p, color: p.color, life: 1.2, trail: []
-        });
-        spawnSparks(sx, sy, p.color, 14);
-        p.fireTimer = 1;
+    // The longer you hold off firing, the bigger the rapid-fire burst you unleash:
+    // wait 2s -> 2 shots with no cooldown between them, wait 3s -> 3 shots, etc.
+    p.timeSinceFire += dt;
+    if (p.burstQueue > 0) {
+        p.burstTimer -= dt;
+        if (p.burstTimer <= 0) {
+            if (gameType === 'laser' && target) fireLaser(p, target);
+            p.burstQueue--;
+            p.burstTimer = 0.08;
+        }
+    } else if (input.fire && p.timeSinceFire >= 1 && gameType === 'laser' && target) {
+        const shots = Math.max(1, Math.floor(p.timeSinceFire));
+        fireLaser(p, target);
+        p.burstQueue = shots - 1;
+        p.burstTimer = 0.08;
+        p.timeSinceFire = 0;
     }
 }
 
@@ -724,11 +751,6 @@ function drawTrampolines() {
         }
         ctx.restore();
     }
-}
-
-function drawPitBackground() {
-    ctx.fillStyle = '#2b1b3a';
-    ctx.fillRect(0, 0, W, H);
 }
 
 function drawPlatforms() {
@@ -841,6 +863,32 @@ function drawBoxes() {
     }
 }
 
+function updateTagging(dt) {
+    if (gameType !== 'regular') return;
+    const all = getAllEntities();
+    for (const e of all) {
+        if (e.tagImmune > 0) e.tagImmune -= dt;
+    }
+    const itEntity = all.find(e => e.it && !e.sliced);
+    if (!itEntity) return;
+    for (const e of all) {
+        if (e === itEntity || e.sliced) continue;
+        if (e.tagImmune > 0 || itEntity.tagImmune > 0) continue;
+        const touchDist = (e.size + itEntity.size) / 2;
+        if (Math.hypot(e.x - itEntity.x, e.y - itEntity.y) < touchDist) {
+            itEntity.it = false;
+            itEntity.hits++;
+            itEntity.tagImmune = 1.5;
+            e.it = true;
+            e.timesHit++;
+            e.tagImmune = 1.5;
+            spawnExplosion(e.x, e.y, e.color);
+            if (winCondition === 'firstHit' && !gameOver) endGame();
+            break;
+        }
+    }
+}
+
 function updateLasers(dt) {
     const all = getAllEntities();
     for (let i = lasers.length - 1; i >= 0; i--) {
@@ -897,6 +945,21 @@ function drawPlayer(p) {
     if (p.sliced) { drawSlicedPlayer(p); return; }
     ctx.save();
     ctx.translate(p.x, p.y);
+    if (gameType === 'regular' && p.it) {
+        const pulse = Math.sin(Date.now() / 150) * 3;
+        ctx.strokeStyle = '#ff2d55';
+        ctx.lineWidth = 4;
+        ctx.shadowColor = '#ff2d55';
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.arc(0, 0, p.size / 2 + 12 + pulse, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#ff2d55';
+        ctx.font = 'bold 16px Trebuchet MS, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('IT', 0, -p.size / 2 - 18);
+    }
     ctx.font = p.size + 'px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -1056,18 +1119,15 @@ function gameLoop(time) {
     if (player2) updateSliced(player2, dt);
     for (const b of bots) updateSliced(b, dt);
 
+    updateTagging(dt);
     updateLasers(dt);
     updateParticles(dt);
     updateShockwaves(dt);
 
     ctx.clearRect(0, 0, W, H);
-    if (gravityMode) {
-        drawPitBackground();
-        drawPlatforms();
-    } else {
-        ctx.fillStyle = '#ff8fc4';
-        ctx.fillRect(0, 0, W, H);
-    }
+    ctx.fillStyle = '#ff8fc4';
+    ctx.fillRect(0, 0, W, H);
+    if (gravityMode) drawPlatforms();
     drawTrampolines();
     drawBoxes();
 
