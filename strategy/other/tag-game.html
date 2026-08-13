@@ -8,7 +8,7 @@
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#241b3a;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:'Trebuchet MS','Segoe UI',sans-serif;overflow:hidden;color:#fff}
 #gameContainer{position:relative;width:100vw;height:100vh;overflow:hidden}
-canvas{display:block;width:100%;height:100%;background:#ffd873}
+canvas{display:block;width:100%;height:100%;background:#ff8fc4}
 .screen-overlay{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;background:linear-gradient(160deg,#ff9a56 0%,#ff6b9d 45%,#a855f7 100%)}
 #homeScreen{gap:28px}
 .tag-title{font-size:120px;font-weight:900;letter-spacing:4px;color:#fff;-webkit-text-stroke:5px #ff3d7f;text-shadow:0 10px 0 #d6216b,0 16px 24px rgba(0,0,0,0.35);animation:bounceTitle 2.2s ease-in-out infinite;transform:rotate(-3deg)}
@@ -19,6 +19,11 @@ canvas{display:block;width:100%;height:100%;background:#ffd873}
 .btn:active{transform:translateY(4px);box-shadow:0 4px 0 #d19a00}
 .btn-small{padding:10px 30px;font-size:13px;}
 #modeSelect{display:none;flex-direction:column;align-items:center;gap:22px}
+#typeSelect{display:none;flex-direction:column;align-items:center;gap:22px}
+.type-btn{font-size:28px;line-height:1.6;padding:20px 36px}
+.toggle-btn{padding:12px 30px;font-size:13px;font-family:'Trebuchet MS',sans-serif;background:rgba(255,255,255,0.15);color:#fff;border:2px solid rgba(255,255,255,0.4);border-radius:30px;cursor:pointer;letter-spacing:2px;font-weight:bold;transition:all 0.2s ease}
+.toggle-btn:hover{background:rgba(255,255,255,0.25)}
+.toggle-btn.active{background:#44dd88;border-color:#44dd88;color:#08351d;box-shadow:0 0 20px rgba(68,221,136,0.5)}
 #modeSelect h2{font-size:16px;letter-spacing:4px;color:#fff;font-weight:bold;background:rgba(0,0,0,0.18);padding:5px 16px;border-radius:16px}
 .mode-row{display:flex;gap:18px}
 .mode-btn{padding:22px 34px;font-size:15px;font-family:'Trebuchet MS',sans-serif;background:#fff;color:#7a3d00;border:none;border-radius:20px;cursor:pointer;letter-spacing:2px;transition:all 0.2s ease;min-width:150px;font-weight:bold;box-shadow:0 6px 0 rgba(0,0,0,0.2)}
@@ -57,6 +62,16 @@ canvas{display:block;width:100%;height:100%;background:#ffd873}
             <button class="mode-btn" id="mode2P"><span class="n">2</span>PLAYERS</button>
         </div>
         <button id="backBtn">&larr; BACK</button>
+    </div>
+
+    <div id="typeSelect">
+        <h2>SELECT GAME TYPE</h2>
+        <div class="mode-row">
+            <button class="mode-btn type-btn" id="typeLaser">&#128293;<br>LASER TAG</button>
+            <button class="mode-btn type-btn" id="typeRegular">&#127939;<br>REGULAR TAG</button>
+        </div>
+        <button id="fullModeBtn" class="toggle-btn">FULL MODE: OFF</button>
+        <button id="backBtn2">&larr; BACK</button>
     </div>
 </div>
 
@@ -130,8 +145,15 @@ const modeSelect = document.getElementById('modeSelect');
 const mode1PBtn = document.getElementById('mode1P');
 const mode2PBtn = document.getElementById('mode2P');
 const backBtn = document.getElementById('backBtn');
+const typeSelect = document.getElementById('typeSelect');
+const typeLaserBtn = document.getElementById('typeLaser');
+const typeRegularBtn = document.getElementById('typeRegular');
+const fullModeBtn = document.getElementById('fullModeBtn');
+const backBtn2 = document.getElementById('backBtn2');
 
 let numPlayers = 1;
+let gameType = null;
+let fullMode = false;
 
 startBtn.addEventListener('click', () => {
     startBtn.style.display = 'none';
@@ -145,17 +167,349 @@ backBtn.addEventListener('click', () => {
 
 mode1PBtn.addEventListener('click', () => {
     numPlayers = 1;
-    startGame();
+    modeSelect.style.display = 'none';
+    typeSelect.style.display = 'flex';
 });
 
 mode2PBtn.addEventListener('click', () => {
     numPlayers = 2;
+    modeSelect.style.display = 'none';
+    typeSelect.style.display = 'flex';
+});
+
+backBtn2.addEventListener('click', () => {
+    typeSelect.style.display = 'none';
+    modeSelect.style.display = 'flex';
+});
+
+fullModeBtn.addEventListener('click', () => {
+    fullMode = !fullMode;
+    fullModeBtn.textContent = 'FULL MODE: ' + (fullMode ? 'ON' : 'OFF');
+    fullModeBtn.classList.toggle('active', fullMode);
+});
+
+typeLaserBtn.addEventListener('click', () => {
+    gameType = 'laser';
+    startGame();
+});
+
+typeRegularBtn.addEventListener('click', () => {
+    gameType = 'regular';
     startGame();
 });
 
 function startGame() {
     homeScreen.style.display = 'none';
-    // Gameplay to be built next
+    initGame();
+    requestAnimationFrame(gameLoop);
+}
+
+// ---- Input ----
+const keys = {};
+window.addEventListener('keydown', e => {
+    keys[e.key.toLowerCase()] = true;
+    keys[e.code] = true;
+});
+window.addEventListener('keyup', e => {
+    keys[e.key.toLowerCase()] = false;
+    keys[e.code] = false;
+});
+
+function getP1Input() {
+    if (numPlayers === 2) {
+        // 2P mode: Player 1 is the arrow-key side, fire on Right Shift
+        return {
+            up: keys['arrowup'],
+            down: keys['arrowdown'],
+            left: keys['arrowleft'],
+            right: keys['arrowright'],
+            fire: keys['ShiftRight']
+        };
+    }
+    // 1P mode: either key set works, either Shift fires
+    return {
+        up: keys['arrowup'] || keys['w'],
+        down: keys['arrowdown'] || keys['s'],
+        left: keys['arrowleft'] || keys['a'],
+        right: keys['arrowright'] || keys['d'],
+        fire: keys['ShiftLeft'] || keys['ShiftRight']
+    };
+}
+function getP2Input() {
+    // 2P mode: Player 2 is the WASD side, fire on Left Shift
+    return {
+        up: keys['w'],
+        down: keys['s'],
+        left: keys['a'],
+        right: keys['d'],
+        fire: keys['ShiftLeft']
+    };
+}
+function getBotInput(bot, dt) {
+    // AI: wander in a random direction, changing every so often, and always try to fire
+    bot.aiTimer = (bot.aiTimer || 0) - dt;
+    if (bot.aiTimer <= 0) {
+        bot.aiDir = {
+            up: Math.random() < 0.5,
+            down: Math.random() < 0.5,
+            left: Math.random() < 0.5,
+            right: Math.random() < 0.5
+        };
+        bot.aiTimer = 0.6 + Math.random() * 1.2;
+    }
+    return {
+        up: bot.aiDir.up,
+        down: bot.aiDir.down,
+        left: bot.aiDir.left,
+        right: bot.aiDir.right,
+        fire: true
+    };
+}
+
+// ---- Game entities ----
+let player1, player2, bot, lasers, gameTick;
+
+function makePlayer(emoji, color) {
+    return {
+        x: W / 2, y: H / 2, angle: 0, speed: 260, size: 46,
+        emoji, color, fireTimer: 0
+    };
+}
+
+function initGame() {
+    lasers = [];
+    particles = [];
+    shockwaves = [];
+    gameTick = 0;
+    player1 = makePlayer('🌮', '#ffb703');
+    player1.x = W * 0.3; player1.y = H * 0.5;
+
+    if (numPlayers === 2) {
+        player2 = makePlayer('🌯', '#ff6b9d');
+        player2.x = W * 0.7; player2.y = H * 0.5;
+        bot = null;
+    } else {
+        player2 = null;
+        bot = makePlayer('🌯', '#ff6b9d');
+        bot.x = W * 0.7; bot.y = H * 0.5;
+    }
+}
+
+function updatePlayerMovement(p, input, dt, target) {
+    let dx = 0, dy = 0;
+    if (input.up) dy -= 1;
+    if (input.down) dy += 1;
+    if (input.left) dx -= 1;
+    if (input.right) dx += 1;
+    if (dx !== 0 || dy !== 0) {
+        const len = Math.hypot(dx, dy);
+        dx /= len; dy /= len;
+        p.x += dx * p.speed * dt;
+        p.y += dy * p.speed * dt;
+        p.angle = Math.atan2(dy, dx);
+    }
+    p.x = Math.max(p.size / 2, Math.min(W - p.size / 2, p.x));
+    p.y = Math.max(p.size / 2, Math.min(H - p.size / 2, p.y));
+
+    p.fireTimer -= dt;
+    if (input.fire && p.fireTimer <= 0 && gameType === 'laser' && target) {
+        const aimAngle = Math.atan2(target.y - p.y, target.x - p.x);
+        const sx = p.x + Math.cos(aimAngle) * p.size / 2;
+        const sy = p.y + Math.sin(aimAngle) * p.size / 2;
+        lasers.push({
+            x: sx, y: sy,
+            vx: Math.cos(aimAngle) * 700,
+            vy: Math.sin(aimAngle) * 700,
+            owner: p, color: p.color, life: 1.2, trail: []
+        });
+        spawnSparks(sx, sy, p.color, 14);
+        p.fireTimer = 1;
+    }
+}
+
+let particles = [];
+function spawnSparks(x, y, color, count) {
+    for (let i = 0; i < count; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const spd = 60 + Math.random() * 160;
+        const life = 0.25 + Math.random() * 0.25;
+        particles.push({ x, y, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, life, maxLife: life, color, size: 1.5 + Math.random() * 2.5 });
+    }
+}
+function updateParticles(dt) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        p.vx *= 0.9; p.vy *= 0.9;
+        p.life -= dt;
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+}
+function drawParticles() {
+    for (const p of particles) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+let shockwaves = [];
+function spawnExplosion(x, y, color) {
+    spawnSparks(x, y, color, 30);
+    spawnSparks(x, y, '#ffffff', 12);
+    shockwaves.push({ x, y, r: 4, maxR: 60, life: 0.4, maxLife: 0.4, color });
+}
+function updateShockwaves(dt) {
+    for (let i = shockwaves.length - 1; i >= 0; i--) {
+        const s = shockwaves[i];
+        s.life -= dt;
+        s.r = s.maxR * (1 - s.life / s.maxLife);
+        if (s.life <= 0) shockwaves.splice(i, 1);
+    }
+}
+function drawShockwaves() {
+    for (const s of shockwaves) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, s.life / s.maxLife) * 0.8;
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = 4;
+        ctx.shadowColor = s.color;
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+    }
+}
+
+function updateLasers(dt) {
+    for (let i = lasers.length - 1; i >= 0; i--) {
+        const l = lasers[i];
+        l.trail.push({ x: l.x, y: l.y });
+        if (l.trail.length > 8) l.trail.shift();
+        l.x += l.vx * dt; l.y += l.vy * dt; l.life -= dt;
+        if (Math.random() < 0.6) spawnSparks(l.x, l.y, l.color, 1);
+
+        const target = l.owner === player1 ? (player2 || bot) : player1;
+        if (target && Math.hypot(l.x - target.x, l.y - target.y) < target.size / 2) {
+            spawnExplosion(l.x, l.y, l.color);
+            lasers.splice(i, 1);
+            continue;
+        }
+
+        if (l.life <= 0 || l.x < 0 || l.x > W || l.y < 0 || l.y > H) lasers.splice(i, 1);
+    }
+}
+
+function drawPlayer(p) {
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.font = p.size + 'px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 20;
+    ctx.fillText(p.emoji, 0, 0);
+    ctx.restore();
+}
+
+function drawLasers() {
+    for (const l of lasers) {
+        ctx.save();
+
+        // Fading trail behind the bolt
+        if (l.trail.length > 1) {
+            for (let i = 1; i < l.trail.length; i++) {
+                const a = l.trail[i - 1], b = l.trail[i];
+                const t = i / l.trail.length;
+                ctx.globalAlpha = t * 0.5;
+                ctx.strokeStyle = l.color;
+                ctx.lineWidth = 6 * t;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(a.x, a.y);
+                ctx.lineTo(b.x, b.y);
+                ctx.stroke();
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        const tailX = l.x - l.vx * 0.045, tailY = l.y - l.vy * 0.045;
+
+        // Outer soft glow
+        ctx.strokeStyle = l.color;
+        ctx.lineWidth = 14;
+        ctx.lineCap = 'round';
+        ctx.globalAlpha = 0.25;
+        ctx.shadowColor = l.color;
+        ctx.shadowBlur = 25;
+        ctx.beginPath();
+        ctx.moveTo(l.x, l.y);
+        ctx.lineTo(tailX, tailY);
+        ctx.stroke();
+
+        // Mid colored bolt
+        ctx.globalAlpha = 0.9;
+        ctx.lineWidth = 6;
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.moveTo(l.x, l.y);
+        ctx.lineTo(tailX, tailY);
+        ctx.stroke();
+
+        // White-hot core
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2.5;
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.moveTo(l.x, l.y);
+        ctx.lineTo(tailX, tailY);
+        ctx.stroke();
+
+        // Bright tip flare
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowBlur = 20;
+        ctx.beginPath();
+        ctx.arc(l.x, l.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+    }
+}
+
+let lastGameTime = 0;
+function gameLoop(time) {
+    const dt = Math.min((time - lastGameTime) / 1000, 0.05) || 0;
+    lastGameTime = time;
+    gameTick++;
+
+    updatePlayerMovement(player1, getP1Input(), dt, player2 || bot);
+    if (player2) updatePlayerMovement(player2, getP2Input(), dt, player1);
+    if (bot) updatePlayerMovement(bot, getBotInput(bot, dt), dt, player1);
+    updateLasers(dt);
+    updateParticles(dt);
+    updateShockwaves(dt);
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#ff8fc4';
+    ctx.fillRect(0, 0, W, H);
+
+    drawPlayer(player1);
+    if (player2) drawPlayer(player2);
+    if (bot) drawPlayer(bot);
+    drawLasers();
+    drawParticles();
+    drawShockwaves();
+
+    requestAnimationFrame(gameLoop);
 }
 </script>
 </body>
