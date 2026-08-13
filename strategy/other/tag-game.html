@@ -111,7 +111,7 @@ canvas{display:block;width:100%;height:100%;background:#ff8fc4}
                 <span class="setup-label">GRAVITY</span>
                 <button id="gravityBtn" class="toggle-btn">OFF</button>
             </div>
-            <div class="setup-row">
+            <div class="setup-row" id="winCondRow">
                 <span class="setup-label">WIN CONDITION</span>
                 <div class="pill-group" id="winCondGroup">
                     <button class="pill-btn active" data-val="firstHit">FIRST HIT</button>
@@ -126,10 +126,6 @@ canvas{display:block;width:100%;height:100%;background:#ff8fc4}
                     <button class="pill-btn" data-val="90">90s</button>
                     <button class="pill-btn" data-val="120">120s</button>
                 </div>
-            </div>
-            <div class="setup-row">
-                <span class="setup-label">FULL MODE</span>
-                <button id="fullModeBtn" class="toggle-btn">OFF</button>
             </div>
         </div>
         <button class="btn" id="playBtn">PLAY</button>
@@ -214,8 +210,8 @@ const setupScreen = document.getElementById('setupScreen');
 const setupBackBtn = document.getElementById('setupBackBtn');
 const playBtn = document.getElementById('playBtn');
 const botsRow = document.getElementById('botsRow');
-const fullModeBtn = document.getElementById('fullModeBtn');
 const gravityBtn = document.getElementById('gravityBtn');
+const winCondRow = document.getElementById('winCondRow');
 const timeLimitRow = document.getElementById('timeLimitRow');
 const resultsScreen = document.getElementById('resultsScreen');
 const resultsTitle = document.getElementById('resultsTitle');
@@ -227,7 +223,6 @@ const matchTimerHud = document.getElementById('matchTimerHud');
 let numPlayers = 1;
 let numBots = 1;
 let gameType = 'laser';
-let fullMode = false;
 let numTrampolines = 4;
 let numBoxes = 5;
 let winCondition = 'firstHit';
@@ -261,20 +256,18 @@ wirePillGroup('playersGroup', val => {
     botsRow.style.display = numPlayers === 1 ? 'flex' : 'none';
 });
 wirePillGroup('botsGroup', val => { numBots = parseInt(val, 10); });
-wirePillGroup('typeGroup', val => { gameType = val; });
+wirePillGroup('typeGroup', val => {
+    gameType = val;
+    winCondRow.style.display = val === 'regular' ? 'none' : 'flex';
+    timeLimitRow.style.display = (val === 'regular' || winCondition === 'points') ? 'flex' : 'none';
+});
 wirePillGroup('trampGroup', val => { numTrampolines = parseInt(val, 10); });
 wirePillGroup('boxGroup', val => { numBoxes = parseInt(val, 10); });
 wirePillGroup('winCondGroup', val => {
     winCondition = val;
-    timeLimitRow.style.display = val === 'points' ? 'flex' : 'none';
+    timeLimitRow.style.display = (gameType === 'regular' || val === 'points') ? 'flex' : 'none';
 });
 wirePillGroup('timeLimitGroup', val => { timeLimit = parseInt(val, 10); });
-
-fullModeBtn.addEventListener('click', () => {
-    fullMode = !fullMode;
-    fullModeBtn.textContent = fullMode ? 'ON' : 'OFF';
-    fullModeBtn.classList.toggle('active', fullMode);
-});
 
 gravityBtn.addEventListener('click', () => {
     gravityMode = !gravityMode;
@@ -319,38 +312,68 @@ window.addEventListener('keyup', e => {
 
 function getP1Input() {
     if (numPlayers === 2) {
-        // 2P mode: Player 1 is the arrow-key side, fire on Right Shift, Up jumps
+        // 2P mode: Player 1 is the arrow-key side, fire on Right Shift, Up jumps, / boosts
         return {
             up: keys['arrowup'],
             down: keys['arrowdown'],
             left: keys['arrowleft'],
             right: keys['arrowright'],
-            fire: keys['ShiftRight']
+            fire: keys['ShiftRight'],
+            boost: keys['Slash']
         };
     }
-    // 1P mode: either key set works, either Shift fires, Up/W jumps
+    // 1P mode: either key set works, either Shift fires, Up/W jumps, Space boosts
     return {
         up: keys['arrowup'] || keys['w'],
         down: keys['arrowdown'] || keys['s'],
         left: keys['arrowleft'] || keys['a'],
         right: keys['arrowright'] || keys['d'],
-        fire: keys['ShiftLeft'] || keys['ShiftRight']
+        fire: keys['ShiftLeft'] || keys['ShiftRight'],
+        boost: keys['Space']
     };
 }
 function getP2Input() {
-    // 2P mode: Player 2 is the WASD side, fire on Left Shift, W jumps
+    // 2P mode: Player 2 is the WASD side, fire on Left Shift, W jumps, Space boosts
     return {
         up: keys['w'],
         down: keys['s'],
         left: keys['a'],
         right: keys['d'],
-        fire: keys['ShiftLeft']
+        fire: keys['ShiftLeft'],
+        boost: keys['Space']
     };
 }
-function getBotInput(bot, dt) {
-    // AI: wander in a random direction, changing every so often, and always try to fire
+function getBotInput(bot, dt, target) {
     bot.aiTimer = (bot.aiTimer || 0) - dt;
-    if (bot.aiTimer <= 0) {
+
+    if (target) {
+        // Chase the nearest player (or flee them, if this bot is "it" evader in tag mode),
+        // with a bit of perpendicular jitter so movement doesn't look perfectly robotic.
+        if (bot.aiTimer <= 0) {
+            bot.aiJitter = (Math.random() - 0.5) * 1.1;
+            bot.aiTimer = 0.35 + Math.random() * 0.4;
+        }
+        const chase = gameType !== 'regular' || bot.it;
+        const dx = target.x - bot.x, dy = target.y - bot.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        let mx = (dx / dist) * (chase ? 1 : -1);
+        let my = (dy / dist) * (chase ? 1 : -1);
+        const px = -my, py = mx;
+        mx += px * bot.aiJitter;
+        my += py * bot.aiJitter;
+
+        return {
+            up: my < -0.25,
+            down: my > 0.25,
+            left: mx < -0.25,
+            right: mx > 0.25,
+            fire: gameType === 'laser',
+            boost: true
+        };
+    }
+
+    // No target found: wander randomly
+    if (bot.aiTimer <= 0 || !bot.aiDir) {
         bot.aiDir = {
             up: Math.random() < 0.5,
             down: Math.random() < 0.5,
@@ -381,8 +404,8 @@ function makePlayer(emoji, color, name) {
         timeSinceFire: 0, burstQueue: 0, burstTimer: 0,
         sliced: false, sliceTimer: 0, sliceMaxTimer: 0.9,
         vy: 0, grounded: false,
-        it: false, tagImmune: 0,
-        boostTimer: 0, hits: 0, timesHit: 0
+        it: false, tagImmune: 0, moveFreeze: 0,
+        boostTimer: 0, dashCooldown: 0, hits: 0, timesHit: 0
     };
 }
 
@@ -444,7 +467,7 @@ function initGame() {
     gameOver = false;
     matchTimer = timeLimit;
     resultsScreen.style.display = 'none';
-    matchTimerHud.style.display = winCondition === 'points' ? 'block' : 'none';
+    matchTimerHud.style.display = (gameType === 'regular' || winCondition === 'points') ? 'block' : 'none';
 
     platforms = [];
     if (gravityMode) generatePlatforms();
@@ -513,6 +536,29 @@ function getAllEntities() {
     return list;
 }
 
+function resolveEntityCollisions() {
+    const all = getAllEntities();
+    for (let i = 0; i < all.length; i++) {
+        for (let j = i + 1; j < all.length; j++) {
+            const a = all[i], b = all[j];
+            if (a.sliced || b.sliced) continue;
+            const dx = b.x - a.x, dy = b.y - a.y;
+            const dist = Math.hypot(dx, dy) || 0.001;
+            const minDist = (a.size + b.size) / 2;
+            if (dist < minDist) {
+                const nx = dx / dist, ny = dy / dist;
+                const overlap = (minDist - dist) / 2;
+                a.x -= nx * overlap; a.y -= ny * overlap;
+                b.x += nx * overlap; b.y += ny * overlap;
+            }
+        }
+    }
+    for (const e of all) {
+        e.x = Math.max(e.size / 2, Math.min(W - e.size / 2, e.x));
+        e.y = Math.max(e.size / 2, Math.min(H - e.size / 2, e.y));
+    }
+}
+
 function findNearestTarget(entity, all) {
     let best = null, bestD = Infinity;
     for (const e of all) {
@@ -534,7 +580,6 @@ function updateFreeMovement(p, input, dt) {
             p.boostTimer = 1.2;
         }
     }
-    if (p.boostTimer > 0) p.boostTimer -= dt;
     const effSpeed = p.speed * (p.boostTimer > 0 ? 2.2 : 1);
 
     let dx = 0, dy = 0;
@@ -569,7 +614,8 @@ function updateGravityMovement(p, input, dt) {
     if (input.left) dx -= 1;
     if (input.right) dx += 1;
     if (dx !== 0) {
-        p.x += dx * p.speed * dt;
+        const effSpeed = p.speed * (p.boostTimer > 0 ? 2.2 : 1);
+        p.x += dx * effSpeed * dt;
         p.angle = dx > 0 ? 0 : Math.PI;
     }
     p.x = Math.max(p.size / 2, Math.min(W - p.size / 2, p.x));
@@ -623,6 +669,19 @@ function fireLaser(p, target) {
 
 function updatePlayerMovement(p, input, dt, target) {
     if (p.sliced) return;
+
+    if (p.moveFreeze > 0) {
+        p.moveFreeze -= dt;
+        return;
+    }
+
+    if (p.dashCooldown > 0) p.dashCooldown -= dt;
+    if (p.boostTimer > 0) p.boostTimer -= dt;
+    if (input.boost && p.dashCooldown <= 0) {
+        p.boostTimer = 0.5;
+        p.dashCooldown = 5;
+        spawnSparks(p.x, p.y, '#ffffff', 12);
+    }
 
     if (gravityMode) {
         updateGravityMovement(p, input, dt);
@@ -882,8 +941,8 @@ function updateTagging(dt) {
             e.it = true;
             e.timesHit++;
             e.tagImmune = 1.5;
+            if (bots.includes(e)) e.moveFreeze = 1;
             spawnExplosion(e.x, e.y, e.color);
-            if (winCondition === 'firstHit' && !gameOver) endGame();
             break;
         }
     }
@@ -1080,17 +1139,31 @@ function endGame() {
     if (gameOver) return;
     gameOver = true;
     const all = getAllEntities();
-    const sorted = [...all].sort((a, b) => (b.hits - b.timesHit) - (a.hits - a.timesHit));
-    const topScore = sorted[0].hits - sorted[0].timesHit;
 
-    resultsTitle.textContent = sorted.length > 1 && (sorted[0].hits - sorted[0].timesHit) === (sorted[1].hits - sorted[1].timesHit) ? "IT'S A TIE!" : sorted[0].name + (sorted[0].name === 'YOU' ? ' WIN!' : ' WINS!');
-    resultsList.innerHTML = '';
-    for (const e of sorted) {
-        const row = document.createElement('div');
-        const score = e.hits - e.timesHit;
-        row.className = 'results-row' + (score === topScore ? ' winner' : '');
-        row.innerHTML = '<span>' + e.emoji + ' ' + e.name + '</span><span>' + score + ' pts</span>';
-        resultsList.appendChild(row);
+    if (gameType === 'regular') {
+        const loser = all.find(e => e.it) || all[0];
+        resultsTitle.textContent = loser.name === 'YOU' ? "YOU'RE IT! YOU LOSE!" : loser.name + ' IS IT! LOSES!';
+        resultsList.innerHTML = '';
+        for (const e of all) {
+            const row = document.createElement('div');
+            const isLoser = e === loser;
+            row.className = 'results-row' + (!isLoser ? ' winner' : '');
+            row.innerHTML = '<span>' + e.emoji + ' ' + e.name + '</span><span>' + (isLoser ? 'IT' : 'SAFE') + '</span>';
+            resultsList.appendChild(row);
+        }
+    } else {
+        const sorted = [...all].sort((a, b) => (b.hits - b.timesHit) - (a.hits - a.timesHit));
+        const topScore = sorted[0].hits - sorted[0].timesHit;
+
+        resultsTitle.textContent = sorted.length > 1 && (sorted[0].hits - sorted[0].timesHit) === (sorted[1].hits - sorted[1].timesHit) ? "IT'S A TIE!" : sorted[0].name + (sorted[0].name === 'YOU' ? ' WIN!' : ' WINS!');
+        resultsList.innerHTML = '';
+        for (const e of sorted) {
+            const row = document.createElement('div');
+            const score = e.hits - e.timesHit;
+            row.className = 'results-row' + (score === topScore ? ' winner' : '');
+            row.innerHTML = '<span>' + e.emoji + ' ' + e.name + '</span><span>' + score + ' pts</span>';
+            resultsList.appendChild(row);
+        }
     }
     matchTimerHud.style.display = 'none';
     resultsScreen.style.display = 'flex';
@@ -1103,7 +1176,7 @@ function gameLoop(time) {
 
     if (gameOver) { requestAnimationFrame(gameLoop); return; }
 
-    if (winCondition === 'points') {
+    if (gameType === 'regular' || winCondition === 'points') {
         matchTimer -= dt;
         matchTimerHud.textContent = Math.ceil(Math.max(0, matchTimer));
         if (matchTimer <= 0) { endGame(); requestAnimationFrame(gameLoop); return; }
@@ -1113,7 +1186,12 @@ function gameLoop(time) {
 
     updatePlayerMovement(player1, getP1Input(), dt, findNearestTarget(player1, all));
     if (player2) updatePlayerMovement(player2, getP2Input(), dt, findNearestTarget(player2, all));
-    for (const b of bots) updatePlayerMovement(b, getBotInput(b, dt), dt, findNearestTarget(b, all));
+    for (const b of bots) {
+        const botTarget = findNearestTarget(b, all);
+        updatePlayerMovement(b, getBotInput(b, dt, botTarget), dt, botTarget);
+    }
+
+    resolveEntityCollisions();
 
     updateSliced(player1, dt);
     if (player2) updateSliced(player2, dt);
