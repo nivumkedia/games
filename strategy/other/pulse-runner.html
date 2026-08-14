@@ -354,7 +354,6 @@ body {
 <div class="hud">
     <div class="hud-group">
         <div class="pill" id="level">Level 1</div>
-        <div class="pill" id="lives">Lives 15</div>
         <div class="pill" id="kills">Kills 0</div>
     </div>
 </div>
@@ -395,14 +394,6 @@ body {
     </div>
 </div>
 
-<div class="overlay hidden" id="lose-screen">
-    <div class="panel">
-        <h1>You Fell</h1>
-        <p id="lose-text">Out of lives.</p>
-        <button class="primary-btn" id="retry-btn">Try Again</button>
-    </div>
-</div>
-
 <div class="overlay hidden" id="win-screen">
     <div class="panel">
         <h1 id="win-title">Level Complete!</h1>
@@ -426,15 +417,11 @@ body {
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const levelEl = document.getElementById("level");
-const livesEl = document.getElementById("lives");
 const killsEl = document.getElementById("kills");
 const instructionEl = document.getElementById("instruction");
 const overlay = document.getElementById("overlay");
 const modeSelect = document.getElementById("mode-select");
 const startBtn = document.getElementById("start-btn");
-const loseScreen = document.getElementById("lose-screen");
-const loseText = document.getElementById("lose-text");
-const retryBtn = document.getElementById("retry-btn");
 const winScreen = document.getElementById("win-screen");
 const winTitle = document.getElementById("win-title");
 const winText = document.getElementById("win-text");
@@ -497,12 +484,27 @@ let cameraX = 0;
 let platforms = [];
 let gates = [];
 let spikes = [];
+let saws = [];
+let rockSpawners = [];
+let lavaPools = [];
+let barriers = [];
+let turrets = [];
+let turretShots = [];
 let enemies = [];
 let buttons = [];
 let arrows = [];
 let particles = [];
 
 function platformStrip(x, y, w, h) { return { x, y, w, h }; }
+function createRockSpawner(x) { return { x, r: 56, state: "idle", ry: 0, vy: 0, timer: 30 + Math.floor(Math.random() * 30) }; }
+function createBarrier(spec) {
+    const period = spec.period || 25;
+    return { x: spec.x, y: spec.y, w: spec.w, h: spec.h, period, on: true, timer: spec.phase || period };
+}
+function createTurret(spec) {
+    const interval = spec.interval || 90;
+    return { x: spec.x, y: spec.y, dir: spec.dir || -1, interval, timer: interval };
+}
 
 const levels = [
     {
@@ -629,18 +631,202 @@ const levels = [
         enemies: [],
         buttons: [],
         gates: []
+    },
+    {
+        name: "7. Saw Gauntlet",
+        width: 2800,
+        start: { x: 60, y: 590 },
+        goal: { x: 2700, y: 558, w: 56, h: 102 },
+        platforms: [
+            platformStrip(0, 660, 1200, 200),
+            platformStrip(1380, 660, 1420, 200)
+        ],
+        spikes: [
+            { x: 500, y: 636, w: 90, h: 24 },
+            { x: 1600, y: 636, w: 90, h: 24 },
+            { x: 2350, y: 636, w: 90, h: 24 }
+        ],
+        saws: [
+            { x: 850, y: 638, r: 22, min: 650, max: 1150, speed: 4.5 },
+            { x: 2050, y: 638, r: 22, min: 1750, max: 2300, speed: 5.2 }
+        ],
+        enemies: [],
+        buttons: [],
+        gates: []
+    },
+    {
+        name: "8. Rockfall",
+        width: 2800,
+        start: { x: 60, y: 590 },
+        goal: { x: 2700, y: 558, w: 56, h: 102 },
+        platforms: [
+            platformStrip(0, 660, 1200, 200),
+            platformStrip(1380, 660, 1420, 200)
+        ],
+        spikes: [
+            { x: 450, y: 636, w: 90, h: 24 },
+            { x: 1650, y: 636, w: 90, h: 24 },
+            { x: 2400, y: 636, w: 90, h: 24 }
+        ],
+        saws: [
+            { x: 750, y: 638, r: 22, min: 560, max: 1150, speed: 4.5 }
+        ],
+        rocks: [
+            { x: 1000 },
+            { x: 2100 }
+        ],
+        enemies: [],
+        buttons: [],
+        gates: []
+    },
+    {
+        name: "9. Everything At Once",
+        width: 3400,
+        start: { x: 60, y: 590 },
+        goal: { x: 3300, y: 558, w: 56, h: 102 },
+        platforms: [
+            platformStrip(0, 660, 600, 200),
+            platformStrip(780, 660, 600, 200),
+            platformStrip(1560, 660, 1840, 200)
+        ],
+        spikes: [
+            { x: 300, y: 636, w: 90, h: 24 },
+            { x: 2000, y: 636, w: 90, h: 24 }
+        ],
+        saws: [
+            { x: 1000, y: 638, r: 22, min: 820, max: 1340, speed: 4.5 },
+            { x: 2600, y: 638, r: 22, min: 2350, max: 2850, speed: 5.2 }
+        ],
+        rocks: [
+            { x: 1050 },
+            { x: 2900 }
+        ],
+        enemies: [],
+        buttons: [],
+        gates: []
+    },
+    {
+        name: "10. Molten Run",
+        width: 3000,
+        start: { x: 60, y: 590 },
+        goal: { x: 2900, y: 558, w: 56, h: 102 },
+        platforms: [
+            platformStrip(0, 660, 3000, 200)
+        ],
+        spikes: [],
+        lava: [
+            { x: 500, y: 630, w: 140, h: 30 },
+            { x: 1700, y: 630, w: 140, h: 30 }
+        ],
+        saws: [
+            { x: 900, y: 638, r: 22, min: 750, max: 1050, speed: 4.5 },
+            { x: 2100, y: 638, r: 22, min: 1950, max: 2250, speed: 5.2 }
+        ],
+        rocks: [
+            { x: 1300 }
+        ],
+        enemies: [],
+        buttons: [],
+        gates: []
+    },
+    {
+        name: "11. Live Wire",
+        width: 3200,
+        start: { x: 60, y: 590 },
+        goal: { x: 3100, y: 558, w: 56, h: 102 },
+        platforms: [
+            platformStrip(0, 660, 3200, 200)
+        ],
+        spikes: [
+            { x: 300, y: 636, w: 90, h: 24 },
+            { x: 1500, y: 636, w: 90, h: 24 },
+            { x: 2850, y: 636, w: 90, h: 24 }
+        ],
+        lava: [
+            { x: 1100, y: 630, w: 140, h: 30 },
+            { x: 2500, y: 630, w: 140, h: 30 }
+        ],
+        barriers: [
+            { x: 700, y: 500, w: 24, h: 160, period: 25, phase: 12 },
+            { x: 2100, y: 500, w: 24, h: 160, period: 25, phase: 0 }
+        ],
+        rocks: [
+            { x: 1800 }
+        ],
+        enemies: [],
+        buttons: [],
+        gates: []
+    },
+    {
+        name: "12. One Of Each",
+        width: 2800,
+        start: { x: 60, y: 590 },
+        goal: { x: 2700, y: 558, w: 56, h: 102 },
+        platforms: [
+            platformStrip(0, 660, 900, 200),
+            platformStrip(1080, 660, 1720, 200)
+        ],
+        spikes: [
+            { x: 1300, y: 636, w: 90, h: 24 }
+        ],
+        lava: [
+            { x: 2000, y: 630, w: 140, h: 30 }
+        ],
+        barriers: [
+            { x: 2400, y: 500, w: 24, h: 160, period: 25, phase: 0 }
+        ],
+        saws: [
+            { x: 600, y: 638, r: 22, min: 450, max: 750, speed: 4.5 }
+        ],
+        rocks: [
+            { x: 1600 }
+        ],
+        enemies: [],
+        buttons: [],
+        gates: []
+    },
+    {
+        name: "13. Turret Run",
+        width: 3200,
+        start: { x: 60, y: 590 },
+        goal: { x: 3100, y: 558, w: 56, h: 102 },
+        platforms: [
+            platformStrip(0, 660, 220, 80),
+            platformStrip(300, 600, 220, 30),
+            platformStrip(600, 560, 220, 30),
+            platformStrip(900, 600, 220, 30),
+            platformStrip(1200, 560, 220, 30),
+            platformStrip(1500, 600, 220, 30),
+            platformStrip(1800, 560, 220, 30),
+            platformStrip(2100, 600, 220, 30),
+            platformStrip(2400, 560, 220, 30),
+            platformStrip(2700, 660, 220, 80)
+        ],
+        spikes: [
+            { x: 1250, y: 536, w: 110, h: 24 },
+            { x: 2450, y: 536, w: 110, h: 24 }
+        ],
+        lava: [
+            { x: 640, y: 530, w: 140, h: 30 },
+            { x: 1840, y: 530, w: 140, h: 30 }
+        ],
+        turrets: [
+            { x: 1600, y: 560, dir: 1, interval: 100 }
+        ],
+        enemies: [],
+        buttons: [],
+        gates: []
     }
 ];
 
 let levelIndex = 0;
-let lives = 15;
 let killBank = 0;
 let attackUpgradeLevel = 0;
 let shieldUpgradeLevel = 0;
 let archeryRangeLevel = 0;
 let running = false;
 
-function loadLevel(index, resetLives = false) {
+function loadLevel(index) {
     const level = levels[index];
     levelIndex = index;
     world.width = level.width;
@@ -649,11 +835,16 @@ function loadLevel(index, resetLives = false) {
     platforms = level.platforms.map(p => ({ ...p }));
     gates = level.gates.map(g => ({ ...g, open: false }));
     spikes = level.spikes.map(s => ({ ...s }));
+    saws = (level.saws || []).map(s => ({ ...s, dir: 1, angle: 0 }));
+    rockSpawners = (level.rocks || []).map(r => createRockSpawner(r.x));
+    lavaPools = (level.lava || []).map(l => ({ ...l }));
+    barriers = (level.barriers || []).map(b => createBarrier(b));
+    turrets = (level.turrets || []).map(t => createTurret(t));
+    turretShots = [];
     enemies = level.enemies.map(e => ({ ...e, x0: e.x, dir: 1, alive: true }));
     buttons = level.buttons.map(b => ({ ...b, pressed: false }));
     arrows = [];
     particles = [];
-    if (resetLives) lives = 15;
     levelEl.textContent = level.name;
     setInstruction(level.intro || level.name);
     updateHud();
@@ -681,7 +872,6 @@ function setInstruction(text) {
 }
 
 function updateHud() {
-    livesEl.textContent = `Lives ${lives}`;
     killsEl.textContent = `Kills ${killBank}`;
     updateShop();
 }
@@ -857,14 +1047,8 @@ function updateArrows() {
 function takeHit() {
     if (player.blockTimer > 0) return;
     if (player.hitFlash > 0) return;
-    lives -= 1;
     player.hitFlash = 60;
-    updateHud();
-    if (lives <= 0) {
-        endRun(false);
-    } else {
-        respawn();
-    }
+    respawn();
 }
 
 function updatePlayer() {
@@ -914,6 +1098,16 @@ function updatePlayer() {
     for (const spike of spikes) {
         if (rectsOverlap(player, spike)) { takeHit(); break; }
     }
+    for (const lava of lavaPools) {
+        if (rectsOverlap(player, lava)) { takeHit(); break; }
+    }
+    for (const barrier of barriers) {
+        if (barrier.on && rectsOverlap(player, barrier)) { takeHit(); break; }
+    }
+    for (const saw of saws) {
+        const sawBox = { x: saw.x - saw.r, y: saw.y - saw.r, w: saw.r * 2, h: saw.r * 2 };
+        if (rectsOverlap(player, sawBox)) { takeHit(); break; }
+    }
     for (const enemy of enemies) {
         if (enemy.alive && rectsOverlap(player, { x: enemy.x, y: enemy.y, w: player.w, h: player.h })) takeHit();
     }
@@ -945,11 +1139,70 @@ function updateEnemies() {
     }
 }
 
+function updateSaws() {
+    for (const saw of saws) {
+        saw.x += saw.dir * saw.speed;
+        if (saw.x < saw.min) { saw.x = saw.min; saw.dir = 1; }
+        if (saw.x > saw.max) { saw.x = saw.max; saw.dir = -1; }
+        saw.angle += saw.speed * 0.12;
+    }
+}
+
+function updateRocks() {
+    for (const rock of rockSpawners) {
+        if (rock.state === "idle") {
+            rock.timer -= 1;
+            if (rock.timer <= 0) { rock.state = "warn"; rock.timer = 30; }
+        } else if (rock.state === "warn") {
+            rock.timer -= 1;
+            if (rock.timer <= 0) { rock.state = "falling"; rock.ry = 40; rock.vy = 4; }
+        } else if (rock.state === "falling") {
+            rock.vy += 0.5;
+            rock.ry += rock.vy;
+            if (rectsOverlap(player, { x: rock.x - rock.r, y: rock.ry - rock.r, w: rock.r * 2, h: rock.r * 2 })) takeHit();
+            if (rock.ry > world.height + 40) {
+                rock.state = "idle";
+                rock.timer = 40 + Math.floor(Math.random() * 30);
+            }
+        }
+    }
+}
+
+function updateBarriers() {
+    for (const barrier of barriers) {
+        barrier.timer -= 1;
+        if (barrier.timer <= 0) {
+            barrier.on = !barrier.on;
+            barrier.timer = barrier.period;
+        }
+    }
+}
+
+function updateTurrets() {
+    for (const turret of turrets) {
+        turret.timer -= 1;
+        if (turret.timer <= 0) {
+            turret.timer = turret.interval;
+            turretShots.push({ x: turret.x, y: turret.y, vx: turret.dir * 8 });
+        }
+    }
+    for (let i = turretShots.length - 1; i >= 0; i--) {
+        const shot = turretShots[i];
+        shot.x += shot.vx;
+        if (rectsOverlap(player, { x: shot.x - 6, y: shot.y - 6, w: 12, h: 12 })) {
+            takeHit();
+            turretShots.splice(i, 1);
+            continue;
+        }
+        if (shot.x < -50 || shot.x > world.width + 50) turretShots.splice(i, 1);
+    }
+}
+
 function completeLevel() {
     if (!running) return;
     running = false;
     if (levelIndex >= levels.length - 1) {
-        endRun(true, true);
+        endRun();
     } else {
         winTitle.textContent = "Level Complete!";
         winText.textContent = `On to ${levels[levelIndex + 1].name}.`;
@@ -957,16 +1210,11 @@ function completeLevel() {
     }
 }
 
-function endRun(won, campaignDone = false) {
+function endRun() {
     running = false;
-    if (won) {
-        winTitle.textContent = campaignDone ? "Campaign Complete!" : "Level Complete!";
-        winText.textContent = campaignDone ? "More levels coming soon." : "";
-        winScreen.classList.remove("hidden");
-    } else {
-        loseText.textContent = `You ran out of lives on ${levels[levelIndex].name}.`;
-        loseScreen.classList.remove("hidden");
-    }
+    winTitle.textContent = "Campaign Complete!";
+    winText.textContent = "More levels coming soon.";
+    winScreen.classList.remove("hidden");
 }
 
 nextBtn.addEventListener("click", () => {
@@ -977,12 +1225,6 @@ nextBtn.addEventListener("click", () => {
         loadLevel(levelIndex + 1);
         running = true;
     }
-});
-
-retryBtn.addEventListener("click", () => {
-    loseScreen.classList.add("hidden");
-    loadLevel(levelIndex, true);
-    running = true;
 });
 
 // ---- Rendering (ported from Battlebound) ----
@@ -1087,6 +1329,133 @@ function drawSpikes() {
     });
 }
 
+function drawSaws() {
+    saws.forEach(saw => {
+        ctx.save();
+        ctx.translate(saw.x, saw.y);
+        ctx.rotate(saw.angle);
+        ctx.shadowColor = "rgba(255, 49, 93, 0.5)";
+        ctx.shadowBlur = 10;
+        const teeth = 10;
+        ctx.fillStyle = "#d9dee6";
+        ctx.beginPath();
+        for (let i = 0; i < teeth; i++) {
+            const a1 = (i / teeth) * Math.PI * 2;
+            const a2 = a1 + (Math.PI * 2) / teeth / 2;
+            ctx.lineTo(Math.cos(a1) * saw.r, Math.sin(a1) * saw.r);
+            ctx.lineTo(Math.cos(a2) * saw.r * 1.3, Math.sin(a2) * saw.r * 1.3);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "#7c8797";
+        ctx.beginPath();
+        ctx.arc(0, 0, saw.r * 0.55, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#3a4048";
+        ctx.beginPath();
+        ctx.arc(0, 0, saw.r * 0.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    });
+}
+
+function drawRocks() {
+    rockSpawners.forEach(rock => {
+        if (rock.state === "warn") {
+            const pulse = 0.5 + Math.sin(rock.timer * 0.6) * 0.3;
+            ctx.fillStyle = `rgba(255, 210, 95, ${pulse})`;
+            ctx.beginPath();
+            ctx.arc(rock.x, 30, rock.r * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#3a2c14";
+            ctx.font = "bold 22px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText("!", rock.x, 36);
+        } else if (rock.state === "falling") {
+            ctx.save();
+            ctx.translate(rock.x, rock.ry);
+            ctx.fillStyle = "#8a7360";
+            ctx.beginPath();
+            ctx.moveTo(-rock.r, -2);
+            ctx.lineTo(-rock.r * 0.4, -rock.r);
+            ctx.lineTo(rock.r * 0.5, -rock.r * 0.7);
+            ctx.lineTo(rock.r, 4);
+            ctx.lineTo(rock.r * 0.3, rock.r);
+            ctx.lineTo(-rock.r * 0.6, rock.r * 0.8);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = "rgba(0, 0, 0, 0.25)";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.restore();
+        }
+    });
+}
+
+function drawLava() {
+    const t = Date.now() * 0.001;
+    lavaPools.forEach(lava => {
+        const glow = ctx.createLinearGradient(0, lava.y, 0, lava.y + lava.h);
+        glow.addColorStop(0, "#ffd76a");
+        glow.addColorStop(0.4, "#ff7a1f");
+        glow.addColorStop(1, "#b5220a");
+        ctx.fillStyle = glow;
+        roundRect(lava.x, lava.y, lava.w, lava.h, 6);
+        ctx.fillStyle = "rgba(255, 240, 180, 0.55)";
+        for (let x = lava.x + 14; x < lava.x + lava.w - 10; x += 26) {
+            const bob = Math.sin(t * 3 + x * 0.05) * 3;
+            ctx.beginPath();
+            ctx.arc(x, lava.y + lava.h * 0.4 + bob, 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    });
+}
+
+function drawBarriers() {
+    barriers.forEach(barrier => {
+        if (barrier.on) {
+            ctx.save();
+            ctx.strokeStyle = "#7ef5ff";
+            ctx.lineWidth = 4;
+            ctx.shadowColor = "#7ef5ff";
+            ctx.shadowBlur = 14;
+            ctx.beginPath();
+            const zigzags = 6;
+            for (let i = 0; i <= zigzags; i++) {
+                const y = barrier.y + (barrier.h / zigzags) * i;
+                const x = barrier.x + barrier.w / 2 + (i % 2 === 0 ? -barrier.w / 2 : barrier.w / 2);
+                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+            ctx.restore();
+        } else {
+            ctx.strokeStyle = "rgba(126, 245, 255, 0.25)";
+            ctx.lineWidth = 2;
+            ctx.strokeRect(barrier.x, barrier.y, barrier.w, barrier.h);
+        }
+    });
+}
+
+function drawTurrets() {
+    turrets.forEach(turret => {
+        ctx.fillStyle = "#3a4048";
+        roundRect(turret.x - 16, turret.y - 12, 32, 24, 4);
+        ctx.fillStyle = "#7c8797";
+        ctx.fillRect(turret.dir < 0 ? turret.x - 32 : turret.x, turret.y - 5, 16, 10);
+    });
+    turretShots.forEach(shot => {
+        ctx.save();
+        ctx.shadowColor = "#ff4fd8";
+        ctx.shadowBlur = 6;
+        ctx.fillStyle = "#ff4fd8";
+        ctx.beginPath();
+        ctx.arc(shot.x, shot.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    });
+}
+
 function drawButtons() {
     buttons.forEach(button => {
         ctx.fillStyle = button.pressed ? "#49ffa8" : "#ffd25f";
@@ -1177,6 +1546,11 @@ function draw() {
     ctx.translate(-cameraX, 0);
     drawPlatforms();
     drawSpikes();
+    drawLava();
+    drawBarriers();
+    drawTurrets();
+    drawSaws();
+    drawRocks();
     drawButtons();
     drawEnemies();
     drawArrows();
@@ -1189,6 +1563,10 @@ function loop() {
     if (running) {
         updatePlayer();
         updateEnemies();
+        updateSaws();
+        updateRocks();
+        updateBarriers();
+        updateTurrets();
         updateArrows();
     }
     draw();
@@ -1209,7 +1587,7 @@ modeSelect.querySelectorAll(".mode-card").forEach(card => {
 startBtn.addEventListener("click", () => {
     overlay.classList.add("hidden");
     shopToggle.style.display = "block";
-    loadLevel(0, true);
+    loadLevel(0);
     running = true;
 });
 
