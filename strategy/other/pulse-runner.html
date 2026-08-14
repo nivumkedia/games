@@ -492,6 +492,11 @@ let barriers = [];
 let turrets = [];
 let turretShots = [];
 let timedPlatforms = [];
+let crumblingPlatforms = [];
+let axes = [];
+let arrowTraps = [];
+let trapArrows = [];
+let geysers = [];
 let crushers = [];
 let boulders = [];
 let drones = [];
@@ -501,7 +506,10 @@ let arrows = [];
 let particles = [];
 
 function platformStrip(x, y, w, h, tunnel) { return tunnel ? { x, y, w, h, tunnel: true } : { x, y, w, h }; }
-function createRockSpawner(x) { return { x, r: 56, state: "idle", ry: 0, vy: 0, timer: 30 + Math.floor(Math.random() * 30) }; }
+function createRockSpawner(spec) {
+    const type = spec.type || "rock";
+    return { x: spec.x, type, fallMult: type === "icicle" ? 2 : 1, r: 56, state: "idle", ry: 0, vy: 0, timer: 30 + Math.floor(Math.random() * 30) };
+}
 function createBarrier(spec) {
     const period = spec.period || 25;
     return { x: spec.x, y: spec.y, w: spec.w, h: spec.h, period, on: true, timer: spec.phase || period };
@@ -512,7 +520,27 @@ function createTurret(spec) {
 }
 function createTimedPlatform(spec) {
     const period = spec.period || 60;
-    return { x: spec.x, y: spec.y, w: spec.w, h: spec.h, period, solid: true, timer: spec.phase || period };
+    return {
+        x: spec.x, y: spec.y, w: spec.w, h: spec.h, period, solid: true, timer: spec.phase || period,
+        min: spec.min, max: spec.max, moveSpeed: spec.moveSpeed || 0, dir: 1
+    };
+}
+function createCrumblingPlatform(spec) {
+    return { x: spec.x, y: spec.y, w: spec.w, h: spec.h, state: "solid", timer: 0, shakeTimer: 0 };
+}
+function createAxe(spec) {
+    return {
+        anchorX: spec.anchorX, anchorY: spec.anchorY, length: spec.length || 180,
+        amplitude: spec.amplitude || 1, period: spec.period || 90, t: spec.phase || 0,
+        angle: 0, r: spec.r || 26
+    };
+}
+function createArrowTrap(spec) {
+    return { x: spec.x, y: spec.y, w: spec.w || 44, h: spec.h || 12, dir: spec.dir || 1, launchY: spec.launchY, cooldown: 0 };
+}
+function createGeyser(spec) {
+    const idleTime = spec.idleTime || 90;
+    return { x: spec.x, w: spec.w || 50, groundY: spec.groundY, height: spec.height || 220, idleTime, state: "idle", timer: spec.phase || idleTime };
 }
 function createCrusher(spec) {
     return {
@@ -1069,7 +1097,27 @@ function ultimatePlatforms() {
         platformStrip(5390, 660, 220, 80)
     ];
 }
-function platformSpike(p) { return { x: p.x + 85, y: p.y - 24, w: 90, h: 24 }; }
+function platformSpike(p) { const pw = p.w || 260; return { x: p.x + (pw - 90) / 2, y: p.y - 24, w: 90, h: 24 }; }
+function bigUltimatePlatforms() {
+    return [
+        platformStrip(0, 660, 220, 80),
+        platformStrip(350, 600, 380, 30),
+        platformStrip(840, 560, 380, 30),
+        platformStrip(1330, 520, 380, 30),
+        platformStrip(1820, 560, 380, 30),
+        platformStrip(2310, 600, 380, 30),
+        platformStrip(2800, 560, 380, 30),
+        platformStrip(3290, 520, 380, 30),
+        platformStrip(3780, 560, 380, 30),
+        platformStrip(4270, 600, 380, 30),
+        platformStrip(4760, 560, 380, 30),
+        platformStrip(5250, 520, 380, 30),
+        platformStrip(5740, 560, 380, 30),
+        platformStrip(6230, 600, 380, 30),
+        platformStrip(6720, 560, 380, 30),
+        platformStrip(7210, 660, 220, 80)
+    ];
+}
 
 const ultimateLevels = [
     {
@@ -1099,25 +1147,25 @@ const ultimateLevels = [
     },
     {
         name: "3. Full Spike Run",
-        width: 5650,
+        width: 7500,
         start: { x: 60, y: 590 },
-        goal: { x: 5430, y: 558, w: 56, h: 102 },
-        platforms: ultimatePlatforms(),
+        goal: { x: 7250, y: 558, w: 56, h: 102 },
+        platforms: bigUltimatePlatforms(),
         spikes: [
-            platformSpike({ x: 350, y: 600 }),
-            platformSpike({ x: 710, y: 560 }),
-            platformSpike({ x: 1070, y: 520 }),
-            platformSpike({ x: 1430, y: 560 }),
-            platformSpike({ x: 1790, y: 600 }),
-            platformSpike({ x: 2150, y: 560 }),
-            platformSpike({ x: 2510, y: 520 }),
-            platformSpike({ x: 2870, y: 560 }),
-            platformSpike({ x: 3230, y: 600 }),
-            platformSpike({ x: 3590, y: 560 }),
-            platformSpike({ x: 3950, y: 520 }),
-            platformSpike({ x: 4310, y: 560 }),
-            platformSpike({ x: 4670, y: 600 }),
-            platformSpike({ x: 5030, y: 560 })
+            platformSpike({ x: 350, y: 600, w: 380 }),
+            platformSpike({ x: 840, y: 560, w: 380 }),
+            platformSpike({ x: 1330, y: 520, w: 380 }),
+            platformSpike({ x: 1820, y: 560, w: 380 }),
+            platformSpike({ x: 2310, y: 600, w: 380 }),
+            platformSpike({ x: 2800, y: 560, w: 380 }),
+            platformSpike({ x: 3290, y: 520, w: 380 }),
+            platformSpike({ x: 3780, y: 560, w: 380 }),
+            platformSpike({ x: 4270, y: 600, w: 380 }),
+            platformSpike({ x: 4760, y: 560, w: 380 }),
+            platformSpike({ x: 5250, y: 520, w: 380 }),
+            platformSpike({ x: 5740, y: 560, w: 380 }),
+            platformSpike({ x: 6230, y: 600, w: 380 }),
+            platformSpike({ x: 6720, y: 560, w: 380 })
         ],
         enemies: [],
         buttons: [],
@@ -1134,7 +1182,196 @@ const ultimateLevels = [
             platformSpike({ x: 3950, y: 520 })
         ],
         saws: [
-            { x: 2640, y: 498, r: 22, min: 2540, max: 2740, speed: 8 }
+            { x: 2640, y: 498, r: 22, min: 2540, max: 2740, speed: 5 }
+        ],
+        enemies: [],
+        buttons: [],
+        gates: []
+    },
+    {
+        name: "5. Icefall",
+        width: 5650,
+        start: { x: 60, y: 590 },
+        goal: { x: 5430, y: 558, w: 56, h: 102 },
+        platforms: ultimatePlatforms(),
+        spikes: [
+            platformSpike({ x: 710, y: 560 }),
+            platformSpike({ x: 2150, y: 560 }),
+            platformSpike({ x: 3590, y: 560 })
+        ],
+        rocks: [
+            { x: 3000, type: "icicle" },
+            { x: 4440, type: "icicle" }
+        ],
+        enemies: [],
+        buttons: [],
+        gates: []
+    },
+    {
+        name: "6. Deep Freeze",
+        width: 5650,
+        start: { x: 60, y: 590 },
+        goal: { x: 5430, y: 558, w: 56, h: 102 },
+        platforms: ultimatePlatforms(),
+        spikes: [
+            platformSpike({ x: 1070, y: 520 }),
+            platformSpike({ x: 3230, y: 600 })
+        ],
+        rocks: [
+            { x: 1560, type: "icicle" },
+            { x: 2640, type: "icicle" },
+            { x: 4080, type: "icicle" }
+        ],
+        enemies: [],
+        buttons: [],
+        gates: []
+    },
+    {
+        name: "7. First Crumble",
+        width: 5650,
+        start: { x: 60, y: 590 },
+        goal: { x: 5430, y: 558, w: 56, h: 102 },
+        platforms: ultimatePlatforms().filter((p, i) => i !== 6),
+        crumblingPlatforms: [
+            { x: 2150, y: 560, w: 260, h: 30 }
+        ],
+        spikes: [],
+        rocks: [
+            { x: 3360, type: "icicle" },
+            { x: 4800, type: "icicle" }
+        ],
+        enemies: [],
+        buttons: [],
+        gates: []
+    },
+    {
+        name: "8. Crumble Run",
+        width: 5650,
+        start: { x: 60, y: 590 },
+        goal: { x: 5430, y: 558, w: 56, h: 102 },
+        platforms: ultimatePlatforms().filter((p, i) => i !== 3 && i !== 7 && i !== 11),
+        crumblingPlatforms: [
+            { x: 1070, y: 520, w: 260, h: 30 },
+            { x: 2510, y: 520, w: 260, h: 30 },
+            { x: 3950, y: 520, w: 260, h: 30 }
+        ],
+        spikes: [],
+        rocks: [
+            { x: 1920, type: "icicle" },
+            { x: 3360, type: "icicle" }
+        ],
+        enemies: [],
+        buttons: [],
+        gates: []
+    },
+    {
+        name: "9. First Swing",
+        width: 5650,
+        start: { x: 60, y: 590 },
+        goal: { x: 5430, y: 558, w: 56, h: 102 },
+        platforms: ultimatePlatforms().filter((p, i) => i !== 4 && i !== 10),
+        crumblingPlatforms: [
+            { x: 1430, y: 560, w: 260, h: 30 },
+            { x: 3590, y: 560, w: 260, h: 30 }
+        ],
+        spikes: [],
+        rocks: [
+            { x: 4440, type: "icicle" }
+        ],
+        axes: [
+            { anchorX: 2820, anchorY: 350, length: 180, amplitude: 0.9, period: 90 }
+        ],
+        enemies: [],
+        buttons: [],
+        gates: []
+    },
+    {
+        name: "10. Pressure Point",
+        width: 5650,
+        start: { x: 60, y: 590 },
+        goal: { x: 5430, y: 558, w: 56, h: 102 },
+        platforms: ultimatePlatforms(),
+        spikes: [],
+        arrowTraps: [
+            { x: 2258, y: 548, w: 44, h: 12, dir: 1, launchY: 530 }
+        ],
+        enemies: [],
+        buttons: [],
+        gates: []
+    },
+    {
+        name: "11. Trap Line",
+        width: 5650,
+        start: { x: 60, y: 590 },
+        goal: { x: 5430, y: 558, w: 56, h: 102 },
+        platforms: ultimatePlatforms().filter((p, i) => i !== 2 && i !== 6 && i !== 10),
+        crumblingPlatforms: [
+            { x: 710, y: 560, w: 260, h: 30 },
+            { x: 2150, y: 560, w: 260, h: 30 },
+            { x: 3590, y: 560, w: 260, h: 30 }
+        ],
+        spikes: [],
+        arrowTraps: [
+            { x: 1538, y: 548, w: 44, h: 12, dir: 1, launchY: 530 },
+            { x: 3338, y: 588, w: 44, h: 12, dir: -1, launchY: 570 }
+        ],
+        enemies: [],
+        buttons: [],
+        gates: []
+    },
+    {
+        name: "12. Crossfire Crumble",
+        width: 5650,
+        start: { x: 60, y: 590 },
+        goal: { x: 5430, y: 558, w: 56, h: 102 },
+        platforms: ultimatePlatforms().filter((p, i) => i !== 3 && i !== 7 && i !== 11),
+        crumblingPlatforms: [
+            { x: 1070, y: 520, w: 260, h: 30 },
+            { x: 2510, y: 520, w: 260, h: 30 },
+            { x: 3950, y: 520, w: 260, h: 30 }
+        ],
+        spikes: [],
+        arrowTraps: [
+            { x: 458, y: 588, w: 44, h: 12, dir: 1, launchY: 570 },
+            { x: 1898, y: 588, w: 44, h: 12, dir: -1, launchY: 570 },
+            { x: 3338, y: 588, w: 44, h: 12, dir: 1, launchY: 570 }
+        ],
+        enemies: [],
+        buttons: [],
+        gates: []
+    },
+    {
+        name: "13. Moving Targets",
+        width: 5650,
+        start: { x: 60, y: 590 },
+        goal: { x: 5430, y: 558, w: 56, h: 102 },
+        platforms: ultimatePlatforms().filter((p, i) => i !== 5 && i !== 9),
+        spikes: [],
+        timedPlatforms: [
+            { x: 1790, y: 600, w: 260, h: 30, period: 50, min: 1690, max: 1890, moveSpeed: 3 },
+            { x: 3230, y: 600, w: 260, h: 30, period: 50, phase: 25, min: 3130, max: 3330, moveSpeed: 3.5 }
+        ],
+        arrowTraps: [
+            { x: 2618, y: 508, w: 44, h: 12, dir: 1, launchY: 490 }
+        ],
+        enemies: [],
+        buttons: [],
+        gates: []
+    },
+    {
+        name: "14. Eruption",
+        width: 5650,
+        start: { x: 60, y: 590 },
+        goal: { x: 5430, y: 558, w: 56, h: 102 },
+        platforms: ultimatePlatforms().filter((p, i) => i !== 2 && i !== 6 && i !== 10),
+        spikes: [],
+        timedPlatforms: [
+            { x: 710, y: 560, w: 260, h: 30, period: 50, min: 610, max: 810, moveSpeed: 3 },
+            { x: 2150, y: 560, w: 260, h: 30, period: 50, phase: 20, min: 2050, max: 2250, moveSpeed: 3.2 },
+            { x: 3590, y: 560, w: 260, h: 30, period: 50, phase: 40, min: 3490, max: 3690, moveSpeed: 3.5 }
+        ],
+        geysers: [
+            { x: 2975, groundY: 560, height: 220 }
         ],
         enemies: [],
         buttons: [],
@@ -1161,11 +1398,16 @@ function loadLevel(index) {
     gates = level.gates.map(g => ({ ...g, open: false }));
     spikes = level.spikes.map(s => ({ ...s }));
     saws = (level.saws || []).map(s => ({ ...s, dir: 1, angle: 0 }));
-    rockSpawners = (level.rocks || []).map(r => createRockSpawner(r.x));
+    rockSpawners = (level.rocks || []).map(r => createRockSpawner(r));
     lavaPools = (level.lava || []).map(l => ({ ...l }));
     barriers = (level.barriers || []).map(b => createBarrier(b));
     turrets = (level.turrets || []).map(t => createTurret(t));
     timedPlatforms = (level.timedPlatforms || []).map(t => createTimedPlatform(t));
+    crumblingPlatforms = (level.crumblingPlatforms || []).map(c => createCrumblingPlatform(c));
+    axes = (level.axes || []).map(a => createAxe(a));
+    arrowTraps = (level.arrowTraps || []).map(a => createArrowTrap(a));
+    geysers = (level.geysers || []).map(g => createGeyser(g));
+    trapArrows = [];
     crushers = (level.crushers || []).map(c => createCrusher(c));
     boulders = (level.boulders || []).map(b => createBoulder(b));
     drones = (level.drones || []).map(d => createDrone(d));
@@ -1460,7 +1702,7 @@ function updatePlayer() {
 }
 
 function solids() {
-    return platforms.concat(gates.filter(g => !g.open)).concat(timedPlatforms.filter(t => t.solid));
+    return platforms.concat(gates.filter(g => !g.open)).concat(timedPlatforms.filter(t => t.solid)).concat(crumblingPlatforms.filter(c => c.state !== "gone"));
 }
 
 function updateTimedPlatforms() {
@@ -1469,6 +1711,79 @@ function updateTimedPlatforms() {
         if (tp.timer <= 0) {
             tp.solid = !tp.solid;
             tp.timer = tp.period;
+        }
+        if (tp.moveSpeed > 0 && tp.solid) {
+            const standing = player.grounded && rectsOverlap(player, { x: tp.x - 2, y: tp.y - 4, w: tp.w + 4, h: tp.h + 4 });
+            const prevX = tp.x;
+            tp.x += tp.dir * tp.moveSpeed;
+            if (tp.x < tp.min) { tp.x = tp.min; tp.dir = 1; }
+            if (tp.x > tp.max) { tp.x = tp.max; tp.dir = -1; }
+            if (standing) player.x += tp.x - prevX;
+        }
+    }
+}
+
+function updateCrumblingPlatforms() {
+    for (const cp of crumblingPlatforms) {
+        if (cp.state === "solid") {
+            const standing = player.grounded && rectsOverlap(player, { x: cp.x, y: cp.y - 4, w: cp.w, h: cp.h + 4 });
+            if (standing) {
+                cp.timer += 1;
+                cp.shakeTimer = cp.timer;
+                if (cp.timer > 5) { cp.state = "gone"; cp.timer = 150; cp.shakeTimer = 0; }
+            } else {
+                cp.timer = 0;
+                cp.shakeTimer = 0;
+            }
+        } else if (cp.state === "gone") {
+            cp.timer -= 1;
+            if (cp.timer <= 0) cp.state = "solid";
+        }
+    }
+}
+
+function updateAxes() {
+    for (const axe of axes) {
+        axe.t += 1;
+        axe.angle = Math.sin((axe.t / axe.period) * Math.PI * 2) * axe.amplitude;
+        const headX = axe.anchorX + Math.sin(axe.angle) * axe.length;
+        const headY = axe.anchorY + Math.cos(axe.angle) * axe.length;
+        if (rectsOverlap(player, { x: headX - axe.r, y: headY - axe.r, w: axe.r * 2, h: axe.r * 2 })) takeHit();
+    }
+}
+
+function updateArrowTraps() {
+    for (const trap of arrowTraps) {
+        if (trap.cooldown > 0) trap.cooldown -= 1;
+        const zone = { x: trap.x - 4, y: trap.y - 30, w: trap.w + 8, h: 40 };
+        if (player.grounded && trap.cooldown <= 0 && rectsOverlap(player, zone)) {
+            trapArrows.push({ x: trap.x + trap.w / 2, y: trap.launchY, vx: trap.dir * 9 });
+            trap.cooldown = 60;
+        }
+    }
+    for (let i = trapArrows.length - 1; i >= 0; i--) {
+        const a = trapArrows[i];
+        a.x += a.vx;
+        if (rectsOverlap(player, { x: a.x - 8, y: a.y - 3, w: 16, h: 6 })) {
+            takeHit();
+            trapArrows.splice(i, 1);
+            continue;
+        }
+        if (a.x < -50 || a.x > world.width + 50) trapArrows.splice(i, 1);
+    }
+}
+
+function updateGeysers() {
+    for (const g of geysers) {
+        g.timer -= 1;
+        if (g.timer <= 0) {
+            if (g.state === "idle") { g.state = "warn"; g.timer = 20; }
+            else if (g.state === "warn") { g.state = "erupt"; g.timer = 25; }
+            else if (g.state === "erupt") { g.state = "idle"; g.timer = g.idleTime; }
+        }
+        if (g.state === "erupt") {
+            const hitbox = { x: g.x, y: g.groundY - g.height, w: g.w, h: g.height };
+            if (rectsOverlap(player, hitbox)) takeHit();
         }
     }
 }
@@ -1537,9 +1852,9 @@ function updateRocks() {
             if (rock.timer <= 0) { rock.state = "warn"; rock.timer = 30; }
         } else if (rock.state === "warn") {
             rock.timer -= 1;
-            if (rock.timer <= 0) { rock.state = "falling"; rock.ry = 40; rock.vy = 4; }
+            if (rock.timer <= 0) { rock.state = "falling"; rock.ry = 40; rock.vy = 4 * rock.fallMult; }
         } else if (rock.state === "falling") {
-            rock.vy += 0.5;
+            rock.vy += 0.5 * rock.fallMult;
             rock.ry += rock.vy;
             if (rectsOverlap(player, { x: rock.x - rock.r, y: rock.ry - rock.r, w: rock.r * 2, h: rock.r * 2 })) takeHit();
             if (rock.ry > world.height + 40) {
@@ -1728,6 +2043,38 @@ function drawPlatforms() {
             ctx.setLineDash([]);
         }
     });
+
+    crumblingPlatforms.forEach(cp => {
+        if (cp.state === "gone") {
+            ctx.strokeStyle = "rgba(178, 140, 100, 0.25)";
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.strokeRect(cp.x, cp.y, cp.w, cp.h);
+            ctx.setLineDash([]);
+            return;
+        }
+        const shake = cp.shakeTimer > 0 ? (Math.random() - 0.5) * Math.min(6, cp.shakeTimer * 0.3) : 0;
+        ctx.save();
+        ctx.translate(shake, 0);
+        ctx.shadowColor = "rgba(0, 0, 0, 0.28)";
+        ctx.shadowBlur = 16;
+        ctx.shadowOffsetY = 8;
+        const body = ctx.createLinearGradient(0, cp.y, 0, cp.y + cp.h);
+        body.addColorStop(0, "#25527d");
+        body.addColorStop(0.62, "#17395e");
+        body.addColorStop(1, "#0f2744");
+        ctx.fillStyle = body;
+        roundRect(cp.x, cp.y, cp.w, cp.h, 8);
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.fillStyle = "#72e6ff";
+        roundRect(cp.x + 8, cp.y + 4, Math.max(0, cp.w - 16), 5, 3);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+        ctx.fillRect(cp.x + 12, cp.y + 12, Math.max(0, cp.w - 24), 2);
+        ctx.fillStyle = "rgba(2, 9, 18, 0.28)";
+        ctx.fillRect(cp.x + 8, cp.y + cp.h - 8, Math.max(0, cp.w - 16), 5);
+        ctx.restore();
+    });
 }
 
 function drawSpikes() {
@@ -1792,17 +2139,54 @@ function drawRocks() {
         } else if (rock.state === "falling") {
             ctx.save();
             ctx.translate(rock.x, rock.ry);
-            ctx.fillStyle = "#8a7360";
-            ctx.beginPath();
-            ctx.moveTo(-rock.r, -2);
-            ctx.lineTo(-rock.r * 0.4, -rock.r);
-            ctx.lineTo(rock.r * 0.5, -rock.r * 0.7);
-            ctx.lineTo(rock.r, 4);
-            ctx.lineTo(rock.r * 0.3, rock.r);
-            ctx.lineTo(-rock.r * 0.6, rock.r * 0.8);
-            ctx.closePath();
-            ctx.fill();
-            ctx.strokeStyle = "rgba(0, 0, 0, 0.25)";
+            if (rock.type === "icicle") {
+                ctx.shadowColor = "rgba(160, 235, 255, 0.85)";
+                ctx.shadowBlur = 18;
+                const grad = ctx.createLinearGradient(0, -rock.r, 0, rock.r * 1.3);
+                grad.addColorStop(0, "#ffffff");
+                grad.addColorStop(0.45, "#d8f6ff");
+                grad.addColorStop(1, "#6fc9ea");
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.moveTo(-rock.r * 0.55, -rock.r);
+                ctx.lineTo(rock.r * 0.55, -rock.r);
+                ctx.lineTo(rock.r * 0.32, rock.r * 0.1);
+                ctx.lineTo(rock.r * 0.12, rock.r * 0.55);
+                ctx.lineTo(0, rock.r * 1.35);
+                ctx.lineTo(-rock.r * 0.12, rock.r * 0.55);
+                ctx.lineTo(-rock.r * 0.32, rock.r * 0.1);
+                ctx.closePath();
+                ctx.fill();
+                ctx.shadowBlur = 0;
+                ctx.strokeStyle = "rgba(90, 190, 220, 0.55)";
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(-rock.r * 0.55, -rock.r);
+                ctx.lineTo(rock.r * 0.12, rock.r * 0.55);
+                ctx.moveTo(rock.r * 0.55, -rock.r);
+                ctx.lineTo(0, rock.r * 1.35);
+                ctx.stroke();
+                ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
+                ctx.beginPath();
+                ctx.moveTo(-rock.r * 0.3, -rock.r * 0.9);
+                ctx.lineTo(-rock.r * 0.1, -rock.r * 0.9);
+                ctx.lineTo(-rock.r * 0.22, rock.r * 0.6);
+                ctx.closePath();
+                ctx.fill();
+                ctx.strokeStyle = "rgba(140, 220, 255, 0.6)";
+            } else {
+                ctx.fillStyle = "#8a7360";
+                ctx.beginPath();
+                ctx.moveTo(-rock.r, -2);
+                ctx.lineTo(-rock.r * 0.4, -rock.r);
+                ctx.lineTo(rock.r * 0.5, -rock.r * 0.7);
+                ctx.lineTo(rock.r, 4);
+                ctx.lineTo(rock.r * 0.3, rock.r);
+                ctx.lineTo(-rock.r * 0.6, rock.r * 0.8);
+                ctx.closePath();
+                ctx.fill();
+                ctx.strokeStyle = "rgba(0, 0, 0, 0.25)";
+            }
             ctx.lineWidth = 2;
             ctx.stroke();
             ctx.restore();
@@ -1893,6 +2277,44 @@ function drawBoulders() {
     });
 }
 
+function drawAxes() {
+    axes.forEach(axe => {
+        const headX = axe.anchorX + Math.sin(axe.angle) * axe.length;
+        const headY = axe.anchorY + Math.cos(axe.angle) * axe.length;
+        ctx.strokeStyle = "#5c6470";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(axe.anchorX, axe.anchorY);
+        ctx.lineTo(headX, headY);
+        ctx.stroke();
+        ctx.fillStyle = "#3a4048";
+        ctx.beginPath();
+        ctx.arc(axe.anchorX, axe.anchorY, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.save();
+        ctx.translate(headX, headY);
+        ctx.rotate(axe.angle);
+        const grad = ctx.createLinearGradient(-axe.r, 0, axe.r, 0);
+        grad.addColorStop(0, "#dfe6ee");
+        grad.addColorStop(1, "#8a94a3");
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(0, -axe.r * 1.1);
+        ctx.lineTo(axe.r, 0);
+        ctx.lineTo(0, axe.r * 1.1);
+        ctx.lineTo(-axe.r * 0.35, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.3)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = "#6b4a2a";
+        ctx.fillRect(-axe.r * 0.35, -6, axe.r * 0.35, 12);
+        ctx.restore();
+    });
+}
+
 function drawDrones() {
     drones.forEach(d => {
         ctx.save();
@@ -1949,6 +2371,57 @@ function drawButtons() {
     buttons.forEach(button => {
         ctx.fillStyle = button.pressed ? "#49ffa8" : "#ffd25f";
         roundRect(button.x, button.y, button.w, button.h, 4);
+    });
+}
+
+function drawArrowTraps() {
+    arrowTraps.forEach(trap => {
+        ctx.fillStyle = trap.cooldown > 40 ? "#ff9a4a" : "#8a94a3";
+        roundRect(trap.x, trap.y, trap.w, trap.h, 3);
+    });
+    trapArrows.forEach(a => {
+        ctx.strokeStyle = "#e8d9b0";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(a.x - a.vx * 1.6, a.y);
+        ctx.lineTo(a.x + a.vx * 1.6, a.y);
+        ctx.stroke();
+        ctx.fillStyle = "#3a4048";
+        ctx.beginPath();
+        const tipX = a.x + Math.sign(a.vx) * 10;
+        ctx.moveTo(tipX, a.y);
+        ctx.lineTo(tipX - Math.sign(a.vx) * 8, a.y - 4);
+        ctx.lineTo(tipX - Math.sign(a.vx) * 8, a.y + 4);
+        ctx.closePath();
+        ctx.fill();
+    });
+}
+
+function drawGeysers() {
+    geysers.forEach(g => {
+        if (g.state === "warn") {
+            const pulse = 0.4 + Math.sin(g.timer * 0.7) * 0.3;
+            ctx.fillStyle = `rgba(255, 140, 50, ${pulse})`;
+            roundRect(g.x, g.groundY - 6, g.w, 6, 2);
+        } else if (g.state === "erupt") {
+            const grad = ctx.createLinearGradient(0, g.groundY - g.height, 0, g.groundY);
+            grad.addColorStop(0, "#fff4a3");
+            grad.addColorStop(0.5, "#ff9d18");
+            grad.addColorStop(1, "#ff4718");
+            ctx.fillStyle = grad;
+            ctx.save();
+            ctx.shadowColor = "#ff7418";
+            ctx.shadowBlur = 20;
+            ctx.beginPath();
+            const midX = g.x + g.w / 2;
+            const wobble = Math.sin(g.timer * 1.5) * 6;
+            ctx.moveTo(g.x, g.groundY);
+            ctx.quadraticCurveTo(g.x + wobble, g.groundY - g.height * 0.5, midX, g.groundY - g.height);
+            ctx.quadraticCurveTo(g.x + g.w - wobble, g.groundY - g.height * 0.5, g.x + g.w, g.groundY);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
     });
 }
 
@@ -2040,10 +2513,13 @@ function draw() {
     drawTurrets();
     drawCrushers();
     drawBoulders();
+    drawAxes();
     drawDrones();
     drawSaws();
     drawRocks();
     drawButtons();
+    drawArrowTraps();
+    drawGeysers();
     drawEnemies();
     drawArrows();
     drawGoal();
@@ -2060,6 +2536,10 @@ function loop() {
         updateBarriers();
         updateTurrets();
         updateTimedPlatforms();
+        updateCrumblingPlatforms();
+        updateAxes();
+        updateArrowTraps();
+        updateGeysers();
         updateCrushers();
         updateBoulders();
         updateDrones();
@@ -2085,7 +2565,7 @@ startBtn.addEventListener("click", () => {
     overlay.classList.add("hidden");
     shopToggle.style.display = "block";
     levels = selectedMode === "ultimate" ? ultimateLevels : normalLevels;
-    const startIndex = Math.max(0, levels.length - 1);
+    const startIndex = selectedMode === "ultimate" ? 3 : Math.max(0, levels.length - 1);
     loadLevel(startIndex);
     running = true;
 });
