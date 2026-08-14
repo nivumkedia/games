@@ -497,6 +497,8 @@ let axes = [];
 let arrowTraps = [];
 let trapArrows = [];
 let geysers = [];
+let silentTrapdoors = [];
+let ceilings = [];
 let crushers = [];
 let boulders = [];
 let drones = [];
@@ -541,6 +543,12 @@ function createArrowTrap(spec) {
 function createGeyser(spec) {
     const idleTime = spec.idleTime || 90;
     return { x: spec.x, w: spec.w || 50, groundY: spec.groundY, height: spec.height || 220, idleTime, state: "idle", timer: spec.phase || idleTime };
+}
+function createSilentTrapdoor(spec) {
+    return { x: spec.x, y: spec.y, w: spec.w, h: spec.h, state: "solid", timer: 0 };
+}
+function createCeiling(spec) {
+    return { x: spec.x, w: spec.w, h: spec.h || 60, platformY: spec.platformY, topY: spec.topY, state: "up", y: spec.topY, timer: 0 };
 }
 function createCrusher(spec) {
     return {
@@ -1376,6 +1384,78 @@ const ultimateLevels = [
         enemies: [],
         buttons: [],
         gates: []
+    },
+    {
+        name: "15. Geyser Field",
+        width: 5650,
+        start: { x: 60, y: 590 },
+        goal: { x: 5430, y: 558, w: 56, h: 102 },
+        platforms: ultimatePlatforms(),
+        spikes: [],
+        geysers: [
+            { x: 455, groundY: 600, phase: 0 },
+            { x: 815, groundY: 560, phase: 15 },
+            { x: 1175, groundY: 520, phase: 30 },
+            { x: 1535, groundY: 560, phase: 45 },
+            { x: 1895, groundY: 600, phase: 60 },
+            { x: 2255, groundY: 560, phase: 75 },
+            { x: 2615, groundY: 520, phase: 0 },
+            { x: 2975, groundY: 560, phase: 15 },
+            { x: 3335, groundY: 600, phase: 30 },
+            { x: 3695, groundY: 560, phase: 45 },
+            { x: 4055, groundY: 520, phase: 60 },
+            { x: 4415, groundY: 560, phase: 75 },
+            { x: 4775, groundY: 600, phase: 0 },
+            { x: 5135, groundY: 560, phase: 15 }
+        ],
+        enemies: [],
+        buttons: [],
+        gates: []
+    },
+    {
+        name: "16. No Warning",
+        width: 5650,
+        start: { x: 60, y: 590 },
+        goal: { x: 5430, y: 558, w: 56, h: 102 },
+        platforms: ultimatePlatforms().filter((p, i) => i !== 8),
+        silentTrapdoors: [
+            { x: 2870, y: 560, w: 260, h: 30 }
+        ],
+        spikes: [],
+        enemies: [],
+        buttons: [],
+        gates: []
+    },
+    {
+        name: "17. Boulder And Trap",
+        width: 5650,
+        start: { x: 60, y: 590 },
+        goal: { x: 5430, y: 558, w: 56, h: 102 },
+        platforms: ultimatePlatforms().filter((p, i) => i !== 5),
+        silentTrapdoors: [
+            { x: 1790, y: 600, w: 260, h: 30 }
+        ],
+        boulders: [
+            { x: 3360, y: 564, r: 36, min: 3260, max: 3460, speed: 5 }
+        ],
+        spikes: [],
+        enemies: [],
+        buttons: [],
+        gates: []
+    },
+    {
+        name: "18. Ceiling Drop",
+        width: 5650,
+        start: { x: 60, y: 590 },
+        goal: { x: 5430, y: 558, w: 56, h: 102 },
+        platforms: ultimatePlatforms(),
+        spikes: [],
+        ceilings: [
+            { x: 2900, w: 200, h: 60, platformY: 560, topY: -600 }
+        ],
+        enemies: [],
+        buttons: [],
+        gates: []
     }
 ];
 
@@ -1407,6 +1487,8 @@ function loadLevel(index) {
     axes = (level.axes || []).map(a => createAxe(a));
     arrowTraps = (level.arrowTraps || []).map(a => createArrowTrap(a));
     geysers = (level.geysers || []).map(g => createGeyser(g));
+    silentTrapdoors = (level.silentTrapdoors || []).map(t => createSilentTrapdoor(t));
+    ceilings = (level.ceilings || []).map(c => createCeiling(c));
     trapArrows = [];
     crushers = (level.crushers || []).map(c => createCrusher(c));
     boulders = (level.boulders || []).map(b => createBoulder(b));
@@ -1702,7 +1784,7 @@ function updatePlayer() {
 }
 
 function solids() {
-    return platforms.concat(gates.filter(g => !g.open)).concat(timedPlatforms.filter(t => t.solid)).concat(crumblingPlatforms.filter(c => c.state !== "gone"));
+    return platforms.concat(gates.filter(g => !g.open)).concat(timedPlatforms.filter(t => t.solid)).concat(crumblingPlatforms.filter(c => c.state !== "gone")).concat(silentTrapdoors.filter(t => t.state !== "gone"));
 }
 
 function updateTimedPlatforms() {
@@ -1739,6 +1821,38 @@ function updateCrumblingPlatforms() {
             cp.timer -= 1;
             if (cp.timer <= 0) cp.state = "solid";
         }
+    }
+}
+
+function updateSilentTrapdoors() {
+    for (const td of silentTrapdoors) {
+        if (td.state === "solid") {
+            const standing = player.grounded && rectsOverlap(player, { x: td.x, y: td.y - 4, w: td.w, h: td.h + 4 });
+            if (standing) { td.state = "gone"; td.timer = 150; }
+        } else if (td.state === "gone") {
+            td.timer -= 1;
+            if (td.timer <= 0) td.state = "solid";
+        }
+    }
+}
+
+function updateCeilings() {
+    for (const c of ceilings) {
+        const bottomY = c.platformY - c.h;
+        if (c.state === "up") {
+            const standing = player.grounded && rectsOverlap(player, { x: c.x, y: c.platformY - 4, w: c.w, h: 8 });
+            if (standing) c.state = "falling";
+        } else if (c.state === "falling") {
+            c.y += 220;
+            if (c.y >= bottomY) { c.y = bottomY; c.state = "down"; c.timer = 30; }
+        } else if (c.state === "down") {
+            c.timer -= 1;
+            if (c.timer <= 0) c.state = "rising";
+        } else if (c.state === "rising") {
+            c.y -= 6;
+            if (c.y <= c.topY) { c.y = c.topY; c.state = "up"; }
+        }
+        if ((c.state === "falling" || c.state === "down") && rectsOverlap(player, { x: c.x, y: c.y, w: c.w, h: c.h })) takeHit();
     }
 }
 
@@ -2075,6 +2189,34 @@ function drawPlatforms() {
         ctx.fillRect(cp.x + 8, cp.y + cp.h - 8, Math.max(0, cp.w - 16), 5);
         ctx.restore();
     });
+
+    silentTrapdoors.forEach(td => {
+        if (td.state === "gone") {
+            ctx.strokeStyle = "rgba(114, 230, 255, 0.2)";
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.strokeRect(td.x, td.y, td.w, td.h);
+            ctx.setLineDash([]);
+            return;
+        }
+        ctx.shadowColor = "rgba(0, 0, 0, 0.28)";
+        ctx.shadowBlur = 16;
+        ctx.shadowOffsetY = 8;
+        const body = ctx.createLinearGradient(0, td.y, 0, td.y + td.h);
+        body.addColorStop(0, "#25527d");
+        body.addColorStop(0.62, "#17395e");
+        body.addColorStop(1, "#0f2744");
+        ctx.fillStyle = body;
+        roundRect(td.x, td.y, td.w, td.h, 8);
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.fillStyle = "#72e6ff";
+        roundRect(td.x + 8, td.y + 4, Math.max(0, td.w - 16), 5, 3);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+        ctx.fillRect(td.x + 12, td.y + 12, Math.max(0, td.w - 24), 2);
+        ctx.fillStyle = "rgba(2, 9, 18, 0.28)";
+        ctx.fillRect(td.x + 8, td.y + td.h - 8, Math.max(0, td.w - 16), 5);
+    });
 }
 
 function drawSpikes() {
@@ -2249,6 +2391,18 @@ function drawCrushers() {
         roundRect(c.x, c.y, c.w, c.h, 6);
         ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
         ctx.fillRect(c.x + 6, c.y + 5, c.w - 12, 4);
+    });
+}
+
+function drawCeilings() {
+    ceilings.forEach(c => {
+        const body = ctx.createLinearGradient(0, c.y, 0, c.y + c.h);
+        body.addColorStop(0, "#8a919c");
+        body.addColorStop(1, "#4a4f58");
+        ctx.fillStyle = body;
+        roundRect(c.x, c.y, c.w, c.h, 6);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
+        ctx.fillRect(c.x + 6, c.y + c.h - 9, c.w - 12, 4);
     });
 }
 
@@ -2512,6 +2666,7 @@ function draw() {
     drawBarriers();
     drawTurrets();
     drawCrushers();
+    drawCeilings();
     drawBoulders();
     drawAxes();
     drawDrones();
@@ -2537,6 +2692,8 @@ function loop() {
         updateTurrets();
         updateTimedPlatforms();
         updateCrumblingPlatforms();
+        updateSilentTrapdoors();
+        updateCeilings();
         updateAxes();
         updateArrowTraps();
         updateGeysers();
@@ -2565,7 +2722,7 @@ startBtn.addEventListener("click", () => {
     overlay.classList.add("hidden");
     shopToggle.style.display = "block";
     levels = selectedMode === "ultimate" ? ultimateLevels : normalLevels;
-    const startIndex = selectedMode === "ultimate" ? 3 : Math.max(0, levels.length - 1);
+    const startIndex = Math.max(0, levels.length - 1);
     loadLevel(startIndex);
     running = true;
 });
