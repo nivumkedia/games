@@ -499,6 +499,7 @@ let trapArrows = [];
 let geysers = [];
 let silentTrapdoors = [];
 let ceilings = [];
+let batSwarms = [];
 let crushers = [];
 let boulders = [];
 let drones = [];
@@ -549,6 +550,20 @@ function createSilentTrapdoor(spec) {
 }
 function createCeiling(spec) {
     return { x: spec.x, w: spec.w, h: spec.h || 60, platformY: spec.platformY, topY: spec.topY, state: "up", y: spec.topY, timer: 0 };
+}
+function createBatSwarm(spec) {
+    const count = spec.count || 5;
+    const bats = [];
+    for (let i = 0; i < count; i++) {
+        bats.push({
+            x: spec.x + (Math.random() - 0.5) * 40,
+            y: spec.y + (Math.random() - 0.5) * 40,
+            vx: (Math.random() - 0.5) * 4,
+            vy: (Math.random() - 0.5) * 4,
+            wobble: Math.random() * Math.PI * 2
+        });
+    }
+    return { centerX: spec.x, centerY: spec.y, radius: spec.radius || 120, speed: spec.speed || 3, r: spec.r || 12, bats };
 }
 function createCrusher(spec) {
     return {
@@ -1456,6 +1471,20 @@ const ultimateLevels = [
         enemies: [],
         buttons: [],
         gates: []
+    },
+    {
+        name: "19. Cave Swarm",
+        width: 5650,
+        start: { x: 60, y: 590 },
+        goal: { x: 5430, y: 558, w: 56, h: 102 },
+        platforms: ultimatePlatforms(),
+        spikes: [],
+        batSwarms: [
+            { x: 2600, y: 450, radius: 400, count: 1, speed: 10, r: 60 }
+        ],
+        enemies: [],
+        buttons: [],
+        gates: []
     }
 ];
 
@@ -1489,6 +1518,7 @@ function loadLevel(index) {
     geysers = (level.geysers || []).map(g => createGeyser(g));
     silentTrapdoors = (level.silentTrapdoors || []).map(t => createSilentTrapdoor(t));
     ceilings = (level.ceilings || []).map(c => createCeiling(c));
+    batSwarms = (level.batSwarms || []).map(b => createBatSwarm(b));
     trapArrows = [];
     crushers = (level.crushers || []).map(c => createCrusher(c));
     boulders = (level.boulders || []).map(b => createBoulder(b));
@@ -1853,6 +1883,48 @@ function updateCeilings() {
             if (c.y <= c.topY) { c.y = c.topY; c.state = "up"; }
         }
         if ((c.state === "falling" || c.state === "down") && rectsOverlap(player, { x: c.x, y: c.y, w: c.w, h: c.h })) takeHit();
+    }
+}
+
+function findNextPlatform() {
+    let best = null, bestDist = Infinity;
+    for (const p of platforms) {
+        if (p.h > 40) continue;
+        const center = p.x + p.w / 2;
+        const dist = player.facing >= 0 ? center - player.x : player.x - center;
+        if (dist > 0 && dist < bestDist) { bestDist = dist; best = p; }
+    }
+    return best;
+}
+
+function updateBatSwarms() {
+    const nextPlatform = findNextPlatform();
+    for (const swarm of batSwarms) {
+        if (nextPlatform) {
+            const targetX = nextPlatform.x + nextPlatform.w / 2;
+            const targetY = nextPlatform.y - 80;
+            swarm.centerX += (targetX - swarm.centerX) * 0.04;
+            swarm.centerY += (targetY - swarm.centerY) * 0.04;
+        }
+        for (const bat of swarm.bats) {
+            bat.wobble += 0.15;
+            bat.vx += Math.sin(bat.wobble * 1.3) * 0.3;
+            bat.vy += Math.cos(bat.wobble) * 0.3;
+            const dx = bat.x - swarm.centerX, dy = bat.y - swarm.centerY;
+            const dist = Math.hypot(dx, dy) || 1;
+            if (dist > swarm.radius) {
+                bat.vx -= (dx / dist) * 0.4;
+                bat.vy -= (dy / dist) * 0.4;
+            }
+            const speed = Math.hypot(bat.vx, bat.vy) || 1;
+            if (speed > swarm.speed) {
+                bat.vx = (bat.vx / speed) * swarm.speed;
+                bat.vy = (bat.vy / speed) * swarm.speed;
+            }
+            bat.x += bat.vx;
+            bat.y += bat.vy;
+            if (rectsOverlap(player, { x: bat.x - swarm.r, y: bat.y - swarm.r, w: swarm.r * 2, h: swarm.r * 2 })) takeHit();
+        }
     }
 }
 
@@ -2406,6 +2478,36 @@ function drawCeilings() {
     });
 }
 
+function drawBatSwarms() {
+    batSwarms.forEach(swarm => {
+        swarm.bats.forEach(bat => {
+            const flap = Math.sin(bat.wobble * 4) * 0.5 + 0.5;
+            ctx.save();
+            ctx.translate(bat.x, bat.y);
+            ctx.fillStyle = "#241a30";
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.quadraticCurveTo(-swarm.r * 1.4, -swarm.r * (0.3 + flap * 0.5), -swarm.r * 0.3, swarm.r * 0.15);
+            ctx.closePath();
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.quadraticCurveTo(swarm.r * 1.4, -swarm.r * (0.3 + flap * 0.5), swarm.r * 0.3, swarm.r * 0.15);
+            ctx.closePath();
+            ctx.fill();
+            ctx.beginPath();
+            ctx.ellipse(0, 0, swarm.r * 0.28, swarm.r * 0.22, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#ff4fd8";
+            ctx.beginPath();
+            ctx.arc(-3, -1, 1.5, 0, Math.PI * 2);
+            ctx.arc(3, -1, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        });
+    });
+}
+
 function drawBoulders() {
     boulders.forEach(b => {
         ctx.save();
@@ -2667,6 +2769,7 @@ function draw() {
     drawTurrets();
     drawCrushers();
     drawCeilings();
+    drawBatSwarms();
     drawBoulders();
     drawAxes();
     drawDrones();
@@ -2694,6 +2797,7 @@ function loop() {
         updateCrumblingPlatforms();
         updateSilentTrapdoors();
         updateCeilings();
+        updateBatSwarms();
         updateAxes();
         updateArrowTraps();
         updateGeysers();
