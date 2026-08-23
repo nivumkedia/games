@@ -74,28 +74,18 @@ header h1 {
 .bubble-field {
     position: absolute;
     inset: 0;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: center;
-    align-content: center;
-    gap: 4vh;
-    padding: 5vh 5vw;
 }
 
 .bubble {
-    position: relative;
+    position: absolute;
     border-radius: 50%;
     background: var(--surface);
     border: 1px solid var(--border);
     box-shadow: 0 8px 24px rgba(62, 168, 224, 0.18);
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 0.5em;
     cursor: pointer;
-    will-change: transform;
 }
 
 .bubble:hover {
@@ -103,17 +93,14 @@ header h1 {
     border-color: var(--accent);
 }
 
-.bubble-icon {
-    line-height: 1;
-}
-
 .bubble-name {
+    font-size: clamp(12px, 2.4vmin, 16px);
     font-weight: 700;
     color: var(--text);
     letter-spacing: 0.3px;
     text-align: center;
     line-height: 1.15;
-    padding: 0 12%;
+    padding: 0 14%;
 }
 
 .game-frame {
@@ -140,63 +127,211 @@ header h1 {
 
 <script>
 const GAMES = [
-    { name: 'Sushi Maker', icon: '🍣', src: '../../sushi-game.html', size: 210 },
-    { name: 'Block Blast', icon: '🟪', src: 'block-blast.html', size: 190 },
+    { name: 'Sushi Maker', src: '../../sushi-game.html' },
+    { name: 'Block Blast', src: 'block-blast.html' },
+    { name: '2048', src: '2048.html' },
 ];
 
 const field = document.getElementById('bubble-field');
 
-const fitCap = Math.min(window.innerWidth, window.innerHeight) * 0.4;
-
 function easeOutQuint(t) { return 1 - Math.pow(1 - t, 5); }
 
-GAMES.forEach((game, i) => {
-    const diameter = Math.max(130, Math.min(game.size, fitCap));
+// Cycle through varied sizes so bubbles don't just shrink as more are added —
+// the cluster grows to fit them instead.
+const SIZE_TIERS = [195, 145, 215, 165, 130, 180];
+function diameterFor(i) {
+    const base = SIZE_TIERS[i % SIZE_TIERS.length];
+    const viewportCap = Math.min(window.innerWidth, window.innerHeight) * 0.46;
+    return Math.max(95, Math.min(base, viewportCap));
+}
+
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+const RISE_DURATION = 3000;
+const DAMPING = 0.975;
+const CENTER_SPRING = 0.0018;
+const WANDER_LERP = 0.012;
+const GAP = 16;
+
+let centerX, centerY, homes;
+
+// Relaxation-based packing: seed positions on a golden-angle spiral, then
+// repeatedly push overlapping pairs apart (respecting each bubble's own
+// radius) while gently pulling everything back toward the center. This
+// converges on a tight, non-overlapping, evenly-spaced cluster no matter
+// how much the bubble sizes vary — unlike a plain spiral layout, which only
+// spaces bubbles evenly by angle and can leave differently-sized neighbors
+// overlapping.
+function computeHomes() {
+    const radii = GAMES.map((_, i) => diameterFor(i) / 2);
+    const n = radii.length;
+    const avgRadius = radii.reduce((sum, r) => sum + r, 0) / n;
+    const seedScale = avgRadius * 1.7;
+    const pts = radii.map((_, i) => {
+        if (n <= 1) return { x: 0, y: 0 };
+        const r = seedScale * Math.sqrt(i / (n - 1));
+        const theta = i * GOLDEN_ANGLE;
+        return { x: Math.cos(theta) * r, y: Math.sin(theta) * r };
+    });
+
+    for (let iter = 0; iter < 500; iter++) {
+        for (let i = 0; i < n; i++) {
+            for (let j = i + 1; j < n; j++) {
+                const dx = pts[j].x - pts[i].x, dy = pts[j].y - pts[i].y;
+                let dist = Math.hypot(dx, dy);
+                const minDist = radii[i] + radii[j] + GAP;
+                if (dist >= minDist) continue;
+                if (dist < 0.001) dist = 0.001;
+                const nx = dx / dist, ny = dy / dist;
+                const overlap = (minDist - dist) / 2;
+                pts[i].x -= nx * overlap; pts[i].y -= ny * overlap;
+                pts[j].x += nx * overlap; pts[j].y += ny * overlap;
+            }
+        }
+        for (let i = 0; i < n; i++) {
+            pts[i].x *= 0.995;
+            pts[i].y *= 0.995;
+        }
+    }
+
+    return pts;
+}
+
+function refreshHomes() {
+    const rect = field.getBoundingClientRect();
+    centerX = rect.width / 2;
+    centerY = rect.height / 2;
+    const pts = computeHomes();
+    homes = pts.map(p => ({ x: centerX + p.x, y: centerY + p.y }));
+}
+
+refreshHomes();
+
+const bubbles = GAMES.map((game, i) => {
+    const diameter = diameterFor(i);
+    const radius = diameter / 2;
+    const home = homes[i];
+    const fieldRect = field.getBoundingClientRect();
+    const startY = fieldRect.height + radius + 40;
+
     const el = document.createElement('div');
     el.className = 'bubble';
     el.style.width = `${diameter}px`;
     el.style.height = `${diameter}px`;
-    el.innerHTML = `<div class="bubble-icon" style="font-size:${diameter * 0.32}px">${game.icon}</div>` +
-        `<div class="bubble-name" style="font-size:${Math.max(12, diameter * 0.08)}px">${game.name}</div>`;
+    el.style.left = `${home.x - radius}px`;
+    el.style.top = `${startY - radius}px`;
+    el.innerHTML = `<div class="bubble-name">${game.name}</div>`;
     el.addEventListener('click', () => loadGame(game.src));
     field.appendChild(el);
 
-    const riseDelay = i * 300;
-    const riseDuration = 3200;
-    const riseStart = performance.now() + riseDelay;
-    const startY = window.innerHeight * 0.75 + diameter;
-    const swayAmp = 14 + Math.random() * 8;
-    const swayFreq = 1.6 + Math.random() * 0.6;
+    return {
+        el, radius,
+        homeX: home.x, homeY: home.y,
+        startY,
+        x: home.x, y: startY,
+        vx: 0, vy: 0,
+        phase: 'rising',
+        riseStart: performance.now() + i * 280,
+        swayAmp: 12 + Math.random() * 8,
+        swayFreq: 1.5 + Math.random() * 0.6,
+        wanderTargetVX: 0, wanderTargetVY: 0,
+        nextWanderChange: 0,
+    };
+});
 
-    const floatAmpY = 8 + Math.random() * 6;
-    const floatPeriodY = 4500 + Math.random() * 2500;
-    const floatAmpX = 5 + Math.random() * 5;
-    const floatPeriodX = 5500 + Math.random() * 3000;
-    const floatPhaseX = Math.random() * Math.PI * 2;
+function physicsTick(now) {
+    bubbles.forEach(b => {
+        if (b.phase !== 'rising') return;
+        const elapsed = now - b.riseStart;
+        if (elapsed < 0) return;
+        const t = Math.min(1, elapsed / RISE_DURATION);
+        const eased = easeOutQuint(t);
+        b.x = b.homeX + b.swayAmp * Math.sin(t * b.swayFreq * Math.PI * 2) * (1 - eased);
+        b.y = b.homeY + (b.startY - b.homeY) * (1 - eased);
+        if (t >= 1) {
+            b.phase = 'floating';
+            b.vx = 0;
+            b.vy = 0;
+            b.nextWanderChange = now;
+        }
+    });
 
-    function tick(now) {
-        let x, y;
-        if (now < riseStart) {
-            requestAnimationFrame(tick);
-            return;
+    const floaters = bubbles.filter(b => b.phase === 'floating');
+    floaters.forEach(b => {
+        if (now >= b.nextWanderChange) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 0.15 + Math.random() * 0.35;
+            b.wanderTargetVX = Math.cos(angle) * speed;
+            b.wanderTargetVY = Math.sin(angle) * speed;
+            b.nextWanderChange = now + 2000 + Math.random() * 2500;
         }
-        const elapsed = now - riseStart;
-        if (elapsed < riseDuration) {
-            const t = elapsed / riseDuration;
-            const eased = easeOutQuint(t);
-            y = startY * (1 - eased);
-            x = swayAmp * Math.sin(t * swayFreq * Math.PI * 2) * (1 - eased);
-        } else {
-            const ft = (now - riseStart - riseDuration);
-            y = floatAmpY * Math.sin((ft / floatPeriodY) * Math.PI * 2);
-            x = floatAmpX * Math.sin((ft / floatPeriodX) * Math.PI * 2 + floatPhaseX);
+        b.vx += (b.wanderTargetVX - b.vx) * WANDER_LERP;
+        b.vy += (b.wanderTargetVY - b.vy) * WANDER_LERP;
+        b.vx += (b.homeX - b.x) * CENTER_SPRING;
+        b.vy += (b.homeY - b.y) * CENTER_SPRING;
+        b.vx *= DAMPING;
+        b.vy *= DAMPING;
+    });
+
+    for (let i = 0; i < bubbles.length; i++) {
+        for (let j = i + 1; j < bubbles.length; j++) {
+            const a = bubbles[i], b = bubbles[j];
+            let dx = b.x - a.x, dy = b.y - a.y;
+            let dist = Math.hypot(dx, dy);
+            const minDist = a.radius + b.radius + GAP;
+            if (dist >= minDist) continue;
+            if (dist < 0.001) { dx = 1; dy = 0; dist = 1; }
+            const nx = dx / dist, ny = dy / dist;
+            const overlap = minDist - dist;
+            const aMovable = a.phase === 'floating';
+            const bMovable = b.phase === 'floating';
+            const share = (aMovable ? 1 : 0) + (bMovable ? 1 : 0);
+            if (share === 0) continue;
+            // Fully resolve the overlap every frame — a soft partial push
+            // lets fast-wandering bubbles sustain an overlap indefinitely.
+            const push = overlap / share;
+            if (aMovable) { a.x -= nx * push; a.y -= ny * push; }
+            if (bMovable) { b.x += nx * push; b.y += ny * push; }
+
+            // Cancel the velocity driving them together so they don't
+            // immediately re-collide next frame.
+            if (aMovable && bMovable) {
+                const approach = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+                if (approach < 0) {
+                    a.vx += nx * approach * 0.5; a.vy += ny * approach * 0.5;
+                    b.vx -= nx * approach * 0.5; b.vy -= ny * approach * 0.5;
+                }
+            } else if (aMovable) {
+                const approach = -(a.vx * nx + a.vy * ny);
+                if (approach > 0) { a.vx += nx * approach; a.vy += ny * approach; }
+            } else if (bMovable) {
+                const approach = b.vx * nx + b.vy * ny;
+                if (approach > 0) { b.vx -= nx * approach; b.vy -= ny * approach; }
+            }
         }
-        el.style.transform = `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px)`;
-        requestAnimationFrame(tick);
     }
 
-    el.style.transform = `translate(0, ${startY}px)`;
-    requestAnimationFrame(tick);
+    floaters.forEach(b => { b.x += b.vx; b.y += b.vy; });
+
+    bubbles.forEach(b => {
+        b.el.style.left = `${(b.x - b.radius).toFixed(2)}px`;
+        b.el.style.top = `${(b.y - b.radius).toFixed(2)}px`;
+    });
+
+    requestAnimationFrame(physicsTick);
+}
+
+requestAnimationFrame(physicsTick);
+
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+        refreshHomes();
+        bubbles.forEach((b, i) => {
+            b.homeX = homes[i].x;
+            b.homeY = homes[i].y;
+        });
+    }, 200);
 });
 
 function loadGame(src) {
@@ -204,6 +339,7 @@ function loadGame(src) {
     frame.src = src;
     frame.style.display = 'block';
     field.style.display = 'none';
+    frame.onload = () => frame.contentWindow?.focus();
 }
 
 document.getElementById('back-btn').addEventListener('click', () => {
