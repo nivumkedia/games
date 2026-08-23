@@ -7,16 +7,20 @@
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+*, *::before, *::after {
+    transition: background-color 0.7s ease, border-color 0.7s ease, color 0.7s ease;
+}
+
 :root {
-    --bg: #f6f1fc;
-    --panel: #ffffff;
-    --board-bg: #efe6fa;
-    --cell-empty: #ece0f8;
-    --cell-border: #d9c5ef;
-    --accent: #8e5fc7;
-    --accent-dark: #6f45a3;
-    --text: #4a3568;
-    --dim: #8a76a8;
+    --bg: #d9cbe9;
+    --panel: #f6f3fa;
+    --board-bg: #e6dcf0;
+    --cell-empty: #ddd0ea;
+    --cell-border: #c4a9dd;
+    --accent: #82599e;
+    --accent-dark: #674387;
+    --text: #453160;
+    --dim: #8577a0;
 }
 
 body {
@@ -111,6 +115,28 @@ h1 {
     z-index: 60;
 }
 
+#confetti {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 70;
+}
+
+.confetti-piece {
+    position: absolute;
+    top: -20px;
+    border-radius: 2px;
+    animation-name: confettiFall;
+    animation-timing-function: ease-in;
+    animation-fill-mode: forwards;
+}
+
+@keyframes confettiFall {
+    0%   { transform: translate(0, -10vh) rotate(0deg); opacity: 1; }
+    100% { transform: translate(var(--drift), 115vh) rotate(var(--rot)); opacity: 0.9; }
+}
+
 .particle {
     position: fixed;
     width: 9px;
@@ -198,7 +224,7 @@ h1 {
 #overlay {
     position: fixed;
     inset: 0;
-    background: rgba(246, 241, 252, 0.9);
+    background: color-mix(in srgb, var(--bg) 90%, transparent);
     display: none;
     align-items: center;
     justify-content: center;
@@ -238,6 +264,7 @@ h1 {
 
 <div id="ghost"></div>
 <div id="particles"></div>
+<div id="confetti"></div>
 
 <div id="overlay">
     <h2>No more moves</h2>
@@ -250,7 +277,100 @@ h1 {
 
 <script>
 const SIZE = 8;
-const PALETTE = ['#b39ddb', '#9575cd', '#d1c4e9', '#ba68c8', '#ce93d8', '#7e57c2'];
+let PALETTE = ['#a98bc6', '#8c6cae', '#c0a9d9', '#a561ac', '#b478bf', '#6b4a8f'];
+
+const THEMES = [
+    {
+        bg: '#d9cbe9', panel: '#f6f3fa', boardBg: '#e6dcf0', cellEmpty: '#ddd0ea', cellBorder: '#c4a9dd',
+        accent: '#82599e', accentDark: '#674387', text: '#453160', dim: '#8577a0',
+        palette: ['#a98bc6', '#8c6cae', '#c0a9d9', '#a561ac', '#b478bf', '#6b4a8f'],
+    },
+    {
+        bg: '#c9e7d7', panel: '#f4faf6', boardBg: '#d9efe3', cellEmpty: '#cde9dc', cellBorder: '#a9d3bd',
+        accent: '#4c9880', accentDark: '#397a66', text: '#234a3a', dim: '#6e9284',
+        palette: ['#8ec6a6', '#6bb18f', '#a9d9bc', '#4ea37e', '#3a8563', '#6b9a82'],
+    },
+    {
+        bg: '#f4d3bd', panel: '#faf1ea', boardBg: '#f6dcc7', cellEmpty: '#f3d5bb', cellBorder: '#e2b389',
+        accent: '#cd8151', accentDark: '#ab6535', text: '#5e341b', dim: '#b58968',
+        palette: ['#e0955a', '#d3866c', '#e7ad88', '#cd8151', '#dba070', '#c4915a'],
+    },
+    {
+        bg: '#f3ecc0', panel: '#faf8ec', boardBg: '#f0e8c9', cellEmpty: '#ede2b7', cellBorder: '#d9c688',
+        accent: '#b89736', accentDark: '#977823', text: '#524217', dim: '#a08e52',
+        palette: ['#d9c26c', '#d1b559', '#e2cd88', '#c4a53f', '#b39536', '#dcc067'],
+    },
+    {
+        bg: '#f5d9b8', panel: '#faf2e6', boardBg: '#f8e3c6', cellEmpty: '#f5dcbc', cellBorder: '#e6bd85',
+        accent: '#d1893f', accentDark: '#ad6c2b', text: '#5f3a14', dim: '#bd9560',
+        palette: ['#e8a15c', '#dd9349', '#efbb82', '#d1893f', '#e0a466', '#c68c4b'],
+    },
+    {
+        bg: '#bfe8e4', panel: '#f1faf9', boardBg: '#cdefec', cellEmpty: '#c2e9e5', cellBorder: '#9bd3cc',
+        accent: '#3f9e94', accentDark: '#2d8078', text: '#1c4a45', dim: '#6a9d97',
+        palette: ['#7fc9c1', '#5cb3a9', '#9bd8d1', '#3fa89b', '#2f8a7e', '#66aca3'],
+    },
+    {
+        bg: '#f7d9e3', panel: '#fbf1f4', boardBg: '#f9e3ea', cellEmpty: '#f6dbe4', cellBorder: '#eab8c9',
+        accent: '#d97fa0', accentDark: '#b96284', text: '#6b2f47', dim: '#c191a6',
+        palette: ['#eda9c0', '#e492ae', '#f0bdd0', '#d97fa0', '#e6a6bb', '#cc7c99'],
+    },
+    {
+        bg: '#cfe3f6', panel: '#f2f7fc', boardBg: '#dcecfa', cellEmpty: '#d3e6f7', cellBorder: '#b0cdec',
+        accent: '#5e93cc', accentDark: '#4674a8', text: '#2c4a68', dim: '#7fa0c0',
+        palette: ['#9dc4ea', '#82b3e2', '#b6d6f2', '#6aa3d9', '#5286bd', '#8ab8dd'],
+    },
+];
+
+let themeIndex = 0;
+
+function applyTheme(index) {
+    const t = THEMES[index];
+    const root = document.documentElement.style;
+    root.setProperty('--bg', t.bg);
+    root.setProperty('--panel', t.panel);
+    root.setProperty('--board-bg', t.boardBg);
+    root.setProperty('--cell-empty', t.cellEmpty);
+    root.setProperty('--cell-border', t.cellBorder);
+    root.setProperty('--accent', t.accent);
+    root.setProperty('--accent-dark', t.accentDark);
+    root.setProperty('--text', t.text);
+    root.setProperty('--dim', t.dim);
+    PALETTE = t.palette;
+}
+
+function shiftToNextTheme() {
+    let next = themeIndex;
+    if (THEMES.length > 1) {
+        while (next === themeIndex) next = Math.floor(Math.random() * THEMES.length);
+    }
+    themeIndex = next;
+    applyTheme(themeIndex);
+}
+
+function spawnConfetti() {
+    const count = 550;
+    for (let i = 0; i < count; i++) {
+        const piece = document.createElement('div');
+        piece.className = 'confetti-piece';
+        const size = 10 + Math.random() * 10;
+        const color = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+        const delay = Math.random() * 1.1;
+        const duration = 2.2 + Math.random() * 1.6;
+        const drift = (Math.random() - 0.5) * 300;
+        const rot = 180 + Math.random() * 540;
+        piece.style.left = `${-8 + Math.random() * 116}vw`;
+        piece.style.width = `${size}px`;
+        piece.style.height = `${size * 0.45}px`;
+        piece.style.background = color;
+        piece.style.setProperty('--drift', `${drift}px`);
+        piece.style.setProperty('--rot', `${rot}deg`);
+        piece.style.animationDuration = `${duration}s`;
+        piece.style.animationDelay = `${delay}s`;
+        confettiEl.appendChild(piece);
+        piece.addEventListener('animationend', () => piece.remove());
+    }
+}
 
 const SHAPES = [
     [[1]],
@@ -266,16 +386,12 @@ const SHAPES = [
     [[1,1,1],[0,1,0]],
     [[1,1,1,1]],
     [[1,1],[1,0]],
-    [[0,1,0],[1,1,1],[0,1,0]],
     [[1,1,1],[1,1,1]],
     [[1,1],[1,1],[1,1]],
     [[1,1,1],[1,1,1],[1,1,1]],
-    [[1,1,1,1],[1,1,1,1]],
-    [[1,1],[1,1],[1,1],[1,1]],
 ];
 
 const LARGE_SHAPES = SHAPES.filter(shape => shape.flat().filter(Boolean).length >= 6);
-let roundCount = 0;
 
 let board = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
 let tray = [null, null, null];
@@ -287,6 +403,7 @@ const boardEl = document.getElementById('board');
 const trayEl = document.getElementById('tray');
 const ghostEl = document.getElementById('ghost');
 const particlesEl = document.getElementById('particles');
+const confettiEl = document.getElementById('confetti');
 const scoreEl = document.getElementById('score');
 const bestEl = document.getElementById('best');
 const overlayEl = document.getElementById('overlay');
@@ -307,36 +424,54 @@ function isShapeCell(shape, topR, topC, r, c) {
     return !!shape[sr][sc];
 }
 
-function wouldCompleteLine(shape, topR, topC) {
+function linesCompletedBy(shape, topR, topC) {
+    const rowsFull = [];
+    const colsFull = [];
     const rowsToCheck = new Set();
     const colsToCheck = new Set();
     shape.forEach((row, r) => row.forEach((v, c) => {
         if (v) { rowsToCheck.add(topR + r); colsToCheck.add(topC + c); }
     }));
-    for (const r of rowsToCheck) {
-        let full = true;
+    rowsToCheck.forEach(r => {
         for (let c = 0; c < SIZE; c++) {
-            if (!(board[r][c] || isShapeCell(shape, topR, topC, r, c))) { full = false; break; }
+            if (!(board[r][c] || isShapeCell(shape, topR, topC, r, c))) return;
         }
-        if (full) return true;
-    }
-    for (const c of colsToCheck) {
-        let full = true;
+        rowsFull.push(r);
+    });
+    colsToCheck.forEach(c => {
         for (let r = 0; r < SIZE; r++) {
-            if (!(board[r][c] || isShapeCell(shape, topR, topC, r, c))) { full = false; break; }
+            if (!(board[r][c] || isShapeCell(shape, topR, topC, r, c))) return;
         }
-        if (full) return true;
-    }
-    return false;
+        colsFull.push(c);
+    });
+    return { rowsFull, colsFull };
 }
 
-function shapeCanCompleteLine(shape) {
+function wouldClearBoardCompletely(shape, topR, topC, rowsFull, colsFull) {
+    const temp = board.map(row => row.slice());
+    shape.forEach((row, r) => row.forEach((v, c) => { if (v) temp[topR + r][topC + c] = 'x'; }));
+    rowsFull.forEach(r => { for (let c = 0; c < SIZE; c++) temp[r][c] = null; });
+    colsFull.forEach(c => { for (let r = 0; r < SIZE; r++) temp[r][c] = null; });
+    return temp.every(row => row.every(cell => !cell));
+}
+
+// Best-case outcome across every legal placement of this shape: the most
+// lines it could clear in one drop, and whether any placement would leave
+// the whole board empty.
+function shapeHelpfulness(shape) {
+    let maxLines = 0;
+    let canFullyClear = false;
     for (let r = 0; r < SIZE; r++) {
         for (let c = 0; c < SIZE; c++) {
-            if (canPlace(shape, r, c) && wouldCompleteLine(shape, r, c)) return true;
+            if (!canPlace(shape, r, c)) continue;
+            const { rowsFull, colsFull } = linesCompletedBy(shape, r, c);
+            const lines = rowsFull.length + colsFull.length;
+            if (lines === 0) continue;
+            if (lines > maxLines) maxLines = lines;
+            if (wouldClearBoardCompletely(shape, r, c, rowsFull, colsFull)) canFullyClear = true;
         }
     }
-    return false;
+    return { maxLines, canFullyClear };
 }
 
 function sizeWeight(shape, fullness) {
@@ -358,11 +493,51 @@ function hasAnyPlacement(shape) {
     return false;
 }
 
-function randomShape() {
-    const fullness = boardFullness();
-    const candidates = SHAPES.map(shape => {
+// True while the filled cells still form a clean rectangle/square, or a
+// rectangle with one corner rectangle missing (a large "L"). False once the
+// filled area gets notched/fragmented into anything less regular.
+function boardShapeIsNice() {
+    let minR = SIZE, maxR = -1, minC = SIZE, maxC = -1, filledCount = 0;
+    for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+            if (board[r][c]) {
+                filledCount++;
+                if (r < minR) minR = r;
+                if (r > maxR) maxR = r;
+                if (c < minC) minC = c;
+                if (c > maxC) maxC = c;
+            }
+        }
+    }
+    if (filledCount === 0) return true;
+
+    const bboxRows = maxR - minR + 1;
+    const bboxCols = maxC - minC + 1;
+    if (filledCount === bboxRows * bboxCols) return true;
+
+    let eMinR = SIZE, eMaxR = -1, eMinC = SIZE, eMaxC = -1, emptyCount = 0;
+    for (let r = minR; r <= maxR; r++) {
+        for (let c = minC; c <= maxC; c++) {
+            if (!board[r][c]) {
+                emptyCount++;
+                if (r < eMinR) eMinR = r;
+                if (r > eMaxR) eMaxR = r;
+                if (c < eMinC) eMinC = c;
+                if (c > eMaxC) eMaxC = c;
+            }
+        }
+    }
+    const emptyBboxIsSolid = emptyCount === (eMaxR - eMinR + 1) * (eMaxC - eMinC + 1);
+    const emptyAtCorner = (eMinR === minR || eMaxR === maxR) && (eMinC === minC || eMaxC === maxC);
+    return emptyBboxIsSolid && emptyAtCorner;
+}
+
+function weightedPickShape(pool, fullness) {
+    const candidates = pool.map(shape => {
         let weight = sizeWeight(shape, fullness);
-        if (shapeCanCompleteLine(shape)) weight *= 8;
+        const { maxLines, canFullyClear } = shapeHelpfulness(shape);
+        if (maxLines > 0) weight *= 8 * (1 + (maxLines - 1) * 0.5);
+        if (canFullyClear) weight *= 6;
         return { shape, weight };
     });
     const totalWeight = candidates.reduce((sum, cand) => sum + cand.weight, 0);
@@ -372,23 +547,28 @@ function randomShape() {
         roll -= cand.weight;
         if (roll <= 0) { chosen = cand.shape; break; }
     }
+    return chosen;
+}
+
+function randomShape() {
+    const shape = weightedPickShape(SHAPES, boardFullness());
     const color = PALETTE[Math.floor(Math.random() * PALETTE.length)];
-    return { shape: chosen, color };
+    return { shape, color };
 }
 
 function randomLargeShape() {
     let pool = LARGE_SHAPES.filter(hasAnyPlacement);
     if (pool.length === 0) pool = SHAPES.filter(hasAnyPlacement);
     if (pool.length === 0) pool = SHAPES;
-    const shape = pool[Math.floor(Math.random() * pool.length)];
+    const shape = weightedPickShape(pool, boardFullness());
     const color = PALETTE[Math.floor(Math.random() * PALETTE.length)];
     return { shape, color };
 }
 
 function refillTrayIfNeeded() {
     if (tray.every(p => p === null)) {
-        roundCount++;
-        if (roundCount <= 2) {
+        const canForceLarge = boardShapeIsNice() && LARGE_SHAPES.some(hasAnyPlacement);
+        if (canForceLarge) {
             tray = [randomLargeShape(), randomLargeShape(), randomLargeShape()];
         } else {
             tray = [randomShape(), randomShape(), randomShape()];
@@ -554,6 +734,10 @@ function placePiece(slotIndex, topR, topC) {
             score += lines * SIZE * 10 * lines;
             updateScore();
             renderBoard();
+            if (board.every(row => row.every(cell => !cell))) {
+                spawnConfetti();
+                shiftToNextTheme();
+            }
             refillTrayIfNeeded();
             renderTray();
             if (!anyMoveAvailable()) showGameOver();
@@ -584,7 +768,6 @@ function resetGame() {
     board = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
     tray = [null, null, null];
     score = 0;
-    roundCount = 0;
     refillTrayIfNeeded();
     updateScore();
     renderBoard();
