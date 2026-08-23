@@ -8,7 +8,7 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
-    --bg: #e8f4fd;
+    --bg: #ffffff;
     --sidebar-bg: #ffffff;
     --border: #c8dff0;
     --text: #1a2a3a;
@@ -31,16 +31,15 @@ header {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 14px 20px;
-    background: var(--sidebar-bg);
+    padding: 16px 20px 12px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
 }
 
 header h1 {
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 800;
-    letter-spacing: 0.5px;
+    letter-spacing: 1px;
     color: var(--accent);
 }
 
@@ -56,6 +55,7 @@ header h1 {
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
     transition: border-color 0.2s, color 0.2s, transform 0.2s;
 }
 
@@ -65,10 +65,93 @@ header h1 {
     transform: scale(1.1);
 }
 
-.game-frame {
+.main {
     flex: 1;
+    position: relative;
+    overflow: hidden;
+}
+
+.bubble-field {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    align-content: center;
+    gap: 4vh;
+    padding: 5vh 5vw;
+}
+
+.bubble {
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: 0 8px 24px rgba(62, 168, 224, 0.18);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5em;
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(130vh);
+}
+
+.bubble:hover {
+    box-shadow: 0 14px 32px rgba(62, 168, 224, 0.28);
+    border-color: var(--accent);
+}
+
+.bubble.rising {
+    animation-name: riseUp;
+    animation-timing-function: cubic-bezier(.16, .6, .25, 1);
+    animation-fill-mode: forwards;
+}
+
+.bubble.floating {
+    opacity: 1;
+    transform: translateY(0);
+    animation-name: floaty;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+    animation-direction: alternate;
+}
+
+.bubble.floating:hover {
+    animation-play-state: paused;
+}
+
+@keyframes riseUp {
+    from { transform: translateY(130vh); opacity: 0; }
+    to   { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes floaty {
+    from { transform: translateY(0); }
+    to   { transform: translateY(-16px); }
+}
+
+.bubble-icon {
+    line-height: 1;
+}
+
+.bubble-name {
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: 0.3px;
+    text-align: center;
+    line-height: 1.15;
+    padding: 0 12%;
+}
+
+.game-frame {
+    position: absolute;
+    inset: 0;
     width: 100%;
+    height: 100%;
     border: none;
+    display: none;
 }
 </style>
 </head>
@@ -76,12 +159,54 @@ header h1 {
 
 <header>
     <button id="back-btn" title="Back to Playmerth 2.0">←</button>
-    <h1>Didi's Games</h1>
+    <h1>DIDI'S GAMES</h1>
 </header>
 
-<iframe class="game-frame" src="../../sushi-game.html"></iframe>
+<div class="main">
+    <div class="bubble-field" id="bubble-field"></div>
+    <iframe class="game-frame" id="game-frame"></iframe>
+</div>
 
 <script>
+const GAMES = [
+    { name: 'Sushi Surge', icon: '🍣', src: '../../sushi-game.html', size: 210 },
+];
+
+const field = document.getElementById('bubble-field');
+
+const fitCap = Math.min(window.innerWidth, window.innerHeight) * 0.4;
+
+GAMES.forEach((game, i) => {
+    const diameter = Math.max(130, Math.min(game.size, fitCap));
+    const el = document.createElement('div');
+    el.className = 'bubble';
+    el.style.width = `${diameter}px`;
+    el.style.height = `${diameter}px`;
+    el.style.animationDelay = `${i * 0.3}s`;
+    el.style.animationDuration = '2.4s';
+    el.innerHTML = `<div class="bubble-icon" style="font-size:${diameter * 0.32}px">${game.icon}</div>` +
+        `<div class="bubble-name" style="font-size:${Math.max(12, diameter * 0.08)}px">${game.name}</div>`;
+    el.addEventListener('click', () => loadGame(game.src));
+    field.appendChild(el);
+
+    el.addEventListener('animationend', event => {
+        if (event.animationName !== 'riseUp') return;
+        el.classList.remove('rising');
+        el.classList.add('floating');
+        el.style.animationDelay = `${Math.random() * 2}s`;
+        el.style.animationDuration = `${6 + Math.random() * 3}s`;
+    });
+
+    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('rising')));
+});
+
+function loadGame(src) {
+    const frame = document.getElementById('game-frame');
+    frame.src = src;
+    frame.style.display = 'block';
+    field.style.display = 'none';
+}
+
 document.getElementById('back-btn').addEventListener('click', () => {
     window.location.href = 'gamehub.html';
 });
