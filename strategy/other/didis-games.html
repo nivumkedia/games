@@ -84,6 +84,7 @@ header h1 {
 }
 
 .bubble {
+    position: relative;
     border-radius: 50%;
     background: var(--surface);
     border: 1px solid var(--border);
@@ -94,42 +95,12 @@ header h1 {
     justify-content: center;
     gap: 0.5em;
     cursor: pointer;
-    opacity: 0;
-    transform: translateY(130vh);
+    will-change: transform;
 }
 
 .bubble:hover {
     box-shadow: 0 14px 32px rgba(62, 168, 224, 0.28);
     border-color: var(--accent);
-}
-
-.bubble.rising {
-    animation-name: riseUp;
-    animation-timing-function: cubic-bezier(.16, .6, .25, 1);
-    animation-fill-mode: forwards;
-}
-
-.bubble.floating {
-    opacity: 1;
-    transform: translateY(0);
-    animation-name: floaty;
-    animation-timing-function: ease-in-out;
-    animation-iteration-count: infinite;
-    animation-direction: alternate;
-}
-
-.bubble.floating:hover {
-    animation-play-state: paused;
-}
-
-@keyframes riseUp {
-    from { transform: translateY(130vh); opacity: 0; }
-    to   { transform: translateY(0); opacity: 1; }
-}
-
-@keyframes floaty {
-    from { transform: translateY(0); }
-    to   { transform: translateY(-16px); }
 }
 
 .bubble-icon {
@@ -169,12 +140,15 @@ header h1 {
 
 <script>
 const GAMES = [
-    { name: 'Sushi Surge', icon: '🍣', src: '../../sushi-game.html', size: 210 },
+    { name: 'Sushi Maker', icon: '🍣', src: '../../sushi-game.html', size: 210 },
+    { name: 'Block Blast', icon: '🟪', src: 'block-blast.html', size: 190 },
 ];
 
 const field = document.getElementById('bubble-field');
 
 const fitCap = Math.min(window.innerWidth, window.innerHeight) * 0.4;
+
+function easeOutQuint(t) { return 1 - Math.pow(1 - t, 5); }
 
 GAMES.forEach((game, i) => {
     const diameter = Math.max(130, Math.min(game.size, fitCap));
@@ -182,22 +156,47 @@ GAMES.forEach((game, i) => {
     el.className = 'bubble';
     el.style.width = `${diameter}px`;
     el.style.height = `${diameter}px`;
-    el.style.animationDelay = `${i * 0.3}s`;
-    el.style.animationDuration = '2.4s';
     el.innerHTML = `<div class="bubble-icon" style="font-size:${diameter * 0.32}px">${game.icon}</div>` +
         `<div class="bubble-name" style="font-size:${Math.max(12, diameter * 0.08)}px">${game.name}</div>`;
     el.addEventListener('click', () => loadGame(game.src));
     field.appendChild(el);
 
-    el.addEventListener('animationend', event => {
-        if (event.animationName !== 'riseUp') return;
-        el.classList.remove('rising');
-        el.classList.add('floating');
-        el.style.animationDelay = `${Math.random() * 2}s`;
-        el.style.animationDuration = `${6 + Math.random() * 3}s`;
-    });
+    const riseDelay = i * 300;
+    const riseDuration = 3200;
+    const riseStart = performance.now() + riseDelay;
+    const startY = window.innerHeight * 0.75 + diameter;
+    const swayAmp = 14 + Math.random() * 8;
+    const swayFreq = 1.6 + Math.random() * 0.6;
 
-    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('rising')));
+    const floatAmpY = 8 + Math.random() * 6;
+    const floatPeriodY = 4500 + Math.random() * 2500;
+    const floatAmpX = 5 + Math.random() * 5;
+    const floatPeriodX = 5500 + Math.random() * 3000;
+    const floatPhaseX = Math.random() * Math.PI * 2;
+
+    function tick(now) {
+        let x, y;
+        if (now < riseStart) {
+            requestAnimationFrame(tick);
+            return;
+        }
+        const elapsed = now - riseStart;
+        if (elapsed < riseDuration) {
+            const t = elapsed / riseDuration;
+            const eased = easeOutQuint(t);
+            y = startY * (1 - eased);
+            x = swayAmp * Math.sin(t * swayFreq * Math.PI * 2) * (1 - eased);
+        } else {
+            const ft = (now - riseStart - riseDuration);
+            y = floatAmpY * Math.sin((ft / floatPeriodY) * Math.PI * 2);
+            x = floatAmpX * Math.sin((ft / floatPeriodX) * Math.PI * 2 + floatPhaseX);
+        }
+        el.style.transform = `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px)`;
+        requestAnimationFrame(tick);
+    }
+
+    el.style.transform = `translate(0, ${startY}px)`;
+    requestAnimationFrame(tick);
 });
 
 function loadGame(src) {
