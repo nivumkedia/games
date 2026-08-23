@@ -1843,7 +1843,7 @@ const SAVE_KEY = "platformer-rush-save-v1";
 const STARTING_LIVES = 40;
 const HARD_SLASH_COOLDOWN_FRAMES = 3600;
 const START_AT_NEW_STUFF = true;
-const TEST_START_LEVEL = 18;
+const TEST_START_LEVEL = 21;
 const keys = { left: false, right: false, jump: false, down: false, duck: false, block: false };
 const setupChoices = { style: "regular", version: "normal", difficulty: "easy" };
 const styleDetails = {
@@ -4385,6 +4385,9 @@ function activeEnemySwordBoxes(enemy) {
     if (enemy.type === "jumpSword" || enemy.type === "quickSlashSword" || enemy.type === "patrolQuickSlashSword" || enemy.type === "spearSword") {
         return [guardSwordBox(enemy)];
     }
+    if (enemy.type === "blockSword" && enemy.sideSlash) {
+        return [guardSwordBox(enemy)];
+    }
     return [];
 }
 
@@ -4677,6 +4680,7 @@ function legendDisarm() {
     let nearestDist = Infinity;
     enemies.forEach(enemy => {
         if (!disarmableSwordEnemy(enemy) || enemy.disarmed) return;
+        if (enemyBlocking(enemy)) return;
         if (!disarmTargetBoxes(enemy).some(box => rectsOverlap(disarmBox, box))) return;
         const dist = Math.hypot(centerOf(enemy).x - playerCenter.x, centerOf(enemy).y - playerCenter.y);
         if (dist < nearestDist) { target = enemy; nearestDist = dist; }
@@ -5179,7 +5183,7 @@ function update() {
             enemy.facing = centerOf(enemy).x < centerOf(player).x ? 1 : -1;
             enemy.blockClock -= 1 / 60;
             if (enemy.blockClock <= 0) {
-                enemy.blockTimer = 1.15;
+                enemy.blockTimer = 1.8;
                 enemy.blockClock = enemy.blockInterval || 5;
             }
             if (enemy.blockTimer > 0) {
@@ -6370,7 +6374,7 @@ function draw() {
             }
         }
         if (enemy.type === "guardSword" || enemy.type === "patrolSword" || enemy.type === "jumpSword" || enemy.type === "flipSword" || enemy.type === "quickSlashSword" || enemy.type === "bothSlashSword" || enemy.type === "patrolQuickSlashSword" || enemy.type === "spearSword" || enemy.type === "dualSword" || enemy.type === "headSpearSword" || enemy.type === "swingSword" || enemy.type === "blockSword") {
-            if (!enemy.disarmed && enemy.type !== "swingSword") {
+            if (!enemy.disarmed && enemy.type !== "swingSword" && enemy.type !== "blockSword") {
                 if (enemy.attackTimer > 0 || enemy.type === "headSpearSword") {
                     const hbox = headSpearBox(enemy);
                     ctx.fillStyle = "rgba(255, 59, 91, 0.18)";
@@ -6381,6 +6385,19 @@ function draw() {
                 const sw = enemy.swordReach || 60;
                 ctx.fillStyle = "rgba(255, 200, 50, 0.22)";
                 roundRect(enemy.x - sw, enemy.y, enemy.w + sw * 2, enemy.h * 0.55, 5);
+            }
+            if (enemy.type === "blockSword" && !enemy.disarmed && enemy.attackTimer > 0) {
+                if (enemy.playerSpear) {
+                    const reach = (enemy.swordReach || 60) + 58;
+                    const facing = enemy.facing || -1;
+                    const tx = facing > 0 ? enemy.x + enemy.w : enemy.x - reach;
+                    ctx.fillStyle = "rgba(255, 143, 179, 0.3)";
+                    roundRect(tx, enemy.y + enemy.h * 0.32, reach, 18, 4);
+                } else {
+                    const sw = enemy.swordReach || 60;
+                    ctx.fillStyle = "rgba(255, 200, 50, 0.22)";
+                    roundRect(enemy.x - sw, enemy.y, enemy.w + sw * 2, enemy.h * 0.55, 5);
+                }
             }
             if (!enemy.disarmed) {
                 if (enemy.type === "dualSword" && (enemy.attack1 === "both" || enemy.attack2 === "both") && enemy.phase === (enemy.attack1 === "both" ? 1 : 2)) {
@@ -6732,7 +6749,12 @@ syncSetupChoices();
 if (START_AT_NEW_STUFF) {
     localStorage.removeItem(SAVE_KEY);
     useBattleVersion("ultimate");
-    currentCharacterId = "azure";
+    unlockedCharacterIds.add("volt");
+    currentCharacterId = "volt";
+    collectedSwordTypes.spear = 1;
+    collectedSwordStyles.spear = { enemyType: "spearSword", reach: 80 };
+    equippedSwordType = "spear";
+    attackUpgradeLevel = swordUpgradeCosts.length;
     loadLevel(clampLevel(TEST_START_LEVEL), true);
     gameStarted = true;
     rushTitleScreen.classList.add("hidden");
