@@ -294,7 +294,7 @@ const PLAYER_W = 28, PLAYER_H = 36;
 const START_X = 55, START_Y = 300;
 const STEP_HEIGHT = 16;   // ledges this short are auto-climbed like stairs
 const CLIMB_SPEED = 3.4;  // ladder climb speed
-const SLIDE_ACCEL = 0.32; // extra push while standing on a slide platform
+const SLIDE_SPEED = 6.2; // guaranteed horizontal speed while riding a slide, faster than normal walking
 const TUNNEL_SHOULDER = 40; // how far a tunnel's floor extends past its ceiling on each side
 
 // A small starting ledge — everything past it is floating platforms only,
@@ -353,17 +353,30 @@ function addTrustFallSlide(basePlatform) {
     const slideX = basePlatform.x + basePlatform.w - 10;
     PLATFORMS.push({ x: slideX, y: B, w: 60, h: 22, slide: 'right' });
 
-    // A short hidden course well below CAMERA_Y_FLOOR — the camera never
-    // scrolls down to it until you've actually fallen past the visible
-    // floor, so there's no peeking at what's waiting for you first. It
-    // climbs back up in a few easy hops rather than one straight ladder.
-    const landing = { x: slideX + 70, y: B + 190, w: 220, h: 22 };
-    const step1 = { x: landing.x + landing.w + 40, y: B + 120, w: 100, h: 22 };
-    const step2 = { x: step1.x + step1.w + 45, y: B + 60, w: 110, h: 22 };
-    const exit = { x: step2.x + step2.w / 2 - 55, y: B, w: 110, h: 22 };
-    PLATFORMS.push(landing, step1, step2, exit);
-    CHECKPOINTS.push({ x: step2.x + step2.w / 2, y: step2.y, claimed: false });
-    LADDERS.push({ x: step2.x + step2.w / 2 - 10, y: B, w: 20, h: step2.y - B + 10 });
+    // A long hidden course, well below CAMERA_Y_FLOOR — the camera never
+    // scrolls down to it until you've actually committed to the fall, so
+    // there's no peeking at what's waiting first. It's a real drop (this
+    // time a proper fall, not a short hop), and instead of a ladder back up
+    // it's a gradual run of jumps that slowly gains height each time, until
+    // the last one quietly puts you back at the main track's own level.
+    const DROP = 380;
+    const landing = { x: slideX + 100, y: B + DROP, w: 260, h: 22 };
+    PLATFORMS.push(landing);
+
+    const HIDDEN_STEPS = 8;
+    const RISE = Math.round(DROP / HIDDEN_STEPS);
+    let hx = landing.x + landing.w + 90;
+    let hy = landing.y;
+    for (let i = 0; i < HIDDEN_STEPS; i++) {
+        hy -= RISE;
+        const w = i % 2 === 0 ? 100 : 85;
+        const plat = { x: hx, y: hy, w, h: 22 };
+        PLATFORMS.push(plat);
+        if (i === HIDDEN_STEPS - 2) {
+            CHECKPOINTS.push({ x: plat.x + plat.w / 2, y: plat.y, claimed: false });
+        }
+        hx += w + 90;
+    }
 }
 
 // -- Intro jumps, then a flat rest area with a checkpoint --
@@ -406,12 +419,16 @@ const stairTop1 = seg.platforms[seg.platforms.length - 1];
     const upperSeg = layoutSequence(ladderTop.x + ladderTop.w, [
         { gap: 90, y: upperY, w: 90 },
         { gap: 85, y: upperY, w: 85 },
+        { gap: 90, y: upperY, w: 90 },
+        { gap: 85, y: upperY, w: 85 },
     ]);
 
     // Lower (plain jumps) route — same total length as the ladder route
     const lowerSeg = layoutSequence(B, [
-        { gap: 90, y: BY, w: 100 },
-        { gap: 130, y: BY, w: 150 },
+        { gap: 90, y: BY, w: 90 },
+        { gap: 90, y: BY, w: 90 },
+        { gap: 90, y: BY, w: 90 },
+        { gap: 90, y: BY, w: 190 },
     ]);
 
     // Shared merge platform — both routes land here with the same easy gap
@@ -484,10 +501,14 @@ const stairTop2 = seg.platforms[seg.platforms.length - 1];
     const routeA = layoutSequence(B, [
         { gap: 90, y: BY, w: 90 },
         { gap: 90, y: BY, w: 90 },
+        { gap: 90, y: BY, w: 90 },
+        { gap: 90, y: BY, w: 90 },
     ]);
 
     // Route B: a gentle rise-and-fall, same total length as route A
     const routeB = layoutSequence(B, [
+        { gap: 95, y: BY - 20, w: 85 },
+        { gap: 95, y: BY, w: 85 },
         { gap: 95, y: BY - 20, w: 85 },
         { gap: 95, y: BY, w: 85 },
     ]);
@@ -551,7 +572,7 @@ const LEVEL_WIDTH = cursorX + 200;
 // it only reveals what's below once you've fallen past the visible floor,
 // which is exactly what makes a trust-fall slide a genuine leap of faith.
 const CAMERA_Y_FLOOR = 420;
-const WORLD_BOTTOM = 660;
+const WORLD_BOTTOM = 860;
 
 let player, falls, cameraX, cameraY, keys, won, lastCheckpoint;
 
@@ -576,7 +597,16 @@ function rectsOverlap(a, b) {
 function update() {
     if (won) return;
 
-    player.vx = (keys.right ? MOVE_SPEED : 0) - (keys.left ? MOVE_SPEED : 0);
+    // Input sets speed directly on the ground; in the air, existing
+    // horizontal momentum is preserved (rather than reset every frame) so a
+    // slide's push actually carries you off the edge and through the fall
+    // instead of vanishing the instant you leave the ground.
+    const inputDir = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+    if (inputDir !== 0) {
+        player.vx = inputDir * MOVE_SPEED;
+    } else if (player.onGround) {
+        player.vx *= 0.7;
+    }
 
     const startBox = { x: player.x, y: player.y, w: PLAYER_W, h: PLAYER_H };
     const ladder = LADDERS.find(l => rectsOverlap(startBox, l));
@@ -592,7 +622,10 @@ function update() {
             player.onGround = false;
         }
         if (player.onGround && player.standingSlide) {
-            player.vx += player.standingSlide === 'right' ? SLIDE_ACCEL : -SLIDE_ACCEL;
+            // A slide sweeps you along regardless of input — stepping onto
+            // one is a commitment, like an actual slope would be.
+            if (player.standingSlide === 'right') player.vx = Math.max(player.vx, SLIDE_SPEED);
+            else player.vx = Math.min(player.vx, -SLIDE_SPEED);
         }
         player.vy += GRAVITY;
         if (player.vy > 18) player.vy = 18;
@@ -644,7 +677,7 @@ function update() {
         }
     }
 
-    if (player.y > VH + 100) {
+    if (player.y > WORLD_BOTTOM + 100) {
         falls++;
         fallsEl.textContent = falls;
         player.x = lastCheckpoint.x;
