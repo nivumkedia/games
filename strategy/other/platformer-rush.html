@@ -1842,7 +1842,7 @@ const world = { width: 3200, height: 720, gravity: 0.82 };
 const SAVE_KEY = "platformer-rush-save-v1";
 const STARTING_LIVES = 40;
 const HARD_SLASH_COOLDOWN_FRAMES = 3600;
-const START_AT_NEW_STUFF = true;
+const START_AT_NEW_STUFF = false;
 const TEST_START_LEVEL = 20;
 const keys = { left: false, right: false, jump: false, down: false, duck: false, block: false };
 const setupChoices = { style: "regular", version: "normal", difficulty: "easy" };
@@ -5355,28 +5355,73 @@ function roundRect(x, y, w, h, r) {
 }
 
 function drawBackground() {
+    const now = performance.now();
     const sky = ctx.createLinearGradient(0, 0, 0, window.innerHeight);
-    sky.addColorStop(0, "#07101d");
-    sky.addColorStop(0.48, "#102744");
+    sky.addColorStop(0, "#050b16");
+    sky.addColorStop(0.48, "#122a4a");
     sky.addColorStop(1, "#06101c");
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+
+    // Drifting mist wisps, far behind everything
+    ctx.fillStyle = "rgba(126, 200, 255, 0.05)";
+    for (let i = 0; i < 3; i++) {
+        const wx = (i * 640 + now * 0.006 - cameraX * 0.03) % (window.innerWidth + 500) - 250;
+        const wy = 120 + i * 90;
+        ctx.beginPath();
+        ctx.ellipse(wx, wy, 220, 34, 0, 0, Math.PI * 2);
+        ctx.fill();
+    }
 
     ctx.fillStyle = "rgba(171, 237, 255, 0.72)";
     for (let i = 0; i < 34; i++) {
         const x = (i * 173 - cameraX * 0.08) % (window.innerWidth + 180) - 60;
         const y = 36 + (i * 47) % 210;
         const size = 1 + (i % 3) * 0.6;
+        const twinkle = 0.5 + Math.sin(now / 480 + i * 1.7) * 0.5;
+        ctx.globalAlpha = 0.35 + twinkle * 0.65;
         ctx.fillRect(x, y, size, size);
     }
+    ctx.globalAlpha = 1;
 
-    ctx.fillStyle = "rgba(126, 245, 255, 0.12)";
+    const moonX = window.innerWidth - 118, moonY = 92;
+    ctx.fillStyle = "rgba(126, 245, 255, 0.1)";
     ctx.beginPath();
-    ctx.arc(window.innerWidth - 118, 92, 46, 0, Math.PI * 2);
+    ctx.arc(moonX, moonY, 58, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = "rgba(223, 251, 255, 0.78)";
+    ctx.fillStyle = "rgba(126, 245, 255, 0.16)";
     ctx.beginPath();
-    ctx.arc(window.innerWidth - 118, 92, 24, 0, Math.PI * 2);
+    ctx.arc(moonX, moonY, 40, 0, Math.PI * 2);
+    ctx.fill();
+    const moonBody = ctx.createRadialGradient(moonX - 8, moonY - 8, 2, moonX, moonY, 24);
+    moonBody.addColorStop(0, "#ffffff");
+    moonBody.addColorStop(0.6, "#dff3ff");
+    moonBody.addColorStop(1, "#a9d4e8");
+    ctx.fillStyle = moonBody;
+    ctx.beginPath();
+    ctx.arc(moonX, moonY, 24, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(160, 200, 220, 0.35)";
+    ctx.beginPath();
+    ctx.arc(moonX - 8, moonY + 6, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(moonX + 7, moonY - 5, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(moonX + 2, moonY + 11, 2.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Farthest mountain silhouette, extra depth layer
+    const farOffset = -(cameraX * 0.06) % 640;
+    ctx.fillStyle = "rgba(50, 90, 130, 0.28)";
+    ctx.beginPath();
+    ctx.moveTo(farOffset - 140, window.innerHeight);
+    for (let x = farOffset - 140; x < window.innerWidth + 760; x += 320) {
+        ctx.lineTo(x + 160, window.innerHeight - 300);
+        ctx.lineTo(x + 320, window.innerHeight);
+    }
+    ctx.closePath();
     ctx.fill();
 
     const backOffset = -(cameraX * 0.12) % 520;
@@ -5406,6 +5451,16 @@ function drawBackground() {
     glow.addColorStop(1, "rgba(73, 255, 168, 0.08)");
     ctx.fillStyle = glow;
     ctx.fillRect(0, window.innerHeight - 170, window.innerWidth, 170);
+
+    // Soft vignette for depth
+    const vignette = ctx.createRadialGradient(
+        window.innerWidth / 2, window.innerHeight / 2, Math.min(window.innerWidth, window.innerHeight) * 0.4,
+        window.innerWidth / 2, window.innerHeight / 2, Math.max(window.innerWidth, window.innerHeight) * 0.75
+    );
+    vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
+    vignette.addColorStop(1, "rgba(0, 4, 10, 0.32)");
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 }
 
 function swordGripPoint(angle, mode = "attack") {
@@ -6241,12 +6296,39 @@ function draw() {
         ctx.fillRect(platform.x + 12, platform.y + 12, platform.w - 24, 2);
         ctx.fillStyle = "rgba(2, 9, 18, 0.28)";
         ctx.fillRect(platform.x + 8, platform.y + platform.h - 8, platform.w - 16, 5);
+
+        const shimmerSpan = platform.w + 160;
+        const shimmerX = platform.x - 80 + ((performance.now() * 0.09 + platform.x * 0.3) % shimmerSpan);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(platform.x, platform.y, platform.w, 6);
+        ctx.clip();
+        const shimmer = ctx.createLinearGradient(shimmerX - 40, 0, shimmerX + 40, 0);
+        shimmer.addColorStop(0, "rgba(255, 255, 255, 0)");
+        shimmer.addColorStop(0.5, "rgba(255, 255, 255, 0.5)");
+        shimmer.addColorStop(1, "rgba(255, 255, 255, 0)");
+        ctx.fillStyle = shimmer;
+        ctx.fillRect(shimmerX - 40, platform.y, 80, 6);
+        ctx.restore();
     });
     ctx.shadowColor = "transparent";
 
     droppedSwords.forEach(drawDroppedSword);
 
     enemies.forEach(enemy => {
+        if (enemy.type !== "bigFlyer") {
+            let groundY = enemy.y + enemy.h;
+            for (const p of platforms) {
+                if (enemy.x + enemy.w > p.x && enemy.x < p.x + p.w && p.y >= groundY - 4 && p.y <= groundY + 40) {
+                    groundY = p.y;
+                    break;
+                }
+            }
+            ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+            ctx.beginPath();
+            ctx.ellipse(enemy.x + enemy.w / 2, groundY + 2, enemy.w * 0.5, 4, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
         ctx.shadowColor = "rgba(0, 0, 0, 0.28)";
         ctx.shadowBlur = enemy.type === "bigFlyer" ? 18 : 10;
         ctx.shadowOffsetY = 6;
@@ -6277,6 +6359,10 @@ function draw() {
         roundRect(enemy.x, enemy.y, enemy.w, enemy.h, 7);
         ctx.shadowBlur = 0;
         ctx.shadowOffsetY = 0;
+        if (enemy.type !== "bigFlyer") {
+            ctx.fillStyle = "rgba(255, 255, 255, 0.22)";
+            roundRect(enemy.x + 3, enemy.y + 2, enemy.w - 6, 3, 1.5);
+        }
         ctx.fillStyle = "#f4d7ff";
         if (enemy.type === "bigFlyer") {
             ctx.fillStyle = "#7c3cff";
@@ -6339,6 +6425,28 @@ function draw() {
                 } else {
                     drawGuardSword(enemy);
                 }
+            }
+            if (enemyBlocking(enemy)) {
+                const ec = centerOf(enemy);
+                const pc = centerOf(player);
+                const blockAngle = Math.atan2(pc.y - ec.y, pc.x - ec.x);
+                ctx.save();
+                ctx.translate(ec.x, ec.y);
+                ctx.rotate(blockAngle);
+                ctx.strokeStyle = "#ff8fb3";
+                ctx.shadowColor = "#ff8fb3";
+                ctx.shadowBlur = 16;
+                ctx.lineWidth = 7;
+                ctx.beginPath();
+                ctx.arc(0, 0, 34, -1.15, 1.15);
+                ctx.stroke();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = "#ffffff";
+                ctx.shadowBlur = 0;
+                ctx.beginPath();
+                ctx.arc(0, 0, 42, -0.85, 0.85);
+                ctx.stroke();
+                ctx.restore();
             }
             const timedSlash = enemy.type === "jumpSword" || enemy.type === "quickSlashSword" || enemy.type === "bothSlashSword" || enemy.type === "patrolQuickSlashSword" || enemy.type === "spearSword";
             const showHitbox = !timedSlash || enemy.attackTimer > 0;
@@ -6435,6 +6543,12 @@ function draw() {
     const drawY = ducking ? player.y + 20 : player.y;
     const drawH = ducking ? player.h - 20 : player.h;
     const character = currentCharacter();
+    if (player.grounded) {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.32)";
+        ctx.beginPath();
+        ctx.ellipse(player.x + player.w / 2, player.y + player.h + 2, player.w * 0.52, 4.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+    }
     ctx.shadowColor = character.glow;
     ctx.shadowBlur = 12;
     ctx.shadowOffsetY = 4;
