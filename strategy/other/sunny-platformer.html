@@ -148,8 +148,12 @@ h1 {
 
 #game-wrap {
     position: relative;
-    width: min(94vw, 860px);
-    height: min(64vh, 460px);
+    /* Keeps the canvas's actual 860:460 ratio no matter the device shape —
+       independently clamping width and height (as before) let portrait
+       phones squish the game into the wrong ratio, hiding whatever got
+       squeezed off the visible edge. */
+    width: min(94vw, 860px, calc(64vh * 1.8696));
+    aspect-ratio: 860 / 460;
     border-radius: 14px;
     overflow: hidden;
     box-shadow: 0 10px 28px rgba(62, 168, 224, 0.25);
@@ -805,143 +809,170 @@ const THEMES = [
 
 const MAP_PRICE = 100;
 
-// Each map is defined as its own hand-arranged sequence of modules — a
-// completely different mix and order of stairs/ladders/tunnels/inclines/
-// branches/trampolines, plus themed decorative landmarks scattered along
-// the way — so no two maps play out the same, even though every module is
-// itself built from the same validated-safe physics.
+// Each map is its own hand-arranged sequence of modules, with NO shared
+// intro or shared ending — every map picks its own opening move (a tunnel,
+// a steep climb, a branch, a gauntlet, a calm open sprint, a ladder, a
+// bounce pad...) and its own finishing move, and only about half the maps
+// use a branch fork at all. The goal is that no two maps share the same
+// shape for any stretch of the level, start to finish — not just a
+// different coat of paint on the same skeleton.
 const MAPS = [
-    { // Sunny Meadow
+    { // Sunny Meadow — opens with a tunnel, no branch at all, ends by
+      // climbing back down an incline instead of a gauntlet.
         price: 0,
         track: [
-            { type: 'stairs', steps: 9, direction: 'up' },
-            { type: 'branch', style: 'ladder', decor: 'tree' },
-            { type: 'incline', count: 3, stepRise: 30, direction: 'down' },
-            { type: 'flat', gap: 90, width: 220, checkpoint: true },
-            { type: 'flat', gap: 85, width: 340, checkpoint: true, slide: true },
-            { type: 'tunnel', width: 260, gap: 170, decor: 'tree' },
-            { type: 'incline', count: 2, stepRise: 35, direction: 'up' },
-            { type: 'trampoline', riseTo: 140, decor: 'tree' },
-            { type: 'gauntlet', count: 4 },
+            { type: 'tunnel', width: 220, gap: 120, decor: 'tree' },
+            { type: 'stairs', steps: 10, direction: 'up', width: 50 },
+            { type: 'incline', count: 3, stepRise: 30, direction: 'down', width: 110 },
+            { type: 'flat', gap: 90, width: 380, checkpoint: true },
+            { type: 'flat', gap: 85, width: 340, checkpoint: true, slide: true, slideDrop: 300, slideSteps: 6, slideGap: 85, slideWidthA: 110, slideWidthB: 90, slideLandingWidth: 240 },
+            { type: 'tunnel', width: 280, gap: 170, decor: 'tree' },
+            { type: 'incline', count: 3, stepRise: 35, direction: 'up', width: 75 },
+            { type: 'trampoline', riseTo: 90, decor: 'tree' },
+            { type: 'incline', count: 2, stepRise: 40, direction: 'down', width: 90 },
         ],
+        flagJump: { gap: 130, riseOffset: -30, width: 240 },
     },
-    { // Snowy Mountain
+    { // Snowy Mountain — opens climbing straight up, a standalone ladder
+      // (not a branch fork) right after, ends in the usual gauntlet.
         price: MAP_PRICE,
         track: [
-            { type: 'incline', count: 3, stepRise: 70, direction: 'up', decor: 'icicle' },
-            { type: 'branch', style: 'ladder' },
-            { type: 'flat', gap: 90, width: 240, checkpoint: true },
-            { type: 'stairs', steps: 8, direction: 'down' },
-            { type: 'flat', gap: 85, width: 320, checkpoint: true, slide: true },
+            { type: 'incline', count: 2, stepRise: 75, direction: 'up', width: 70, decor: 'icicle' },
+            { type: 'ladder', height: 110, decor: 'icicle' },
+            { type: 'tunnel', width: 180, gap: 100, decor: 'icicle' },
+            { type: 'stairs', steps: 9, direction: 'down', width: 55 },
+            { type: 'flat', gap: 90, width: 380, checkpoint: true },
+            { type: 'flat', gap: 85, width: 320, checkpoint: true, slide: true, slideDrop: 420, slideSteps: 9, slideGap: 95, slideWidthA: 95, slideWidthB: 80, slideLandingWidth: 280 },
             { type: 'tunnel', width: 260, gap: 170, decor: 'icicle' },
-            { type: 'trampoline', riseTo: 120, decor: 'icicle' },
-            { type: 'gauntlet', count: 5 },
+            { type: 'trampoline', riseTo: 110, decor: 'icicle' },
+            { type: 'gauntlet', count: 5, width: 70 },
         ],
+        flagJump: { gap: 140, riseOffset: 20, width: 220 },
     },
-    { // Desert Dunes
+    { // Desert Dunes — opens with stairs, has the jumps-style branch, and
+      // is one of the only maps to end on a trampoline finale.
         price: MAP_PRICE,
         track: [
-            { type: 'stairs', steps: 11, direction: 'up' },
+            { type: 'stairs', steps: 11, direction: 'up', width: 42 },
             { type: 'branch', style: 'jumps', decor: 'cactus' },
-            { type: 'flat', gap: 90, width: 300, checkpoint: true },
-            { type: 'incline', count: 4, stepRise: 25, direction: 'down', decor: 'cactus' },
-            { type: 'flat', gap: 85, width: 340, checkpoint: true, slide: true },
+            { type: 'tunnel', width: 220, gap: 120, decor: 'cactus' },
+            { type: 'flat', gap: 90, width: 420, checkpoint: true },
+            { type: 'incline', count: 4, stepRise: 25, direction: 'down', width: 95, decor: 'cactus' },
+            { type: 'flat', gap: 85, width: 340, checkpoint: true, slide: true, slideDrop: 340, slideSteps: 7, slideGap: 90, slideWidthA: 105, slideWidthB: 85, slideLandingWidth: 250 },
             { type: 'tunnel', width: 280, gap: 170 },
-            { type: 'gauntlet', count: 5 },
+            { type: 'gauntlet', count: 5, width: 68 },
             { type: 'trampoline', riseTo: 170, decor: 'cactus' },
         ],
+        flagJump: { gap: 120, riseOffset: 30, width: 220 },
     },
-    { // Deep Jungle
+    { // Deep Jungle — the branch fork IS the very first obstacle (no
+      // stairs first), ends climbing a final flight of stairs to the flag.
         price: MAP_PRICE,
         track: [
             { type: 'branch', style: 'ladder', decor: 'tree' },
-            { type: 'stairs', steps: 9, direction: 'up' },
-            { type: 'trampoline', riseTo: 110, decor: 'tree' },
-            { type: 'incline', count: 2, stepRise: 45, direction: 'down' },
-            { type: 'flat', gap: 90, width: 260, checkpoint: true },
-            { type: 'flat', gap: 85, width: 340, checkpoint: true, slide: true },
+            { type: 'tunnel', width: 200, gap: 110, decor: 'tree' },
+            { type: 'stairs', steps: 9, direction: 'up', width: 48 },
+            { type: 'trampoline', riseTo: 100, decor: 'tree' },
+            { type: 'incline', count: 2, stepRise: 40, direction: 'down', width: 100 },
+            { type: 'flat', gap: 85, width: 340, checkpoint: true, slide: true, slideDrop: 380, slideSteps: 8, slideGap: 90, slideWidthA: 100, slideWidthB: 85, slideLandingWidth: 260 },
             { type: 'tunnel', width: 260, gap: 170, decor: 'tree' },
-            { type: 'gauntlet', count: 4 },
+            { type: 'stairs', steps: 8, direction: 'up', width: 46 },
         ],
+        flagJump: { gap: 130, riseOffset: 20, width: 220 },
     },
-    { // Volcano Peaks
+    { // Volcano Peaks — opens straight into a gauntlet with no easing in,
+      // and bookends with a second gauntlet at the end.
         price: MAP_PRICE,
         track: [
-            { type: 'gauntlet', count: 4, decor: 'lavapit' },
-            { type: 'incline', count: 4, stepRise: 70, direction: 'up' },
+            { type: 'gauntlet', count: 4, width: 65, decor: 'lavapit' },
+            { type: 'tunnel', width: 200, gap: 110, decor: 'lavapit' },
+            { type: 'incline', count: 4, stepRise: 70, direction: 'up', width: 80 },
             { type: 'branch', style: 'jumps', decor: 'lavapit' },
-            { type: 'flat', gap: 85, width: 320, checkpoint: true, slide: true },
+            { type: 'flat', gap: 85, width: 320, checkpoint: true, slide: true, slideDrop: 320, slideSteps: 6, slideGap: 100, slideWidthA: 120, slideWidthB: 95, slideLandingWidth: 270 },
             { type: 'tunnel', width: 260, gap: 170, decor: 'lavapit' },
-            { type: 'trampoline', riseTo: 90 },
-            { type: 'stairs', steps: 8, direction: 'down' },
-            { type: 'gauntlet', count: 4 },
+            { type: 'trampoline', riseTo: 80 },
+            { type: 'stairs', steps: 8, direction: 'down', width: 50 },
+            { type: 'gauntlet', count: 4, width: 70 },
         ],
+        flagJump: { gap: 150, riseOffset: -20, width: 240 },
     },
-    { // Tropical Beach
+    { // Tropical Beach — the ONLY map that opens with a calm, obstacle-
+      // free sprint before anything happens; ends climbing final stairs.
         price: MAP_PRICE,
         track: [
-            { type: 'incline', count: 5, stepRise: 20, direction: 'up', decor: 'shell' },
+            { type: 'flat', gap: 90, width: 420, checkpoint: true },
+            { type: 'incline', count: 5, stepRise: 20, direction: 'up', width: 100, decor: 'shell' },
+            { type: 'tunnel', width: 220, gap: 120, decor: 'shell' },
             { type: 'branch', style: 'jumps' },
-            { type: 'flat', gap: 90, width: 280, checkpoint: true, decor: 'shell' },
-            { type: 'trampoline', riseTo: 170, decor: 'shell' },
-            { type: 'flat', gap: 85, width: 320, checkpoint: true, slide: true },
+            { type: 'flat', gap: 90, width: 300, checkpoint: true, decor: 'shell' },
+            { type: 'trampoline', riseTo: 150, decor: 'shell' },
+            { type: 'flat', gap: 85, width: 320, checkpoint: true, slide: true, slideDrop: 360, slideSteps: 8, slideGap: 85, slideWidthA: 90, slideWidthB: 75, slideLandingWidth: 230 },
             { type: 'tunnel', width: 260, gap: 170 },
-            { type: 'stairs', steps: 9, direction: 'down' },
-            { type: 'gauntlet', count: 4 },
+            { type: 'stairs', steps: 9, direction: 'down', width: 52 },
         ],
+        flagJump: { gap: 120, riseOffset: -30, width: 220 },
     },
-    { // Crystal Cave
+    { // Crystal Cave — opens AND closes on a standalone ladder (no branch
+      // used here at all) — the only map with that bookend identity.
         price: MAP_PRICE,
         track: [
-            { type: 'ladder', height: 130, decor: 'crystal' },
-            { type: 'stairs', steps: 9, direction: 'down' },
+            { type: 'ladder', height: 140, decor: 'crystal' },
+            { type: 'tunnel', width: 200, gap: 110, decor: 'crystal' },
+            { type: 'stairs', steps: 10, direction: 'down', width: 44 },
             { type: 'branch', style: 'ladder', decor: 'crystal' },
-            { type: 'flat', gap: 85, width: 340, checkpoint: true, slide: true },
+            { type: 'flat', gap: 85, width: 340, checkpoint: true, slide: true, slideDrop: 400, slideSteps: 10, slideGap: 80, slideWidthA: 85, slideWidthB: 70, slideLandingWidth: 240 },
             { type: 'tunnel', width: 260, gap: 170, decor: 'crystal' },
-            { type: 'trampoline', riseTo: 200 },
-            { type: 'gauntlet', count: 5 },
+            { type: 'trampoline', riseTo: 150 },
+            { type: 'ladder', height: 130 },
         ],
+        flagJump: { gap: 110, riseOffset: 20, width: 220 },
     },
-    { // Autumn Forest
+    { // Autumn Forest — opens with an incline instead of stairs, no
+      // branch at all, ends climbing an incline up to the flag.
         price: MAP_PRICE,
         track: [
-            { type: 'stairs', steps: 11, direction: 'up' },
-            { type: 'incline', count: 3, stepRise: 45, direction: 'down', decor: 'mushroom' },
-            { type: 'branch', style: 'jumps' },
-            { type: 'flat', gap: 90, width: 260, checkpoint: true, decor: 'mushroom' },
-            { type: 'flat', gap: 85, width: 320, checkpoint: true, slide: true },
+            { type: 'incline', count: 4, stepRise: 35, direction: 'up', width: 85, decor: 'mushroom' },
+            { type: 'tunnel', width: 200, gap: 110, decor: 'mushroom' },
+            { type: 'stairs', steps: 9, direction: 'down', width: 50 },
+            { type: 'flat', gap: 90, width: 380, checkpoint: true, decor: 'mushroom' },
+            { type: 'flat', gap: 85, width: 320, checkpoint: true, slide: true, slideDrop: 300, slideSteps: 6, slideGap: 95, slideWidthA: 110, slideWidthB: 90, slideLandingWidth: 260 },
             { type: 'tunnel', width: 260, gap: 170 },
-            { type: 'trampoline', riseTo: 180, decor: 'mushroom' },
-            { type: 'gauntlet', count: 4 },
+            { type: 'trampoline', riseTo: 150, decor: 'mushroom' },
+            { type: 'incline', count: 2, stepRise: 40, direction: 'up', width: 90 },
         ],
+        flagJump: { gap: 130, riseOffset: 30, width: 220 },
     },
-    { // Candy Kingdom
+    { // Candy Kingdom — opens on a bounce pad before anything else, and
+      // is the only map with two separate trampolines mid-track.
         price: MAP_PRICE,
         track: [
-            { type: 'trampoline', riseTo: 120, decor: 'candycane' },
-            { type: 'branch', style: 'ladder' },
-            { type: 'flat', gap: 90, width: 240, checkpoint: true, decor: 'candycane' },
             { type: 'trampoline', riseTo: 110, decor: 'candycane' },
-            { type: 'flat', gap: 85, width: 320, checkpoint: true, slide: true },
+            { type: 'tunnel', width: 200, gap: 110, decor: 'candycane' },
+            { type: 'branch', style: 'ladder' },
+            { type: 'flat', gap: 90, width: 300, checkpoint: true, decor: 'candycane' },
+            { type: 'trampoline', riseTo: 100, decor: 'candycane' },
+            { type: 'flat', gap: 85, width: 320, checkpoint: true, slide: true, slideDrop: 340, slideSteps: 7, slideGap: 100, slideWidthA: 115, slideWidthB: 95, slideLandingWidth: 280 },
             { type: 'tunnel', width: 260, gap: 170, decor: 'candycane' },
-            { type: 'stairs', steps: 9, direction: 'down' },
-            { type: 'gauntlet', count: 4 },
+            { type: 'stairs', steps: 9, direction: 'down', width: 50 },
         ],
+        flagJump: { gap: 120, riseOffset: -20, width: 220 },
     },
-    { // Moonlit Sky
+    { // Moonlit Sky — no branch at all, and the only map that finishes by
+      // running straight through a tunnel right up to the flag.
         price: MAP_PRICE,
         track: [
-            { type: 'stairs', steps: 9, direction: 'up' },
-            { type: 'branch', style: 'ladder', decor: 'star' },
-            { type: 'incline', count: 4, stepRise: 30, direction: 'down' },
-            { type: 'flat', gap: 90, width: 260, checkpoint: true, decor: 'star' },
-            { type: 'flat', gap: 85, width: 340, checkpoint: true, slide: true },
+            { type: 'stairs', steps: 9, direction: 'up', width: 48 },
+            { type: 'tunnel', width: 200, gap: 110, decor: 'star' },
+            { type: 'incline', count: 3, stepRise: 35, direction: 'down', width: 95 },
+            { type: 'flat', gap: 90, width: 360, checkpoint: true, decor: 'star' },
+            { type: 'flat', gap: 85, width: 340, checkpoint: true, slide: true, slideDrop: 380, slideSteps: 8, slideGap: 85, slideWidthA: 95, slideWidthB: 80, slideLandingWidth: 250 },
             { type: 'tunnel', width: 260, gap: 170 },
-            { type: 'trampoline', riseTo: 200, decor: 'star' },
-            { type: 'gauntlet', count: 5 },
+            { type: 'trampoline', riseTo: 170, decor: 'star' },
+            { type: 'tunnel', width: 220, gap: 120 },
         ],
+        flagJump: { gap: 110, riseOffset: 0, width: 240 },
     },
-].map((m, i) => ({ theme: THEMES[i], price: m.price, track: m.track }));
+].map((m, i) => ({ theme: THEMES[i], price: m.price, track: m.track, flagJump: m.flagJump }));
 
 const MAP_SAVE_KEY = 'sunnyPlatformerMapsV1';
 let unlockedMaps, currentMapIndex, currentTheme;
@@ -1022,7 +1053,18 @@ function layoutSequence(startX, specs) {
 // chamber below the main path — with a bonus checkpoint and a ladder back
 // up to exactly where you left. Purely optional; ignoring it and jumping
 // onward as normal works just as well.
-function addTrustFallSlide(basePlatform) {
+// Every parameter here is overridable per-map (see the `slide*` fields on
+// a track's flat/checkpoint module) so no two maps' hidden courses share
+// the same drop depth, step count, step widths, or spacing — otherwise
+// this would be the one part of every map that looked identical.
+function addTrustFallSlide(basePlatform, opts = {}) {
+    const drop = opts.drop || 380;
+    const steps = opts.steps || 8;
+    const gap = opts.gap || 90;
+    const widthA = opts.widthA || 100;
+    const widthB = opts.widthB || 85;
+    const landingWidth = opts.landingWidth || 260;
+
     const B = basePlatform.y;
     const slideX = basePlatform.x + basePlatform.w - 10;
     PLATFORMS.push({ x: slideX, y: B, w: 60, h: 22, slide: 'right' });
@@ -1033,24 +1075,26 @@ function addTrustFallSlide(basePlatform) {
     // time a proper fall, not a short hop), and instead of a ladder back up
     // it's a gradual run of jumps that slowly gains height each time, until
     // the last one quietly puts you back at the main track's own level.
-    const DROP = 380;
-    const landing = { x: slideX + 100, y: B + DROP, w: 260, h: 22 };
+    const landing = { x: slideX + 100, y: B + drop, w: landingWidth, h: 22, hiddenCourse: true };
     PLATFORMS.push(landing);
 
-    const HIDDEN_STEPS = 8;
-    const RISE = Math.round(DROP / HIDDEN_STEPS);
-    let hx = landing.x + landing.w + 90;
+    const rise = Math.round(drop / steps);
+    let hx = landing.x + landing.w + gap;
     let hy = landing.y;
-    for (let i = 0; i < HIDDEN_STEPS; i++) {
-        hy -= RISE;
-        const w = i % 2 === 0 ? 100 : 85;
-        const plat = { x: hx, y: hy, w, h: 22 };
+    for (let i = 0; i < steps; i++) {
+        hy -= rise;
+        const w = i % 2 === 0 ? widthA : widthB;
+        const plat = { x: hx, y: hy, w, h: 22, hiddenCourse: true };
         PLATFORMS.push(plat);
-        if (i === HIDDEN_STEPS - 2) {
+        if (i === steps - 2) {
             CHECKPOINTS.push({ x: plat.x + plat.w / 2, y: plat.y, claimed: false });
         }
-        hx += w + 90;
+        hx += w + gap;
     }
+    // How far right this hidden course's platforms actually reach — the
+    // caller uses this to make sure nothing placed later on the main
+    // track ends up physically overlapping this underground area.
+    return { rightEdge: hx };
 }
 
 const STAIR_RISE = 14, STAIR_W = 46;
@@ -1074,11 +1118,11 @@ function modFlat(cursorX, fromY, opts = {}) {
     return { endX: seg.endX, endY: fromY, platform: seg.platforms[0] };
 }
 
-function modStairs(cursorX, fromY, steps, direction) {
+function modStairs(cursorX, fromY, steps, direction, width = STAIR_W) {
     const spec = [];
     for (let i = 0; i < steps; i++) {
         const delta = (i + 1) * STAIR_RISE * (direction === 'down' ? 1 : -1);
-        spec.push({ gap: i === 0 ? 20 : 2, y: fromY + delta, w: STAIR_W });
+        spec.push({ gap: i === 0 ? 20 : 2, y: fromY + delta, w: width });
     }
     const seg = layoutSequence(cursorX, spec);
     STAIR_PLATFORMS.push(...seg.platforms);
@@ -1091,7 +1135,7 @@ function modLadder(cursorX, fromY, height) {
     const base = { x: baseX, y: fromY, w: 70, h: 22 };
     PLATFORMS.push(base);
     const topY = fromY - height;
-    LADDERS.push({ x: baseX + 25, y: topY, w: 20, h: height + 10 });
+    LADDERS.push({ x: baseX + 15, y: topY, w: 40, h: height + 10 });
     const top = { x: baseX - 10, y: topY, w: 100, h: 22, checkpoint: undefined };
     PLATFORMS.push(top);
     CHECKPOINTS.push({ x: top.x + top.w / 2, y: topY, claimed: false });
@@ -1116,12 +1160,12 @@ function modIncline(cursorX, fromY, { count, stepRise, direction, width = 90, ga
     return { endX: seg.endX, endY: y, platform: seg.platforms[seg.platforms.length - 1] };
 }
 
-function modGauntlet(cursorX, fromY, count) {
+function modGauntlet(cursorX, fromY, count, width = 75) {
     const spec = [];
     let y = fromY;
     for (let i = 0; i < count; i++) {
         y = fromY + (i % 2 === 0 ? -10 : 40);
-        spec.push({ gap: 130 + (i % 3) * 5, y, w: 75 });
+        spec.push({ gap: 130 + (i % 3) * 5, y, w: width });
     }
     const seg = layoutSequence(cursorX, spec);
     return { endX: seg.endX, endY: y, platform: seg.platforms[seg.platforms.length - 1] };
@@ -1140,7 +1184,7 @@ function modBranch(cursorX, fromY, style) {
         const ladderBaseX = B + 30;
         PLATFORMS.push({ x: ladderBaseX, y: fromY, w: 50, h: 22 });
         const upperY = fromY - 120;
-        LADDERS.push({ x: ladderBaseX + 15, y: upperY, w: 20, h: 130 });
+        LADDERS.push({ x: ladderBaseX + 10, y: upperY, w: 30, h: 130 });
         const ladderTop = { x: B + 20, y: upperY, w: 100, h: 22 };
         PLATFORMS.push(ladderTop);
         CHECKPOINTS.push({ x: ladderTop.x + ladderTop.w / 2, y: upperY, claimed: false });
@@ -1155,13 +1199,17 @@ function modBranch(cursorX, fromY, style) {
         aEnd = upperSeg.endX; bEnd = lowerSeg.endX;
         mergeY = Math.round((upperY + fromY) / 2);
     } else {
+        // Two lanes kept a full 70px apart the whole way — enough clearance
+        // that neither route's platforms ever physically overlap the
+        // other's (a previous alternating-height version let them collide,
+        // which made jumps on one route randomly blocked by the other).
         const routeA = layoutSequence(B, [
             { gap: 90, y: fromY, w: 90 }, { gap: 90, y: fromY, w: 90 },
             { gap: 90, y: fromY, w: 90 }, { gap: 90, y: fromY, w: 90 },
         ]);
         const routeB = layoutSequence(B, [
-            { gap: 95, y: fromY - 20, w: 85 }, { gap: 95, y: fromY, w: 85 },
-            { gap: 95, y: fromY - 20, w: 85 }, { gap: 95, y: fromY, w: 85 },
+            { gap: 95, y: fromY - 70, w: 85 }, { gap: 95, y: fromY - 70, w: 85 },
+            { gap: 95, y: fromY - 70, w: 85 }, { gap: 95, y: fromY - 70, w: 85 },
         ]);
         aEnd = routeA.endX; bEnd = routeB.endX;
         mergeY = fromY + 20;
@@ -1188,11 +1236,11 @@ function modTrampoline(cursorX, fromY, { riseTo = 190, width = 130, gap = 100 })
 function runModule(mod, cursorX, fromY) {
     switch (mod.type) {
         case 'flat': return modFlat(cursorX, fromY, mod);
-        case 'stairs': return modStairs(cursorX, fromY, mod.steps, mod.direction);
+        case 'stairs': return modStairs(cursorX, fromY, mod.steps, mod.direction, mod.width);
         case 'ladder': return modLadder(cursorX, fromY, mod.height);
         case 'tunnel': return modTunnel(cursorX, fromY, mod.width, mod.gap);
         case 'incline': return modIncline(cursorX, fromY, mod);
-        case 'gauntlet': return modGauntlet(cursorX, fromY, mod.count);
+        case 'gauntlet': return modGauntlet(cursorX, fromY, mod.count, mod.width);
         case 'branch': return modBranch(cursorX, fromY, mod.style);
         case 'trampoline': return modTrampoline(cursorX, fromY, mod);
         default: throw new Error('Unknown track module: ' + mod.type);
@@ -1207,7 +1255,10 @@ function runTrack(cursorX, fromY, script) {
         const result = runModule(mod, x, y);
         x = result.endX;
         y = result.endY;
-        if (mod.slide) addTrustFallSlide(result.platform);
+        if (mod.slide) addTrustFallSlide(result.platform, {
+            drop: mod.slideDrop, steps: mod.slideSteps, gap: mod.slideGap,
+            widthA: mod.slideWidthA, widthB: mod.slideWidthB, landingWidth: mod.slideLandingWidth,
+        });
         if (mod.decor) addDecor(result.platform.x + result.platform.w / 2, result.platform.y, mod.decor);
     });
     return { endX: x, endY: y };
@@ -1219,8 +1270,12 @@ let COINS = [];
 // Rebuilds the entire level from scratch for the given map: clears every
 // level-data array (keeping the same array objects, since layoutSequence /
 // the track modules / addTrustFallSlide all close over these references),
-// replays the intro + that map's own module track + final gauntlet/flag,
-// then regenerates coins and the theme used by rendering.
+// then replays that map's own module track — start to finish, including
+// its opening move and its finish — plus a short per-map approach to the
+// flag, then regenerates coins and the theme used by rendering. There is
+// no shared intro or shared ending: every map's very first jump and very
+// last jump are both defined by that map alone, so no two maps open or
+// close with the same shape.
 function buildLevel(mapIndex) {
     PLATFORMS.length = 0;
     CEILINGS.length = 0;
@@ -1233,34 +1288,21 @@ function buildLevel(mapIndex) {
     const map = MAPS[mapIndex];
     currentTheme = map.theme;
 
-    // -- Intro jumps, then a flat rest area with a checkpoint --
-    let seg = layoutSequence(START_PLATFORM.x + START_PLATFORM.w, [
-        { gap: 90, y: 350, w: 100 },
-        { gap: 95, y: 300, w: 90 },
-        { gap: 95, y: 250, w: 90 },
-        { gap: 90, y: 300, w: 100 },
-        { gap: 90, y: 340, w: 260, checkpoint: true },
-    ]);
-    let cursorX = seg.endX;
-    let cursorY = 340;
+    let cursorX = START_PLATFORM.x + START_PLATFORM.w;
+    let cursorY = START_PLATFORM.y;
 
     // -- This map's unique track: a hand-arranged sequence of modules plus
-    // themed decorative landmarks. Every map runs a different mix/order.
+    // themed decorative landmarks, covering the whole level start-to-finish.
     const trackResult = runTrack(cursorX, cursorY, map.track);
     cursorX = trackResult.endX;
     cursorY = trackResult.endY;
 
-    // -- Final hard gauntlet, final flat, flag platform — computed relative
-    // to wherever this map's track happened to end, so it's guaranteed to
-    // stay within the same safe jump/rise limits no matter how the track
-    // above varied.
-    const finalGauntlet = modGauntlet(cursorX, cursorY, 6);
-    cursorX = finalGauntlet.endX;
-    const rest = modFlat(cursorX, finalGauntlet.endY, { gap: 100, width: 200, checkpoint: true });
-    cursorX = rest.endX;
-    seg = layoutSequence(cursorX, [{ gap: 150, y: rest.endY - 40, w: 240 }]);
+    // -- A short final approach to the flag, shaped per-map (map.flagJump)
+    // so even the last hop of the level isn't identical across maps.
+    const fj = map.flagJump;
+    const seg = layoutSequence(cursorX, [{ gap: fj.gap, y: cursorY + fj.riseOffset, w: fj.width }]);
     cursorX = seg.endX;
-    FLAG_PLATFORM = seg.platforms[seg.platforms.length - 1];
+    FLAG_PLATFORM = seg.platforms[0];
 
     ALL_BLOCKS = [START_PLATFORM, ...PLATFORMS, ...CEILINGS];
     FLAG_X = FLAG_PLATFORM.x + FLAG_PLATFORM.w * 0.5;
@@ -1286,10 +1328,22 @@ function buildLevel(mapIndex) {
 // step-per-platform behavior for the climb back up.
 const CAMERA_Y_ANCHOR = 300;
 const CAMERA_EASE = 0.1;
+// A quicker ease used only while continuously tracking a fall — at max
+// fall speed the gentle CAMERA_EASE would lag ~160px behind (right at the
+// bottom edge of the screen); this keeps the player comfortably in view
+// during a fast plunge instead of riding the very edge of visibility.
+const FALL_CAMERA_EASE = 0.35;
 const WORLD_BOTTOM = 1080;
+// The old clamp capped the camera at WORLD_BOTTOM - VH (the "floor" of a
+// normal level) — but a genuine void-fall keeps going another 100px past
+// WORLD_BOTTOM before the respawn triggers, and the camera would refuse to
+// follow that last stretch, scrolling the player off the bottom edge right
+// before they respawn. Clamping to the respawn threshold instead means the
+// camera can always keep the player in view for the entire fall.
+const CAMERA_MAX_Y = (WORLD_BOTTOM + 100) - CAMERA_Y_ANCHOR + 60;
 
 function cameraTargetFor(playerY) {
-    return Math.max(0, Math.min(playerY - CAMERA_Y_ANCHOR, WORLD_BOTTOM - VH));
+    return Math.max(0, Math.min(playerY - CAMERA_Y_ANCHOR, CAMERA_MAX_Y));
 }
 
 let player, falls, coinCount, cameraX, cameraY, cameraTargetY, keys, won, lastCheckpoint;
@@ -1331,8 +1385,6 @@ function rectsOverlap(a, b) {
 function update() {
     if (won) return;
 
-    const wasOnSlide = player.onGround && !!player.standingSlide;
-
     // Input sets speed directly on the ground; in the air, existing
     // horizontal momentum is preserved (rather than reset every frame) so a
     // slide's push actually carries you off the edge and through the fall
@@ -1350,6 +1402,14 @@ function update() {
 
     if (climbing) {
         player.vy = 0;
+        // Lock horizontal position to the ladder's center while climbing —
+        // otherwise any left/right input (or leftover momentum from
+        // walking up to it) keeps being applied every frame below, and
+        // since climbing never grounds the player, that drift never decays
+        // via friction either — it just slides them right off the narrow
+        // ladder and back into a fall.
+        player.vx = 0;
+        player.x = ladder.x + ladder.w / 2 - PLAYER_W / 2;
         player.y += keys.up ? -CLIMB_SPEED : CLIMB_SPEED;
         player.onGround = false;
     } else {
@@ -1414,12 +1474,29 @@ function update() {
         box.y = player.y;
     }
 
-    // Leaving a slide's edge kicks off the one continuously-tracked fall —
-    // the "trust fall" reveal. Every other jump (rising or falling) leaves
-    // the camera target alone until the next landing.
-    if (wasOnSlide && !player.onGround) player.longFalling = true;
+    // Any fall that drops well past where the camera last anchored — a
+    // slide's trust-fall reveal, or simply missing a jump and plunging
+    // toward the void — switches to continuously tracking the player so
+    // they're never scrolled off-screen while still airborne. Ordinary
+    // jumps (rising and landing within the normal ~125px reach) never
+    // trigger this, so the camera still only "ramps up" on real landings.
+    if (!player.onGround && !player.longFalling) {
+        const expectedScreenY = cameraTargetY + CAMERA_Y_ANCHOR;
+        if (player.y - expectedScreenY > 150) player.longFalling = true;
+    }
     if (player.longFalling) cameraTargetY = cameraTargetFor(player.y);
-    cameraY += (cameraTargetY - cameraY) * CAMERA_EASE;
+    cameraY += (cameraTargetY - cameraY) * (player.longFalling ? FALL_CAMERA_EASE : CAMERA_EASE);
+
+    // Hard guarantee, independent of the heuristics above: never let the
+    // player actually render outside this margin, no matter what state got
+    // them there. Catches edge cases the eased/stepped model above can
+    // miss on its own — e.g. a long stairs-down run (walked, not jumped,
+    // so no landing event ever fires) or the brief window before a fast
+    // fall's continuous tracking has kicked in.
+    const SAFE_TOP = 20, SAFE_BOTTOM = VH - 20 - PLAYER_H;
+    const playerScreenY = player.y - cameraY;
+    if (playerScreenY < SAFE_TOP) cameraY = player.y - SAFE_TOP;
+    else if (playerScreenY > SAFE_BOTTOM) cameraY = player.y - SAFE_BOTTOM;
 
     if (player.x < 0) player.x = 0;
 
@@ -1744,18 +1821,29 @@ function drawLadder(l) {
 function drawDecor(d) {
     const x = d.x - cameraX, y = d.y - cameraY;
     if (x < -80 || x > VW + 80) return;
+    ctx.save();
+    // A soft glow footprint under every landmark marks it as background
+    // dressing — nothing the player needs to react to — no matter how
+    // hazard-like the shape above it looks.
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.ellipse(x, y - 2, 20, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.92;
     switch (d.kind) {
-        case 'tree': return drawTreeDecor(x, y);
-        case 'candycane': return drawCandyCaneDecor(x, y);
-        case 'crystal': return drawCrystalDecor(x, y);
-        case 'cactus': return drawCactusDecor(x, y);
-        case 'icicle': return drawIcicleDecor(x, y);
-        case 'lavapit': return drawLavaPitDecor(x, y);
-        case 'shell': return drawShellDecor(x, y);
-        case 'star': return drawStarDecor(x, y);
-        case 'mushroom': return drawMushroomDecor(x, y);
-        case 'skull': return drawSkullDecor(x, y);
+        case 'tree': drawTreeDecor(x, y); break;
+        case 'candycane': drawCandyCaneDecor(x, y); break;
+        case 'crystal': drawCrystalDecor(x, y); break;
+        case 'cactus': drawCactusDecor(x, y); break;
+        case 'icicle': drawIcicleDecor(x, y); break;
+        case 'lavapit': drawLavaPitDecor(x, y); break;
+        case 'shell': drawShellDecor(x, y); break;
+        case 'star': drawStarDecor(x, y); break;
+        case 'mushroom': drawMushroomDecor(x, y); break;
+        case 'skull': drawSkullDecor(x, y); break;
     }
+    ctx.restore();
 }
 
 function drawTreeDecor(x, y) {
@@ -1808,34 +1896,68 @@ function drawCrystalDecor(x, y) {
     ctx.strokeStyle = '#8a6fd8';
     ctx.lineWidth = 2;
     ctx.stroke();
-}
-
-function drawCactusDecor(x, y) {
-    ctx.fillStyle = '#3f8f4a';
-    ctx.fillRect(x - 6, y - 40, 12, 40);
-    ctx.fillRect(x - 18, y - 26, 12, 10);
-    ctx.fillRect(x + 6, y - 32, 12, 10);
-}
-
-function drawIcicleDecor(x, y) {
-    ctx.fillStyle = 'rgba(210,235,255,0.9)';
+    // A sparkle glint reads as "gem", not "spike".
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.beginPath();
-    ctx.moveTo(x - 8, y - 34);
-    ctx.lineTo(x + 8, y - 34);
-    ctx.lineTo(x, y);
+    ctx.moveTo(x - 4, y - 30);
+    ctx.lineTo(x - 1, y - 24);
+    ctx.lineTo(x - 4, y - 18);
+    ctx.lineTo(x - 7, y - 24);
     ctx.closePath();
     ctx.fill();
 }
 
+function drawCactusDecor(x, y) {
+    ctx.fillStyle = '#3f8f4a';
+    ctx.beginPath();
+    ctx.roundRect(x - 6, y - 40, 12, 40, 6);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.roundRect(x - 18, y - 26, 12, 10, 5);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.roundRect(x + 6, y - 32, 12, 10, 5);
+    ctx.fill();
+    // A little blossom softens the silhouette into something friendly.
+    ctx.fillStyle = '#ff8fc4';
+    ctx.beginPath();
+    ctx.arc(x, y - 42, 4, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+function drawIcicleDecor(x, y) {
+    // A rounded cluster of little ice-blue bumps with a sparkle, rather
+    // than a single sharp spike planted right on the walkable surface.
+    ctx.fillStyle = 'rgba(210,235,255,0.85)';
+    [[0, -30, 10], [-9, -16, 7], [9, -18, 7]].forEach(([ox, oy, r]) => {
+        ctx.beginPath();
+        ctx.arc(x + ox, y + oy, r, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.beginPath();
+    ctx.arc(x - 3, y - 32, 2, 0, Math.PI * 2);
+    ctx.fill();
+}
+
 function drawLavaPitDecor(x, y) {
-    ctx.fillStyle = '#2a1a1a';
+    // A drifting ember glow rather than a flat pit shape sitting right on
+    // the walkable surface — reads as ambient lighting, not a hazard.
+    const gx = x, gy = y - 28;
     ctx.beginPath();
-    ctx.ellipse(x, y - 4, 28, 8, 0, 0, Math.PI * 2);
+    ctx.arc(gx, gy, 16, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,87,34,0.25)';
     ctx.fill();
-    ctx.fillStyle = '#ff5722';
     ctx.beginPath();
-    ctx.ellipse(x, y - 4, 20, 5, 0, 0, Math.PI * 2);
+    ctx.arc(gx, gy, 8, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,152,0,0.6)';
     ctx.fill();
+    ctx.fillStyle = '#ffcc80';
+    [[-10, -6], [6, -14], [2, 5]].forEach(([ox, oy]) => {
+        ctx.beginPath();
+        ctx.arc(gx + ox, gy + oy, 2, 0, Math.PI * 2);
+        ctx.fill();
+    });
 }
 
 function drawShellDecor(x, y) {
