@@ -1842,7 +1842,7 @@ const world = { width: 3200, height: 720, gravity: 0.82 };
 const SAVE_KEY = "platformer-rush-save-v1";
 const STARTING_LIVES = 40;
 const HARD_SLASH_COOLDOWN_FRAMES = 3600;
-const START_AT_NEW_STUFF = true;
+const START_AT_NEW_STUFF = false;
 const TEST_START_LEVEL = 24;
 const keys = { left: false, right: false, jump: false, down: false, duck: false, block: false };
 const setupChoices = { style: "regular", version: "normal", difficulty: "easy" };
@@ -2703,14 +2703,16 @@ function stageRecapPlatforms() {
     ];
 }
 const stageRecapCenters = [900, 1450, 2000, 2550, 3100, 3650, 4200, 4750, 5300, 5850];
-const stageRecapYs = [490, 415, 505, 435, 365, 475, 405, 485, 415, 490];
+const stageRecapSurfaceYs = [575, 500, 590, 520, 450, 560, 490, 570, 500, 575];
 
-function stageRecapEnemy(entry, x, y, idx) {
+function stageRecapEnemy(entry, x, surfaceY, idx) {
     const type = entry.type || entry;
     const extra = entry.extra || {};
     const facing = idx % 2 === 0 ? -1 : 1;
-    const small = type === "still" || type === "pattern" || type === "jumper" || type === "chaos";
-    const spec = { x, y, w: 30, h: small ? 30 : 48, type, facing };
+    const tall = type === "headSpearSword" || type === "swingSword" || type === "blockSword" || type === "legendSword";
+    const h = tall ? 48 : 30;
+    const y = surfaceY - h;
+    const spec = { x, y, w: 30, h, type, facing };
     switch (type) {
         case "pattern":
             spec.pattern = [[1, 0], [-1, 0]]; spec.stepTime = 1; spec.speed = 1.9; break;
@@ -2749,22 +2751,22 @@ function stageRecapEnemy(entry, x, y, idx) {
     return spec;
 }
 
-function buildStageRecapLevels(stageNum, stageLabel, roster, levelNumStart) {
+function buildStageRecapLevels(stageNum, stageLabel, roster, levelNumStart, unlockCapIndex) {
     const platforms = stageRecapPlatforms();
-    const oneOfEach = roster.slice(0, stageRecapCenters.length).map((entry, i) => stageRecapEnemy(entry, stageRecapCenters[i], stageRecapYs[i], i));
+    const oneOfEach = roster.slice(0, stageRecapCenters.length).map((entry, i) => stageRecapEnemy(entry, stageRecapCenters[i], stageRecapSurfaceYs[i], i));
 
     const shifterCount = Math.min(stageRecapCenters.length, Math.max(roster.length, 6));
     const shapeshifters = [];
     for (let i = 0; i < shifterCount; i++) {
         const entry = roster[i % roster.length];
-        const spec = stageRecapEnemy(entry, stageRecapCenters[i], stageRecapYs[i], i);
+        const spec = stageRecapEnemy(entry, stageRecapCenters[i], stageRecapSurfaceYs[i], i);
         spec.isShapeshifter = true;
         spec.shapeshiftPool = roster;
         spec.shapeShiftOffset = 2 + i * 0.7;
         shapeshifters.push(spec);
     }
 
-    const fusion = stageRecapEnemy(roster[0], stageRecapCenters[4], stageRecapYs[4], 0);
+    const fusion = stageRecapEnemy(roster[0], stageRecapCenters[4], stageRecapSurfaceYs[4], 0);
     fusion.isShapeshifter = true;
     fusion.shapeshiftPool = roster;
     fusion.fastCycle = true;
@@ -2772,7 +2774,7 @@ function buildStageRecapLevels(stageNum, stageLabel, roster, levelNumStart) {
 
     const base = (name, intro, enemies) => ({
         name, intro, width: 6550, start: { x: 90, y: 520 }, goal: { x: 6180, y: 552, w: 56, h: 98 },
-        platforms, enemies
+        platforms, enemies, unlockCapIndex
     });
 
     return [
@@ -3325,22 +3327,22 @@ const battleUltimateLevels = [
             { x: 5850, y: 490, w: 30, h: 48, type: "blockSword", facing: -1, swordReach: 74, blockOffset: 1.4, isShapeshifter: true, shapeShiftOffset: 6 }
         ]
     },
-    ...buildStageRecapLevels(1, "Stage 1 (still, pattern, jumper, chaos)", ["still", "pattern", "jumper", "chaos"], 25),
-    ...buildStageRecapLevels(2, "Stage 2 (guard, patrol, jump, flip, quick-slash, both-slash sword)", ["guardSword", "patrolSword", "jumpSword", "flipSword", "quickSlashSword", "bothSlashSword"], 28),
-    ...buildStageRecapLevels(3, "Stage 3 (both-slash, patrol-quick-slash, spear, dual sword)", ["bothSlashSword", "patrolQuickSlashSword", "spearSword", "dualSword"], 31),
-    ...buildStageRecapLevels(4, "Stage 4 (head-spear, swing sword)", ["headSpearSword", "swingSword"], 34),
+    ...buildStageRecapLevels(1, "Stage 1 (still, pattern, jumper, chaos)", ["still", "pattern", "jumper", "chaos"], 25, 4),
+    ...buildStageRecapLevels(2, "Stage 2 (guard, patrol, jump, flip, quick-slash, both-slash sword)", ["guardSword", "patrolSword", "jumpSword", "flipSword", "quickSlashSword", "bothSlashSword"], 28, 10),
+    ...buildStageRecapLevels(3, "Stage 3 (both-slash, patrol-quick-slash, spear, dual sword)", ["bothSlashSword", "patrolQuickSlashSword", "spearSword", "dualSword"], 31, 14),
+    ...buildStageRecapLevels(4, "Stage 4 (head-spear, swing sword)", ["headSpearSword", "swingSword"], 34, 16),
     ...buildStageRecapLevels(5, "Stage 5 (blockers: base, armored, random-attack, fast-guard, spear-thrust)", [
         { type: "blockSword" },
         { type: "blockSword", extra: { armored: true } },
         { type: "blockSword", extra: { armored: true, randomAttacks: true } },
         { type: "blockSword", extra: { armored: true, blockInterval: 2.6 } },
         { type: "blockSword", extra: { armored: true, playerSpear: true } }
-    ], 37),
+    ], 37, 21),
     ...buildStageRecapLevels(6, "Stage 6 (legend sword + full shapeshifter roster)", [
         { type: "legendSword" },
         { type: "guardSword", extra: { isShapeshifter: true, shapeshiftPool: shapeshifterPool(), shapeShiftOffset: 2 } },
         ...shapeshifterPool()
-    ], 40)
+    ], 40, 23)
 ];
 
 let levels = battleNormalLevels;
@@ -3391,6 +3393,10 @@ function reconfigureShapeshifter(enemy) {
     const newType = pick.type || pick;
     const extra = pick.extra || {};
     enemy.type = newType;
+    const tall = newType === "headSpearSword" || newType === "swingSword" || newType === "blockSword" || newType === "legendSword";
+    const bottom = enemy.y + enemy.h;
+    enemy.h = tall ? 48 : 30;
+    enemy.y = bottom - enemy.h;
     enemy.facing = enemy.facing || (Math.random() < 0.5 ? -1 : 1);
     enemy.initialFacing = enemy.facing;
     enemy.mustHitBack = newType !== "bothSlashSword";
@@ -4346,14 +4352,15 @@ function loadLevel(index, resetLives = false) {
         if (enemy.type === "chaos" || enemy.type === "chaosSentry" || enemy.type === "bigFlyer") chooseChaosDirection(enemy);
     });
     if (resetLives) lives = STARTING_LIVES;
-    shieldUnlocked = index >= 7;
-    altBlockKeyUnlocked = index >= 21;
-    duckUnlocked = realSwordControlsActive() ? index >= 15 : index >= 10;
-    archeryUnlocked = index >= 13;
-    combosUnlocked = realSwordControlsActive() && index >= 6;
-    spearKeysUnlocked = realSwordControlsActive() && index >= 12;
-    legendComboUnlocked = realSwordControlsActive() && index >= 13;
-    armorBreakUnlocked = realSwordControlsActive() && index >= 15;
+    const unlockIndex = level.unlockCapIndex ?? index;
+    shieldUnlocked = unlockIndex >= 7;
+    altBlockKeyUnlocked = unlockIndex >= 21;
+    duckUnlocked = realSwordControlsActive() ? unlockIndex >= 15 : unlockIndex >= 10;
+    archeryUnlocked = unlockIndex >= 13;
+    combosUnlocked = realSwordControlsActive() && unlockIndex >= 6;
+    spearKeysUnlocked = realSwordControlsActive() && unlockIndex >= 12;
+    legendComboUnlocked = realSwordControlsActive() && unlockIndex >= 13;
+    armorBreakUnlocked = realSwordControlsActive() && unlockIndex >= 15;
     heldAttackKeys.clear();
     player.sideSlashHeld = false;
     player.sideSlashTimer = 0;
@@ -4372,8 +4379,7 @@ function loadLevel(index, resetLives = false) {
 
 function updateHud() {
     const level = levels[levelIndex];
-    const whatsNew = (level.intro || "").match(/New:.*/);
-    setInstruction(whatsNew ? `${level.name} — ${whatsNew[0]}` : level.name);
+    setInstruction(level.intro || level.name);
     updateLivesCounter();
     updateKillsCounter();
     updateCooldownCounter();
@@ -7212,12 +7218,9 @@ syncSetupChoices();
 if (START_AT_NEW_STUFF) {
     localStorage.removeItem(SAVE_KEY);
     useBattleVersion("ultimate");
-    unlockedCharacterIds.add("volt");
-    currentCharacterId = "volt";
-    collectedSwordTypes.spear = 1;
-    collectedSwordStyles.spear = { enemyType: "spearSword", reach: 80 };
-    equippedSwordType = "spear";
-    attackUpgradeLevel = swordUpgradeCosts.length;
+    currentCharacterId = "azure";
+    equippedSwordType = "basic";
+    attackUpgradeLevel = 0;
     loadLevel(clampLevel(TEST_START_LEVEL), true);
     gameStarted = true;
     rushTitleScreen.classList.add("hidden");
