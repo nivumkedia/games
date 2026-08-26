@@ -231,9 +231,93 @@ body {
     overflow: hidden;
 }
 
+/* blocks palette */
+.blocks-panel {
+    width: 220px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+    min-width: 0;
+}
+.blocks-bar {
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    height: 34px;
+    padding: 0 14px;
+    display: flex;
+    align-items: center;
+    font-size: 12px;
+    color: var(--dim);
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+}
+.blocks-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 10px 20px;
+}
+.blocks-cat {
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin: 14px 2px 6px;
+}
+.blocks-cat:first-child { margin-top: 2px; }
+.block-chip {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 8px;
+    margin-bottom: 6px;
+    cursor: grab;
+    transition: border-color 0.15s, background 0.15s;
+    position: relative;
+}
+.block-chip:hover {
+    border-color: var(--purple);
+    background: rgba(203,166,247,0.06);
+}
+.block-chip:active { cursor: grabbing; }
+.block-chip.dragging { opacity: 0.4; }
+.block-label {
+    font-size: 11.5px;
+    color: var(--text);
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+}
+.block-copy {
+    background: transparent;
+    border: none;
+    color: var(--dim);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 1px 4px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    transition: color 0.15s;
+}
+.block-copy:hover { color: var(--cyan); }
+.block-copy.copied { color: var(--green); }
+.block-snippet {
+    font-size: 10.5px;
+    color: var(--dim);
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin-top: 4px;
+    line-height: 1.4;
+    max-height: 54px;
+    overflow: hidden;
+}
+
 /* code side */
 .code-panel {
-    width: 50%;
+    flex: 1;
     display: flex;
     flex-direction: column;
     border-right: 1px solid var(--border);
@@ -394,7 +478,7 @@ body {
 
 /* preview side */
 .preview-panel {
-    width: 50%;
+    flex: 1;
     display: flex;
     flex-direction: column;
     background: var(--bg);
@@ -604,6 +688,12 @@ body {
   </div>
 
   <div class="e-main">
+    <!-- Blocks palette -->
+    <div class="blocks-panel">
+      <div class="blocks-bar">blocks</div>
+      <div class="blocks-list" id="blocks-list"></div>
+    </div>
+
     <!-- Code panel -->
     <div class="code-panel">
       <div class="code-tab-bar">
@@ -654,6 +744,7 @@ let files = {};
 let current = null;
 let saveTimer = null;
 let gameState = {};
+let isRunning = false;
 
 // ── game types ────────────────────────────────────
 const GAME_TYPES = {
@@ -981,6 +1072,7 @@ function openEditor(name) {
 }
 
 document.getElementById('exit-btn').addEventListener('click', () => {
+    stopGame();
     doSave();
     showTerminal();
 });
@@ -1616,7 +1708,7 @@ function setSave(state) {
 }
 
 // ── run / interpreter ────────────────────────────
-document.getElementById('run-btn').addEventListener('click', runCode);
+document.getElementById('run-btn').addEventListener('click', toggleRun);
 
 function runCode() {
     stopGame();
@@ -1880,11 +1972,22 @@ function runCode() {
         renderGame();
         playAnimations();
         setupMotionControls();
-        if (gameState.ifThenEnabled) startGameLoop();
+        if (gameState.ifThenEnabled || (gameState.motionBindings && gameState.motionBindings.length)) startGameLoop();
         log('Done.', 'ok');
+        isRunning = true;
         setRunning(true);
     } else {
+        isRunning = false;
         setRunning(false);
+    }
+}
+
+function toggleRun() {
+    if (isRunning) {
+        stopGame();
+        log('Stopped.', 'info');
+    } else {
+        runCode();
     }
 }
 
@@ -3434,28 +3537,56 @@ function playAnimations() {
     setTimeout(doNextMove, 300);
 }
 
+const MOTION_KEY_MAP = {
+    'leftarrow': 'ArrowLeft', 'rightarrow': 'ArrowRight',
+    'uparrow': 'ArrowUp', 'downarrow': 'ArrowDown',
+    'space': ' ', 'spacebar': ' ',
+    'enter': 'Enter', 'return': 'Enter',
+    'escape': 'Escape', 'esc': 'Escape',
+    'shift': 'Shift', 'ctrl': 'Control', 'control': 'Control',
+    'alt': 'Alt', 'tab': 'Tab'
+};
+
+function motionKeyMatches(bindingKey, heldKey) {
+    const lower = bindingKey.toLowerCase();
+    const named = MOTION_KEY_MAP[lower];
+    // named specials match exactly; anything else (letters, digits, punctuation) matches case-insensitively
+    return named !== undefined ? heldKey === named : heldKey.toLowerCase() === lower;
+}
+
 function setupMotionControls() {
     if (!gameState.motionBindings || !gameState.motionBindings.length) return;
-    const step = getUnitPx();
-    const keyMap = {
-        'leftarrow': 'ArrowLeft', 'rightarrow': 'ArrowRight',
-        'uparrow': 'ArrowUp', 'downarrow': 'ArrowDown'
+    gameState.heldKeys = new Set();
+    gameState._motionKeyDown = (e) => {
+        const isBound = gameState.motionBindings.some(b => motionKeyMatches(b.key, e.key));
+        if (isBound) e.preventDefault();
+        gameState.heldKeys.add(e.key);
     };
-    gameState._motionHandler = (e) => {
-        for (const b of gameState.motionBindings) {
-            const expected = keyMap[b.key.toLowerCase()] || b.key;
-            if (e.key !== expected) continue;
-            const sp = gameState.sprites[b.sprite];
-            if (!sp) continue;
-            if (b.dir === 'left')  sp.x -= step;
-            if (b.dir === 'right') sp.x += step;
-            if (b.dir === 'up')    sp.y -= step;
-            if (b.dir === 'down')  sp.y += step;
-            e.preventDefault();
-            renderGame();
+    gameState._motionKeyUp = (e) => {
+        gameState.heldKeys.delete(e.key);
+    };
+    document.addEventListener('keydown', gameState._motionKeyDown);
+    document.addEventListener('keyup', gameState._motionKeyUp);
+}
+
+// Applies movement for every currently-held key at once, so multiple
+// controlled-motion bindings can be active simultaneously (e.g. diagonal movement).
+function applyHeldMotion() {
+    if (!gameState.motionBindings || !gameState.heldKeys || !gameState.heldKeys.size) return;
+    const step = getUnitPx() * 0.15;
+    for (const b of gameState.motionBindings) {
+        let pressed = false;
+        for (const k of gameState.heldKeys) {
+            if (motionKeyMatches(b.key, k)) { pressed = true; break; }
         }
-    };
-    document.addEventListener('keydown', gameState._motionHandler);
+        if (!pressed) continue;
+        const sp = gameState.sprites[b.sprite];
+        if (!sp) continue;
+        if (b.dir === 'left')  sp.x -= step;
+        if (b.dir === 'right') sp.x += step;
+        if (b.dir === 'up')    sp.y -= step;
+        if (b.dir === 'down')  sp.y += step;
+    }
 }
 
 function spritesTouching(a, b) {
@@ -3520,6 +3651,7 @@ function startGameLoop() {
                 if (sp) sp.visible = true;
             }
         }
+        applyHeldMotion();
         evalIfThen();
         renderGame();
         gameState._gameLoopId = requestAnimationFrame(loop);
@@ -3531,10 +3663,16 @@ function stopGame() {
     gameState.animRunning = false;
     gameState._gameLoopActive = false;
     if (gameState._gameLoopId) { cancelAnimationFrame(gameState._gameLoopId); gameState._gameLoopId = null; }
-    if (gameState._motionHandler) {
-        document.removeEventListener('keydown', gameState._motionHandler);
-        gameState._motionHandler = null;
+    if (gameState._motionKeyDown) {
+        document.removeEventListener('keydown', gameState._motionKeyDown);
+        gameState._motionKeyDown = null;
     }
+    if (gameState._motionKeyUp) {
+        document.removeEventListener('keyup', gameState._motionKeyUp);
+        gameState._motionKeyUp = null;
+    }
+    if (gameState.heldKeys) gameState.heldKeys.clear();
+    isRunning = false;
     setRunning(false);
     const c = document.getElementById('game-canvas');
     c.getContext('2d').clearRect(0, 0, c.width, c.height);
@@ -3543,6 +3681,8 @@ function stopGame() {
 function setRunning(on) {
     document.getElementById('p-dot').className = 'p-dot' + (on ? ' on' : '');
     document.getElementById('p-label').textContent = on ? 'running' : 'preview';
+    document.getElementById('run-btn').textContent = on ? '■ STOP' : '▶ RUN';
+    document.getElementById('fs-run-btn').textContent = on ? '■ STOP' : '▶ RUN';
 }
 
 // ── fullscreen ───────────────────────────────────
@@ -3575,7 +3715,7 @@ document.addEventListener('fullscreenchange', () => {
 
 document.getElementById('fs-run-btn').addEventListener('click', e => {
     e.stopPropagation();
-    runCode();
+    toggleRun();
 });
 
 // ── console ──────────────────────────────────────
@@ -3593,9 +3733,110 @@ function clearConsole() {
     document.getElementById('console-out').innerHTML = '';
 }
 
+// ── blocks palette ─────────────────────────────────
+// Whenever a new CodeLab language feature is added, add an entry here too
+// so it automatically shows up in the drag/copy panel.
+const BLOCK_LIBRARY = [
+    { category: 'Basics', label: 'Comment', snippet: '// comment' },
+    { category: 'Basics', label: 'Declare variable', snippet: 'set.create newvariable ("myVar")' },
+    { category: 'Basics', label: 'Dev unit setup', snippet: 'start <dev>:\n    set.create (newdev/unit), (tile)\n    devunit: tile; tile(....)' },
+    { category: 'Sprites', label: 'Spawn sprite', snippet: 'spawnsprite(name), player()' },
+    { category: 'Sprites', label: 'Despawn sprite', snippet: 'despawnsprite(name), player()' },
+    { category: 'Sprites', label: 'Respawn sprite', snippet: 'respawnsprite(name), player()' },
+    { category: 'Sprites', label: 'Position sprite', snippet: 'name xy (0, 10), (0, 10)' },
+    { category: 'Sprites', label: 'Color sprite', snippet: 'name, 1#3' },
+    { category: 'Sprites', label: 'Blink sprite', snippet: 'name blink (60, 30)' },
+    { category: 'Blocks', label: 'Activate block', snippet: 'activate:\n    spawnsprite(name), player()' },
+    { category: 'Animation', label: 'Animation setup', snippet: '<dev>:import. animation\na=animation.a.animation' },
+    { category: 'Animation', label: 'Animation steps', snippet: 'activate:\n1: on name\n2: a.down (1)' },
+    { category: 'Motion', label: 'Controlled motion setup', snippet: '<dev>: import. controlled_motion. motion()\nset.create newfunction (controlled_motion())\nm=controlled_motion.m.controlled_motion' },
+    { category: 'Motion', label: 'Key binding (all arrows)', snippet: 'm.("uparrow")=\nm.(name)up\nm.("downarrow")=\nm.(name)down\nm.("leftarrow")=\nm.(name)left\nm.("rightarrow")=\nm.(name)right' },
+    { category: 'Motion', label: 'Key binding (any key)', snippet: 'm.("w")=\nm.(name)up' },
+    { category: 'Conditionals', label: 'If/then setup', snippet: '<dev>:import. if_then\nsearchdev (if_then)\nset.create newfunction (if_then)' },
+    { category: 'Conditionals', label: 'If/then block', snippet: '{if\nname = (touching) = name2\n{then\ndespawnsprite(name2), player()\n{' },
+    { category: 'Loops', label: 'Loop setup', snippet: '<dev>:import. loop()\nset.create newfunction (loop())' },
+    { category: 'Loops', label: 'Loop block', snippet: 'activate: loop()\nloop (0, 5)\nspawnsprite(item), coin()\n{' },
+];
+
+function insertBlockText(snippet) {
+    codeInput.focus();
+    const pos = codeInput.selectionStart;
+    const end = codeInput.selectionEnd;
+    const before = codeInput.value.slice(0, pos);
+    const needsNewlineBefore = before.length && !before.endsWith('\n');
+    const text = (needsNewlineBefore ? '\n' : '') + snippet;
+    codeInput.value = before + text + codeInput.value.slice(end);
+    const newPos = pos + text.length;
+    codeInput.selectionStart = codeInput.selectionEnd = newPos;
+    syncHighlight();
+    syncLineNums();
+    triggerSave();
+}
+
+function renderBlocksPanel() {
+    const list = document.getElementById('blocks-list');
+    list.innerHTML = '';
+    let lastCat = null;
+    BLOCK_LIBRARY.forEach(block => {
+        if (block.category !== lastCat) {
+            const cat = document.createElement('div');
+            cat.className = 'blocks-cat';
+            cat.textContent = block.category;
+            list.appendChild(cat);
+            lastCat = block.category;
+        }
+        const chip = document.createElement('div');
+        chip.className = 'block-chip';
+        chip.draggable = true;
+
+        const label = document.createElement('div');
+        label.className = 'block-label';
+        const labelText = document.createElement('span');
+        labelText.textContent = block.label;
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'block-copy';
+        copyBtn.type = 'button';
+        copyBtn.textContent = 'copy';
+        copyBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            navigator.clipboard.writeText(block.snippet).catch(() => {});
+            copyBtn.textContent = 'copied';
+            copyBtn.classList.add('copied');
+            setTimeout(() => { copyBtn.textContent = 'copy'; copyBtn.classList.remove('copied'); }, 1000);
+        });
+        label.appendChild(labelText);
+        label.appendChild(copyBtn);
+
+        const snippetEl = document.createElement('div');
+        snippetEl.className = 'block-snippet';
+        snippetEl.textContent = block.snippet;
+
+        chip.appendChild(label);
+        chip.appendChild(snippetEl);
+
+        chip.addEventListener('click', () => insertBlockText(block.snippet));
+        chip.addEventListener('dragstart', e => {
+            chip.classList.add('dragging');
+            e.dataTransfer.setData('text/plain', block.snippet);
+            e.dataTransfer.effectAllowed = 'copy';
+        });
+        chip.addEventListener('dragend', () => chip.classList.remove('dragging'));
+
+        list.appendChild(chip);
+    });
+}
+
+codeInput.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+codeInput.addEventListener('drop', e => {
+    e.preventDefault();
+    const text = e.dataTransfer.getData('text/plain');
+    if (text) insertBlockText(text);
+});
+
 // ── init ─────────────────────────────────────────
 loadFiles();
 showTerminal();
+renderBlocksPanel();
 </script>
 </body>
 </html>
