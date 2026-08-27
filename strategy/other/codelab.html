@@ -1408,7 +1408,7 @@ function hl(line) {
     }
 
     // motion move: [N: ] m.(sprite)direction
-    const motMvHL = line.match(/^(\s*)(?:(\d+):\s+)?m\.\((\w+)\)\s*(left|right|up|down|punch)$/);
+    const motMvHL = line.match(/^(\s*)(?:(\d+):\s+)?m\.\((\w+)\)\s*(left|right|up|down|punch|longpunch)$/);
     if (motMvHL) {
         const [, indent, num, sprite, dir] = motMvHL;
         return escHtml(indent)
@@ -1861,7 +1861,7 @@ function runCode() {
         {
             const keyM2 = t.match(/^(?:\d+:\s+)?m\.\s*\(\s*"([^"]+)"\s*\)\s*=$/);
             if (keyM2) { gameState.pendingMotionKey = keyM2[1]; continue; }
-            const motM2 = t.match(/^(?:\d+:\s+)?m\.\((\w+)\)\s*(left|right|up|down|punch)$/);
+            const motM2 = t.match(/^(?:\d+:\s+)?m\.\((\w+)\)\s*(left|right|up|down|punch|longpunch)$/);
             if (motM2) {
                 gameState.motionBindings.push({ key: gameState.pendingMotionKey || '', sprite: motM2[1], dir: motM2[2] });
                 gameState.pendingMotionKey = null;
@@ -2084,7 +2084,7 @@ function execActivateLine(line, n) {
     if (keyM) { gameState.pendingMotionKey = keyM[1]; return true; }
 
     // [N: ] m.(sprite)direction — complete motion binding
-    const motM = line.match(/^(?:\d+:\s+)?m\.\((\w+)\)\s*(left|right|up|down|punch)$/);
+    const motM = line.match(/^(?:\d+:\s+)?m\.\((\w+)\)\s*(left|right|up|down|punch|longpunch)$/);
     if (motM) {
         gameState.motionBindings.push({ key: gameState.pendingMotionKey || '', sprite: motM[1], dir: motM[2] });
         gameState.pendingMotionKey = null;
@@ -3549,25 +3549,59 @@ function setupMotionControls() {
         'shift': 'Shift', 'ctrl': 'Control', 'control': 'Control',
         'alt': 'Alt', 'tab': 'Tab'
     };
+    const fireAction = (b) => {
+        const sp = gameState.sprites[b.sprite];
+        if (!sp) return;
+        if (b.dir === 'left')  sp.x -= step;
+        if (b.dir === 'right') sp.x += step;
+        if (b.dir === 'up')    sp.y -= step;
+        if (b.dir === 'down')  sp.y += step;
+        if (b.dir === 'punch') log(`"${b.sprite}" punches!`, 'info');
+        if (b.dir === 'longpunch') log(`"${b.sprite}" longpunches! (+0.25 range)`, 'info');
+        renderGame();
+    };
+
+    // heldKeys/activeCombos only exist to support multi-key combo bindings
+    // (e.g. "lp" = L and P together) — single-key bindings still fire
+    // immediately on keydown, exactly as before.
+    gameState.heldKeys = new Set();
+    gameState.activeCombos = new Set();
+
     gameState._motionHandler = (e) => {
+        gameState.heldKeys.add(e.key.toLowerCase());
         for (const b of gameState.motionBindings) {
             const lower = b.key.toLowerCase();
             const named = keyMap[lower];
-            // named specials match exactly; anything else (letters, digits, punctuation) matches case-insensitively
+            if (lower.length > 1 && named === undefined) continue; // combo binding, handled below
+            // named specials match exactly; anything else (single char) matches case-insensitively
             const matches = named !== undefined ? e.key === named : e.key.toLowerCase() === lower;
             if (!matches) continue;
-            const sp = gameState.sprites[b.sprite];
-            if (!sp) continue;
-            if (b.dir === 'left')  sp.x -= step;
-            if (b.dir === 'right') sp.x += step;
-            if (b.dir === 'up')    sp.y -= step;
-            if (b.dir === 'down')  sp.y += step;
-            if (b.dir === 'punch') log(`"${b.sprite}" punches!`, 'info');
             e.preventDefault();
-            renderGame();
+            fireAction(b);
+        }
+        // combo bindings: every character in the key string must currently be held,
+        // and it only fires once per press (until all its keys are released again)
+        for (const b of gameState.motionBindings) {
+            const lower = b.key.toLowerCase();
+            if (lower.length <= 1 || keyMap[lower] !== undefined) continue;
+            const req = lower.split('');
+            const allHeld = req.every(k => gameState.heldKeys.has(k));
+            if (allHeld && !gameState.activeCombos.has(b.key)) {
+                gameState.activeCombos.add(b.key);
+                e.preventDefault();
+                fireAction(b);
+            }
+        }
+    };
+    gameState._motionKeyUp = (e) => {
+        gameState.heldKeys.delete(e.key.toLowerCase());
+        for (const comboKey of [...gameState.activeCombos]) {
+            const req = comboKey.toLowerCase().split('');
+            if (!req.every(k => gameState.heldKeys.has(k))) gameState.activeCombos.delete(comboKey);
         }
     };
     document.addEventListener('keydown', gameState._motionHandler);
+    document.addEventListener('keyup', gameState._motionKeyUp);
 }
 
 function spritesTouching(a, b) {
@@ -3646,6 +3680,10 @@ function stopGame() {
     if (gameState._motionHandler) {
         document.removeEventListener('keydown', gameState._motionHandler);
         gameState._motionHandler = null;
+    }
+    if (gameState._motionKeyUp) {
+        document.removeEventListener('keyup', gameState._motionKeyUp);
+        gameState._motionKeyUp = null;
     }
     isRunning = false;
     setRunning(false);
@@ -3728,6 +3766,7 @@ const BLOCK_LIBRARY = [
     { category: 'Motion', label: 'Key binding (all arrows)', snippet: 'm.("uparrow")=\nm.(name)up\nm.("downarrow")=\nm.(name)down\nm.("leftarrow")=\nm.(name)left\nm.("rightarrow")=\nm.(name)right' },
     { category: 'Motion', label: 'Key binding (any key)', snippet: 'm.("w")=\nm.(name)up' },
     { category: 'Motion', label: 'Punch key binding', snippet: 'm.("p")=\nm.(name)punch' },
+    { category: 'Motion', label: 'Longpunch key combo (L+P)', snippet: 'm.("lp")=\nm.(name)longpunch' },
     { category: 'Conditionals', label: 'If/then setup', snippet: '<dev>:import. if_then\nsearchdev (if_then)\nset.create newfunction (if_then)' },
     { category: 'Conditionals', label: 'If/then block', snippet: '{if\nname = (touching) = name2\n{then\ndespawnsprite(name2), player()\n{' },
     { category: 'Loops', label: 'Loop setup', snippet: '<dev>:import. loop()\nset.create newfunction (loop())' },
