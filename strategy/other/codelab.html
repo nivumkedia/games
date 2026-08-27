@@ -1972,7 +1972,7 @@ function runCode() {
         renderGame();
         playAnimations();
         setupMotionControls();
-        if (gameState.ifThenEnabled || (gameState.motionBindings && gameState.motionBindings.length)) startGameLoop();
+        if (gameState.ifThenEnabled) startGameLoop();
         log('Done.', 'ok');
         isRunning = true;
         setRunning(true);
@@ -3537,56 +3537,36 @@ function playAnimations() {
     setTimeout(doNextMove, 300);
 }
 
-const MOTION_KEY_MAP = {
-    'leftarrow': 'ArrowLeft', 'rightarrow': 'ArrowRight',
-    'uparrow': 'ArrowUp', 'downarrow': 'ArrowDown',
-    'space': ' ', 'spacebar': ' ',
-    'enter': 'Enter', 'return': 'Enter',
-    'escape': 'Escape', 'esc': 'Escape',
-    'shift': 'Shift', 'ctrl': 'Control', 'control': 'Control',
-    'alt': 'Alt', 'tab': 'Tab'
-};
-
-function motionKeyMatches(bindingKey, heldKey) {
-    const lower = bindingKey.toLowerCase();
-    const named = MOTION_KEY_MAP[lower];
-    // named specials match exactly; anything else (letters, digits, punctuation) matches case-insensitively
-    return named !== undefined ? heldKey === named : heldKey.toLowerCase() === lower;
-}
-
 function setupMotionControls() {
     if (!gameState.motionBindings || !gameState.motionBindings.length) return;
-    gameState.heldKeys = new Set();
-    gameState._motionKeyDown = (e) => {
-        const isBound = gameState.motionBindings.some(b => motionKeyMatches(b.key, e.key));
-        if (isBound) e.preventDefault();
-        gameState.heldKeys.add(e.key);
+    const step = getUnitPx();
+    const keyMap = {
+        'leftarrow': 'ArrowLeft', 'rightarrow': 'ArrowRight',
+        'uparrow': 'ArrowUp', 'downarrow': 'ArrowDown',
+        'space': ' ', 'spacebar': ' ',
+        'enter': 'Enter', 'return': 'Enter',
+        'escape': 'Escape', 'esc': 'Escape',
+        'shift': 'Shift', 'ctrl': 'Control', 'control': 'Control',
+        'alt': 'Alt', 'tab': 'Tab'
     };
-    gameState._motionKeyUp = (e) => {
-        gameState.heldKeys.delete(e.key);
-    };
-    document.addEventListener('keydown', gameState._motionKeyDown);
-    document.addEventListener('keyup', gameState._motionKeyUp);
-}
-
-// Applies movement for every currently-held key at once, so multiple
-// controlled-motion bindings can be active simultaneously (e.g. diagonal movement).
-function applyHeldMotion() {
-    if (!gameState.motionBindings || !gameState.heldKeys || !gameState.heldKeys.size) return;
-    const step = getUnitPx() * 0.15;
-    for (const b of gameState.motionBindings) {
-        let pressed = false;
-        for (const k of gameState.heldKeys) {
-            if (motionKeyMatches(b.key, k)) { pressed = true; break; }
+    gameState._motionHandler = (e) => {
+        for (const b of gameState.motionBindings) {
+            const lower = b.key.toLowerCase();
+            const named = keyMap[lower];
+            // named specials match exactly; anything else (letters, digits, punctuation) matches case-insensitively
+            const matches = named !== undefined ? e.key === named : e.key.toLowerCase() === lower;
+            if (!matches) continue;
+            const sp = gameState.sprites[b.sprite];
+            if (!sp) continue;
+            if (b.dir === 'left')  sp.x -= step;
+            if (b.dir === 'right') sp.x += step;
+            if (b.dir === 'up')    sp.y -= step;
+            if (b.dir === 'down')  sp.y += step;
+            e.preventDefault();
+            renderGame();
         }
-        if (!pressed) continue;
-        const sp = gameState.sprites[b.sprite];
-        if (!sp) continue;
-        if (b.dir === 'left')  sp.x -= step;
-        if (b.dir === 'right') sp.x += step;
-        if (b.dir === 'up')    sp.y -= step;
-        if (b.dir === 'down')  sp.y += step;
-    }
+    };
+    document.addEventListener('keydown', gameState._motionHandler);
 }
 
 function spritesTouching(a, b) {
@@ -3651,7 +3631,6 @@ function startGameLoop() {
                 if (sp) sp.visible = true;
             }
         }
-        applyHeldMotion();
         evalIfThen();
         renderGame();
         gameState._gameLoopId = requestAnimationFrame(loop);
@@ -3663,15 +3642,10 @@ function stopGame() {
     gameState.animRunning = false;
     gameState._gameLoopActive = false;
     if (gameState._gameLoopId) { cancelAnimationFrame(gameState._gameLoopId); gameState._gameLoopId = null; }
-    if (gameState._motionKeyDown) {
-        document.removeEventListener('keydown', gameState._motionKeyDown);
-        gameState._motionKeyDown = null;
+    if (gameState._motionHandler) {
+        document.removeEventListener('keydown', gameState._motionHandler);
+        gameState._motionHandler = null;
     }
-    if (gameState._motionKeyUp) {
-        document.removeEventListener('keyup', gameState._motionKeyUp);
-        gameState._motionKeyUp = null;
-    }
-    if (gameState.heldKeys) gameState.heldKeys.clear();
     isRunning = false;
     setRunning(false);
     const c = document.getElementById('game-canvas');
