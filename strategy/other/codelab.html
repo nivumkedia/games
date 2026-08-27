@@ -3549,6 +3549,24 @@ function setupMotionControls() {
         'shift': 'Shift', 'ctrl': 'Control', 'control': 'Control',
         'alt': 'Alt', 'tab': 'Tab'
     };
+    const attemptAttack = (attackerName, range, label) => {
+        const attacker = gameState.sprites[attackerName];
+        if (!attacker) return;
+        const ac = { x: attacker.x + attacker.w / 2, y: attacker.y + attacker.h / 2 };
+        for (const [name, sp] of Object.entries(gameState.sprites)) {
+            if (name === attackerName || !sp.visible) continue;
+            const dist = Math.hypot((sp.x + sp.w / 2) - ac.x, (sp.y + sp.h / 2) - ac.y);
+            if (dist > range) continue;
+            if (sp.blocking) {
+                log(`"${name}" blocks "${attackerName}"'s ${label}!`, 'info');
+            } else {
+                log(`"${attackerName}" ${label}es "${name}"!`, 'info');
+            }
+            return;
+        }
+        log(`"${attackerName}" ${label}es — nothing in range`, 'info');
+    };
+
     const fireAction = (b) => {
         const sp = gameState.sprites[b.sprite];
         if (!sp) return;
@@ -3556,9 +3574,9 @@ function setupMotionControls() {
         if (b.dir === 'right') sp.x += step;
         if (b.dir === 'up')    sp.y -= step;
         if (b.dir === 'down')  sp.y += step;
-        if (b.dir === 'punch') log(`"${b.sprite}" punches!`, 'info');
-        if (b.dir === 'longpunch') log(`"${b.sprite}" longpunches! (+0.25 range)`, 'info');
-        if (b.dir === 'block') log(`"${b.sprite}" blocks!`, 'info');
+        if (b.dir === 'punch') attemptAttack(b.sprite, getUnitPx() * 2, 'punch');
+        if (b.dir === 'longpunch') attemptAttack(b.sprite, getUnitPx() * 2.25, 'longpunch');
+        if (b.dir === 'block') sp.blocking = true;
         renderGame();
     };
 
@@ -3599,6 +3617,16 @@ function setupMotionControls() {
         for (const comboKey of [...gameState.activeCombos]) {
             const req = comboKey.toLowerCase().split('');
             if (!req.every(k => gameState.heldKeys.has(k))) gameState.activeCombos.delete(comboKey);
+        }
+        // release held block state when its key comes up
+        for (const b of gameState.motionBindings) {
+            if (b.dir !== 'block') continue;
+            const lower = b.key.toLowerCase();
+            const named = keyMap[lower];
+            const matches = named !== undefined ? e.key === named : e.key.toLowerCase() === lower;
+            if (!matches) continue;
+            const sp = gameState.sprites[b.sprite];
+            if (sp) sp.blocking = false;
         }
     };
     document.addEventListener('keydown', gameState._motionHandler);
