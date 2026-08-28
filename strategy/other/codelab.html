@@ -865,7 +865,21 @@ function saveFightProgress() {
     localStorage.setItem(FIGHT_STORE, String(fightUnlocked));
 }
 
+// punch is available from the start; longpunch needs Level 5 unlocked (beat
+// Level 4); block needs Level 8 unlocked (beat Level 7); kick needs Level 9
+// unlocked (beat Level 8)
+function combatUnlockRequirement(dir) {
+    if (dir === 'longpunch') return 5;
+    if (dir === 'block') return 8;
+    if (dir === 'kick') return 9;
+    return 1;
+}
+function isCombatUnlocked(dir) {
+    return fightUnlocked >= combatUnlockRequirement(dir);
+}
+
 function showFightSelect() {
+    doSave();
     document.getElementById('screen-terminal').style.display = 'none';
     document.getElementById('screen-editor').style.display = 'none';
     document.getElementById('screen-fight-select').classList.remove('hidden');
@@ -1375,6 +1389,7 @@ function openEditor(name) {
     syncLineNums();
     setSave('saved');
     clearConsole();
+    renderBlocksPanel();
 
     setTimeout(() => inp.focus(), 50);
 }
@@ -1577,6 +1592,50 @@ function hl(line) {
     // comment
     if (line.trim().startsWith('//')) {
         return `<span style="color:#6c7086;font-style:italic">${escHtml(line)}</span>`;
+    }
+
+    // punch/longpunch/kick/block setup lines (exact literal statements —
+    // too irregular for token-by-token coloring, so highlight generically
+    // instead of falling through to the flat default color)
+    const COMBAT_SETUP_LINES = [
+        /^set\.create\.import\s*\(punch\)\s*,\s*"punch"\/declare\.onpunch\}$/,
+        /^onpunch$/,
+        /^punch=onpunch\(\)\.punchmotion,\s*"addpunch"\s*on\s*punchdeclare\(\),\s*"punchmotion"$/,
+        /^declare\.onpunch\/punchmotion\(newpunch\)$/,
+        /^punch\.declare"longpunch"range\.\{range=\+2\.add\+2\}\(\)$/,
+        /^declare\{onlongpunch\.\{longpunchmotion\}$/,
+        /^longpunch\.startlongpunch$/,
+        /^declare\.newattack,\s*"kick"\/declare\.kick\(\)$/,
+        /^kick=onkick\(\)\.kickmotion,\s*"addkick"\s*on\s*kickdeclare\(\),\s*"kickmotion"$/,
+        /^kickmotion\{\(damage\)=damage\.declaredamage\}:damge\.\{damage=\*\(\*\.\*\/declare\)2\.add\*2\}\(\)$/,
+        /^defense\.newdefense\/declaredefense$/,
+        /^add\."defense\{block\}"\(\)$/,
+        /^block=block\.\(defense\.newdefend\(defendattack\.punch\)$/,
+        /^b=block\.blockdefenseblockattack$/,
+        /^block:attack\.<dev>findnewattack\.addblock$/
+    ];
+    if (COMBAT_SETUP_LINES.some(p => p.test(line.trim()))) {
+        const indent = line.match(/^(\s*)/)[1];
+        const body = line.trim();
+        const tokRe = /"[^"]*"|[A-Za-z_][A-Za-z0-9_]*|\d+|./g;
+        const tokColor = (s) => {
+            if (s.startsWith('"')) return '#fab387';
+            if (/^\d/.test(s)) return '#a6e3a1';
+            if (!/^[A-Za-z_]/.test(s)) return '#6c7086';
+            const lower = s.toLowerCase();
+            if (lower.includes('kick')) return '#94e2d5';
+            if (lower.includes('punch')) return '#f38ba8';
+            if (lower.includes('block') || lower.includes('defense') || lower.includes('defend')) return '#89b4fa';
+            if (lower.includes('damage') || lower.includes('damge') || lower.includes('range')) return '#f9e2af';
+            if (lower.includes('declare') || lower.startsWith('new') || lower.startsWith('add') || lower.startsWith('find')) return '#cba6f7';
+            return '#89dceb';
+        };
+        let out = '';
+        let tok;
+        while ((tok = tokRe.exec(body))) {
+            out += `<span style="color:${tokColor(tok[0])}">${escHtml(tok[0])}</span>`;
+        }
+        return escHtml(indent) + out;
     }
 
     // set.create newvariable ("name")
@@ -2049,6 +2108,7 @@ function runCode() {
         _gameLoopActive: false,
         _gameLoopId: null,
         punchSetupDone: false,
+        longpunchSetupDone: false,
         kickSetupDone: false,
         blockSetupDone: false
     };
@@ -2174,6 +2234,11 @@ function runCode() {
             if (keyM2) { gameState.pendingMotionKey = keyM2[1]; continue; }
             const motM2 = t.match(/^(?:\d+:\s+)?m\.\((\w+)\)\s*(left|right|up|down|punch|longpunch|block|kick)$/);
             if (motM2) {
+                if (!isCombatUnlocked(motM2[2])) {
+                    log(`"${motM2[2]}" is not unlocked yet — beat Level ${combatUnlockRequirement(motM2[2]) - 1} first`, 'err');
+                    gameState.pendingMotionKey = null;
+                    continue;
+                }
                 gameState.motionBindings.push({ key: gameState.pendingMotionKey || '', sprite: motM2[1], dir: motM2[2] });
                 gameState.pendingMotionKey = null;
                 continue;
@@ -2253,32 +2318,60 @@ function runCode() {
             log('punch wired to punchmotion', 'info'); continue;
         }
 
-        // kick setup (3 lines)
+        // longpunch setup (4 lines, plus a bare "}" already handled above)
+        // requires Level 5 unlocked (beat Level 4)
+        if (t.match(/^declare\.onpunch\/punchmotion\(newpunch\)$/)) {
+            if (!isCombatUnlocked('longpunch')) { log('longpunch is not unlocked yet — beat Level 4 first', 'err'); continue; }
+            log('longpunch import declared', 'info'); continue;
+        }
+        if (t.match(/^punch\.declare"longpunch"range\.\{range=\+2\.add\+2\}\(\)$/)) {
+            if (!isCombatUnlocked('longpunch')) { log('longpunch is not unlocked yet — beat Level 4 first', 'err'); continue; }
+            log('longpunch range declared (+0.25 range)', 'info'); continue;
+        }
+        if (t.match(/^declare\{onlongpunch\.\{longpunchmotion\}$/)) {
+            if (!isCombatUnlocked('longpunch')) { log('longpunch is not unlocked yet — beat Level 4 first', 'err'); continue; }
+            log('onlongpunch handler declared', 'info'); continue;
+        }
+        if (t.match(/^longpunch\.startlongpunch$/)) {
+            if (!isCombatUnlocked('longpunch')) { log('longpunch is not unlocked yet — beat Level 4 first', 'err'); continue; }
+            gameState.longpunchSetupDone = true;
+            log('longpunch wired to longpunchmotion', 'info'); continue;
+        }
+
+        // kick setup (3 lines) — requires Level 9 unlocked (beat Level 8)
         if (t.match(/^declare\.newattack,\s*"kick"\/declare\.kick\(\)$/)) {
+            if (!isCombatUnlocked('kick')) { log('kick is not unlocked yet — beat Level 8 first', 'err'); continue; }
             log('kick attack declared', 'info'); continue;
         }
         if (t.match(/^kick=onkick\(\)\.kickmotion,\s*"addkick"\s*on\s*kickdeclare\(\),\s*"kickmotion"$/)) {
+            if (!isCombatUnlocked('kick')) { log('kick is not unlocked yet — beat Level 8 first', 'err'); continue; }
             log('kick wired to kickmotion', 'info'); continue;
         }
         if (t.match(/^kickmotion\{\(damage\)=damage\.declaredamage\}:damge\.\{damage=\*\(\*\.\*\/declare\)2\.add\*2\}\(\)$/)) {
+            if (!isCombatUnlocked('kick')) { log('kick is not unlocked yet — beat Level 8 first', 'err'); continue; }
             gameState.kickSetupDone = true;
             log('kick damage formula declared (half of target\'s current health)', 'info'); continue;
         }
 
-        // block setup (5 lines)
+        // block setup (5 lines) — requires Level 8 unlocked (beat Level 7)
         if (t.match(/^defense\.newdefense\/declaredefense$/)) {
+            if (!isCombatUnlocked('block')) { log('block is not unlocked yet — beat Level 7 first', 'err'); continue; }
             log('defense declared', 'info'); continue;
         }
         if (t.match(/^add\."defense\{block\}"\(\)$/)) {
+            if (!isCombatUnlocked('block')) { log('block is not unlocked yet — beat Level 7 first', 'err'); continue; }
             log('block defense added', 'info'); continue;
         }
         if (t.match(/^block=block\.\(defense\.newdefend\(defendattack\.punch\)$/)) {
+            if (!isCombatUnlocked('block')) { log('block is not unlocked yet — beat Level 7 first', 'err'); continue; }
             log('block wired to defend against punch', 'info'); continue;
         }
         if (t.match(/^b=block\.blockdefenseblockattack$/)) {
+            if (!isCombatUnlocked('block')) { log('block is not unlocked yet — beat Level 7 first', 'err'); continue; }
             log('block bound to blockdefenseblockattack', 'info'); continue;
         }
         if (t.match(/^block:attack\.<dev>findnewattack\.addblock$/)) {
+            if (!isCombatUnlocked('block')) { log('block is not unlocked yet — beat Level 7 first', 'err'); continue; }
             gameState.blockSetupDone = true;
             log('block wired to attack detection', 'info'); continue;
         }
@@ -2440,6 +2533,11 @@ function execActivateLine(line, n) {
     // [N: ] m.(sprite)direction — complete motion binding
     const motM = line.match(/^(?:\d+:\s+)?m\.\((\w+)\)\s*(left|right|up|down|punch|longpunch|block|kick)$/);
     if (motM) {
+        if (!isCombatUnlocked(motM[2])) {
+            log(`"${motM[2]}" is not unlocked yet — beat Level ${combatUnlockRequirement(motM[2]) - 1} first`, 'err');
+            gameState.pendingMotionKey = null;
+            return true;
+        }
         gameState.motionBindings.push({ key: gameState.pendingMotionKey || '', sprite: motM[1], dir: motM[2] });
         gameState.pendingMotionKey = null;
         return true;
@@ -3947,8 +4045,17 @@ function setupMotionControls() {
         if (b.dir === 'right') sp.x += step;
         if (b.dir === 'up')    sp.y -= step;
         if (b.dir === 'down')  sp.y += step;
-        if (b.dir === 'punch' || b.dir === 'longpunch') {
+        if (b.dir === 'punch' || b.dir === 'longpunch' || b.dir === 'kick' || b.dir === 'block') {
+            if (!isCombatUnlocked(b.dir)) {
+                log(`"${b.dir}" is not unlocked yet — beat Level ${combatUnlockRequirement(b.dir) - 1} first`, 'err');
+                return;
+            }
+        }
+        if (b.dir === 'punch') {
             if (!gameState.punchSetupDone) { log('punch setup not run yet — add the punch setup code', 'err'); return; }
+        }
+        if (b.dir === 'longpunch') {
+            if (!gameState.longpunchSetupDone) { log('longpunch setup not run yet — add the longpunch setup code', 'err'); return; }
         }
         if (b.dir === 'kick') {
             if (!gameState.kickSetupDone) { log('kick setup not run yet — add the kick setup code', 'err'); return; }
@@ -4178,13 +4285,14 @@ const BLOCK_LIBRARY = [
     { category: 'Motion', label: 'Controlled motion setup', snippet: '<dev>: import. controlled_motion. motion()\nset.create newfunction (controlled_motion())\nm=controlled_motion.m.controlled_motion' },
     { category: 'Motion', label: 'Key binding (all arrows)', snippet: 'm.("uparrow")=\nm.(name)up\nm.("downarrow")=\nm.(name)down\nm.("leftarrow")=\nm.(name)left\nm.("rightarrow")=\nm.(name)right' },
     { category: 'Motion', label: 'Key binding (any key)', snippet: 'm.("w")=\nm.(name)up' },
-    { category: 'Motion', label: 'Punch key binding', snippet: 'm.("p")=\nm.(name)punch' },
-    { category: 'Motion', label: 'Longpunch key combo (L+P)', snippet: 'm.("lp")=\nm.(name)longpunch' },
-    { category: 'Motion', label: 'Block key binding', snippet: 'm.("b")=\nm.(name)block' },
-    { category: 'Motion', label: 'Kick key binding', snippet: 'm.("k")=\nm.(name)kick' },
-    { category: 'Combat', label: 'Punch setup', snippet: 'set.create.import (punch), "punch"/declare.onpunch}\nonpunch\n}\npunch=onpunch().punchmotion, "addpunch" on punchdeclare(),"punchmotion"' },
-    { category: 'Combat', label: 'Kick setup', snippet: 'declare.newattack, "kick"/declare.kick()\nkick=onkick().kickmotion, "addkick" on kickdeclare(),"kickmotion"\nkickmotion{(damage)=damage.declaredamage}:damge.{damage=*(*.*/declare)2.add*2}()' },
-    { category: 'Combat', label: 'Block setup', snippet: 'defense.newdefense/declaredefense\nadd."defense{block}"()\nblock=block.(defense.newdefend(defendattack.punch)\nb=block.blockdefenseblockattack\nblock:attack.<dev>findnewattack.addblock' },
+    { category: 'Motion', label: 'Punch key binding', snippet: 'm.("p")=\nm.(name)punch', requires: 'punch' },
+    { category: 'Motion', label: 'Longpunch key combo (L+P)', snippet: 'm.("lp")=\nm.(name)longpunch', requires: 'longpunch' },
+    { category: 'Motion', label: 'Block key binding', snippet: 'm.("b")=\nm.(name)block', requires: 'block' },
+    { category: 'Motion', label: 'Kick key binding', snippet: 'm.("k")=\nm.(name)kick', requires: 'kick' },
+    { category: 'Combat', label: 'Punch setup', snippet: 'set.create.import (punch), "punch"/declare.onpunch}\nonpunch\n}\npunch=onpunch().punchmotion, "addpunch" on punchdeclare(),"punchmotion"', requires: 'punch' },
+    { category: 'Combat', label: 'Longpunch setup', snippet: 'declare.onpunch/punchmotion(newpunch)\npunch.declare"longpunch"range.{range=+2.add+2}()\n\ndeclare{onlongpunch.{longpunchmotion}\n}\nlongpunch.startlongpunch', requires: 'longpunch' },
+    { category: 'Combat', label: 'Kick setup', snippet: 'declare.newattack, "kick"/declare.kick()\nkick=onkick().kickmotion, "addkick" on kickdeclare(),"kickmotion"\nkickmotion{(damage)=damage.declaredamage}:damge.{damage=*(*.*/declare)2.add*2}()', requires: 'kick' },
+    { category: 'Combat', label: 'Block setup', snippet: 'defense.newdefense/declaredefense\nadd."defense{block}"()\nblock=block.(defense.newdefend(defendattack.punch)\nb=block.blockdefenseblockattack\nblock:attack.<dev>findnewattack.addblock', requires: 'block' },
     { category: 'Conditionals', label: 'If/then setup', snippet: '<dev>:import. if_then\nsearchdev (if_then)\nset.create newfunction (if_then)' },
     { category: 'Conditionals', label: 'If/then block', snippet: '{if\nname = (touching) = name2\n{then\ndespawnsprite(name2), player()\n{' },
     { category: 'Loops', label: 'Loop setup', snippet: '<dev>:import. loop()\nset.create newfunction (loop())' },
@@ -4211,6 +4319,14 @@ function renderBlocksPanel() {
     list.innerHTML = '';
     let lastCat = null;
     BLOCK_LIBRARY.forEach(block => {
+        if (activeFightLevel) {
+            const fightAllowed = block.category === 'Motion'
+                || block.category === 'Combat'
+                || (block.category === 'Basics' && block.label === 'Declare variable')
+                || (block.category === 'Sprites' && block.label === 'Spawn sprite');
+            if (!fightAllowed) return;
+        }
+        if (block.requires && !isCombatUnlocked(block.requires)) return;
         if (block.category !== lastCat) {
             const cat = document.createElement('div');
             cat.className = 'blocks-cat';
