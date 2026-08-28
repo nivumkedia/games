@@ -227,6 +227,18 @@ body {
     cursor: pointer;
 }
 .fight-back-btn:hover { color: var(--text); border-color: var(--text); }
+.fight-reset-btn {
+    margin-top: 10px;
+    background: transparent;
+    border: 1px solid var(--red);
+    color: var(--red);
+    padding: 8px 16px;
+    border-radius: 5px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    cursor: pointer;
+}
+.fight-reset-btn:hover { color: #fff; background: var(--red); }
 
 /* ─── EDITOR ─── */
 #screen-editor {
@@ -766,6 +778,7 @@ body {
     <div class="fight-select-sub">code your fighter, beat the bot, unlock the next one</div>
     <div class="fight-level-grid" id="fight-level-grid"></div>
     <button class="fight-back-btn" id="fight-back-btn">‹ back to terminal</button>
+    <button class="fight-reset-btn" id="fight-reset-btn">⟲ reset progress</button>
   </div>
 </div>
 
@@ -924,9 +937,18 @@ function spawnBotForFight() {
     gameState._botDir = Math.random() < 0.5 ? -1 : 1;
 }
 
+// the player's sprite can be named anything — treat whichever visible
+// sprite isn't "bot" as the hero, instead of requiring the exact name "hero"
+function getHeroSprite() {
+    for (const [name, sp] of Object.entries(gameState.sprites)) {
+        if (name !== 'bot') return sp;
+    }
+    return null;
+}
+
 function botAttack(type) {
     const bot = gameState.sprites['bot'];
-    const hero = gameState.sprites['hero'];
+    const hero = getHeroSprite();
     if (!bot || !hero || bot.health <= 0 || hero.health <= 0) return;
     const verb = type === 'kick' ? 'kicks' : 'punches';
     const getDamage = type === 'kick' ? () => 50 : () => 25;
@@ -936,7 +958,7 @@ function botAttack(type) {
 function updateBotAI() {
     if (!activeFightLevel || gameState._fightOver) return;
     const bot = gameState.sprites['bot'];
-    const hero = gameState.sprites['hero'];
+    const hero = getHeroSprite();
     if (!bot || !hero || bot.health <= 0 || hero.health <= 0) return;
 
     const step = getUnitPx() * 0.05;
@@ -1004,12 +1026,23 @@ function updateBotAI() {
 function checkFightOutcome() {
     if (!activeFightLevel || gameState._fightOver) return;
     const bot = gameState.sprites['bot'];
-    const hero = gameState.sprites['hero'];
+    const hero = getHeroSprite();
     if (bot && bot.health <= 0) {
         gameState._fightOver = true;
         if (activeFightLevel.index + 2 > fightUnlocked) {
             fightUnlocked = Math.min(FIGHT_LEVELS.length, activeFightLevel.index + 2);
             saveFightProgress();
+            if (activeFightLevel.index + 2 <= FIGHT_LEVELS.length) {
+                const curName = 'fight-level-' + (activeFightLevel.index + 1);
+                const nextName = 'fight-level-' + (activeFightLevel.index + 2);
+                const curCode = (current === curName ? codeInput.value : (files[curName] && files[curName].code)) || '';
+                if (curCode && !(files[nextName] && files[nextName].code)) {
+                    files[nextName] = files[nextName] || { created: Date.now() };
+                    files[nextName].code = curCode;
+                    files[nextName].updated = Date.now();
+                    saveFiles();
+                }
+            }
         }
         setTimeout(() => showFightResult(true), 300);
     } else if (hero && hero.health <= 0) {
@@ -1044,7 +1077,7 @@ function drawFightHealthBars() {
         ctx.font = '10px monospace';
         ctx.fillText(label, x + 3, 20);
     };
-    drawBar('hero', sprites['hero'], 8);
+    drawBar('hero', getHeroSprite(), 8);
     drawBar('bot', sprites['bot'], canvas.width - 148);
 }
 
@@ -1361,6 +1394,12 @@ document.getElementById('fight-mode-btn').addEventListener('click', () => {
     showFightSelect();
 });
 document.getElementById('fight-back-btn').addEventListener('click', showTerminal);
+document.getElementById('fight-reset-btn').addEventListener('click', () => {
+    if (!confirm('Reset Fight Mode progress? This re-locks every level back to Level 1.\n\nYour saved code in each fight level is kept.')) return;
+    fightUnlocked = 1;
+    saveFightProgress();
+    renderFightLevelGrid();
+});
 
 document.getElementById('t-input').addEventListener('keydown', function(e) {
     if (e.key !== 'Enter') return;
@@ -4062,6 +4101,16 @@ function setupMotionControls() {
         }
         if (b.dir === 'block') {
             if (!gameState.blockSetupDone) { log('block setup not run yet — add the block setup code', 'err'); return; }
+        }
+        if (b.dir === 'punch' || b.dir === 'longpunch' || b.dir === 'kick') {
+            gameState._attackCooldowns = gameState._attackCooldowns || {};
+            const now = Date.now();
+            const last = gameState._attackCooldowns[b.sprite] || 0;
+            if (now - last < 1000) {
+                log(`"${b.sprite}" is on cooldown — wait ${((1000 - (now - last)) / 1000).toFixed(1)}s`, 'info');
+                return;
+            }
+            gameState._attackCooldowns[b.sprite] = now;
         }
         if (b.dir === 'punch') attemptAttack(b.sprite, getUnitPx() * 2, 'punches', () => 25);
         if (b.dir === 'longpunch') attemptAttack(b.sprite, getUnitPx() * 2.25, 'longpunches', () => 25);
