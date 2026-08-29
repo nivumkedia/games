@@ -633,7 +633,7 @@ body {
 }
 
 #game-canvas {
-    background: #080a12;
+    background: #ffffff;
     border: 1px solid var(--border);
     border-radius: 6px;
     max-width: 100%;
@@ -643,7 +643,7 @@ body {
 
 .canvas-wrap:fullscreen,
 .canvas-wrap:-webkit-full-screen {
-    background: #000;
+    background: #ffffff;
     padding: 0;
     cursor: default;
 }
@@ -950,6 +950,7 @@ function botAttack(type) {
     const bot = gameState.sprites['bot'];
     const hero = getHeroSprite();
     if (!bot || !hero || bot.health <= 0 || hero.health <= 0) return;
+    bot._pose = { type: type === 'kick' ? 'kick' : 'punch', start: Date.now() };
     const verb = type === 'kick' ? 'kicks' : 'punches';
     const getDamage = type === 'kick' ? () => 50 : () => 25;
     attemptAttack('bot', getUnitPx() * 2, verb, getDamage);
@@ -969,15 +970,43 @@ function updateBotAI() {
     gameState._botMoveTimer = (gameState._botMoveTimer ?? 0) - 1;
     gameState._botAttackClock = (gameState._botAttackClock ?? 90) - 1;
     gameState._botDir = gameState._botDir ?? 1;
+    gameState._botDirY = gameState._botDirY ?? 1;
 
-    const moveToward = () => { bot.x += Math.sign(dx || 1) * step; };
-    const moveAway = () => { bot.x -= Math.sign(dx || 1) * step; };
+    const moveToward = () => { bot.x += Math.sign(dx || 1) * step; bot._pose = { type: 'walk', start: Date.now() }; };
+    const moveAway = () => { bot.x -= Math.sign(dx || 1) * step; bot._pose = { type: 'walk', start: Date.now() }; };
     const moveRandomStep = () => {
         if (gameState._botMoveTimer <= 0) {
             gameState._botDir = Math.random() < 0.5 ? -1 : 1;
             gameState._botMoveTimer = 30 + Math.random() * 60;
         }
         bot.x += gameState._botDir * step;
+        bot._pose = { type: 'walk', start: Date.now() };
+    };
+    // "moves unpredictably" — faster than plain random movement, and darts
+    // in all directions (x and y) instead of just pacing left/right
+    const moveErraticStep = () => {
+        if (gameState._botMoveTimer <= 0) {
+            gameState._botDir = Math.random() < 0.5 ? -1 : 1;
+            gameState._botDirY = Math.random() < 0.5 ? -1 : 1;
+            gameState._botMoveTimer = 10 + Math.random() * 18;
+        }
+        bot.x += gameState._botDir * step * 2.4;
+        bot.y += gameState._botDirY * step * 2.4;
+        bot._pose = { type: 'walk', start: Date.now() };
+    };
+    // same fast, all-direction darting as "moves unpredictably", except the
+    // x movement is deliberately away from the hero once they get close —
+    // still faking out via random y jitter — rather than picking a random x
+    const runAwayErratic = () => {
+        if (gameState._botMoveTimer <= 0) {
+            gameState._botDirY = Math.random() < 0.5 ? -1 : 1;
+            if (dist >= range) gameState._botDir = Math.random() < 0.5 ? -1 : 1;
+            gameState._botMoveTimer = 10 + Math.random() * 18;
+        }
+        const xDir = dist < range ? -Math.sign(dx || 1) : gameState._botDir;
+        bot.x += xDir * step * 2.4;
+        bot.y += gameState._botDirY * step * 2.4;
+        bot._pose = { type: 'walk', start: Date.now() };
     };
     const tryAttack = (min, max, kickChance = 0) => {
         if (gameState._botAttackClock > 0) return;
@@ -990,11 +1019,13 @@ function updateBotAI() {
         case 'still':
             break;
         case 'move':
-        case 'moveRandom':
             moveRandomStep();
             break;
+        case 'moveRandom':
+            moveErraticStep();
+            break;
         case 'runAway':
-            if (dist < range) moveAway(); else moveRandomStep();
+            runAwayErratic();
             break;
         case 'stillAttack':
             tryAttack(90, 150);
@@ -1020,7 +1051,8 @@ function updateBotAI() {
             break;
     }
 
-    bot.x = Math.max(0, Math.min(gameState.canvas.width - bot.w, bot.x));
+    bot.x = Math.max(0, Math.min(CANVAS_W - bot.w, bot.x));
+    bot.y = Math.max(0, Math.min(CANVAS_H - bot.h, bot.y));
 }
 
 function checkFightOutcome() {
@@ -1078,7 +1110,7 @@ function drawFightHealthBars() {
         ctx.fillText(label, x + 3, 20);
     };
     drawBar('hero', getHeroSprite(), 8);
-    drawBar('bot', sprites['bot'], canvas.width - 148);
+    drawBar('bot', sprites['bot'], CANVAS_W - 148);
 }
 
 // ── game types ────────────────────────────────────
@@ -2461,6 +2493,7 @@ function runCode() {
         log('Done.', 'ok');
         isRunning = true;
         setRunning(true);
+        if (!document.fullscreenElement) canvasWrap.requestFullscreen().catch(() => {});
     } else {
         isRunning = false;
         setRunning(false);
@@ -3138,18 +3171,28 @@ function renderGame() {
     const { ctx, canvas, sprites, type } = gameState;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // draw themed background or default grid
+    // Every draw call in this engine (sprite sizes, background fills, etc)
+    // is written in the fixed 400x300 design space. When fullscreen enlarges
+    // the actual buffer, this single scale blows up everything drawn below
+    // uniformly, so the background and every sprite grow together instead of
+    // sprites staying a fixed absolute pixel size on a bigger canvas.
+    ctx.save();
+    const renderScale = canvas.width / CANVAS_W;
+    ctx.scale(renderScale, renderScale);
+
+    // draw themed background or default grid (logical CANVAS_W/H, not the
+    // live buffer size, since the scale above already accounts for that)
     const theme = type && GAME_TYPES[type];
     if (theme) {
-        theme.draw(ctx, canvas.width, canvas.height);
+        theme.draw(ctx, CANVAS_W, CANVAS_H);
     } else {
         ctx.strokeStyle = 'rgba(255,255,255,0.025)';
         ctx.lineWidth = 1;
-        for (let x = 0; x <= canvas.width; x += 20) {
-            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+        for (let x = 0; x <= CANVAS_W; x += 20) {
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, CANVAS_H); ctx.stroke();
         }
-        for (let y = 0; y <= canvas.height; y += 20) {
-            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+        for (let y = 0; y <= CANVAS_H; y += 20) {
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CANVAS_W, y); ctx.stroke();
         }
     }
 
@@ -3175,6 +3218,7 @@ function renderGame() {
     });
 
     drawFightHealthBars();
+    ctx.restore();
 }
 
 // Color system: 1#1=red, 1#3=yellow, 1#5=blue; mix by combining suffixes
@@ -3244,7 +3288,7 @@ function drawSprite(ctx, canvas, name, s) {
         ctx.beginPath(); ctx.ellipse(2, h*0.5, w*0.38, 5, 0, 0, Math.PI*2); ctx.fill();
 
         switch(tmpl) {
-            case T.HUM: drawHumanoid(ctx,w,h,c1,c2,c3,v); break;
+            case T.HUM: drawHumanoid(ctx,w,h,c1,c2,c3,v,getSpritePose(s),tn==='ninja' || !!(activeFightLevel && name !== 'bot')); break;
             case T.MON: drawMonster(ctx,w,h,c1,c2,c3,v); break;
             case T.CAR: drawCar(ctx,w,h,c1,c2,c3,v); break;
             case T.TRK: drawTruck(ctx,w,h,c1,c2,c3,v); break;
@@ -3277,7 +3321,6 @@ function drawSprite(ctx, canvas, name, s) {
     }
 
     ctx.restore();
-    ctx.setTransform(1,0,0,1,0,0);
     if (tmpl !== T.RD) {
         ctx.fillStyle = 'rgba(255,255,255,0.38)';
         ctx.font = '9px Courier New';
@@ -3352,30 +3395,127 @@ function drawBG(ctx, canvas, c1, c2, c3, v) {
 }
 
 // ── Humanoid ──────────────────────────────────────
-function drawHumanoid(ctx,w,h,c1,c2,c3,v) {
+function drawHumanoid(ctx,w,h,c1,c2,c3,v,pose,isNinja) {
+    pose = pose || { type: 'idle', t: 0 };
     const ph=h, pw=w;
+    const hump = (t) => Math.sin(Math.min(Math.max(t,0),1) * Math.PI); // 0 -> 1 -> 0
+    const punchE = pose.type === 'punch'     ? hump(pose.t) : 0;
+    const lpE    = pose.type === 'longpunch' ? hump(pose.t) : 0;
+    const kickE  = pose.type === 'kick'      ? hump(pose.t) : 0;
+    const walkE  = pose.type === 'walk'      ? Math.sin(Math.min(pose.t,1) * Math.PI * 2) : 0;
+    const blocking = pose.type === 'block';
+    // martial artists don't stand at ease — always in a ready stance,
+    // guard fading out as a strike actually fires
+    const stanceBend = isNinja ? 0.14 : 0;
+    const guardFront = isNinja ? -0.55 : 0;
+    const guardBack  = isNinja ? 0.3 : 0;
+    const strikeE = punchE + lpE; // punch and longpunch never overlap
+
     // body
     ctx.fillStyle=c1;
     roundRect(ctx,-pw*0.28,-ph*0.1,pw*0.56,ph*0.45,4); ctx.fill();
-    // legs
+
+    // legs (pivot at hip). A kick sticks the leg straight out forward instead
+    // of just tilting it, while the planting leg braces against the strike.
     ctx.fillStyle=c2;
-    roundRect(ctx,-pw*0.26,ph*0.3,pw*0.22,ph*0.22,3); ctx.fill();
-    roundRect(ctx,pw*0.04,ph*0.3,pw*0.22,ph*0.22,3); ctx.fill();
-    // arms
+    ctx.save();
+    ctx.translate(-pw*0.15-stanceBend*pw*0.15, ph*0.3);
+    ctx.rotate(-stanceBend-walkE*0.3 + kickE*0.2);
+    roundRect(ctx,-pw*0.11,0,pw*0.22,ph*0.22,3); ctx.fill();
+    ctx.restore();
+    if (kickE > 0.02) {
+        const kickReach = pw*0.24 + kickE*pw*0.62;
+        ctx.save();
+        ctx.translate(pw*0.15+stanceBend*pw*0.15, ph*0.32);
+        ctx.rotate(-kickE*0.35); // leg lifts slightly as it extends
+        roundRect(ctx, 0, -pw*0.06, kickReach, pw*0.13, 3); ctx.fill();
+        ctx.restore();
+    } else {
+        ctx.save();
+        ctx.translate(pw*0.15+stanceBend*pw*0.15, ph*0.3);
+        ctx.rotate(stanceBend+walkE*0.3);
+        roundRect(ctx,-pw*0.11,0,pw*0.22,ph*0.22,3); ctx.fill();
+        ctx.restore();
+    }
+
+    // arms (pivot at shoulder)
     ctx.fillStyle=c1;
-    roundRect(ctx,-pw*0.48,-ph*0.08,pw*0.22,ph*0.32,3); ctx.fill();
-    roundRect(ctx,pw*0.26,-ph*0.08,pw*0.22,ph*0.32,3); ctx.fill();
+    if (blocking) {
+        // one arm raised as a flat shield in front of the chest, not two crossed arms
+        ctx.save();
+        ctx.translate(pw*0.16,-ph*0.14);
+        ctx.rotate(-0.32);
+        roundRect(ctx,-pw*0.09,-ph*0.05,pw*0.34,ph*0.24,4); ctx.fill();
+        ctx.restore();
+        // other arm tucked back defensively
+        ctx.save(); ctx.translate(-pw*0.33,-ph*0.06); ctx.rotate(0.5);
+        roundRect(ctx,-pw*0.11,0,pw*0.22,ph*0.26,3); ctx.fill(); ctx.restore();
+    } else if (strikeE > 0.02) {
+        // punching arm sticks straight out from the shoulder instead of just
+        // rotating — longpunch (lpE) reaches noticeably further, with a
+        // lighter trailing streak to read as "a technique with more range"
+        const reach = pw*0.3 + punchE*pw*0.5 + lpE*pw*0.95;
+        ctx.save();
+        ctx.translate(pw*0.37,-ph*0.05);
+        roundRect(ctx, 0, -pw*0.06, reach, pw*0.12, 3); ctx.fill();
+        if (lpE > 0.02) {
+            ctx.globalAlpha = 0.35 * lpE;
+            roundRect(ctx, reach*0.4, -pw*0.045, reach*0.65, pw*0.09, 3); ctx.fill();
+            ctx.globalAlpha = 1;
+        }
+        ctx.restore();
+        // back arm braces, pulled in tight
+        ctx.save(); ctx.translate(-pw*0.35,-ph*0.06); ctx.rotate(0.35);
+        roundRect(ctx,-pw*0.11,0,pw*0.22,ph*0.3,3); ctx.fill(); ctx.restore();
+    } else {
+        ctx.save();
+        ctx.translate(-pw*0.37,-ph*0.08);
+        ctx.rotate(guardBack + walkE*0.25);
+        roundRect(ctx,-pw*0.11,0,pw*0.22,ph*0.32,3); ctx.fill();
+        ctx.restore();
+        ctx.save();
+        ctx.translate(pw*0.37,-ph*0.08);
+        ctx.rotate(guardFront - walkE*0.25);
+        roundRect(ctx,-pw*0.11,0,pw*0.22,ph*0.32,3); ctx.fill();
+        ctx.restore();
+    }
+
     // head
     ctx.fillStyle=c3;
     ctx.beginPath();ctx.arc(0,-ph*0.28,pw*0.26,0,Math.PI*2);ctx.fill();
-    // hat (variant 1)
-    if(v===1){ctx.fillStyle=c2;ctx.beginPath();ctx.moveTo(-pw*0.26,-ph*0.42);ctx.lineTo(pw*0.26,-ph*0.42);ctx.lineTo(pw*0.18,-ph*0.62);ctx.lineTo(-pw*0.18,-ph*0.62);ctx.closePath();ctx.fill();}
-    // armor (variant 2)
-    if(v===2){ctx.fillStyle=c2;ctx.globalAlpha=0.5;roundRect(ctx,-pw*0.3,-ph*0.12,pw*0.6,ph*0.48,4);ctx.fill();ctx.globalAlpha=1;}
-    // robe (variant 3) - extend body
-    if(v===3){ctx.fillStyle=c2;roundRect(ctx,-pw*0.32,-ph*0.1,pw*0.64,ph*0.6,6);ctx.fill();}
+
+    if (isNinja) {
+        // hood covering the top/back of the head
+        ctx.fillStyle=c1;
+        ctx.beginPath();ctx.arc(0,-ph*0.28,pw*0.29,Math.PI*1.05,Math.PI*1.95);ctx.fill();
+        // headband with tails trailing off the back
+        ctx.fillStyle=c3;
+        roundRect(ctx,-pw*0.28,-ph*0.37,pw*0.56,pw*0.08,2); ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(pw*0.24,-ph*0.35);
+        ctx.lineTo(pw*0.46,-ph*0.24-walkE*4);
+        ctx.lineTo(pw*0.38,-ph*0.21-walkE*4);
+        ctx.closePath(); ctx.fill();
+        // mask over the lower half of the face, eyes left uncovered
+        ctx.fillStyle=c1;
+        roundRect(ctx,-pw*0.26,-ph*0.27,pw*0.52,pw*0.24,4); ctx.fill();
+        // black belt (master rank) with tied ends hanging down
+        ctx.fillStyle='#111';
+        roundRect(ctx,-pw*0.29,ph*0.13,pw*0.58,pw*0.08,2); ctx.fill();
+        ctx.fillStyle=c3;
+        roundRect(ctx,-pw*0.06,ph*0.18,pw*0.06,ph*0.14,1); ctx.fill();
+        roundRect(ctx,pw*0.01,ph*0.18,pw*0.06,ph*0.14,1); ctx.fill();
+    } else {
+        // hat (variant 1)
+        if(v===1){ctx.fillStyle=c2;ctx.beginPath();ctx.moveTo(-pw*0.26,-ph*0.42);ctx.lineTo(pw*0.26,-ph*0.42);ctx.lineTo(pw*0.18,-ph*0.62);ctx.lineTo(-pw*0.18,-ph*0.62);ctx.closePath();ctx.fill();}
+        // armor (variant 2)
+        if(v===2){ctx.fillStyle=c2;ctx.globalAlpha=0.5;roundRect(ctx,-pw*0.3,-ph*0.12,pw*0.6,ph*0.48,4);ctx.fill();ctx.globalAlpha=1;}
+        // robe (variant 3) - extend body
+        if(v===3){ctx.fillStyle=c2;roundRect(ctx,-pw*0.32,-ph*0.1,pw*0.64,ph*0.6,6);ctx.fill();}
+    }
+
     // eyes
-    ctx.fillStyle='#222';
+    ctx.fillStyle= isNinja ? '#fff' : '#222';
     ctx.beginPath();ctx.arc(-pw*0.09,-ph*0.3,2,0,Math.PI*2);ctx.fill();
     ctx.beginPath();ctx.arc(pw*0.09,-ph*0.3,2,0,Math.PI*2);ctx.fill();
 }
@@ -4039,6 +4179,19 @@ function playAnimations() {
     setTimeout(doNextMove, 300);
 }
 
+// derives a brief walk/punch/kick pose from recent sprite actions so the
+// humanoid renderer can animate limbs instead of always drawing an idle pose
+function getSpritePose(s) {
+    if (s.blocking) return { type: 'block', t: 1 };
+    const p = s._pose;
+    if (!p) return { type: 'idle', t: 0 };
+    const durations = { walk: 260, punch: 260, longpunch: 320, kick: 320 };
+    const dur = durations[p.type] || 260;
+    const elapsed = Date.now() - p.start;
+    if (elapsed > dur) { s._pose = null; return { type: 'idle', t: 0 }; }
+    return { type: p.type, t: elapsed / dur };
+}
+
 // Global so both player key-bindings and bot AI can land hits the same way.
 function attemptAttack(attackerName, range, verb, getDamage) {
     const attacker = gameState.sprites[attackerName];
@@ -4079,7 +4232,10 @@ function setupMotionControls() {
     };
     const fireAction = (b) => {
         const sp = gameState.sprites[b.sprite];
-        if (!sp) return;
+        if (!sp) { log(`no sprite named "${b.sprite}" — check it matches your spawnsprite name exactly`, 'err'); return; }
+        if (b.dir === 'left' || b.dir === 'right' || b.dir === 'up' || b.dir === 'down') {
+            sp._pose = { type: 'walk', start: Date.now() };
+        }
         if (b.dir === 'left')  sp.x -= step;
         if (b.dir === 'right') sp.x += step;
         if (b.dir === 'up')    sp.y -= step;
@@ -4106,15 +4262,15 @@ function setupMotionControls() {
             gameState._attackCooldowns = gameState._attackCooldowns || {};
             const now = Date.now();
             const last = gameState._attackCooldowns[b.sprite] || 0;
-            if (now - last < 1000) {
-                log(`"${b.sprite}" is on cooldown — wait ${((1000 - (now - last)) / 1000).toFixed(1)}s`, 'info');
+            if (now - last < 500) {
+                log(`"${b.sprite}" is on cooldown — wait ${((500 - (now - last)) / 1000).toFixed(1)}s`, 'info');
                 return;
             }
             gameState._attackCooldowns[b.sprite] = now;
         }
-        if (b.dir === 'punch') attemptAttack(b.sprite, getUnitPx() * 2, 'punches', () => 25);
-        if (b.dir === 'longpunch') attemptAttack(b.sprite, getUnitPx() * 2.25, 'longpunches', () => 25);
-        if (b.dir === 'kick') attemptAttack(b.sprite, getUnitPx() * 2, 'kicks', () => 50);
+        if (b.dir === 'punch') { sp._pose = { type: 'punch', start: Date.now() }; attemptAttack(b.sprite, getUnitPx() * 2, 'punches', () => 25); }
+        if (b.dir === 'longpunch') { sp._pose = { type: 'longpunch', start: Date.now() }; attemptAttack(b.sprite, getUnitPx() * 2.25, 'longpunches', () => 25); }
+        if (b.dir === 'kick') { sp._pose = { type: 'kick', start: Date.now() }; attemptAttack(b.sprite, getUnitPx() * 2, 'kicks', () => 50); }
         if (b.dir === 'block') sp.blocking = true;
         renderGame();
     };
@@ -4279,14 +4435,21 @@ canvasWrap.addEventListener('click', () => {
 
 document.addEventListener('fullscreenchange', () => {
     const canvas = document.getElementById('game-canvas');
+    // Grow the actual drawing buffer to match the screen (so it's crisp, not
+    // a blurry CSS stretch of a tiny bitmap) and keep style.width/height
+    // matched 1:1 to the buffer so the browser never has to rescale it.
+    // renderGame() compensates by scaling everything it draws — background
+    // AND sprites — by canvas.width / CANVAS_W, so nothing looks tiny.
     if (document.fullscreenElement) {
-        const vw = window.screen.width, vh = window.screen.height;
+        const vw = window.innerWidth, vh = window.innerHeight;
         const scale = Math.min(vw / CANVAS_W, vh / CANVAS_H);
-        canvas.width  = Math.round(CANVAS_W * scale);
-        canvas.height = Math.round(CANVAS_H * scale);
+        const dispW = Math.round(CANVAS_W * scale), dispH = Math.round(CANVAS_H * scale);
+        canvas.width = dispW; canvas.height = dispH;
+        canvas.style.width = dispW + 'px'; canvas.style.height = dispH + 'px';
     } else {
-        canvas.width  = CANVAS_W;
-        canvas.height = CANVAS_H;
+        canvas.width = CANVAS_W; canvas.height = CANVAS_H;
+        canvas.style.width  = '';
+        canvas.style.height = '';
     }
     if (gameState.canvas) {
         gameState.canvas = canvas;
