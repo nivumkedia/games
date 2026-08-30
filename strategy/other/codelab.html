@@ -632,6 +632,27 @@ body {
     user-select: none;
 }
 
+.canvas-error-overlay {
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 90%;
+    background: rgba(30,10,14,0.92);
+    border: 1px solid var(--red);
+    color: #f5b8c4;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    padding: 8px 14px;
+    border-radius: 6px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 20;
+    text-align: center;
+}
+.canvas-error-overlay.show { opacity: 1; }
+
 #game-canvas {
     background: #ffffff;
     border: 1px solid var(--border);
@@ -835,6 +856,7 @@ body {
         <canvas id="game-canvas" width="400" height="300"></canvas>
         <button class="fs-run-btn" id="fs-run-btn">▶ RUN</button>
         <span class="fs-hint">⛶</span>
+        <div class="canvas-error-overlay" id="canvas-error-overlay"></div>
       </div>
       <div class="console-panel">
         <div class="console-bar">console</div>
@@ -950,6 +972,12 @@ function botAttack(type) {
     const bot = gameState.sprites['bot'];
     const hero = getHeroSprite();
     if (!bot || !hero || bot.health <= 0 || hero.health <= 0) return;
+    // same 500ms attack cooldown the player is bound by, so the bot fights
+    // under the same rules instead of its own separate limit
+    gameState._attackCooldowns = gameState._attackCooldowns || {};
+    const now = Date.now();
+    if (now - (gameState._attackCooldowns['bot'] || 0) < 500) return;
+    gameState._attackCooldowns['bot'] = now;
     bot._pose = { type: type === 'kick' ? 'kick' : 'punch', start: Date.now() };
     const verb = type === 'kick' ? 'kicks' : 'punches';
     const getDamage = type === 'kick' ? () => 50 : () => 25;
@@ -1445,7 +1473,19 @@ document.getElementById('t-input').addEventListener('keydown', function(e) {
 function openEditor(name) {
     if (!files[name]) files[name] = { code: '', created: Date.now() };
     current = name;
-    if (!name.startsWith('fight-level-')) activeFightLevel = null;
+    // fight-level-N files also show up in the regular terminal file list, so
+    // opening one that way (instead of through the FIGHT MODE level-select
+    // flow) must still count as Fight Mode — otherwise the bot, ninja look,
+    // and health bars silently never activate.
+    const fightMatch = name.match(/^fight-level-(\d+)$/);
+    if (fightMatch) {
+        const idx = parseInt(fightMatch[1]) - 1;
+        if (FIGHT_LEVELS[idx] && (!activeFightLevel || activeFightLevel.index !== idx)) {
+            activeFightLevel = { ...FIGHT_LEVELS[idx], index: idx };
+        }
+    } else {
+        activeFightLevel = null;
+    }
 
     document.getElementById('screen-terminal').style.display = 'none';
     document.getElementById('screen-fight-select').classList.add('hidden');
@@ -2493,7 +2533,7 @@ function runCode() {
         log('Done.', 'ok');
         isRunning = true;
         setRunning(true);
-        if (!document.fullscreenElement) canvasWrap.requestFullscreen().catch(() => {});
+        if (activeFightLevel && !document.fullscreenElement) canvasWrap.requestFullscreen().catch(() => {});
     } else {
         isRunning = false;
         setRunning(false);
@@ -3206,7 +3246,7 @@ function renderGame() {
         ctx.save();
         drawSprite(ctx, canvas, name, s);
         ctx.restore();
-        if (typeof s.health === 'number') {
+        if (activeFightLevel && typeof s.health === 'number') {
             const barW = Math.max(s.w, 24);
             const barX = s.x + s.w / 2 - barW / 2;
             const barY = s.y - 10;
@@ -4196,10 +4236,15 @@ function getSpritePose(s) {
 function attemptAttack(attackerName, range, verb, getDamage) {
     const attacker = gameState.sprites[attackerName];
     if (!attacker) return;
-    const ac = { x: attacker.x + attacker.w / 2, y: attacker.y + attacker.h / 2 };
     for (const [name, sp] of Object.entries(gameState.sprites)) {
         if (name === attackerName || !sp.visible) continue;
-        const dist = Math.hypot((sp.x + sp.w / 2) - ac.x, (sp.y + sp.h / 2) - ac.y);
+        // gap between the two bodies' edges (0 if already overlapping) rather
+        // than center-to-center distance — this is how far the outstretched
+        // arm/leg actually has to reach to touch the opponent, so "range"
+        // means the limb's reach, not a circle drawn from the attacker's middle
+        const gapX = Math.max(0, Math.max(attacker.x, sp.x) - Math.min(attacker.x + attacker.w, sp.x + sp.w));
+        const gapY = Math.max(0, Math.max(attacker.y, sp.y) - Math.min(attacker.y + attacker.h, sp.y + sp.h));
+        const dist = Math.hypot(gapX, gapY);
         if (dist > range) continue;
         if (sp.blocking) {
             log(`"${name}" blocks "${attackerName}"'s ${verb}!`, 'info');
@@ -4271,7 +4316,18 @@ function setupMotionControls() {
         if (b.dir === 'punch') { sp._pose = { type: 'punch', start: Date.now() }; attemptAttack(b.sprite, getUnitPx() * 2, 'punches', () => 25); }
         if (b.dir === 'longpunch') { sp._pose = { type: 'longpunch', start: Date.now() }; attemptAttack(b.sprite, getUnitPx() * 2.25, 'longpunches', () => 25); }
         if (b.dir === 'kick') { sp._pose = { type: 'kick', start: Date.now() }; attemptAttack(b.sprite, getUnitPx() * 2, 'kicks', () => 50); }
-        if (b.dir === 'block') sp.blocking = true;
+        if (b.dir === 'block') {
+            // cooldown runs from when block was last let go, not from when it
+            // was pressed, so you can't just flick it on/off instantly
+            gameState._blockCooldowns = gameState._blockCooldowns || {};
+            const now = Date.now();
+            const last = gameState._blockCooldowns[b.sprite] || 0;
+            if (!sp.blocking && now - last < 500) {
+                log(`"${b.sprite}"'s block is on cooldown — wait ${((500 - (now - last)) / 1000).toFixed(1)}s`, 'info');
+                return;
+            }
+            sp.blocking = true;
+        }
         renderGame();
     };
 
@@ -4321,7 +4377,13 @@ function setupMotionControls() {
             const matches = named !== undefined ? e.key === named : e.key.toLowerCase() === lower;
             if (!matches) continue;
             const sp = gameState.sprites[b.sprite];
-            if (sp) sp.blocking = false;
+            if (sp) {
+                if (sp.blocking) {
+                    gameState._blockCooldowns = gameState._blockCooldowns || {};
+                    gameState._blockCooldowns[b.sprite] = Date.now();
+                }
+                sp.blocking = false;
+            }
         }
     };
     document.addEventListener('keydown', gameState._motionHandler);
@@ -4464,6 +4526,7 @@ document.getElementById('fs-run-btn').addEventListener('click', e => {
 });
 
 // ── console ──────────────────────────────────────
+let _errorOverlayTimer = null;
 function log(msg, type) {
     const out = document.getElementById('console-out');
     const div = document.createElement('div');
@@ -4472,6 +4535,17 @@ function log(msg, type) {
     div.textContent = prefix + msg;
     out.appendChild(div);
     out.scrollTop = out.scrollHeight;
+
+    // fullscreen hides the console panel entirely, so errors also flash
+    // directly on the canvas for a few seconds — otherwise they're invisible
+    // while actually playing a fight
+    if (type === 'err') {
+        const overlay = document.getElementById('canvas-error-overlay');
+        overlay.textContent = msg;
+        overlay.classList.add('show');
+        clearTimeout(_errorOverlayTimer);
+        _errorOverlayTimer = setTimeout(() => overlay.classList.remove('show'), 3000);
+    }
 }
 
 function clearConsole() {
