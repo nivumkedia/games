@@ -56,8 +56,7 @@
   .role-btn:hover { transform: translateY(-4px); box-shadow: 0 14px 30px rgba(0,0,0,0.16); }
   .role-btn:active { transform: translateY(-1px); }
   .role-btn .emoji { display: block; font-size: 2.6rem; margin-bottom: 12px; }
-  #btn-client { background: linear-gradient(135deg, #4fb0e8, #2e86c1); }
-  #btn-therapist { background: linear-gradient(135deg, #6fcf97, #219150); }
+  #btn-start { background: linear-gradient(135deg, #4fb0e8, #2e86c1); }
 
   /* ===== SHARED TOPBAR ===== */
   .topbar {
@@ -125,20 +124,6 @@
   .btn.danger:hover { background: #c8452f; }
   .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 
-  .client-list-item, .list-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 14px;
-    border-radius: 12px;
-    background: #fbfdff;
-    border: 1px solid #eef3f7;
-    margin-bottom: 8px;
-    cursor: pointer;
-  }
-  .client-list-item:hover, .list-item:hover { border-color: #cfe6f9; }
-  .client-name { font-weight: 700; color: #22303f; }
-
   .client-btn-row { display: flex; flex-wrap: wrap; gap: 10px; }
   .client-btn {
     padding: 12px 18px;
@@ -177,7 +162,6 @@
     cursor: pointer;
   }
   .client-btn-delete:hover { background: #e0563f; color: #fff; }
-  .client-sub { font-size: 0.82rem; color: #7a8ea1; margin-top: 2px; }
 
   .passage-text {
     font-size: 1.3rem;
@@ -185,22 +169,37 @@
     color: #22303f;
     white-space: pre-wrap;
   }
-
-  .empty-note { color: #90a2b3; font-size: 0.9rem; padding: 10px 2px; }
 </style>
 </head>
 <body>
 
 <!-- ===== LANDING ===== -->
 <div id="landing" class="screen active">
-  <h1>Speech Homework</h1>
+  <h1>Speech Therapy Homework</h1>
   <div class="role-buttons">
-    <button class="role-btn" id="btn-client">
-      Client
+    <button class="role-btn" id="btn-start">
+      Start
     </button>
-    <button class="role-btn" id="btn-therapist">
-      Therapist
-    </button>
+  </div>
+</div>
+
+<!-- ===== LOGIN ===== -->
+<div id="login-view" class="screen">
+  <div class="topbar">
+    <h2>Log in</h2>
+    <button class="back-btn" onclick="goHome()">← Home</button>
+  </div>
+  <div class="container">
+    <div class="card">
+      <label>Username</label>
+      <input type="text" id="login-username" onkeydown="if(event.key==='Enter') document.getElementById('login-password').focus();">
+      <div style="margin-top:14px;">
+        <label>Password</label>
+        <input type="password" id="login-password" onkeydown="if(event.key==='Enter') submitLogin();">
+      </div>
+      <div id="login-error" style="color:#e0563f; font-size:0.85rem; margin-top:6px; display:none;">Incorrect username or password.</div>
+      <button class="btn" style="margin-top:12px;" onclick="submitLogin()">Log in</button>
+    </div>
   </div>
 </div>
 
@@ -212,12 +211,7 @@
   </div>
   <div class="container">
 
-    <div class="card" id="client-picker-card">
-      <label>Who's practicing?</label>
-      <div id="client-select-list"></div>
-    </div>
-
-    <div class="card" id="client-session-setup" style="display:none;">
+    <div class="card">
       <div class="row" style="justify-content:space-between;">
         <div><strong id="active-client-name"></strong></div>
       </div>
@@ -243,6 +237,7 @@
       <div id="therapist-client-list" class="client-btn-row"></div>
       <div id="add-client-form" class="row" style="margin-top:10px; display:none;">
         <input type="text" id="therapist-new-client" placeholder="Username...">
+        <input type="password" id="therapist-new-client-password" placeholder="Password...">
         <button class="btn green" onclick="therapistAddClient()">Save</button>
       </div>
     </div>
@@ -292,44 +287,41 @@ function showScreen(id) {
 }
 function goHome() { showScreen('landing'); }
 
-document.getElementById('btn-client').addEventListener('click', () => {
-  showScreen('client-view');
-  renderClientPicker();
-});
-document.getElementById('btn-therapist').addEventListener('click', () => {
-  showScreen('therapist-view');
-  renderTherapistView();
+document.getElementById('btn-start').addEventListener('click', () => {
+  showScreen('login-view');
+  document.getElementById('login-username').value = '';
+  document.getElementById('login-password').value = '';
+  document.getElementById('login-error').style.display = 'none';
+  document.getElementById('login-username').focus();
 });
 
-/* ===================== CLIENT FLOW ===================== */
+/* ===================== LOGIN / CLIENT FLOW ===================== */
+const THERAPIST_USERNAME = 'salomi';
+const THERAPIST_PASSWORD = 'brick-churn-buffet';
 let activeClientId = null;
 
-function renderClientPicker() {
-  document.getElementById('client-session-setup').style.display = 'none';
-  document.getElementById('client-picker-card').style.display = 'block';
+function submitLogin() {
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
 
-  const clients = loadClients();
-  const listEl = document.getElementById('client-select-list');
-  listEl.innerHTML = '';
-  if (clients.length === 0) {
-    listEl.innerHTML = '<div class="empty-note">No clients yet — ask your therapist to set one up.</div>';
+  if (username.toLowerCase() === THERAPIST_USERNAME && password === THERAPIST_PASSWORD) {
+    showScreen('therapist-view');
+    renderTherapistView();
+    return;
   }
-  clients.forEach(c => {
-    const div = document.createElement('div');
-    div.className = 'client-list-item';
-    div.innerHTML = `<div class="client-name">${escapeHtml(c.name)}</div><div>→</div>`;
-    div.onclick = () => selectClient(c.id);
-    listEl.appendChild(div);
-  });
-}
 
-function selectClient(id) {
-  activeClientId = id;
-  const client = loadClients().find(c => c.id === id);
-  document.getElementById('client-picker-card').style.display = 'none';
-  document.getElementById('client-session-setup').style.display = 'block';
-  document.getElementById('active-client-name').textContent = client.name;
-  document.getElementById('client-exercise-display').textContent = client.exercise || 'No exercise assigned yet.';
+  const client = loadClients().find(c =>
+    c.name.toLowerCase() === username.toLowerCase() && (c.password || '') === password
+  );
+  if (client) {
+    activeClientId = client.id;
+    showScreen('client-view');
+    document.getElementById('active-client-name').textContent = client.name;
+    document.getElementById('client-exercise-display').textContent = client.exercise || 'No exercise assigned yet.';
+    return;
+  }
+
+  document.getElementById('login-error').style.display = 'block';
 }
 
 /* ===================== THERAPIST FLOW ===================== */
@@ -381,17 +373,21 @@ function showAddClientForm() {
   document.getElementById('add-client-form').style.display = 'flex';
   const input = document.getElementById('therapist-new-client');
   input.value = '';
+  document.getElementById('therapist-new-client-password').value = '';
   input.focus();
 }
 
 function therapistAddClient() {
   const input = document.getElementById('therapist-new-client');
+  const passwordInput = document.getElementById('therapist-new-client-password');
   const name = input.value.trim();
-  if (!name) return;
+  const password = passwordInput.value;
+  if (!name || !password) return;
   const clients = loadClients();
-  clients.push({ id: uid(), name, sounds: [] });
+  clients.push({ id: uid(), name, password });
   saveClients(clients);
   input.value = '';
+  passwordInput.value = '';
   document.getElementById('add-client-form').style.display = 'none';
   renderTherapistClientList();
 }
