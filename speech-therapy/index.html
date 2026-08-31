@@ -105,6 +105,43 @@
     background: #fbfdff;
   }
   textarea { resize: vertical; min-height: 90px; }
+  .exercise-row {
+    border: 1px solid #d7e3ec;
+    border-radius: 10px;
+    padding: 10px;
+    margin-bottom: 10px;
+    background: #fbfdff;
+  }
+  .exercise-row .exercise-box {
+    min-height: 60px;
+    border: none;
+    background: transparent;
+    padding: 4px;
+  }
+  .exercise-row .exercise-box:focus { outline: none; }
+  .exercise-time {
+    display: none;
+    width: 160px;
+    margin-top: 8px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid #d7e3ec;
+    background: #fff;
+    font-size: 0.85rem;
+  }
+
+  .exercise-display-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 14px;
+  }
+  .exercise-display-time {
+    font-size: 1rem;
+    color: #7a8ea1;
+    white-space: nowrap;
+  }
   .btn {
     background: #2e86c1;
     color: #fff;
@@ -254,8 +291,8 @@
   <div class="container">
 
     <div class="card">
-      <label>Exercise</label>
-      <textarea id="detail-exercise-text" placeholder="Type an exercise for this client..."></textarea>
+      <label>Exercises</label>
+      <div id="exercise-boxes"></div>
       <div class="row" style="margin-top:8px;">
         <button class="btn" onclick="saveExercise()">Save</button>
         <span id="exercise-saved-note" style="color:#219150; font-weight:600; font-size:0.9rem; display:none;">Saved ✓</span>
@@ -317,7 +354,27 @@ function submitLogin() {
     activeClientId = client.id;
     showScreen('client-view');
     document.getElementById('active-client-name').textContent = client.name;
-    document.getElementById('client-exercise-display').textContent = client.exercise || 'No exercise assigned yet.';
+    const exercises = clientExercises(client).filter(e => e.text.trim() !== '');
+    const displayEl = document.getElementById('client-exercise-display');
+    displayEl.innerHTML = '';
+    if (exercises.length === 0) {
+      displayEl.textContent = 'No exercise assigned yet.';
+    } else {
+      exercises.forEach(entry => {
+        const row = document.createElement('div');
+        row.className = 'exercise-display-row';
+        const text = document.createElement('span');
+        text.textContent = entry.text;
+        row.appendChild(text);
+        if (entry.time) {
+          const time = document.createElement('span');
+          time.className = 'exercise-display-time';
+          time.textContent = entry.time;
+          row.appendChild(time);
+        }
+        displayEl.appendChild(row);
+      });
+    }
     return;
   }
 
@@ -397,8 +454,66 @@ function renderClientDetail(clientId) {
   const client = clients.find(c => c.id === clientId);
   if (!client) { showScreen('therapist-view'); renderTherapistView(); return; }
   document.getElementById('detail-client-name').textContent = client.name;
-  document.getElementById('detail-exercise-text').value = client.exercise || '';
+  renderExerciseBoxes(clientExercises(client));
   document.getElementById('exercise-saved-note').style.display = 'none';
+}
+
+function clientExercises(client) {
+  if (Array.isArray(client.exercises)) {
+    return client.exercises.map(e => typeof e === 'string' ? { text: e, time: '' } : e);
+  }
+  return client.exercise ? [{ text: client.exercise, time: '' }] : [{ text: '', time: '' }];
+}
+
+function renderExerciseBoxes(exercises) {
+  const container = document.getElementById('exercise-boxes');
+  container.innerHTML = '';
+  (exercises.length ? exercises : [{ text: '', time: '' }]).forEach(entry => addExerciseRow(entry, null, false));
+}
+
+function addExerciseRow(entry, afterEl, focus) {
+  entry = entry || { text: '', time: '' };
+
+  const row = document.createElement('div');
+  row.className = 'exercise-row';
+
+  const box = document.createElement('textarea');
+  box.className = 'exercise-box';
+  box.placeholder = 'Type an exercise for this client...';
+  box.value = entry.text || '';
+
+  const timeInput = document.createElement('input');
+  timeInput.type = 'text';
+  timeInput.className = 'exercise-time';
+  timeInput.placeholder = 'Time (e.g. 20secs)';
+  timeInput.value = entry.time || '';
+  timeInput.style.display = entry.time ? 'block' : 'none';
+
+  box.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      timeInput.style.display = 'block';
+      timeInput.focus();
+    }
+  });
+  timeInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addExerciseRow(null, row, true);
+    }
+  });
+
+  row.appendChild(box);
+  row.appendChild(timeInput);
+
+  const container = document.getElementById('exercise-boxes');
+  if (afterEl && afterEl.nextSibling) {
+    container.insertBefore(row, afterEl.nextSibling);
+  } else {
+    container.appendChild(row);
+  }
+  if (focus !== false) box.focus();
+  return row;
 }
 
 function saveExercise() {
@@ -406,7 +521,12 @@ function saveExercise() {
   const clients = loadClients();
   const client = clients.find(c => c.id === activeDetailClientId);
   if (!client) return;
-  client.exercise = document.getElementById('detail-exercise-text').value;
+  const rows = document.querySelectorAll('#exercise-boxes .exercise-row');
+  client.exercises = Array.from(rows).map(row => ({
+    text: row.querySelector('.exercise-box').value,
+    time: row.querySelector('.exercise-time').value
+  }));
+  delete client.exercise;
   saveClients(clients);
 
   const note = document.getElementById('exercise-saved-note');

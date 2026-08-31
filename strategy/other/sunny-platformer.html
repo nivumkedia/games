@@ -210,6 +210,30 @@ h1 {
     height: 100%;
 }
 
+#secret-toast {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translate(-50%, -14px);
+    background: linear-gradient(135deg, #fff6e0, #ffe9b8);
+    border: 2px solid #f4c430;
+    border-radius: 10px;
+    padding: 8px 18px;
+    font-weight: 800;
+    font-size: 14px;
+    color: var(--accent-dark);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s, transform 0.4s;
+    white-space: nowrap;
+}
+
+#secret-toast.show {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
 .touch-controls {
     position: absolute;
     inset: 0;
@@ -381,6 +405,15 @@ h1 {
 
 .shop-item.locked .shop-label { color: var(--dim); }
 
+.upgrade-icon {
+    width: 44px;
+    height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+}
+
 .htp-overlay {
     position: fixed;
     inset: 0;
@@ -463,6 +496,8 @@ h1 {
         <div class="shop-grid" id="shop-grid"></div>
         <div class="shop-section-label">Accessories (looks only — no effect on play)</div>
         <div class="shop-grid" id="shop-grid-accessories"></div>
+        <div class="shop-section-label">Upgrades</div>
+        <div class="shop-grid" id="shop-grid-upgrades"></div>
         <button class="htp-close" id="shop-close">Close</button>
     </div>
 </div>
@@ -494,8 +529,8 @@ h1 {
 <div id="home-screen">
     <h1>PLATFORMER</h1>
     <div class="home-subtitle">Choose a map</div>
-    <div class="bundle-grid" id="bundle-grid"></div>
     <div class="map-grid" id="map-grid"></div>
+    <div class="bundle-grid" id="bundle-grid"></div>
 </div>
 
 <div id="game-screen">
@@ -510,6 +545,7 @@ h1 {
 
     <div id="game-wrap">
         <canvas id="canvas"></canvas>
+        <div id="secret-toast"></div>
         <div class="touch-controls">
             <div class="touch-side">
                 <button class="touch-btn" id="btn-left">◀</button>
@@ -547,6 +583,15 @@ const wrap = document.getElementById('game-wrap');
 const overlayEl = document.getElementById('overlay');
 const fallsEl = document.getElementById('falls');
 const coinsEl = document.getElementById('coins');
+const secretToastEl = document.getElementById('secret-toast');
+let secretToastTimer = null;
+
+function showToast(message) {
+    secretToastEl.textContent = message;
+    secretToastEl.classList.add('show');
+    clearTimeout(secretToastTimer);
+    secretToastTimer = setTimeout(() => secretToastEl.classList.remove('show'), 2600);
+}
 
 const COLOR_PRICE = 50;
 const SPECIAL_PRICE = 55; // gradients, pastels, metallics, and printed skins
@@ -707,7 +752,7 @@ function drawCharacterPreview(context, w, h, color, accessoryId) {
     }
 }
 
-let ownedColors, selectedColorIndex, ownedAccessories, equippedAccessories;
+let ownedColors, selectedColorIndex, ownedAccessories, equippedAccessories, ownedCoinMagnet, ownedParachute, equippedParachute;
 
 function loadColorProgress() {
     let saved = null;
@@ -727,18 +772,28 @@ function loadColorProgress() {
         ownedAccessories = ACCESSORIES.map(() => false);
         equippedAccessories = ACCESSORIES.map(() => false);
     }
+    speedLevel = (saved && Number.isInteger(saved.speedLevel)) ? Math.min(saved.speedLevel, SPEED_TIER_BONUS.length - 1) : 0;
+    jumpLevel = (saved && Number.isInteger(saved.jumpLevel)) ? Math.min(saved.jumpLevel, JUMP_TIER_BONUS.length - 1) : 0;
+    ownedCoinMagnet = !!(saved && saved.coinMagnet);
+    magnetRangeLevel = (saved && Number.isInteger(saved.magnetRangeLevel)) ? Math.min(saved.magnetRangeLevel, MAGNET_RANGE_TIERS.length - 1) : 0;
+    ownedParachute = !!(saved && saved.parachute);
+    equippedParachute = !!(saved && saved.parachuteEquipped);
+    applyUpgradeLevels();
 }
 
 function saveColorProgress() {
     localStorage.setItem(COLOR_SAVE_KEY, JSON.stringify({
         owned: ownedColors, selected: selectedColorIndex,
         accOwned: ownedAccessories, accEquipped: equippedAccessories,
+        speedLevel, jumpLevel, coinMagnet: ownedCoinMagnet, magnetRangeLevel,
+        parachute: ownedParachute, parachuteEquipped: equippedParachute,
     }));
 }
 
 function renderShop() {
     renderSkinShop();
     renderAccessoryShop();
+    renderUpgradeShop();
 }
 
 function renderSkinShop() {
@@ -822,15 +877,153 @@ function renderAccessoryShop() {
     });
 }
 
-loadColorProgress();
+function renderUpgradeShop() {
+    const grid = document.getElementById('shop-grid-upgrades');
+    grid.innerHTML = '';
+
+    function addTierItem(icon, name, level, prices, tierBonus, onBuy) {
+        const maxed = level >= tierBonus.length - 1;
+        const item = document.createElement('div');
+        item.className = 'shop-item' + (maxed ? ' selected' : '');
+        const iconEl = document.createElement('div');
+        iconEl.className = 'upgrade-icon';
+        iconEl.textContent = icon;
+        const label = document.createElement('div');
+        label.className = 'shop-label';
+        label.textContent = maxed ? name + ' (Max)' : name + ' Lv.' + level + ' — ' + prices[level] + ' coins';
+        item.appendChild(iconEl);
+        item.appendChild(label);
+        if (!maxed) {
+            item.addEventListener('click', () => {
+                if (coinCount >= prices[level]) {
+                    coinCount -= prices[level];
+                    coinsEl.textContent = coinCount;
+                    saveCoinProgress();
+                    onBuy();
+                    applyUpgradeLevels();
+                    saveColorProgress();
+                    renderUpgradeShop();
+                }
+            });
+        }
+        grid.appendChild(item);
+    }
+
+    addTierItem('⚡', 'Speed', speedLevel, SPEED_PRICES, SPEED_TIER_BONUS, () => { speedLevel++; });
+    addTierItem('🦘', 'Jump Length', jumpLevel, JUMP_PRICES, JUMP_TIER_BONUS, () => { jumpLevel++; });
+
+    // Coin Magnet — a one-time purchase (not tiered): once bought, coins
+    // are collected from much further away for the rest of the game.
+    const magnetItem = document.createElement('div');
+    magnetItem.className = 'shop-item' + (ownedCoinMagnet ? ' selected' : '');
+    const magnetIcon = document.createElement('div');
+    magnetIcon.className = 'upgrade-icon';
+    magnetIcon.textContent = '🧲';
+    const magnetLabel = document.createElement('div');
+    magnetLabel.className = 'shop-label';
+    magnetLabel.textContent = ownedCoinMagnet ? 'Coin Magnet (Owned)' : 'Coin Magnet — ' + COIN_MAGNET_PRICE + ' coins';
+    magnetItem.appendChild(magnetIcon);
+    magnetItem.appendChild(magnetLabel);
+    if (!ownedCoinMagnet) {
+        magnetItem.addEventListener('click', () => {
+            if (coinCount >= COIN_MAGNET_PRICE) {
+                coinCount -= COIN_MAGNET_PRICE;
+                coinsEl.textContent = coinCount;
+                saveCoinProgress();
+                ownedCoinMagnet = true;
+                saveColorProgress();
+                renderUpgradeShop();
+            }
+        });
+    }
+    grid.appendChild(magnetItem);
+
+    // Range upgrades only show up once the magnet itself is owned — no
+    // point upgrading the range of something you can't buy yet.
+    if (ownedCoinMagnet) {
+        addTierItem('📡', 'Magnet Range', magnetRangeLevel, MAGNET_RANGE_PRICES, MAGNET_RANGE_TIERS, () => { magnetRangeLevel++; });
+    }
+
+    // Parachute — owned + equipped like an accessory, but with a real
+    // gameplay effect: saves your first void-fall per attempt from
+    // counting against your falls.
+    const chuteItem = document.createElement('div');
+    chuteItem.className = 'shop-item' + (equippedParachute ? ' selected' : '') + (ownedParachute ? '' : ' locked');
+    const chuteIcon = document.createElement('div');
+    chuteIcon.className = 'upgrade-icon';
+    chuteIcon.textContent = '🪂';
+    const chuteLabel = document.createElement('div');
+    chuteLabel.className = 'shop-label';
+    chuteLabel.textContent = ownedParachute ? (equippedParachute ? 'Equipped' : 'Parachute') : 'Parachute — ' + PARACHUTE_PRICE + ' coins';
+    chuteItem.appendChild(chuteIcon);
+    chuteItem.appendChild(chuteLabel);
+    chuteItem.addEventListener('click', () => {
+        if (ownedParachute) {
+            equippedParachute = !equippedParachute;
+            saveColorProgress();
+            renderUpgradeShop();
+        } else if (coinCount >= PARACHUTE_PRICE) {
+            coinCount -= PARACHUTE_PRICE;
+            coinsEl.textContent = coinCount;
+            saveCoinProgress();
+            ownedParachute = true;
+            equippedParachute = true;
+            saveColorProgress();
+            renderUpgradeShop();
+        }
+    });
+    grid.appendChild(chuteItem);
+}
 
 const VW = 860, VH = 460;
 canvas.width = VW;
 canvas.height = VH;
 
 const GRAVITY = 0.62;
-const JUMP_VELOCITY = -12.6;
-const MOVE_SPEED = 4.3;
+const JUMP_VELOCITY = -12.6; // vertical jump power — not upgradeable, so every map's rise limits stay exactly as validated
+const MOVE_SPEED_BASE = 4.3; // ground walking speed at upgrade level 0
+const JUMP_SPEED_BASE = 4.3; // horizontal speed a jump takes off with, at upgrade level 0 — matches MOVE_SPEED_BASE exactly so the base game plays identically to before this feature existed
+
+// Speed/Jump Length are separate shop upgrades (see the Upgrades shop tab).
+// They're kept as two independent multipliers — not one shared "movement
+// speed" — specifically so Speed can be generous (ground walking has no
+// safety concerns) while Jump Length stays modest (every map's jump gaps
+// were tuned around the base reach; too much extra horizontal carry could
+// send a jump sailing past its intended landing). Tiers were chosen and
+// then verified by literally auto-playing every one of the 32 maps at
+// max level to confirm the flag is still reachable everywhere.
+const SPEED_TIER_BONUS = [0, 0.15, 0.30, 0.45];
+const JUMP_TIER_BONUS = [0, 0.08, 0.16, 0.24];
+let speedLevel = 0, jumpLevel = 0;
+let MOVE_SPEED = MOVE_SPEED_BASE, JUMP_SPEED = JUMP_SPEED_BASE;
+
+function applyUpgradeLevels() {
+    MOVE_SPEED = MOVE_SPEED_BASE * (1 + SPEED_TIER_BONUS[speedLevel]);
+    JUMP_SPEED = JUMP_SPEED_BASE * (1 + JUMP_TIER_BONUS[jumpLevel]);
+}
+
+const SPEED_PRICES = [150, 300, 500]; // price to go from level i to i+1
+const JUMP_PRICES = [150, 300, 500];
+const COIN_MAGNET_PRICE = 1000;
+
+// The Coin Magnet doesn't vacuum coins up instantly at range — it pulls
+// them toward the player each frame once they're within range, and they
+// still have to actually reach the player (the normal 26px contact
+// distance) to be collected. Range upgrades (bought only after owning the
+// magnet itself) extend how far away that pull starts reaching.
+const MAGNET_RANGE_TIERS = [100, 150, 200, 250];
+const MAGNET_RANGE_PRICES = [200, 200, 200];
+const MAGNET_PULL_SPEED = 6; // px/frame a coin closes the distance by once in range
+let magnetRangeLevel = 0;
+
+// The Parachute has to be equipped (owning it alone isn't enough) — while
+// equipped, the first time you'd fall into the void on a given attempt,
+// it saves you: you still respawn at the last checkpoint, but it doesn't
+// count against your falls. One save per attempt — it resets the next
+// time you (re)start the level.
+const PARACHUTE_PRICE = 200;
+let parachuteUsed = false;
+
 const PLAYER_W = 28, PLAYER_H = 36;
 const START_X = 55, START_Y = 300;
 const STEP_HEIGHT = 16;   // ledges this short are auto-climbed like stairs
@@ -959,8 +1152,10 @@ const MAPS = [
         flagJump: { gap: 130, riseOffset: 20, width: 220 },
     },
     { // Volcano Peaks — opens straight into a gauntlet with no easing in,
-      // and bookends with a second gauntlet at the end.
-        price: MAP_PRICE,
+      // and bookends with a second gauntlet at the end. Free to enter (like
+      // Sunny Meadow) so the hidden 1000-coin secret is reachable even
+      // starting from 0 coins, not gated behind the very currency it hands out.
+        price: 0,
         track: [
             { type: 'gauntlet', count: 4, width: 65, decor: 'lavapit' },
             { type: 'tunnel', width: 200, gap: 110, decor: 'lavapit' },
@@ -1345,7 +1540,7 @@ const MAPS = [
         ],
         flagJump: { gap: 120, riseOffset: 20, width: 220 },
     },
-].map((m, i) => ({ theme: THEMES[i], price: m.price || null, bundle: m.bundle || null, track: m.track, flagJump: m.flagJump }));
+].map((m, i) => ({ theme: THEMES[i], price: m.price ?? null, bundle: m.bundle || null, track: m.track, flagJump: m.flagJump }));
 
 // A bundle unlocks every map tagged with its id in one purchase, cheaper
 // than buying each of those maps individually would be.
@@ -1356,6 +1551,13 @@ const BUNDLES = [
 
 function mapIsUnlocked(i) {
     const map = MAPS[i];
+    // Free maps are always unlocked, full stop — not just by default on a
+    // fresh save. A browser that already had saved progress from before a
+    // map became free (e.g. Volcano Peaks, which needs to stay reachable
+    // with 0 coins for its secret) would otherwise keep showing it locked
+    // forever, since the old saved `false` for that slot never gets
+    // revisited once it's already on disk.
+    if (map.price === 0) return true;
     return !!(unlockedMaps[i] || (map.bundle && unlockedBundles[map.bundle]));
 }
 
@@ -1370,7 +1572,7 @@ function loadMapProgress() {
     if (saved && Array.isArray(saved.unlocked) && saved.unlocked.length === MAPS.length) {
         unlockedMaps = saved.unlocked;
     } else {
-        unlockedMaps = MAPS.map((_, i) => i === 0);
+        unlockedMaps = MAPS.map(m => m.price === 0);
     }
     if (saved && Array.isArray(saved.bestFalls) && saved.bestFalls.length === MAPS.length) {
         mapBestFalls = saved.bestFalls;
@@ -1453,6 +1655,7 @@ function addTrustFallSlide(basePlatform, opts = {}) {
     const widthA = opts.widthA || 100;
     const widthB = opts.widthB || 85;
     const landingWidth = opts.landingWidth || 260;
+    const forkGroup = opts.forkGroup;
 
     const B = basePlatform.y;
     const slideX = basePlatform.x + basePlatform.w - 10;
@@ -1464,7 +1667,9 @@ function addTrustFallSlide(basePlatform, opts = {}) {
     // time a proper fall, not a short hop), and instead of a ladder back up
     // it's a gradual run of jumps that slowly gains height each time, until
     // the last one quietly puts you back at the main track's own level.
-    const landing = { x: slideX + 100, y: B + drop, w: landingWidth, h: 22, hiddenCourse: true };
+    // Tagged forkGroup/'hidden' so coin generation can treat this as one
+    // side of the slide-vs-tunnel choice — see generateCoins().
+    const landing = { x: slideX + 100, y: B + drop, w: landingWidth, h: 22, hiddenCourse: true, forkGroup, forkSide: 'hidden' };
     PLATFORMS.push(landing);
 
     const rise = Math.round(drop / steps);
@@ -1473,7 +1678,7 @@ function addTrustFallSlide(basePlatform, opts = {}) {
     for (let i = 0; i < steps; i++) {
         hy -= rise;
         const w = i % 2 === 0 ? widthA : widthB;
-        const plat = { x: hx, y: hy, w, h: 22, hiddenCourse: true };
+        const plat = { x: hx, y: hy, w, h: 22, hiddenCourse: true, forkGroup, forkSide: 'hidden' };
         PLATFORMS.push(plat);
         if (i === steps - 2) {
             CHECKPOINTS.push({ x: plat.x + plat.w / 2, y: plat.y, claimed: false });
@@ -1488,6 +1693,11 @@ function addTrustFallSlide(basePlatform, opts = {}) {
 
 const STAIR_RISE = 14, STAIR_W = 46;
 let STAIR_PLATFORMS = [];
+
+// Unique id per fork instance (branch or trust-fall) in the current level,
+// so coin generation can tell which platforms belong to the same either/or
+// choice. Reset per-map in buildLevel.
+let FORK_GROUP_COUNTER = 0;
 
 // --- Module toolkit ---------------------------------------------------
 // Every module is written RELATIVE to whatever height it's handed (fromY)
@@ -1577,7 +1787,12 @@ function modReturnToHeight(cursorX, fromY, targetY) {
 
 // Fork: either a ladder route vs a plain-jump route, or two flavor-different
 // jump routes — always equally easy, always land on the same merge platform.
+// Every platform belonging to one route or the other is tagged with a
+// shared forkGroup id and a forkSide of 'A' or 'B', so coin generation can
+// guarantee the same reward no matter which route is taken — see
+// generateCoins().
 function modBranch(cursorX, fromY, style) {
+    const forkGroup = FORK_GROUP_COUNTER++;
     const forkX = cursorX + 30;
     const branchEntry = { x: forkX, y: fromY, w: 70, h: 22 };
     PLATFORMS.push(branchEntry);
@@ -1586,20 +1801,31 @@ function modBranch(cursorX, fromY, style) {
 
     if (style === 'ladder') {
         const ladderBaseX = B + 30;
-        PLATFORMS.push({ x: ladderBaseX, y: fromY, w: 50, h: 22 });
+        PLATFORMS.push({ x: ladderBaseX, y: fromY, w: 50, h: 22, forkGroup, forkSide: 'B' });
         const upperY = fromY - 120;
         LADDERS.push({ x: ladderBaseX + 10, y: upperY, w: 30, h: 130 });
-        const ladderTop = { x: B + 20, y: upperY, w: 100, h: 22 };
+        const ladderTop = { x: B + 20, y: upperY, w: 100, h: 22, forkGroup, forkSide: 'B' };
         PLATFORMS.push(ladderTop);
         CHECKPOINTS.push({ x: ladderTop.x + ladderTop.w / 2, y: upperY, claimed: false });
+        // A gentle hill — rises then settles back to the ladder-top height,
+        // instead of four dead-flat jumps in a row.
         const upperSeg = layoutSequence(ladderTop.x + ladderTop.w, [
-            { gap: 90, y: upperY, w: 90 }, { gap: 85, y: upperY, w: 85 },
-            { gap: 90, y: upperY, w: 90 }, { gap: 85, y: upperY, w: 85 },
+            { gap: 90, y: upperY, w: 90 },
+            { gap: 85, y: upperY - 20, w: 85 },
+            { gap: 90, y: upperY - 10, w: 90 },
+            { gap: 85, y: upperY, w: 85 },
         ]);
+        upperSeg.platforms.forEach(p => { p.forkGroup = forkGroup; p.forkSide = 'B'; });
+        // A shallow valley the opposite way — dips down then climbs back to
+        // the fork's own height, so the two routes slope in different
+        // directions rather than both just being flat.
         const lowerSeg = layoutSequence(B, [
-            { gap: 90, y: fromY, w: 90 }, { gap: 90, y: fromY, w: 90 },
-            { gap: 90, y: fromY, w: 90 }, { gap: 90, y: fromY, w: 190 },
+            { gap: 90, y: fromY, w: 90 },
+            { gap: 90, y: fromY + 30, w: 90 },
+            { gap: 90, y: fromY + 15, w: 90 },
+            { gap: 90, y: fromY, w: 190 },
         ]);
+        lowerSeg.platforms.forEach(p => { p.forkGroup = forkGroup; p.forkSide = 'A'; });
         aEnd = upperSeg.endX; bEnd = lowerSeg.endX;
         mergeY = Math.round((upperY + fromY) / 2);
     } else {
@@ -1607,14 +1833,24 @@ function modBranch(cursorX, fromY, style) {
         // that neither route's platforms ever physically overlap the
         // other's (a previous alternating-height version let them collide,
         // which made jumps on one route randomly blocked by the other).
+        // A shallow valley — dips down then climbs back to the fork's own
+        // height, rather than four dead-flat jumps.
         const routeA = layoutSequence(B, [
-            { gap: 90, y: fromY, w: 90 }, { gap: 90, y: fromY, w: 90 },
-            { gap: 90, y: fromY, w: 90 }, { gap: 90, y: fromY, w: 90 },
+            { gap: 90, y: fromY, w: 90 },
+            { gap: 90, y: fromY + 30, w: 90 },
+            { gap: 90, y: fromY + 15, w: 90 },
+            { gap: 90, y: fromY, w: 90 },
         ]);
+        routeA.platforms.forEach(p => { p.forkGroup = forkGroup; p.forkSide = 'A'; });
+        // The upper lane slopes the opposite way — a gentle hill instead of
+        // a flat run — so the two routes read as genuinely different paths.
         const routeB = layoutSequence(B, [
-            { gap: 95, y: fromY - 70, w: 85 }, { gap: 95, y: fromY - 70, w: 85 },
-            { gap: 95, y: fromY - 70, w: 85 }, { gap: 95, y: fromY - 70, w: 85 },
+            { gap: 95, y: fromY - 70, w: 85 },
+            { gap: 95, y: fromY - 100, w: 85 },
+            { gap: 95, y: fromY - 85, w: 85 },
+            { gap: 95, y: fromY - 70, w: 85 },
         ]);
+        routeB.platforms.forEach(p => { p.forkGroup = forkGroup; p.forkSide = 'B'; });
         aEnd = routeA.endX; bEnd = routeB.endX;
         mergeY = fromY + 20;
     }
@@ -1665,9 +1901,15 @@ function runTrack(cursorX, fromY, script) {
         if (mod.slide) {
             // By convention the module right after a slide is the tunnel
             // that lets you skip it. Build that now (out of order) so we
-            // know exactly where the surface path ends.
+            // know exactly where the surface path ends. Both the tunnel
+            // and any bridge platforms after it are tagged as the
+            // 'surface' side of this fork, paired with the hidden course's
+            // 'hidden' side below — see generateCoins().
+            const forkGroup = FORK_GROUP_COUNTER++;
             const tunnelMod = script[i + 1];
             const tunnelResult = runModule(tunnelMod, x, y);
+            tunnelResult.platform.forkGroup = forkGroup;
+            tunnelResult.platform.forkSide = 'surface';
             if (tunnelMod.decor) addDecor(tunnelResult.platform.x + tunnelResult.platform.w / 2, tunnelResult.platform.y, tunnelMod.decor);
             x = tunnelResult.endX;
             y = tunnelResult.endY;
@@ -1676,6 +1918,7 @@ function runTrack(cursorX, fromY, script) {
             const trustFall = addTrustFallSlide(result.platform, {
                 drop: mod.slideDrop, steps: mod.slideSteps, gap: mod.slideGap,
                 widthA: mod.slideWidthA, widthB: mod.slideWidthB, landingWidth: mod.slideLandingWidth,
+                forkGroup,
             });
 
             // The hidden course almost always needs far more horizontal
@@ -1696,6 +1939,7 @@ function runTrack(cursorX, fromY, script) {
                     remaining -= (90 + w);
                 }
                 const bridgeSeg = layoutSequence(x, bridgeSpec);
+                bridgeSeg.platforms.forEach(p => { p.forkGroup = forkGroup; p.forkSide = 'surface'; });
                 x = bridgeSeg.endX;
             }
         }
@@ -1723,6 +1967,7 @@ function buildLevel(mapIndex) {
     STAIR_PLATFORMS.length = 0;
     COINS.length = 0;
     DECOR.length = 0;
+    FORK_GROUP_COUNTER = 0;
 
     const map = MAPS[mapIndex];
     currentTheme = map.theme;
@@ -1759,22 +2004,98 @@ function buildLevel(mapIndex) {
     FLAG_X = FLAG_PLATFORM.x + FLAG_PLATFORM.w * 0.5;
     LEVEL_WIDTH = cursorX + 200;
 
-    // Coins floating above every "real" platform — wide platforms get two
-    // spread across their width instead of just one. Staircases still skip
-    // most steps (too dense for a coin on every single one) but now drop
-    // an occasional coin rather than none at all.
+    // A hidden secret on Volcano Peaks: the 3rd platform of the level hides
+    // a 1000-coin stash for anyone who jumps straight up off it and lands
+    // back down on it (see the landing logic in update()).
+    if (mapIndex === 4 && PLATFORMS[2]) PLATFORMS[2].secretPlatform = true;
+
+    generateCoins();
+}
+
+// Coin placement is built around one guarantee: every map has exactly 100
+// coins reachable by a player who only ever takes ONE side of any fork —
+// the branch (ladder vs. jumps) and the trust-fall (slide vs. the tunnel
+// that skips it). Both sides of every fork are made to carry the same
+// number of coins (so it never matters which one you pick), then the
+// shared, non-forking part of the level is padded or trimmed so the total
+// comes out to exactly 100 no matter which combination of choices you make.
+function generateCoins() {
+    COINS.length = 0;
     const stairSet = new Set(STAIR_PLATFORMS);
+
+    // Natural density: wide platforms get two coins, staircases get an
+    // occasional one, everything else gets one — same as before, just
+    // tagged with whichever fork (if any) the platform belongs to.
+    const rawCoins = [];
     PLATFORMS.forEach(p => {
         if (stairSet.has(p)) return;
-        if (p.w >= 160) {
-            COINS.push({ x: p.x + p.w * 0.3, y: p.y - 30, collected: false });
-            COINS.push({ x: p.x + p.w * 0.7, y: p.y - 30, collected: false });
-        } else {
-            COINS.push({ x: p.x + p.w / 2, y: p.y - 30, collected: false });
-        }
+        const fracs = p.w >= 160 ? [0.3, 0.7] : [0.5];
+        fracs.forEach(f => rawCoins.push({ x: p.x + p.w * f, y: p.y - 30, collected: false, forkGroup: p.forkGroup, forkSide: p.forkSide }));
     });
     STAIR_PLATFORMS.forEach((p, i) => {
-        if (i % 3 === 1) COINS.push({ x: p.x + p.w / 2, y: p.y - 22, collected: false });
+        if (i % 3 === 1) rawCoins.push({ x: p.x + p.w / 2, y: p.y - 22, collected: false, forkGroup: p.forkGroup, forkSide: p.forkSide });
+    });
+
+    const mainCoins = rawCoins.filter(c => c.forkGroup === undefined);
+    const forkGroups = {}; // forkGroup -> { side: [coins] }
+    rawCoins.forEach(c => {
+        if (c.forkGroup === undefined) return;
+        forkGroups[c.forkGroup] = forkGroups[c.forkGroup] || {};
+        forkGroups[c.forkGroup][c.forkSide] = forkGroups[c.forkGroup][c.forkSide] || [];
+        forkGroups[c.forkGroup][c.forkSide].push(c);
+    });
+    const forkPlatforms = {}; // forkGroup -> { side: [platforms] }, for padding a short side
+    PLATFORMS.forEach(p => {
+        if (p.forkGroup === undefined) return;
+        forkPlatforms[p.forkGroup] = forkPlatforms[p.forkGroup] || {};
+        forkPlatforms[p.forkGroup][p.forkSide] = forkPlatforms[p.forkGroup][p.forkSide] || [];
+        forkPlatforms[p.forkGroup][p.forkSide].push(p);
+    });
+
+    // Every fork's two sides are leveled up to match whichever side
+    // naturally got more coins, so the reward is identical either way.
+    let forkTotal = 0;
+    Object.keys(forkGroups).forEach(gid => {
+        const sides = forkGroups[gid];
+        const sideNames = Object.keys(sides);
+        if (sideNames.length < 2) {
+            sideNames.forEach(s => { forkTotal += sides[s].length; mainCoins.push(...sides[s]); });
+            return;
+        }
+        const maxCount = Math.max(...sideNames.map(s => sides[s].length));
+        sideNames.forEach(s => {
+            const list = sides[s];
+            const plats = (forkPlatforms[gid] && forkPlatforms[gid][s]) || [];
+            let extra = 0;
+            while (list.length < maxCount && plats.length) {
+                const p = plats[extra % plats.length];
+                list.push({ x: p.x + p.w * 0.5, y: p.y - 30 - 14 * (1 + Math.floor(extra / plats.length)), collected: false, forkGroup: gid, forkSide: s });
+                extra++;
+            }
+        });
+        forkTotal += maxCount;
+    });
+
+    // With every fork now symmetric, the total is the same no matter which
+    // side of any fork gets taken — pad or trim the shared, non-forking
+    // coins until that guaranteed total is exactly 100.
+    let diff = 100 - (mainCoins.length + forkTotal);
+    if (diff > 0) {
+        const mainPlats = PLATFORMS.filter(p => p.forkGroup === undefined && !stairSet.has(p));
+        let extra = 0;
+        while (diff > 0 && mainPlats.length) {
+            const p = mainPlats[extra % mainPlats.length];
+            mainCoins.push({ x: p.x + p.w * 0.5, y: p.y - 30 - 14 * (1 + Math.floor(extra / mainPlats.length)), collected: false });
+            extra++; diff--;
+        }
+    } else if (diff < 0) {
+        let toRemove = -diff;
+        while (toRemove > 0 && mainCoins.length) { mainCoins.pop(); toRemove--; }
+    }
+
+    COINS.push(...mainCoins);
+    Object.keys(forkGroups).forEach(gid => {
+        Object.keys(forkGroups[gid]).forEach(s => COINS.push(...forkGroups[gid][s]));
     });
 }
 
@@ -1819,9 +2140,30 @@ function saveCoinProgress() {
     localStorage.setItem(COIN_SAVE_KEY, String(coinCount));
 }
 
+// A hidden secret: jump straight up off one specific platform and land
+// back down on it to find a one-time 1000-coin stash. Which platform holds
+// it is tagged in buildLevel — see `secretPlatform`.
+// Bumped to V2: the secret moved maps and changed trigger conditions
+// (Sunny Meadow/3-jumps -> Volcano Peaks/1-jump) after some testing had
+// already happened, which could leave `secretFound` stuck true in a
+// browser's storage from the earlier version — silently blocking the new
+// one from ever firing. A fresh key guarantees everyone gets a clean shot
+// at the current version.
+const SECRET_SAVE_KEY = 'sunnyPlatformerSecretV2';
+let secretFound;
+
+function loadSecretProgress() {
+    secretFound = localStorage.getItem(SECRET_SAVE_KEY) === '1';
+}
+
+function saveSecretProgress() {
+    localStorage.setItem(SECRET_SAVE_KEY, secretFound ? '1' : '0');
+}
+
 function resetState() {
-    player = { x: START_X, y: START_Y, vx: 0, vy: 0, onGround: false, longFalling: false };
+    player = { x: START_X, y: START_Y, vx: 0, vy: 0, onGround: false, longFalling: false, lastLandedBlock: null };
     falls = 0;
+    parachuteUsed = false;
     // Coins are a persistent currency (for the shop and unlocking maps), so
     // they carry over across restarts and sessions rather than resetting.
     cameraX = 0;
@@ -1844,16 +2186,18 @@ function rectsOverlap(a, b) {
 
 function update() {
     if (won) return;
+    const wasGrounded = player.onGround;
 
-    // Input sets speed directly on the ground; in the air, existing
-    // horizontal momentum is preserved (rather than reset every frame) so a
-    // slide's push actually carries you off the edge and through the fall
-    // instead of vanishing the instant you leave the ground.
+    // Input sets speed directly on the ground; in the air, horizontal
+    // momentum is locked in at the moment of takeoff (see the jump below)
+    // and preserved for the whole flight, rather than being re-applied
+    // from ground speed every frame. This is what lets Speed and Jump
+    // Length be separate upgrades: a faster walk never sneaks extra
+    // distance into a jump, since jumps get their own takeoff velocity.
     const inputDir = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
-    if (inputDir !== 0) {
-        player.vx = inputDir * MOVE_SPEED;
-    } else if (player.onGround) {
-        player.vx *= 0.7;
+    if (player.onGround) {
+        if (inputDir !== 0) player.vx = inputDir * MOVE_SPEED;
+        else player.vx *= 0.7;
     }
 
     const startBox = { x: player.x, y: player.y, w: PLAYER_W, h: PLAYER_H };
@@ -1876,6 +2220,10 @@ function update() {
         if ((keys.jump || keys.up) && player.onGround) {
             player.vy = JUMP_VELOCITY;
             player.onGround = false;
+            // Takeoff velocity is set fresh here (not inherited from
+            // whatever ground speed produced) — this is the one and only
+            // place Jump Length applies.
+            player.vx = inputDir * JUMP_SPEED;
         }
         if (player.onGround && player.standingSlide) {
             // A slide sweeps you along regardless of input — stepping onto
@@ -1926,6 +2274,21 @@ function update() {
                 player.vy = 0;
                 player.onGround = true;
                 player.standingSlide = block.slide || null;
+
+                // Secret: jump straight up off the tagged platform and
+                // land back down on that same platform to reveal a hidden
+                // coin stash.
+                if (!wasGrounded) {
+                    if (block.secretPlatform && player.lastLandedBlock === block && !secretFound) {
+                        secretFound = true;
+                        coinCount += 1000;
+                        coinsEl.textContent = coinCount;
+                        saveCoinProgress();
+                        saveSecretProgress();
+                        showToast('✨ Secret found! +1000 coins');
+                    }
+                    player.lastLandedBlock = block;
+                }
             }
         } else if (player.vy < 0) {
             player.y = block.y + block.h;
@@ -1970,10 +2333,23 @@ function update() {
     }
 
     const cx = player.x + PLAYER_W / 2, cy = player.y + PLAYER_H / 2;
+    const magnetRange = ownedCoinMagnet ? MAGNET_RANGE_TIERS[magnetRangeLevel] : 0;
     for (const coin of COINS) {
         if (coin.collected) continue;
-        const dx = cx - coin.x, dy = cy - coin.y;
-        if (dx * dx + dy * dy < 26 * 26) {
+        let dx = cx - coin.x, dy = cy - coin.y;
+        let dist2 = dx * dx + dy * dy;
+        if (magnetRange > 0 && dist2 < magnetRange * magnetRange && dist2 > 0.01) {
+            // Pull it toward the player at a fixed speed rather than
+            // snapping it there — it visibly travels in, and only counts
+            // as collected once it actually reaches contact distance.
+            const dist = Math.sqrt(dist2);
+            const t = Math.min(1, MAGNET_PULL_SPEED / dist);
+            coin.x += dx * t;
+            coin.y += dy * t;
+            dx = cx - coin.x; dy = cy - coin.y;
+            dist2 = dx * dx + dy * dy;
+        }
+        if (dist2 < 26 * 26) {
             coin.collected = true;
             coinCount++;
             coinsEl.textContent = coinCount;
@@ -1982,8 +2358,13 @@ function update() {
     }
 
     if (player.y > WORLD_BOTTOM + 100) {
-        falls++;
-        fallsEl.textContent = falls;
+        if (equippedParachute && !parachuteUsed) {
+            parachuteUsed = true;
+            showToast('🪂 Parachute saved you! (no fall counted)');
+        } else {
+            falls++;
+            fallsEl.textContent = falls;
+        }
         player.x = lastCheckpoint.x;
         player.y = lastCheckpoint.y;
         player.vx = 0;
@@ -3831,11 +4212,14 @@ function loop() {
 }
 
 function renderMapSelect() {
-    renderBundles();
     const grid = document.getElementById('map-grid');
     grid.innerHTML = '';
     MAPS.forEach((map, i) => {
         const unlocked = mapIsUnlocked(i);
+        // Maps belonging to a not-yet-purchased bundle don't get a card at
+        // all — they only appear here once that bundle is bought, so the
+        // grid doesn't fill up with entries you can't act on individually.
+        if (map.bundle && !unlocked) return;
         const card = document.createElement('div');
         card.className = 'map-card' + (unlocked ? '' : ' locked');
         const preview = document.createElement('div');
@@ -3853,14 +4237,7 @@ function renderMapSelect() {
         name.textContent = map.theme.name;
         const status = document.createElement('div');
         status.className = 'map-status';
-        if (unlocked) {
-            status.textContent = 'Play';
-        } else if (map.bundle) {
-            const bundle = BUNDLES.find(b => b.id === map.bundle);
-            status.textContent = '🎁 ' + bundle.name;
-        } else {
-            status.textContent = map.price + ' coins';
-        }
+        status.textContent = unlocked ? 'Play' : map.price + ' coins';
         card.appendChild(preview);
         card.appendChild(name);
         card.appendChild(status);
@@ -3878,6 +4255,7 @@ function renderMapSelect() {
         });
         grid.appendChild(card);
     });
+    renderBundles();
 }
 
 function renderBundles() {
@@ -3986,6 +4364,8 @@ document.getElementById('shop-close').addEventListener('click', () => {
 loadCoinProgress();
 coinsEl.textContent = coinCount;
 loadMapProgress();
+loadSecretProgress();
+loadColorProgress();
 showHome();
 requestAnimationFrame(loop);
 window.focus();
