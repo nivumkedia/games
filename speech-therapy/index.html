@@ -142,6 +142,31 @@
     color: #7a8ea1;
     white-space: nowrap;
   }
+
+  .week-calendar { display: flex; gap: 8px; }
+  .week-day {
+    flex: 1;
+    text-align: center;
+    padding: 12px 4px;
+    border-radius: 12px;
+    border: 1px solid #eef3f7;
+    background: #fbfdff;
+    pointer-events: none;
+    cursor: default;
+  }
+  .week-day .dow { font-size: 0.7rem; color: #7a8ea1; text-transform: uppercase; font-weight: 700; }
+  .week-day .num { font-weight: 700; font-size: 1.15rem; margin-top: 4px; color: #22303f; }
+  .week-day .check { font-size: 1.1rem; color: #219150; margin-top: 4px; }
+  .week-day.today {
+    border-color: #2e86c1;
+    border-width: 2px;
+    pointer-events: auto;
+    cursor: pointer;
+  }
+  .week-day.today:hover { background: #eaf4ff; }
+  .week-day.done { background: #e5f7ec; border-color: #6fcf97; }
+  .week-day.today.done:hover { background: #d7f0e1; }
+
   .btn {
     background: #2e86c1;
     color: #fff;
@@ -258,6 +283,11 @@
       </div>
     </div>
 
+    <div class="card">
+      <label>This week</label>
+      <div id="client-week-calendar" class="week-calendar"></div>
+    </div>
+
   </div>
 </div>
 
@@ -297,6 +327,11 @@
         <button class="btn" onclick="saveExercise()">Save</button>
         <span id="exercise-saved-note" style="color:#219150; font-weight:600; font-size:0.9rem; display:none;">Saved ✓</span>
       </div>
+    </div>
+
+    <div class="card">
+      <label>This week's progress</label>
+      <div id="detail-week-calendar" class="week-calendar"></div>
     </div>
 
     <div class="card">
@@ -375,10 +410,68 @@ function submitLogin() {
         displayEl.appendChild(row);
       });
     }
+    renderWeekCalendar('client-week-calendar', client, true);
     return;
   }
 
   document.getElementById('login-error').style.display = 'block';
+}
+
+/* ===================== WEEK CALENDAR ===================== */
+const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function dateKey(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function getWeekDates(today) {
+  const start = new Date(today);
+  start.setDate(start.getDate() - start.getDay());
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    days.push(d);
+  }
+  return days;
+}
+
+function renderWeekCalendar(containerId, client, clickable) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  const today = new Date();
+  const todayKey = dateKey(today);
+  const checkins = client.checkins || {};
+
+  getWeekDates(today).forEach(d => {
+    const key = dateKey(d);
+    const isToday = key === todayKey;
+    const done = !!checkins[key];
+
+    const cell = document.createElement('div');
+    cell.className = 'week-day' + (isToday ? ' today' : '') + (done ? ' done' : '');
+    cell.innerHTML = `<div class="dow">${DOW_LABELS[d.getDay()]}</div><div class="num">${d.getDate()}</div>${done ? '<div class="check">✓</div>' : ''}`;
+
+    if (clickable && isToday) {
+      cell.onclick = toggleTodayCheckin;
+    }
+    container.appendChild(cell);
+  });
+}
+
+function toggleTodayCheckin() {
+  if (!activeClientId) return;
+  const clients = loadClients();
+  const client = clients.find(c => c.id === activeClientId);
+  if (!client) return;
+  client.checkins = client.checkins || {};
+  const key = dateKey(new Date());
+  client.checkins[key] = !client.checkins[key];
+  saveClients(clients);
+  renderWeekCalendar('client-week-calendar', client, true);
 }
 
 /* ===================== THERAPIST FLOW ===================== */
@@ -456,6 +549,7 @@ function renderClientDetail(clientId) {
   document.getElementById('detail-client-name').textContent = client.name;
   renderExerciseBoxes(clientExercises(client));
   document.getElementById('exercise-saved-note').style.display = 'none';
+  renderWeekCalendar('detail-week-calendar', client, false);
 }
 
 function clientExercises(client) {
