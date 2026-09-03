@@ -335,13 +335,55 @@
     </div>
 
     <div class="card">
+      <label>Parent contact</label>
+      <div class="row">
+        <input type="text" id="detail-phone" placeholder="Phone number (10 digits)">
+        <select id="detail-carrier"></select>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <button class="btn secondary" onclick="saveContact()">Save contact</button>
+        <button class="btn green" onclick="sendReminder()">Send reminder</button>
+        <span id="contact-note" style="font-weight:600; font-size:0.9rem; display:none;"></span>
+      </div>
+    </div>
+
+    <div class="card">
       <button class="btn danger" onclick="deleteActiveDetailClient()">Remove client</button>
     </div>
 
   </div>
 </div>
 
+<!--
+  Reminder texts are sent via EmailJS (emails an SMS-gateway address, which the
+  carrier delivers as a text). To activate:
+  1. Create a free account at https://www.emailjs.com and connect an email address.
+  2. Create an Email Service -> copy its Service ID into EMAILJS_SERVICE_ID below.
+  3. Create an Email Template with a {{to_email}} recipient and a {{message}} body
+     -> copy its Template ID into EMAILJS_TEMPLATE_ID below.
+  4. Copy your Public Key (Account -> General) into EMAILJS_PUBLIC_KEY below.
+  Until these are filled in, the Send reminder button will show a setup message.
+-->
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script>
+const EMAILJS_PUBLIC_KEY = 'YOUR_PUBLIC_KEY';
+const EMAILJS_SERVICE_ID = 'YOUR_SERVICE_ID';
+const EMAILJS_TEMPLATE_ID = 'YOUR_TEMPLATE_ID';
+if (typeof emailjs !== 'undefined' && EMAILJS_PUBLIC_KEY !== 'YOUR_PUBLIC_KEY') {
+  emailjs.init(EMAILJS_PUBLIC_KEY);
+}
+
+const CARRIER_GATEWAYS = {
+  'Verizon': 'vtext.com',
+  'AT&T': 'txt.att.net',
+  'T-Mobile': 'tmomail.net',
+  'Sprint': 'messaging.sprintpcs.com',
+  'Boost Mobile': 'sms.myboostmobile.com',
+  'Cricket': 'sms.cricketwireless.net',
+  'US Cellular': 'email.uscc.net',
+  'Metro by T-Mobile': 'mymetropcs.com'
+};
+
 /* ===================== DATA ===================== */
 function loadClients() {
   return JSON.parse(localStorage.getItem('st_clients') || '[]');
@@ -550,6 +592,66 @@ function renderClientDetail(clientId) {
   renderExerciseBoxes(clientExercises(client));
   document.getElementById('exercise-saved-note').style.display = 'none';
   renderWeekCalendar('detail-week-calendar', client, false);
+
+  const carrierSelect = document.getElementById('detail-carrier');
+  carrierSelect.innerHTML = '';
+  Object.keys(CARRIER_GATEWAYS).forEach(name => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    carrierSelect.appendChild(opt);
+  });
+  document.getElementById('detail-phone').value = client.phone || '';
+  if (client.carrier) carrierSelect.value = client.carrier;
+  document.getElementById('contact-note').style.display = 'none';
+}
+
+function saveContact() {
+  if (!activeDetailClientId) return;
+  const clients = loadClients();
+  const client = clients.find(c => c.id === activeDetailClientId);
+  if (!client) return;
+  client.phone = document.getElementById('detail-phone').value.trim();
+  client.carrier = document.getElementById('detail-carrier').value;
+  saveClients(clients);
+  showContactNote('Contact saved ✓', '#219150');
+}
+
+function showContactNote(text, color) {
+  const note = document.getElementById('contact-note');
+  note.textContent = text;
+  note.style.color = color;
+  note.style.display = 'inline';
+  clearTimeout(showContactNote._timer);
+  showContactNote._timer = setTimeout(() => { note.style.display = 'none'; }, 3000);
+}
+
+function sendReminder() {
+  if (!activeDetailClientId) return;
+  const clients = loadClients();
+  const client = clients.find(c => c.id === activeDetailClientId);
+  if (!client) return;
+
+  const phone = document.getElementById('detail-phone').value.trim().replace(/\D/g, '');
+  const carrier = document.getElementById('detail-carrier').value;
+  if (phone.length !== 10) {
+    showContactNote('Enter a valid 10-digit phone number first.', '#e0563f');
+    return;
+  }
+
+  const gateway = CARRIER_GATEWAYS[carrier];
+  const toEmail = `${phone}@${gateway}`;
+  const message = `Speech Homework reminder: ${client.name} hasn't checked in today. Please complete today's exercise!`;
+
+  if (typeof emailjs === 'undefined' || EMAILJS_PUBLIC_KEY === 'YOUR_PUBLIC_KEY') {
+    showContactNote('EmailJS not set up yet — see the comment near the top of the file.', '#e0563f');
+    return;
+  }
+
+  showContactNote('Sending...', '#7a8ea1');
+  emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, { to_email: toEmail, message })
+    .then(() => showContactNote('Reminder sent ✓', '#219150'))
+    .catch(err => showContactNote('Failed to send: ' + (err && err.text ? err.text : err), '#e0563f'));
 }
 
 function clientExercises(client) {

@@ -752,7 +752,7 @@ function drawCharacterPreview(context, w, h, color, accessoryId) {
     }
 }
 
-let ownedColors, selectedColorIndex, ownedAccessories, equippedAccessories, ownedCoinMagnet, ownedParachute, equippedParachute;
+let ownedColors, selectedColorIndex, ownedAccessories, equippedAccessories, ownedParachute, equippedParachute;
 
 function loadColorProgress() {
     let saved = null;
@@ -773,9 +773,16 @@ function loadColorProgress() {
         equippedAccessories = ACCESSORIES.map(() => false);
     }
     speedLevel = (saved && Number.isInteger(saved.speedLevel)) ? Math.min(saved.speedLevel, SPEED_TIER_BONUS.length - 1) : 0;
-    jumpLevel = (saved && Number.isInteger(saved.jumpLevel)) ? Math.min(saved.jumpLevel, JUMP_TIER_BONUS.length - 1) : 0;
-    ownedCoinMagnet = !!(saved && saved.coinMagnet);
-    magnetRangeLevel = (saved && Number.isInteger(saved.magnetRangeLevel)) ? Math.min(saved.magnetRangeLevel, MAGNET_RANGE_TIERS.length - 1) : 0;
+    if (saved && Number.isInteger(saved.magnetLevel)) {
+        magnetLevel = Math.min(saved.magnetLevel, MAGNET_LEVELS.length - 1);
+    } else if (saved && saved.coinMagnet) {
+        // Migrates anyone who bought the magnet back when it was a separate
+        // "own it" purchase plus separate range tiers, so they don't lose
+        // what they already paid for now that it's one combined ladder.
+        magnetLevel = Math.min(1 + (saved.magnetRangeLevel || 0), MAGNET_LEVELS.length - 1);
+    } else {
+        magnetLevel = 0;
+    }
     ownedParachute = !!(saved && saved.parachute);
     equippedParachute = !!(saved && saved.parachuteEquipped);
     applyUpgradeLevels();
@@ -785,7 +792,7 @@ function saveColorProgress() {
     localStorage.setItem(COLOR_SAVE_KEY, JSON.stringify({
         owned: ownedColors, selected: selectedColorIndex,
         accOwned: ownedAccessories, accEquipped: equippedAccessories,
-        speedLevel, jumpLevel, coinMagnet: ownedCoinMagnet, magnetRangeLevel,
+        speedLevel, magnetLevel,
         parachute: ownedParachute, parachuteEquipped: equippedParachute,
     }));
 }
@@ -910,39 +917,10 @@ function renderUpgradeShop() {
     }
 
     addTierItem('⚡', 'Speed', speedLevel, SPEED_PRICES, SPEED_TIER_BONUS, () => { speedLevel++; });
-    addTierItem('🦘', 'Jump Length', jumpLevel, JUMP_PRICES, JUMP_TIER_BONUS, () => { jumpLevel++; });
 
-    // Coin Magnet — a one-time purchase (not tiered): once bought, coins
-    // are collected from much further away for the rest of the game.
-    const magnetItem = document.createElement('div');
-    magnetItem.className = 'shop-item' + (ownedCoinMagnet ? ' selected' : '');
-    const magnetIcon = document.createElement('div');
-    magnetIcon.className = 'upgrade-icon';
-    magnetIcon.textContent = '🧲';
-    const magnetLabel = document.createElement('div');
-    magnetLabel.className = 'shop-label';
-    magnetLabel.textContent = ownedCoinMagnet ? 'Coin Magnet (Owned)' : 'Coin Magnet — ' + COIN_MAGNET_PRICE + ' coins';
-    magnetItem.appendChild(magnetIcon);
-    magnetItem.appendChild(magnetLabel);
-    if (!ownedCoinMagnet) {
-        magnetItem.addEventListener('click', () => {
-            if (coinCount >= COIN_MAGNET_PRICE) {
-                coinCount -= COIN_MAGNET_PRICE;
-                coinsEl.textContent = coinCount;
-                saveCoinProgress();
-                ownedCoinMagnet = true;
-                saveColorProgress();
-                renderUpgradeShop();
-            }
-        });
-    }
-    grid.appendChild(magnetItem);
-
-    // Range upgrades only show up once the magnet itself is owned — no
-    // point upgrading the range of something you can't buy yet.
-    if (ownedCoinMagnet) {
-        addTierItem('📡', 'Magnet Range', magnetRangeLevel, MAGNET_RANGE_PRICES, MAGNET_RANGE_TIERS, () => { magnetRangeLevel++; });
-    }
+    // Coin Magnet — one combined button: the first purchase unlocks it,
+    // every purchase after that extends its pull range further.
+    addTierItem('🧲', 'Coin Magnet', magnetLevel, MAGNET_PRICES, MAGNET_LEVELS, () => { magnetLevel++; });
 
     // Parachute — owned + equipped like an accessory, but with a real
     // gameplay effect: saves your first void-fall per attempt from
@@ -982,39 +960,37 @@ canvas.height = VH;
 const GRAVITY = 0.62;
 const JUMP_VELOCITY = -12.6; // vertical jump power — not upgradeable, so every map's rise limits stay exactly as validated
 const MOVE_SPEED_BASE = 4.3; // ground walking speed at upgrade level 0
-const JUMP_SPEED_BASE = 4.3; // horizontal speed a jump takes off with, at upgrade level 0 — matches MOVE_SPEED_BASE exactly so the base game plays identically to before this feature existed
+// Horizontal speed a jump takes off with — fixed, not upgradeable (kept
+// separate from MOVE_SPEED so the Speed upgrade, which only affects ground
+// walking, can never sneak extra distance into a jump). Matches
+// MOVE_SPEED_BASE exactly so jump physics play identically to before the
+// Speed upgrade existed.
+const JUMP_SPEED = MOVE_SPEED_BASE;
 
-// Speed/Jump Length are separate shop upgrades (see the Upgrades shop tab).
-// They're kept as two independent multipliers — not one shared "movement
-// speed" — specifically so Speed can be generous (ground walking has no
-// safety concerns) while Jump Length stays modest (every map's jump gaps
-// were tuned around the base reach; too much extra horizontal carry could
-// send a jump sailing past its intended landing). Tiers were chosen and
-// then verified by literally auto-playing every one of the 32 maps at
-// max level to confirm the flag is still reachable everywhere.
-const SPEED_TIER_BONUS = [0, 0.15, 0.30, 0.45];
-const JUMP_TIER_BONUS = [0, 0.08, 0.16, 0.24];
-let speedLevel = 0, jumpLevel = 0;
-let MOVE_SPEED = MOVE_SPEED_BASE, JUMP_SPEED = JUMP_SPEED_BASE;
+// Speed is a shop upgrade (see the Upgrades shop tab) — generous, since
+// ground walking speed has no jump-overshoot safety concerns the way a
+// jump-distance upgrade would.
+const SPEED_TIER_BONUS = [0, 0.15, 0.30, 0.45, 0.60, 0.75];
+let speedLevel = 0;
+let MOVE_SPEED = MOVE_SPEED_BASE;
 
 function applyUpgradeLevels() {
     MOVE_SPEED = MOVE_SPEED_BASE * (1 + SPEED_TIER_BONUS[speedLevel]);
-    JUMP_SPEED = JUMP_SPEED_BASE * (1 + JUMP_TIER_BONUS[jumpLevel]);
 }
 
-const SPEED_PRICES = [150, 300, 500]; // price to go from level i to i+1
-const JUMP_PRICES = [150, 300, 500];
-const COIN_MAGNET_PRICE = 1000;
+const SPEED_PRICES = [150, 300, 500, 750, 1000]; // price to go from level i to i+1
 
-// The Coin Magnet doesn't vacuum coins up instantly at range — it pulls
-// them toward the player each frame once they're within range, and they
-// still have to actually reach the player (the normal 26px contact
-// distance) to be collected. Range upgrades (bought only after owning the
-// magnet itself) extend how far away that pull starts reaching.
-const MAGNET_RANGE_TIERS = [100, 150, 200, 250];
-const MAGNET_RANGE_PRICES = [200, 200, 200];
+// The Coin Magnet is one combined tiered upgrade, same pattern as Speed:
+// level 0 is "not owned" (range 0, inert), the first purchase unlocks it,
+// and every purchase after that extends its range further. It doesn't
+// vacuum coins up instantly at range — it pulls them toward the player
+// each frame once they're within range, and they still have to actually
+// reach the player (the normal 26px contact distance) to
+// be collected.
+const MAGNET_LEVELS = [0, 100, 150, 200, 250, 300, 350];
+const MAGNET_PRICES = [1000, 200, 200, 200, 300, 400];
 const MAGNET_PULL_SPEED = 6; // px/frame a coin closes the distance by once in range
-let magnetRangeLevel = 0;
+let magnetLevel = 0;
 
 // The Parachute has to be equipped (owning it alone isn't enough) — while
 // equipped, the first time you'd fall into the void on a given attempt,
@@ -2141,24 +2117,9 @@ function saveCoinProgress() {
 }
 
 // A hidden secret: jump straight up off one specific platform and land
-// back down on it to find a one-time 1000-coin stash. Which platform holds
-// it is tagged in buildLevel — see `secretPlatform`.
-// Bumped to V2: the secret moved maps and changed trigger conditions
-// (Sunny Meadow/3-jumps -> Volcano Peaks/1-jump) after some testing had
-// already happened, which could leave `secretFound` stuck true in a
-// browser's storage from the earlier version — silently blocking the new
-// one from ever firing. A fresh key guarantees everyone gets a clean shot
-// at the current version.
-const SECRET_SAVE_KEY = 'sunnyPlatformerSecretV2';
-let secretFound;
-
-function loadSecretProgress() {
-    secretFound = localStorage.getItem(SECRET_SAVE_KEY) === '1';
-}
-
-function saveSecretProgress() {
-    localStorage.setItem(SECRET_SAVE_KEY, secretFound ? '1' : '0');
-}
+// back down on it for a 1000-coin stash — repeatable every time, not just
+// once. Which platform holds it is tagged in buildLevel — see
+// `secretPlatform`.
 
 function resetState() {
     player = { x: START_X, y: START_Y, vx: 0, vy: 0, onGround: false, longFalling: false, lastLandedBlock: null };
@@ -2221,8 +2182,8 @@ function update() {
             player.vy = JUMP_VELOCITY;
             player.onGround = false;
             // Takeoff velocity is set fresh here (not inherited from
-            // whatever ground speed produced) — this is the one and only
-            // place Jump Length applies.
+            // whatever ground speed produced) — jump distance stays fixed
+            // regardless of the Speed upgrade.
             player.vx = inputDir * JUMP_SPEED;
         }
         if (player.onGround && player.standingSlide) {
@@ -2276,16 +2237,14 @@ function update() {
                 player.standingSlide = block.slide || null;
 
                 // Secret: jump straight up off the tagged platform and
-                // land back down on that same platform to reveal a hidden
-                // coin stash.
+                // land back down on that same platform for a coin stash —
+                // works every time, not just the first.
                 if (!wasGrounded) {
-                    if (block.secretPlatform && player.lastLandedBlock === block && !secretFound) {
-                        secretFound = true;
+                    if (block.secretPlatform && player.lastLandedBlock === block) {
                         coinCount += 1000;
                         coinsEl.textContent = coinCount;
                         saveCoinProgress();
-                        saveSecretProgress();
-                        showToast('✨ Secret found! +1000 coins');
+                        showToast('✨ Secret! +1000 coins');
                     }
                     player.lastLandedBlock = block;
                 }
@@ -2333,7 +2292,7 @@ function update() {
     }
 
     const cx = player.x + PLAYER_W / 2, cy = player.y + PLAYER_H / 2;
-    const magnetRange = ownedCoinMagnet ? MAGNET_RANGE_TIERS[magnetRangeLevel] : 0;
+    const magnetRange = MAGNET_LEVELS[magnetLevel];
     for (const coin of COINS) {
         if (coin.collected) continue;
         let dx = cx - coin.x, dy = cy - coin.y;
@@ -4364,7 +4323,6 @@ document.getElementById('shop-close').addEventListener('click', () => {
 loadCoinProgress();
 coinsEl.textContent = coinCount;
 loadMapProgress();
-loadSecretProgress();
 loadColorProgress();
 showHome();
 requestAnimationFrame(loop);
