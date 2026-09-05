@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Block Blast</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+*, *::before, *::after {
+    transition: background-color 0.7s ease, border-color 0.7s ease, color 0.7s ease;
+}
+
+:root {
+    --bg: #d9cbe9;
+    --panel: #f6f3fa;
+    --board-bg: #e6dcf0;
+    --cell-empty: #ddd0ea;
+    --cell-border: #c4a9dd;
+    --accent: #82599e;
+    --accent-dark: #674387;
+    --text: #453160;
+    --dim: #8577a0;
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    overflow: hidden;
+    touch-action: none;
+    user-select: none;
+}
+
+h1 {
+    font-size: clamp(20px, 4vmin, 28px);
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: var(--accent-dark);
+}
+
+.hud {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.score-box {
+    background: var(--panel);
+    border: 1px solid var(--cell-border);
+    border-radius: 10px;
+    padding: 6px 16px;
+    text-align: center;
+    box-shadow: 0 4px 14px rgba(142, 95, 199, 0.12);
+}
+
+.score-box .label {
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    color: var(--dim);
+    font-weight: 700;
+}
+
+.score-box .value {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--accent-dark);
+}
+
+#board {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+    width: min(88vmin, 380px);
+    height: min(88vmin, 380px);
+    background: var(--board-bg);
+    border: 2px solid var(--cell-border);
+    border-radius: 12px;
+    padding: 6px;
+    gap: 4px;
+    box-shadow: 0 10px 28px rgba(142, 95, 199, 0.18);
+}
+
+.cell {
+    background: var(--cell-empty);
+    border-radius: 5px;
+    transition: background 0.12s, box-shadow 0.12s;
+}
+
+.cell.filled {
+    box-shadow: inset 0 -3px 0 rgba(0,0,0,0.12), inset 0 2px 0 rgba(255,255,255,0.35);
+}
+
+.cell.exploding {
+    animation: cellPop 0.42s ease-in forwards;
+    z-index: 2;
+}
+
+@keyframes cellPop {
+    0%   { transform: scale(1) rotate(0deg); opacity: 1; }
+    35%  { transform: scale(1.3) rotate(6deg); opacity: 1; }
+    100% { transform: scale(0.15) rotate(18deg); opacity: 0; }
+}
+
+#particles {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 60;
+}
+
+#confetti {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 70;
+}
+
+.confetti-piece {
+    position: absolute;
+    top: -20px;
+    border-radius: 2px;
+    animation-name: confettiFall;
+    animation-timing-function: ease-in;
+    animation-fill-mode: forwards;
+}
+
+@keyframes confettiFall {
+    0%   { transform: translate(0, -10vh) rotate(0deg); opacity: 1; }
+    100% { transform: translate(var(--drift), 115vh) rotate(var(--rot)); opacity: 0.9; }
+}
+
+.particle {
+    position: fixed;
+    width: 9px;
+    height: 9px;
+    border-radius: 3px;
+    margin: -4.5px 0 0 -4.5px;
+    animation: particleFly 0.5s ease-out forwards;
+}
+
+@keyframes particleFly {
+    0%   { transform: translate(0, 0) scale(1); opacity: 1; }
+    100% { transform: translate(var(--dx), var(--dy)) scale(0.2); opacity: 0; }
+}
+
+.cell.preview-ok {
+    background: var(--accent);
+    opacity: 0.55;
+}
+
+.cell.preview-bad {
+    background: #e5788a;
+    opacity: 0.55;
+}
+
+#tray {
+    display: flex;
+    gap: 22px;
+    align-items: center;
+    justify-content: center;
+    min-height: 90px;
+}
+
+.piece-slot {
+    display: grid;
+    gap: 3px;
+    cursor: grab;
+    touch-action: none;
+}
+
+.piece-slot.empty {
+    visibility: hidden;
+}
+
+.piece-slot.dragging {
+    opacity: 0.25;
+}
+
+.piece-cell {
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,0.12), inset 0 2px 0 rgba(255,255,255,0.35);
+}
+
+.piece-cell.empty {
+    visibility: hidden;
+}
+
+#ghost {
+    position: fixed;
+    display: grid;
+    pointer-events: none;
+    z-index: 50;
+    opacity: 0.85;
+}
+
+#restart-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 18px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.2s;
+}
+
+#restart-btn:hover {
+    background: var(--accent-dark);
+    transform: translateY(-1px);
+}
+
+#overlay {
+    position: fixed;
+    inset: 0;
+    background: color-mix(in srgb, var(--bg) 90%, transparent);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 14px;
+    z-index: 100;
+}
+
+#overlay.show { display: flex; }
+
+#overlay h2 {
+    font-size: 26px;
+    color: var(--accent-dark);
+}
+
+.corner-btn {
+    position: fixed;
+    top: 14px;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: var(--panel);
+    border: 1px solid var(--cell-border);
+    color: var(--accent-dark);
+    font-weight: 800;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    z-index: 200;
+}
+
+.htp-btn { right: 14px; }
+.back-btn { left: 14px; }
+
+.htp-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(30, 20, 45, 0.45);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 300;
+    padding: 20px;
+}
+
+.htp-overlay.show { display: flex; }
+
+.htp-panel {
+    background: var(--panel);
+    border-radius: 14px;
+    padding: 22px 24px;
+    max-width: 340px;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.25);
+    text-align: left;
+}
+
+.htp-panel h2 {
+    color: var(--accent-dark);
+    font-size: 18px;
+    margin-bottom: 10px;
+}
+
+.htp-panel ul {
+    margin: 0 0 16px 18px;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.htp-close {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 7px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+</style>
+</head>
+<body>
+
+<button class="corner-btn back-btn" id="back-to-didis" title="Back to Didi's Games">←</button>
+<button class="corner-btn htp-btn" id="htp-btn" title="How to play">?</button>
+<div class="htp-overlay" id="htp-overlay">
+    <div class="htp-panel">
+        <h2>How to Play</h2>
+        <ul>
+            <li>Drag a piece from the tray onto the board.</li>
+            <li>Fill an entire row or column to clear it and score points.</li>
+            <li>Bigger pieces show up early — use them to clear lines fast.</li>
+            <li>Clear the whole board for a confetti shower and a new color theme.</li>
+            <li>Game ends when none of the three pieces in the tray can be placed.</li>
+        </ul>
+        <button class="htp-close" id="htp-close">Got it</button>
+    </div>
+</div>
+
+<h1>BLOCK BLAST</h1>
+
+<div class="hud">
+    <div class="score-box">
+        <div class="label">SCORE</div>
+        <div class="value" id="score">0</div>
+    </div>
+    <div class="score-box">
+        <div class="label">BEST</div>
+        <div class="value" id="best">0</div>
+    </div>
+</div>
+
+<div id="board"></div>
+
+<div id="tray"></div>
+
+<button id="restart-btn">Restart</button>
+
+<div id="ghost"></div>
+<div id="particles"></div>
+<div id="confetti"></div>
+
+<div id="overlay">
+    <h2>No more moves</h2>
+    <div class="score-box">
+        <div class="label">FINAL SCORE</div>
+        <div class="value" id="final-score">0</div>
+    </div>
+    <button id="overlay-restart">Play Again</button>
+</div>
+
+<script>
+const SIZE = 8;
+let PALETTE = ['#a98bc6', '#8c6cae', '#c0a9d9', '#a561ac', '#b478bf', '#6b4a8f'];
+
+const THEMES = [
+    {
+        bg: '#d9cbe9', panel: '#f6f3fa', boardBg: '#e6dcf0', cellEmpty: '#ddd0ea', cellBorder: '#c4a9dd',
+        accent: '#82599e', accentDark: '#674387', text: '#453160', dim: '#8577a0',
+        palette: ['#a98bc6', '#8c6cae', '#c0a9d9', '#a561ac', '#b478bf', '#6b4a8f'],
+    },
+    {
+        bg: '#c9e7d7', panel: '#f4faf6', boardBg: '#d9efe3', cellEmpty: '#cde9dc', cellBorder: '#a9d3bd',
+        accent: '#4c9880', accentDark: '#397a66', text: '#234a3a', dim: '#6e9284',
+        palette: ['#8ec6a6', '#6bb18f', '#a9d9bc', '#4ea37e', '#3a8563', '#6b9a82'],
+    },
+    {
+        bg: '#f4d3bd', panel: '#faf1ea', boardBg: '#f6dcc7', cellEmpty: '#f3d5bb', cellBorder: '#e2b389',
+        accent: '#cd8151', accentDark: '#ab6535', text: '#5e341b', dim: '#b58968',
+        palette: ['#e0955a', '#d3866c', '#e7ad88', '#cd8151', '#dba070', '#c4915a'],
+    },
+    {
+        bg: '#f3ecc0', panel: '#faf8ec', boardBg: '#f0e8c9', cellEmpty: '#ede2b7', cellBorder: '#d9c688',
+        accent: '#b89736', accentDark: '#977823', text: '#524217', dim: '#a08e52',
+        palette: ['#d9c26c', '#d1b559', '#e2cd88', '#c4a53f', '#b39536', '#dcc067'],
+    },
+    {
+        bg: '#f5d9b8', panel: '#faf2e6', boardBg: '#f8e3c6', cellEmpty: '#f5dcbc', cellBorder: '#e6bd85',
+        accent: '#d1893f', accentDark: '#ad6c2b', text: '#5f3a14', dim: '#bd9560',
+        palette: ['#e8a15c', '#dd9349', '#efbb82', '#d1893f', '#e0a466', '#c68c4b'],
+    },
+    {
+        bg: '#bfe8e4', panel: '#f1faf9', boardBg: '#cdefec', cellEmpty: '#c2e9e5', cellBorder: '#9bd3cc',
+        accent: '#3f9e94', accentDark: '#2d8078', text: '#1c4a45', dim: '#6a9d97',
+        palette: ['#7fc9c1', '#5cb3a9', '#9bd8d1', '#3fa89b', '#2f8a7e', '#66aca3'],
+    },
+    {
+        bg: '#f7d9e3', panel: '#fbf1f4', boardBg: '#f9e3ea', cellEmpty: '#f6dbe4', cellBorder: '#eab8c9',
+        accent: '#d97fa0', accentDark: '#b96284', text: '#6b2f47', dim: '#c191a6',
+        palette: ['#eda9c0', '#e492ae', '#f0bdd0', '#d97fa0', '#e6a6bb', '#cc7c99'],
+    },
+    {
+        bg: '#cfe3f6', panel: '#f2f7fc', boardBg: '#dcecfa', cellEmpty: '#d3e6f7', cellBorder: '#b0cdec',
+        accent: '#5e93cc', accentDark: '#4674a8', text: '#2c4a68', dim: '#7fa0c0',
+        palette: ['#9dc4ea', '#82b3e2', '#b6d6f2', '#6aa3d9', '#5286bd', '#8ab8dd'],
+    },
+];
+
+let themeIndex = 0;
+
+function applyTheme(index) {
+    const t = THEMES[index];
+    const root = document.documentElement.style;
+    root.setProperty('--bg', t.bg);
+    root.setProperty('--panel', t.panel);
+    root.setProperty('--board-bg', t.boardBg);
+    root.setProperty('--cell-empty', t.cellEmpty);
+    root.setProperty('--cell-border', t.cellBorder);
+    root.setProperty('--accent', t.accent);
+    root.setProperty('--accent-dark', t.accentDark);
+    root.setProperty('--text', t.text);
+    root.setProperty('--dim', t.dim);
+    PALETTE = t.palette;
+}
+
+function shiftToNextTheme() {
+    let next = themeIndex;
+    if (THEMES.length > 1) {
+        while (next === themeIndex) next = Math.floor(Math.random() * THEMES.length);
+    }
+    themeIndex = next;
+    applyTheme(themeIndex);
+}
+
+function spawnConfetti() {
+    const count = 550;
+    for (let i = 0; i < count; i++) {
+        const piece = document.createElement('div');
+        piece.className = 'confetti-piece';
+        const size = 10 + Math.random() * 10;
+        const color = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+        const delay = Math.random() * 1.1;
+        const duration = 2.2 + Math.random() * 1.6;
+        const drift = (Math.random() - 0.5) * 300;
+        const rot = 180 + Math.random() * 540;
+        piece.style.left = `${-8 + Math.random() * 116}vw`;
+        piece.style.width = `${size}px`;
+        piece.style.height = `${size * 0.45}px`;
+        piece.style.background = color;
+        piece.style.setProperty('--drift', `${drift}px`);
+        piece.style.setProperty('--rot', `${rot}deg`);
+        piece.style.animationDuration = `${duration}s`;
+        piece.style.animationDelay = `${delay}s`;
+        confettiEl.appendChild(piece);
+        piece.addEventListener('animationend', () => piece.remove());
+    }
+}
+
+const SHAPES = [
+    [[1]],
+    [[1,1]],
+    [[1],[1]],
+    [[1,1,1]],
+    [[1],[1],[1]],
+    [[1,1],[1,1]],
+    [[1,0],[1,0],[1,1]],
+    [[0,1],[0,1],[1,1]],
+    [[1,1,0],[0,1,1]],
+    [[0,1,1],[1,1,0]],
+    [[1,1,1],[0,1,0]],
+    [[1,1,1,1]],
+    [[1,1],[1,0]],
+    [[1,1,1],[1,1,1]],
+    [[1,1],[1,1],[1,1]],
+    [[1,1,1],[1,1,1],[1,1,1]],
+];
+
+const LARGE_SHAPES = SHAPES.filter(shape => shape.flat().filter(Boolean).length >= 6);
+
+let board = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
+let tray = [null, null, null];
+let score = 0;
+let best = parseInt(localStorage.getItem('blockBlastBest') || '0', 10);
+let dragging = null; // { slotIndex, shape, color, pointerId }
+
+const boardEl = document.getElementById('board');
+const trayEl = document.getElementById('tray');
+const ghostEl = document.getElementById('ghost');
+const particlesEl = document.getElementById('particles');
+const confettiEl = document.getElementById('confetti');
+const scoreEl = document.getElementById('score');
+const bestEl = document.getElementById('best');
+const overlayEl = document.getElementById('overlay');
+
+bestEl.textContent = best;
+
+function boardFullness() {
+    let filled = 0;
+    for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) if (board[r][c]) filled++;
+    }
+    return filled / (SIZE * SIZE);
+}
+
+function isShapeCell(shape, topR, topC, r, c) {
+    const sr = r - topR, sc = c - topC;
+    if (sr < 0 || sc < 0 || sr >= shape.length || sc >= shape[0].length) return false;
+    return !!shape[sr][sc];
+}
+
+function linesCompletedBy(shape, topR, topC) {
+    const rowsFull = [];
+    const colsFull = [];
+    const rowsToCheck = new Set();
+    const colsToCheck = new Set();
+    shape.forEach((row, r) => row.forEach((v, c) => {
+        if (v) { rowsToCheck.add(topR + r); colsToCheck.add(topC + c); }
+    }));
+    rowsToCheck.forEach(r => {
+        for (let c = 0; c < SIZE; c++) {
+            if (!(board[r][c] || isShapeCell(shape, topR, topC, r, c))) return;
+        }
+        rowsFull.push(r);
+    });
+    colsToCheck.forEach(c => {
+        for (let r = 0; r < SIZE; r++) {
+            if (!(board[r][c] || isShapeCell(shape, topR, topC, r, c))) return;
+        }
+        colsFull.push(c);
+    });
+    return { rowsFull, colsFull };
+}
+
+function wouldClearBoardCompletely(shape, topR, topC, rowsFull, colsFull) {
+    const temp = board.map(row => row.slice());
+    shape.forEach((row, r) => row.forEach((v, c) => { if (v) temp[topR + r][topC + c] = 'x'; }));
+    rowsFull.forEach(r => { for (let c = 0; c < SIZE; c++) temp[r][c] = null; });
+    colsFull.forEach(c => { for (let r = 0; r < SIZE; r++) temp[r][c] = null; });
+    return temp.every(row => row.every(cell => !cell));
+}
+
+// Best-case outcome across every legal placement of this shape: the most
+// lines it could clear in one drop, and whether any placement would leave
+// the whole board empty.
+function shapeHelpfulness(shape) {
+    let maxLines = 0;
+    let canFullyClear = false;
+    for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+            if (!canPlace(shape, r, c)) continue;
+            const { rowsFull, colsFull } = linesCompletedBy(shape, r, c);
+            const lines = rowsFull.length + colsFull.length;
+            if (lines === 0) continue;
+            if (lines > maxLines) maxLines = lines;
+            if (wouldClearBoardCompletely(shape, r, c, rowsFull, colsFull)) canFullyClear = true;
+        }
+    }
+    return { maxLines, canFullyClear };
+}
+
+function sizeWeight(shape, fullness) {
+    const cells = shape.flat().filter(Boolean).length;
+    if (fullness < 0.3) {
+        return cells >= 6 ? 5 : cells >= 4 ? 2.5 : 1;
+    } else if (fullness < 0.6) {
+        return cells >= 4 && cells <= 6 ? 2.5 : 1;
+    }
+    return cells <= 3 ? 3 : cells <= 5 ? 1.5 : 0.5;
+}
+
+function hasAnyPlacement(shape) {
+    for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+            if (canPlace(shape, r, c)) return true;
+        }
+    }
+    return false;
+}
+
+// True while the filled cells still form a clean rectangle/square, or a
+// rectangle with one corner rectangle missing (a large "L"). False once the
+// filled area gets notched/fragmented into anything less regular.
+function boardShapeIsNice() {
+    let minR = SIZE, maxR = -1, minC = SIZE, maxC = -1, filledCount = 0;
+    for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+            if (board[r][c]) {
+                filledCount++;
+                if (r < minR) minR = r;
+                if (r > maxR) maxR = r;
+                if (c < minC) minC = c;
+                if (c > maxC) maxC = c;
+            }
+        }
+    }
+    if (filledCount === 0) return true;
+
+    const bboxRows = maxR - minR + 1;
+    const bboxCols = maxC - minC + 1;
+    if (filledCount === bboxRows * bboxCols) return true;
+
+    let eMinR = SIZE, eMaxR = -1, eMinC = SIZE, eMaxC = -1, emptyCount = 0;
+    for (let r = minR; r <= maxR; r++) {
+        for (let c = minC; c <= maxC; c++) {
+            if (!board[r][c]) {
+                emptyCount++;
+                if (r < eMinR) eMinR = r;
+                if (r > eMaxR) eMaxR = r;
+                if (c < eMinC) eMinC = c;
+                if (c > eMaxC) eMaxC = c;
+            }
+        }
+    }
+    const emptyBboxIsSolid = emptyCount === (eMaxR - eMinR + 1) * (eMaxC - eMinC + 1);
+    const emptyAtCorner = (eMinR === minR || eMaxR === maxR) && (eMinC === minC || eMaxC === maxC);
+    return emptyBboxIsSolid && emptyAtCorner;
+}
+
+function weightedPickShape(pool, fullness) {
+    const candidates = pool.map(shape => {
+        let weight = sizeWeight(shape, fullness);
+        const { maxLines, canFullyClear } = shapeHelpfulness(shape);
+        if (maxLines > 0) weight *= 8 * (1 + (maxLines - 1) * 0.5);
+        if (canFullyClear) weight *= 6;
+        return { shape, weight };
+    });
+    const totalWeight = candidates.reduce((sum, cand) => sum + cand.weight, 0);
+    let roll = Math.random() * totalWeight;
+    let chosen = candidates[candidates.length - 1].shape;
+    for (const cand of candidates) {
+        roll -= cand.weight;
+        if (roll <= 0) { chosen = cand.shape; break; }
+    }
+    return chosen;
+}
+
+function randomShape() {
+    const shape = weightedPickShape(SHAPES, boardFullness());
+    const color = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+    return { shape, color };
+}
+
+function randomLargeShape() {
+    let pool = LARGE_SHAPES.filter(hasAnyPlacement);
+    if (pool.length === 0) pool = SHAPES.filter(hasAnyPlacement);
+    if (pool.length === 0) pool = SHAPES;
+    const shape = weightedPickShape(pool, boardFullness());
+    const color = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+    return { shape, color };
+}
+
+function refillTrayIfNeeded() {
+    if (tray.every(p => p === null)) {
+        const canForceLarge = boardShapeIsNice() && LARGE_SHAPES.some(hasAnyPlacement);
+        if (canForceLarge) {
+            tray = [randomLargeShape(), randomLargeShape(), randomLargeShape()];
+        } else {
+            tray = [randomShape(), randomShape(), randomShape()];
+        }
+    }
+}
+
+function buildBoard() {
+    boardEl.innerHTML = '';
+    for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.dataset.r = r;
+            cell.dataset.c = c;
+            boardEl.appendChild(cell);
+        }
+    }
+}
+
+function renderBoard() {
+    const cells = boardEl.children;
+    for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+            const cell = cells[r * SIZE + c];
+            const val = board[r][c];
+            cell.classList.remove('preview-ok', 'preview-bad', 'exploding');
+            if (val) {
+                cell.classList.add('filled');
+                cell.style.background = val;
+            } else {
+                cell.classList.remove('filled');
+                cell.style.background = '';
+            }
+        }
+    }
+}
+
+function renderTray() {
+    trayEl.innerHTML = '';
+    tray.forEach((piece, i) => {
+        const slot = document.createElement('div');
+        slot.className = 'piece-slot' + (piece ? '' : ' empty');
+        if (piece) {
+            const cols = piece.shape[0].length;
+            slot.style.gridTemplateColumns = `repeat(${cols}, 22px)`;
+            piece.shape.forEach(row => {
+                row.forEach(v => {
+                    const pc = document.createElement('div');
+                    pc.className = 'piece-cell' + (v ? '' : ' empty');
+                    if (v) pc.style.background = piece.color;
+                    slot.appendChild(pc);
+                });
+            });
+            slot.addEventListener('pointerdown', e => startDrag(e, i));
+        }
+        trayEl.appendChild(slot);
+    });
+}
+
+function canPlace(shape, topR, topC) {
+    for (let r = 0; r < shape.length; r++) {
+        for (let c = 0; c < shape[r].length; c++) {
+            if (!shape[r][c]) continue;
+            const br = topR + r, bc = topC + c;
+            if (br < 0 || br >= SIZE || bc < 0 || bc >= SIZE) return false;
+            if (board[br][bc]) return false;
+        }
+    }
+    return true;
+}
+
+function anyMoveAvailable() {
+    for (const piece of tray) {
+        if (!piece) continue;
+        for (let r = 0; r < SIZE; r++) {
+            for (let c = 0; c < SIZE; c++) {
+                if (canPlace(piece.shape, r, c)) return true;
+            }
+        }
+    }
+    return false;
+}
+
+function detectFullLines() {
+    const fullRows = [];
+    const fullCols = [];
+    for (let r = 0; r < SIZE; r++) {
+        if (board[r].every(v => v)) fullRows.push(r);
+    }
+    for (let c = 0; c < SIZE; c++) {
+        if (board.every(row => row[c])) fullCols.push(c);
+    }
+    return { fullRows, fullCols };
+}
+
+function spawnParticles(rect, color) {
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const count = 6;
+    for (let i = 0; i < count; i++) {
+        const p = document.createElement('div');
+        p.className = 'particle';
+        const angle = (Math.PI * 2 * i) / count + Math.random() * 0.6;
+        const dist = 22 + Math.random() * 20;
+        p.style.setProperty('--dx', `${Math.cos(angle) * dist}px`);
+        p.style.setProperty('--dy', `${Math.sin(angle) * dist}px`);
+        p.style.left = `${cx}px`;
+        p.style.top = `${cy}px`;
+        p.style.background = color;
+        particlesEl.appendChild(p);
+        p.addEventListener('animationend', () => p.remove());
+    }
+}
+
+function explodeLines(fullRows, fullCols, callback) {
+    const cells = boardEl.children;
+    const seen = new Set();
+    const targets = [];
+    fullRows.forEach(r => { for (let c = 0; c < SIZE; c++) targets.push([r, c]); });
+    fullCols.forEach(c => { for (let r = 0; r < SIZE; r++) targets.push([r, c]); });
+    targets.forEach(([r, c]) => {
+        const key = `${r}_${c}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        const color = board[r][c];
+        if (!color) return;
+        const cellEl = cells[r * SIZE + c];
+        cellEl.classList.add('exploding');
+        spawnParticles(cellEl.getBoundingClientRect(), color);
+    });
+    setTimeout(callback, 450);
+}
+
+function clearLines(fullRows, fullCols) {
+    fullRows.forEach(r => { for (let c = 0; c < SIZE; c++) board[r][c] = null; });
+    fullCols.forEach(c => { for (let r = 0; r < SIZE; r++) board[r][c] = null; });
+}
+
+function placePiece(slotIndex, topR, topC) {
+    const piece = tray[slotIndex];
+    if (!piece || !canPlace(piece.shape, topR, topC)) return false;
+    let cellsPlaced = 0;
+    piece.shape.forEach((row, r) => {
+        row.forEach((v, c) => {
+            if (v) {
+                board[topR + r][topC + c] = piece.color;
+                cellsPlaced++;
+            }
+        });
+    });
+    score += cellsPlaced;
+    tray[slotIndex] = null;
+    updateScore();
+    renderBoard();
+    renderTray();
+
+    const { fullRows, fullCols } = detectFullLines();
+    if (fullRows.length || fullCols.length) {
+        explodeLines(fullRows, fullCols, () => {
+            clearLines(fullRows, fullCols);
+            const lines = fullRows.length + fullCols.length;
+            score += lines * SIZE * 10 * lines;
+            updateScore();
+            renderBoard();
+            if (board.every(row => row.every(cell => !cell))) {
+                spawnConfetti();
+                shiftToNextTheme();
+            }
+            refillTrayIfNeeded();
+            renderTray();
+            if (!anyMoveAvailable()) showGameOver();
+        });
+    } else {
+        refillTrayIfNeeded();
+        renderTray();
+        if (!anyMoveAvailable()) showGameOver();
+    }
+    return true;
+}
+
+function updateScore() {
+    scoreEl.textContent = score;
+    if (score > best) {
+        best = score;
+        bestEl.textContent = best;
+        localStorage.setItem('blockBlastBest', String(best));
+    }
+}
+
+function showGameOver() {
+    document.getElementById('final-score').textContent = score;
+    overlayEl.classList.add('show');
+}
+
+function resetGame() {
+    board = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
+    tray = [null, null, null];
+    score = 0;
+    refillTrayIfNeeded();
+    updateScore();
+    renderBoard();
+    renderTray();
+    overlayEl.classList.remove('show');
+}
+
+function getBoardMetrics() {
+    const rect = boardEl.getBoundingClientRect();
+    const padding = 6, gap = 4;
+    const cellSize = (rect.width - padding * 2 - gap * (SIZE - 1)) / SIZE;
+    return { rect, padding, gap, cellSize };
+}
+
+function boardRectCell(clientX, clientY) {
+    const { rect, padding, gap, cellSize } = getBoardMetrics();
+    const relX = clientX - rect.left - padding;
+    const relY = clientY - rect.top - padding;
+    const c = Math.floor(relX / (cellSize + gap));
+    const r = Math.floor(relY / (cellSize + gap));
+    return { r, c, cellSize };
+}
+
+function clearPreview() {
+    Array.from(boardEl.children).forEach(cell => {
+        cell.classList.remove('preview-ok', 'preview-bad');
+    });
+}
+
+function showPreview(shape, topR, topC, ok) {
+    clearPreview();
+    const cells = boardEl.children;
+    shape.forEach((row, r) => {
+        row.forEach((v, c) => {
+            if (!v) return;
+            const br = topR + r, bc = topC + c;
+            if (br < 0 || br >= SIZE || bc < 0 || bc >= SIZE) return;
+            cells[br * SIZE + bc].classList.add(ok ? 'preview-ok' : 'preview-bad');
+        });
+    });
+}
+
+function startDrag(e, slotIndex) {
+    const piece = tray[slotIndex];
+    if (!piece) return;
+    e.preventDefault();
+    const slotEl = e.currentTarget;
+    slotEl.classList.add('dragging');
+    dragging = { slotIndex, piece, pointerId: e.pointerId, anchorR: null, anchorC: null, valid: false };
+
+    const cols = piece.shape[0].length;
+    const rows = piece.shape.length;
+    const { cellSize, gap } = getBoardMetrics();
+    ghostEl.style.gridTemplateColumns = `repeat(${cols}, ${cellSize}px)`;
+    ghostEl.style.gap = `${gap}px`;
+    ghostEl.innerHTML = '';
+    piece.shape.forEach(row => {
+        row.forEach(v => {
+            const pc = document.createElement('div');
+            pc.className = 'piece-cell' + (v ? '' : ' empty');
+            pc.style.width = `${cellSize}px`;
+            pc.style.height = `${cellSize}px`;
+            if (v) pc.style.background = piece.color;
+            ghostEl.appendChild(pc);
+        });
+    });
+    dragging.rows = rows;
+    dragging.cols = cols;
+    dragging.cellSize = cellSize;
+    dragging.gap = gap;
+
+    moveGhost(e.clientX, e.clientY);
+    window.addEventListener('pointermove', onDragMove);
+    window.addEventListener('pointerup', onDragEnd);
+}
+
+function moveGhost(clientX, clientY) {
+    const { cellSize, gap, cols, rows } = dragging;
+    const w = cols * cellSize + (cols - 1) * gap;
+    const h = rows * cellSize + (rows - 1) * gap;
+    const left = clientX - w / 2;
+    const top = clientY - h - 24;
+    ghostEl.style.left = `${left}px`;
+    ghostEl.style.top = `${top}px`;
+
+    const { r, c } = boardRectCell(left, top);
+    dragging.anchorR = r;
+    dragging.anchorC = c;
+    dragging.valid = canPlace(dragging.piece.shape, r, c);
+    showPreview(dragging.piece.shape, r, c, dragging.valid);
+}
+
+function onDragMove(e) {
+    if (!dragging) return;
+    moveGhost(e.clientX, e.clientY);
+}
+
+function onDragEnd(e) {
+    if (!dragging) return;
+    window.removeEventListener('pointermove', onDragMove);
+    window.removeEventListener('pointerup', onDragEnd);
+    clearPreview();
+    const slots = trayEl.querySelectorAll('.piece-slot');
+    if (slots[dragging.slotIndex]) slots[dragging.slotIndex].classList.remove('dragging');
+
+    if (dragging.valid) {
+        placePiece(dragging.slotIndex, dragging.anchorR, dragging.anchorC);
+    }
+    ghostEl.innerHTML = '';
+    dragging = null;
+}
+
+document.getElementById('back-to-didis').addEventListener('click', () => {
+    window.top.location.href = 'didis-games.html';
+});
+
+document.getElementById('htp-btn').addEventListener('click', () => {
+    document.getElementById('htp-overlay').classList.add('show');
+});
+document.getElementById('htp-close').addEventListener('click', () => {
+    document.getElementById('htp-overlay').classList.remove('show');
+});
+
+document.getElementById('restart-btn').addEventListener('click', resetGame);
+document.getElementById('overlay-restart').addEventListener('click', resetGame);
+
+buildBoard();
+resetGame();
+</script>
+
+</body>
+</html>

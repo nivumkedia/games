@@ -72,6 +72,44 @@
     z-index: 10;
   }
   .topbar h2 { font-size: 1.15rem; color: #1c5d8a; }
+  .coin-badge {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: #fff6da;
+    color: #9a7300;
+    border: 1px solid #f0dfa0;
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-weight: 700;
+    font-size: 0.95rem;
+  }
+
+  .shop-game-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 18px;
+    margin-bottom: 14px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+  }
+  .shop-game-title { font-weight: 700; font-size: 1.1rem; color: #22303f; margin-bottom: 12px; }
+  .shop-tier-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .shop-tier-btn {
+    flex: 1;
+    min-width: 140px;
+    background: #eaf4ff;
+    border: 1px solid #cfe6f9;
+    border-radius: 12px;
+    padding: 12px 10px;
+    text-align: center;
+    cursor: pointer;
+    font-weight: 700;
+    color: #1c5d8a;
+  }
+  .shop-tier-btn:hover { background: #d7e9fb; }
+  .shop-tier-btn .price { display: block; font-size: 1.1rem; margin-bottom: 2px; }
+  .shop-tier-btn .desc { display: block; font-size: 0.75rem; font-weight: 600; color: #5a7184; }
+
   .back-btn {
     background: #fff;
     border: 1px solid #d7e3ec;
@@ -147,25 +185,30 @@
   .week-day {
     flex: 1;
     text-align: center;
-    padding: 12px 4px;
+    padding: 10px 4px;
     border-radius: 12px;
     border: 1px solid #eef3f7;
     background: #fbfdff;
+  }
+  .week-day .dow { font-size: 0.7rem; color: #7a8ea1; text-transform: uppercase; font-weight: 700; }
+  .week-day .num { font-weight: 700; font-size: 1.05rem; margin: 2px 0 8px; color: #22303f; }
+  .week-day.today { border-color: #2e86c1; border-width: 2px; }
+
+  .week-slots { display: flex; flex-direction: column; gap: 4px; }
+  .week-slot {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 5px 2px;
+    border-radius: 6px;
+    border: 1px solid #eef3f7;
+    background: #fff;
+    color: #7a8ea1;
     pointer-events: none;
     cursor: default;
   }
-  .week-day .dow { font-size: 0.7rem; color: #7a8ea1; text-transform: uppercase; font-weight: 700; }
-  .week-day .num { font-weight: 700; font-size: 1.15rem; margin-top: 4px; color: #22303f; }
-  .week-day .check { font-size: 1.1rem; color: #219150; margin-top: 4px; }
-  .week-day.today {
-    border-color: #2e86c1;
-    border-width: 2px;
-    pointer-events: auto;
-    cursor: pointer;
-  }
-  .week-day.today:hover { background: #eaf4ff; }
-  .week-day.done { background: #e5f7ec; border-color: #6fcf97; }
-  .week-day.today.done:hover { background: #d7f0e1; }
+  .week-slot.clickable { pointer-events: auto; cursor: pointer; }
+  .week-slot.clickable:hover { border-color: #2e86c1; }
+  .week-slot.done { background: #e5f7ec; border-color: #6fcf97; color: #219150; }
 
   .btn {
     background: #2e86c1;
@@ -276,6 +319,7 @@
     <div class="card">
       <div class="row" style="justify-content:space-between;">
         <div><strong id="active-client-name"></strong></div>
+        <div class="coin-badge">🪙 <span id="client-coin-count">0</span></div>
       </div>
       <div style="margin-top:14px;">
         <label>Exercise</label>
@@ -288,6 +332,23 @@
       <div id="client-week-calendar" class="week-calendar"></div>
     </div>
 
+    <div class="card">
+      <button class="btn" onclick="openShop()">🪙 Shop</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== SHOP ===== -->
+<div id="shop-view" class="screen">
+  <div class="topbar">
+    <h2>Shop</h2>
+    <div class="coin-badge">🪙 <span id="shop-coin-count">0</span></div>
+    <button class="back-btn" onclick="showScreen('client-view')">← Back</button>
+  </div>
+  <div class="container">
+    <div id="shop-error" style="color:#e0563f; font-weight:600; margin-bottom:12px; display:none;"></div>
+    <div id="shop-game-list"></div>
   </div>
 </div>
 
@@ -316,6 +377,7 @@
 <div id="client-detail-view" class="screen">
   <div class="topbar">
     <h2 id="detail-client-name"></h2>
+    <div class="coin-badge">🪙 <span id="detail-coin-count">0</span></div>
     <button class="back-btn" onclick="showScreen('therapist-view'); renderTherapistView();">← Therapist</button>
   </div>
   <div class="container">
@@ -335,55 +397,13 @@
     </div>
 
     <div class="card">
-      <label>Parent contact</label>
-      <div class="row">
-        <input type="text" id="detail-phone" placeholder="Phone number (10 digits)">
-        <select id="detail-carrier"></select>
-      </div>
-      <div class="row" style="margin-top:8px;">
-        <button class="btn secondary" onclick="saveContact()">Save contact</button>
-        <button class="btn green" onclick="sendReminder()">Send reminder</button>
-        <span id="contact-note" style="font-weight:600; font-size:0.9rem; display:none;"></span>
-      </div>
-    </div>
-
-    <div class="card">
       <button class="btn danger" onclick="deleteActiveDetailClient()">Remove client</button>
     </div>
 
   </div>
 </div>
 
-<!--
-  Reminder texts are sent via EmailJS (emails an SMS-gateway address, which the
-  carrier delivers as a text). To activate:
-  1. Create a free account at https://www.emailjs.com and connect an email address.
-  2. Create an Email Service -> copy its Service ID into EMAILJS_SERVICE_ID below.
-  3. Create an Email Template with a {{to_email}} recipient and a {{message}} body
-     -> copy its Template ID into EMAILJS_TEMPLATE_ID below.
-  4. Copy your Public Key (Account -> General) into EMAILJS_PUBLIC_KEY below.
-  Until these are filled in, the Send reminder button will show a setup message.
--->
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script>
-const EMAILJS_PUBLIC_KEY = 'YOUR_PUBLIC_KEY';
-const EMAILJS_SERVICE_ID = 'YOUR_SERVICE_ID';
-const EMAILJS_TEMPLATE_ID = 'YOUR_TEMPLATE_ID';
-if (typeof emailjs !== 'undefined' && EMAILJS_PUBLIC_KEY !== 'YOUR_PUBLIC_KEY') {
-  emailjs.init(EMAILJS_PUBLIC_KEY);
-}
-
-const CARRIER_GATEWAYS = {
-  'Verizon': 'vtext.com',
-  'AT&T': 'txt.att.net',
-  'T-Mobile': 'tmomail.net',
-  'Sprint': 'messaging.sprintpcs.com',
-  'Boost Mobile': 'sms.myboostmobile.com',
-  'Cricket': 'sms.cricketwireless.net',
-  'US Cellular': 'email.uscc.net',
-  'Metro by T-Mobile': 'mymetropcs.com'
-};
-
 /* ===================== DATA ===================== */
 function loadClients() {
   return JSON.parse(localStorage.getItem('st_clients') || '[]');
@@ -431,6 +451,7 @@ function submitLogin() {
     activeClientId = client.id;
     showScreen('client-view');
     document.getElementById('active-client-name').textContent = client.name;
+    document.getElementById('client-coin-count').textContent = client.coins || 0;
     const exercises = clientExercises(client).filter(e => e.text.trim() !== '');
     const displayEl = document.getElementById('client-exercise-display');
     displayEl.innerHTML = '';
@@ -481,6 +502,12 @@ function getWeekDates(today) {
   return days;
 }
 
+const DAY_PARTS = [
+  { key: 'morning', label: 'Morning' },
+  { key: 'afternoon', label: 'Afternoon' },
+  { key: 'evening', label: 'Evening' }
+];
+
 function renderWeekCalendar(containerId, client, clickable) {
   const container = document.getElementById(containerId);
   container.innerHTML = '';
@@ -491,29 +518,132 @@ function renderWeekCalendar(containerId, client, clickable) {
   getWeekDates(today).forEach(d => {
     const key = dateKey(d);
     const isToday = key === todayKey;
-    const done = !!checkins[key];
+    const dayCheckins = checkins[key] || {};
 
     const cell = document.createElement('div');
-    cell.className = 'week-day' + (isToday ? ' today' : '') + (done ? ' done' : '');
-    cell.innerHTML = `<div class="dow">${DOW_LABELS[d.getDay()]}</div><div class="num">${d.getDate()}</div>${done ? '<div class="check">✓</div>' : ''}`;
+    cell.className = 'week-day' + (isToday ? ' today' : '');
 
-    if (clickable && isToday) {
-      cell.onclick = toggleTodayCheckin;
-    }
+    const header = document.createElement('div');
+    header.innerHTML = `<div class="dow">${DOW_LABELS[d.getDay()]}</div><div class="num">${d.getDate()}</div>`;
+    cell.appendChild(header);
+
+    const slots = document.createElement('div');
+    slots.className = 'week-slots';
+    DAY_PARTS.forEach(part => {
+      const done = !!dayCheckins[part.key];
+      const slot = document.createElement('div');
+      slot.className = 'week-slot' + (done ? ' done' : '') + (clickable && isToday ? ' clickable' : '');
+      slot.textContent = part.label;
+      if (clickable && isToday) {
+        slot.onclick = () => toggleTodayCheckin(part.key);
+      }
+      slots.appendChild(slot);
+    });
+    cell.appendChild(slots);
+
     container.appendChild(cell);
   });
 }
 
-function toggleTodayCheckin() {
+function toggleTodayCheckin(part) {
   if (!activeClientId) return;
   const clients = loadClients();
   const client = clients.find(c => c.id === activeClientId);
   if (!client) return;
   client.checkins = client.checkins || {};
   const key = dateKey(new Date());
-  client.checkins[key] = !client.checkins[key];
+  client.checkins[key] = client.checkins[key] || {};
+  const nowDone = !client.checkins[key][part];
+  client.checkins[key][part] = nowDone;
+  client.coins = (client.coins || 0) + (nowDone ? 1 : -1);
+  if (client.coins < 0) client.coins = 0;
   saveClients(clients);
   renderWeekCalendar('client-week-calendar', client, true);
+  document.getElementById('client-coin-count').textContent = client.coins;
+}
+
+/* ===================== SHOP ===================== */
+const DEFAULT_TIERS = [
+  { cost: 1, desc: 'One level' },
+  { cost: 3, desc: 'Until you die' },
+  { cost: 5, desc: '10 lives' }
+];
+
+const SHOP_GAMES = [
+  { name: 'Fortress Fury', path: 'games/fortress-fury.html', tiers: [
+      { cost: 1, desc: '5 waves' },
+      { cost: 3, desc: '20 waves' },
+      { cost: 5, desc: 'Until you die' }
+    ] },
+  { name: 'Sky Vaulter', path: 'games/sky-vaulter.html', tiers: DEFAULT_TIERS },
+  { name: 'Platformer Adventure', path: 'games/platformer-adventure.html', tiers: DEFAULT_TIERS },
+  { name: 'Mystic Forge', path: 'games/mystic-forge.html', tiers: [
+      { cost: 1, desc: '5 combine tries' },
+      { cost: 3, desc: '5 new discoveries' },
+      { cost: 5, desc: 'Unlimited' }
+    ] },
+  { name: 'Lemon Tycoon', path: 'games/lemon-tycoon.html', tiers: DEFAULT_TIERS },
+  { name: 'Nitro Blaze', path: 'games/nitro-blaze.html', tiers: DEFAULT_TIERS },
+  { name: 'Monster Escape', path: 'games/monster-escape.html', tiers: DEFAULT_TIERS },
+  { name: 'Block Blast', path: 'games/block-blast.html', tiers: DEFAULT_TIERS }
+];
+
+function openShop() {
+  showScreen('shop-view');
+  document.getElementById('shop-error').style.display = 'none';
+  renderShop();
+}
+
+function renderShop() {
+  const client = loadClients().find(c => c.id === activeClientId);
+  if (!client) return;
+  document.getElementById('shop-coin-count').textContent = client.coins || 0;
+
+  const listEl = document.getElementById('shop-game-list');
+  listEl.innerHTML = '';
+  SHOP_GAMES.forEach(game => {
+    const card = document.createElement('div');
+    card.className = 'shop-game-card';
+
+    const title = document.createElement('div');
+    title.className = 'shop-game-title';
+    title.textContent = game.name;
+    card.appendChild(title);
+
+    const row = document.createElement('div');
+    row.className = 'shop-tier-row';
+    game.tiers.forEach(tier => {
+      const btn = document.createElement('div');
+      btn.className = 'shop-tier-btn';
+      btn.innerHTML = `<span class="price">${tier.cost} 🪙</span><span class="desc">${tier.desc}</span>`;
+      btn.onclick = () => buyPlay(game, tier);
+      row.appendChild(btn);
+    });
+    card.appendChild(row);
+
+    listEl.appendChild(card);
+  });
+}
+
+function buyPlay(game, tier) {
+  const clients = loadClients();
+  const client = clients.find(c => c.id === activeClientId);
+  if (!client) return;
+
+  const coins = client.coins || 0;
+  const errorEl = document.getElementById('shop-error');
+  if (coins < tier.cost) {
+    errorEl.textContent = `Not enough coins — ${game.name} (${tier.desc}) costs ${tier.cost} 🪙, you have ${coins}.`;
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  client.coins = coins - tier.cost;
+  saveClients(clients);
+  errorEl.style.display = 'none';
+  renderShop();
+
+  window.open(`${game.path}?shopTier=${tier.cost}`, '_blank');
 }
 
 /* ===================== THERAPIST FLOW ===================== */
@@ -589,69 +719,10 @@ function renderClientDetail(clientId) {
   const client = clients.find(c => c.id === clientId);
   if (!client) { showScreen('therapist-view'); renderTherapistView(); return; }
   document.getElementById('detail-client-name').textContent = client.name;
+  document.getElementById('detail-coin-count').textContent = client.coins || 0;
   renderExerciseBoxes(clientExercises(client));
   document.getElementById('exercise-saved-note').style.display = 'none';
   renderWeekCalendar('detail-week-calendar', client, false);
-
-  const carrierSelect = document.getElementById('detail-carrier');
-  carrierSelect.innerHTML = '';
-  Object.keys(CARRIER_GATEWAYS).forEach(name => {
-    const opt = document.createElement('option');
-    opt.value = name;
-    opt.textContent = name;
-    carrierSelect.appendChild(opt);
-  });
-  document.getElementById('detail-phone').value = client.phone || '';
-  if (client.carrier) carrierSelect.value = client.carrier;
-  document.getElementById('contact-note').style.display = 'none';
-}
-
-function saveContact() {
-  if (!activeDetailClientId) return;
-  const clients = loadClients();
-  const client = clients.find(c => c.id === activeDetailClientId);
-  if (!client) return;
-  client.phone = document.getElementById('detail-phone').value.trim();
-  client.carrier = document.getElementById('detail-carrier').value;
-  saveClients(clients);
-  showContactNote('Contact saved ✓', '#219150');
-}
-
-function showContactNote(text, color) {
-  const note = document.getElementById('contact-note');
-  note.textContent = text;
-  note.style.color = color;
-  note.style.display = 'inline';
-  clearTimeout(showContactNote._timer);
-  showContactNote._timer = setTimeout(() => { note.style.display = 'none'; }, 3000);
-}
-
-function sendReminder() {
-  if (!activeDetailClientId) return;
-  const clients = loadClients();
-  const client = clients.find(c => c.id === activeDetailClientId);
-  if (!client) return;
-
-  const phone = document.getElementById('detail-phone').value.trim().replace(/\D/g, '');
-  const carrier = document.getElementById('detail-carrier').value;
-  if (phone.length !== 10) {
-    showContactNote('Enter a valid 10-digit phone number first.', '#e0563f');
-    return;
-  }
-
-  const gateway = CARRIER_GATEWAYS[carrier];
-  const toEmail = `${phone}@${gateway}`;
-  const message = `Speech Homework reminder: ${client.name} hasn't checked in today. Please complete today's exercise!`;
-
-  if (typeof emailjs === 'undefined' || EMAILJS_PUBLIC_KEY === 'YOUR_PUBLIC_KEY') {
-    showContactNote('EmailJS not set up yet — see the comment near the top of the file.', '#e0563f');
-    return;
-  }
-
-  showContactNote('Sending...', '#7a8ea1');
-  emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, { to_email: toEmail, message })
-    .then(() => showContactNote('Reminder sent ✓', '#219150'))
-    .catch(err => showContactNote('Failed to send: ' + (err && err.text ? err.text : err), '#e0563f'));
 }
 
 function clientExercises(client) {
