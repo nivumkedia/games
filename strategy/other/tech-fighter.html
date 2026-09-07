@@ -122,25 +122,51 @@
     // Everything below is driven by continuous curves over t (0..1), not hard
     // zone cutoffs, so one stage eases into the next instead of snapping.
     const GROUND_Y = 440;
-    const NUM_BUILDINGS = 90;
+    const NUM_BUILDINGS = 200;
     function smoothstep(a, b, t){
         const x = Math.max(0, Math.min(1, (t - a) / (b - a)));
         return x * x * (3 - 2 * x);
     }
     const NEON_COLORS = ['#ff2fd6', '#38f2ff', '#b060ff', '#3dffb0'];
 
+    // physics constants, declared here (not just near the player) because the
+    // generator below uses them to guarantee every rooftop-to-rooftop gap is
+    // actually jumpable
+    const GRAVITY = 1500;
+    const MOVE_SPEED = 260;
+    const JUMP_VEL = -620;
+    const JUMP_SPEED = -JUMP_VEL; // positive magnitude
+    const MAX_JUMP_RISE = (JUMP_SPEED * JUMP_SPEED) / (2 * GRAVITY); // highest a jump can climb
+    const SAFE_RISE_CAP = MAX_JUMP_RISE * 0.7; // leave real margin, not a frame-perfect jump
+
+    // time in the air needed to clear a given change in rooftop height
+    // (riseNeeded > 0 = climbing to a taller roof, < 0 = dropping to a lower one)
+    function timeToClearRise(riseNeeded){
+        if (riseNeeded >= 0){
+            const disc = JUMP_SPEED * JUMP_SPEED - 2 * GRAVITY * riseNeeded;
+            if (disc < 0) return null; // physically unreachable
+            // landing only registers while falling (past the jump's apex), so
+            // we need the LATER time the arc crosses that height, not the
+            // first (ascending) crossing
+            return (JUMP_SPEED + Math.sqrt(disc)) / GRAVITY;
+        }
+        const fall = -riseNeeded;
+        return (JUMP_SPEED + Math.sqrt(JUMP_SPEED * JUMP_SPEED + 2 * GRAVITY * fall)) / GRAVITY;
+    }
+
     // how "developed" the city is at this point (0 = sleepy suburb, 1 = full skyline)
-    function densityForT(t){ return smoothstep(0.06, 0.62, t); }
-    // how far into the neon/cyberpunk era we are (only ramps up late)
-    function cyberForT(t){ return smoothstep(0.60, 0.97, t); }
+    function densityForT(t){ return smoothstep(0.05, 0.48, t); }
+    // how far into the neon/cyberpunk era we are (only ramps up late, but with
+    // a long runway afterward to actually be in it)
+    function cyberForT(t){ return smoothstep(0.42, 0.78, t); }
 
     function styleWeights(t){
         return {
-            house:   Math.max(0, 1 - smoothstep(0.10, 0.30, t)),
-            brick:   smoothstep(0.10, 0.30, t) * Math.max(0, 1 - smoothstep(0.55, 0.85, t)),
-            glass:   smoothstep(0.14, 0.36, t),
-            stepped: smoothstep(0.38, 0.64, t),
-            spire:   smoothstep(0.44, 0.70, t)
+            house:   Math.max(0, 1 - smoothstep(0.08, 0.24, t)),
+            brick:   smoothstep(0.08, 0.24, t) * Math.max(0, 1 - smoothstep(0.45, 0.68, t)),
+            glass:   smoothstep(0.11, 0.28, t),
+            stepped: smoothstep(0.30, 0.50, t),
+            spire:   smoothstep(0.34, 0.55, t)
         };
     }
     function pickStyle(t){
@@ -154,32 +180,88 @@
         return 'glassTower';
     }
 
-    const buildings = [];
+    // rooftop gadgets get more elaborate the further into the city you are
+    function pickGadget(density, cyber){
+        const r = rand();
+        if (cyber > 0.3 && r < 0.16) return 'helipad';
+        if (r < 0.16 + 0.22) return 'dish';
+        if (density > 0.2 && r < 0.16 + 0.22 + 0.26) return 'vents';
+        if (r < 0.16 + 0.22 + 0.26 + 0.2) return 'antenna';
+        return 'none';
+    }
+
+    // pass 1: decide every building's size/height/style first, with each
+    // height rate-limited relative to the one before it — always jumpable
+    const meta = [];
     {
-        let x = -200;
+        let prevHeight = null;
         for (let i = 0; i < NUM_BUILDINGS; i++){
             const t = i / (NUM_BUILDINGS - 1);
             const density = densityForT(t);
             const cyber = cyberForT(t);
 
             const width = randRange(lerp(150, 95, density), lerp(230, 190, density));
-            const minH = lerp(50, 140, density);
-            const maxH = lerp(110, 640, Math.pow(density, 1.25));
-            const height = randRange(minH, maxH);
-            const style = pickStyle(t);
+            const minH = lerp(50, 160, density);
+            const maxH = lerp(110, 980, Math.pow(density, 1.2));
 
-            const gap = randRange(55, 75) + density * randRange(50, 120);
-            buildings.push({
-                x, width,
-                y: GROUND_Y - height,
-                height,
-                t, density, cyber,
-                style,
-                neon: rand() < cyber,
+            let height;
+            if (prevHeight === null){
+                height = randRange(minH, maxH);
+            } else {
+                // aim for a height inside the current envelope, but always move
+                // toward it at a rate that's provably jumpable — climbing is
+                // hard-capped under the max jump height, dropping is freer.
+                const target = randRange(minH, maxH);
+                let riseNeeded = target - prevHeight;
+                riseNeeded = Math.max(-260, Math.min(SAFE_RISE_CAP, riseNeeded));
+                height = prevHeight + riseNeeded;
+            }
+            prevHeight = height;
+
+            const neonNow = rand() < cyber;
+            meta.push({
+                width, height, t, density, cyber,
+                style: pickStyle(t),
+                neon: neonNow,
                 neonColor: NEON_COLORS[Math.floor(rand() * NEON_COLORS.length)],
-                seedTint: rand()
+                seedTint: rand(),
+                gadget: pickGadget(density, cyber),
+                searchlight: neonNow && height > 420 && rand() < 0.22
             });
-            x += width + gap;
+        }
+    }
+
+    // pass 2: lay the buildings out left to right, sizing each gap from the
+    // ACTUAL height change to the next building (this is the step that
+    // guarantees every gap is really jumpable — pass 1 only guaranteed the
+    // rise is small enough, this is what turns that into a safe distance)
+    const buildings = [];
+    {
+        let x = -200;
+        for (let i = 0; i < meta.length; i++){
+            const m = meta[i];
+            buildings.push({
+                x, width: m.width,
+                y: GROUND_Y - m.height,
+                height: m.height,
+                t: m.t, density: m.density, cyber: m.cyber,
+                style: m.style, neon: m.neon, neonColor: m.neonColor, seedTint: m.seedTint,
+                gadget: m.gadget, searchlight: m.searchlight
+            });
+
+            let gap;
+            if (i + 1 < meta.length){
+                const riseNeeded = meta[i + 1].height - m.height;
+                const airTime = timeToClearRise(riseNeeded);
+                const maxDist = airTime ? MOVE_SPEED * airTime : 40;
+                // stay well inside maxDist (never past 78% of it) so even the
+                // steepest allowed climb — where maxDist itself is smallest —
+                // still leaves real margin
+                gap = Math.max(20, Math.min(maxDist * randRange(0.5, 0.78), 260));
+            } else {
+                gap = 60;
+            }
+            x += m.width + gap;
         }
     }
     const WORLD_LENGTH = buildings[buildings.length - 1].x + buildings[buildings.length - 1].width + 200;
@@ -202,9 +284,6 @@
         runPhase: 0,
         coyote: 0
     };
-    const GRAVITY = 1500;
-    const MOVE_SPEED = 260;
-    const JUMP_VEL = -620;
     const COYOTE_TIME = 0.09;
 
     const keys = {};
@@ -339,6 +418,65 @@
         return Math.max(0, Math.min(1, camera.x / WORLD_LENGTH));
     }
 
+    // small glowing motes drifting slowly upward through the skyline — tiled
+    // deterministically off camera.x so they stay put as you scroll instead
+    // of swimming around
+    function drawAmbientParticles(p){
+        const intensity = smoothstep(0.35, 0.7, p);
+        if (intensity <= 0) return;
+        ctx.save();
+        const cellW = 90;
+        const colors = ['#ff2fd6', '#38f2ff', '#b060ff', '#3dffb0'];
+        for (let x = -cellW; x < W + cellW; x += cellW){
+            const worldCol = Math.floor((x + camera.x) / cellW);
+            const rx = ((worldCol * 928371 + 12345) % 1000) / 1000;
+            const rSpeed = 14 + rx * 22;
+            const baseY = 120 + ((worldCol * 55731) % 240);
+            const drift = ((gameTime * rSpeed + rx * 300) % 260);
+            const py = GROUND_Y - 40 - drift;
+            const localX = x - ((camera.x) % cellW) + (rx - 0.5) * 40;
+            const twinkle = 0.35 + 0.4 * Math.abs(Math.sin(gameTime * 2 + worldCol));
+            ctx.globalAlpha = intensity * twinkle * (1 - drift / 280);
+            ctx.fillStyle = colors[Math.abs(worldCol) % colors.length];
+            ctx.shadowColor = ctx.fillStyle;
+            ctx.shadowBlur = 6;
+            ctx.beginPath();
+            ctx.arc(localX, py, 1.6, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+
+    // a couple of distant aircraft/drones drifting across the skyline with
+    // blinking nav lights — genuine motion, not just a pulsing glow
+    function drawSkyTraffic(p){
+        const intensity = smoothstep(0.4, 0.75, p);
+        if (intensity <= 0) return;
+        for (let lane = 0; lane < 2; lane++){
+            const speed = lane === 0 ? 26 : -19;
+            const laneY = 70 + lane * 46;
+            const cycle = 2600;
+            const worldX = ((gameTime * speed * 10) % cycle + cycle) % cycle;
+            const sx = (worldX - camera.x * 0.5) % (W + 300) - 150;
+            const blink = Math.sin(gameTime * 6 + lane * 3) > 0.6;
+            ctx.save();
+            ctx.globalAlpha = intensity;
+            ctx.fillStyle = '#1c2430';
+            ctx.beginPath();
+            ctx.ellipse(sx, laneY, 10, 3.2, 0, 0, Math.PI * 2);
+            ctx.fill();
+            if (blink){
+                ctx.fillStyle = lane === 0 ? '#ff5a5a' : '#38f2ff';
+                ctx.shadowColor = ctx.fillStyle;
+                ctx.shadowBlur = 6;
+                ctx.beginPath();
+                ctx.arc(sx + (speed > 0 ? 9 : -9), laneY, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+    }
+
     function drawBackground(){
         const p = currentProgress();
         const skyTop = multiLerp(SKY_TOP_STOPS, p);
@@ -404,6 +542,13 @@
             ctx.restore();
         }
 
+        // drifting ambient light particles + a couple of blinking flying craft,
+        // once there's enough neon around for them to make sense
+        if (p > 0.35){
+            drawAmbientParticles(p);
+            drawSkyTraffic(p);
+        }
+
         // ground strip
         ctx.fillStyle = rgb(multiLerp(GROUND_STOPS, p));
         ctx.fillRect(0, GROUND_Y - camera.y, W, H - (GROUND_Y - camera.y));
@@ -442,11 +587,13 @@
         }
     }
 
-    function drawNeonTrim(sx, sy, w, h, color){
+    function drawNeonTrim(sx, sy, w, h, color, phase){
+        const pulse = 0.75 + 0.25 * Math.sin(gameTime * 2.4 + (phase || 0) * 6.283);
         ctx.save();
+        ctx.globalAlpha = pulse;
         ctx.strokeStyle = color;
         ctx.shadowColor = color;
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = 7 + pulse * 6;
         ctx.lineWidth = 2.5;
         ctx.beginPath();
         ctx.moveTo(sx, sy + h);
@@ -458,19 +605,108 @@
         ctx.restore();
     }
 
-    function drawHolographicSign(sx, sy, w, color){
+    function drawHolographicSign(sx, sy, w, color, phase){
+        const pulse = 0.7 + 0.3 * Math.sin(gameTime * 1.8 + (phase || 0) * 6.283);
         ctx.save();
         const signW = Math.min(w * 0.7, 46);
-        const signH = 16;
         const px = sx + w / 2 - signW / 2;
         const py = sy + 14;
-        ctx.globalAlpha = 0.75;
+        ctx.globalAlpha = 0.75 * pulse;
         ctx.fillStyle = color;
         ctx.shadowColor = color;
-        ctx.shadowBlur = 12;
+        ctx.shadowBlur = 10 + pulse * 8;
         ctx.fillRect(px, py, signW, 4);
         ctx.fillRect(px, py + 6, signW * 0.6, 4);
         ctx.fillRect(px, py + 12, signW * 0.8, 4);
+        ctx.restore();
+    }
+
+    // rooftop gadgets: dishes, vent stacks, helipads — variety beyond the
+    // per-style decorations already baked into each tower type
+    function drawRooftopGadget(b, sx, sy){
+        if (b.gadget === 'none') return;
+        const cx = sx + b.width * 0.5;
+        if (b.gadget === 'dish'){
+            ctx.save();
+            ctx.translate(sx + b.width * 0.28, sy - 14);
+            ctx.rotate(-0.5);
+            ctx.fillStyle = '#c7d0d6';
+            ctx.beginPath();
+            ctx.arc(0, 0, 8, 0, Math.PI, true);
+            ctx.fill();
+            ctx.strokeStyle = '#8fa0ab';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(0, -3);
+            ctx.lineTo(0, -12);
+            ctx.stroke();
+            ctx.restore();
+        } else if (b.gadget === 'vents'){
+            ctx.fillStyle = '#4a5560';
+            for (let i = 0; i < 3; i++){
+                const vx = sx + b.width * (0.2 + i * 0.22);
+                ctx.fillRect(vx, sy - 14, 7, 12);
+                const glowA = 0.35 + 0.25 * Math.sin(gameTime * 3 + i + b.seedTint * 6);
+                ctx.save();
+                ctx.globalAlpha = glowA;
+                ctx.fillStyle = '#ff8a3d';
+                ctx.fillRect(vx + 1, sy - 13, 5, 2);
+                ctx.restore();
+                ctx.fillStyle = '#4a5560';
+            }
+        } else if (b.gadget === 'helipad'){
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(cx, sy - 12, 14, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = 'rgba(255,255,255,0.55)';
+            ctx.font = 'bold 12px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('H', cx, sy - 8);
+            const ringPulse = 0.3 + 0.5 * Math.abs(Math.sin(gameTime * 1.6 + b.seedTint * 6));
+            ctx.strokeStyle = `rgba(255,60,220,${ringPulse})`;
+            ctx.shadowColor = '#ff2fd6';
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            ctx.arc(cx, sy - 12, 16, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        } else if (b.gadget === 'antenna'){
+            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(cx, sy - 4);
+            ctx.lineTo(cx, sy - 22);
+            ctx.stroke();
+            ctx.fillStyle = '#ff5a5a';
+            ctx.beginPath();
+            ctx.arc(cx, sy - 24, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    // rotating searchlight beam sweeping from a rooftop
+    function drawSearchlight(b, sx, sy){
+        const angle = -Math.PI / 2 + Math.sin(gameTime * 0.35 + b.seedTint * 6.283) * 0.9;
+        const len = 420;
+        const spread = 0.16;
+        const ex1 = sx + b.width * 0.5 + Math.cos(angle - spread) * len;
+        const ey1 = sy + Math.sin(angle - spread) * len;
+        const ex2 = sx + b.width * 0.5 + Math.cos(angle + spread) * len;
+        const ey2 = sy + Math.sin(angle + spread) * len;
+        ctx.save();
+        const g = ctx.createLinearGradient(sx + b.width * 0.5, sy, (ex1 + ex2) / 2, (ey1 + ey2) / 2);
+        g.addColorStop(0, 'rgba(255,80,220,0.28)');
+        g.addColorStop(1, 'rgba(255,80,220,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(sx + b.width * 0.5, sy);
+        ctx.lineTo(ex1, ey1);
+        ctx.lineTo(ex2, ey2);
+        ctx.closePath();
+        ctx.fill();
         ctx.restore();
     }
 
@@ -510,8 +746,10 @@
             ctx.fillRect(sx - 2, sy - 3, b.width + 4, 3);
             ctx.fillStyle = '#5b6b78';
             ctx.fillRect(sx + b.width * 0.15, sy - 12, b.width * 0.22, 10);
-            if (b.neon) drawNeonTrim(sx, sy, b.width, fullH, b.neonColor);
-            if (b.neon && b.height > 420) drawHolographicSign(sx, sy, b.width, b.neonColor);
+            if (b.neon) drawNeonTrim(sx, sy, b.width, fullH, b.neonColor, b.seedTint);
+            if (b.neon && b.height > 420) drawHolographicSign(sx, sy, b.width, b.neonColor, b.seedTint);
+            drawRooftopGadget(b, sx, sy);
+            if (b.searchlight) drawSearchlight(b, sx, sy - 12);
             return;
         }
 
@@ -532,7 +770,8 @@
             ctx.closePath();
             ctx.fill();
             ctx.fillRect(sx + b.width * 0.5 - 6, sy - 22, 12, 4);
-            if (b.neon) drawNeonTrim(sx, sy, b.width, fullH, b.neonColor);
+            if (b.neon) drawNeonTrim(sx, sy, b.width, fullH, b.neonColor, b.seedTint);
+            drawRooftopGadget(b, sx, sy);
             return;
         }
 
@@ -558,7 +797,7 @@
                 drawWindowGrid(tx, drawTy, tw, th, cols, rows, litColor, 0.15);
                 ctx.fillStyle = 'rgba(255,255,255,0.3)';
                 ctx.fillRect(tx - 1, drawTy - 2, tw + 2, 2);
-                if (b.neon) drawNeonTrim(tx, drawTy, tw, th, b.neonColor);
+                if (b.neon) drawNeonTrim(tx, drawTy, tw, th, b.neonColor, b.seedTint);
             }
             // rooftop antenna array
             ctx.strokeStyle = b.neon ? b.neonColor : 'rgba(255,255,255,0.5)';
@@ -583,7 +822,8 @@
             ctx.fillRect(bodyTx, bodyTy, bodyW, bodyH);
             const litColor = b.neon ? 'rgba(180,120,255,0.55)' : 'rgba(220,230,255,0.5)';
             drawWindowGrid(bodyTx, bodyTy, bodyW, bodyH, Math.max(2, Math.round(bodyW / 24)), Math.max(4, Math.round(bodyH / 26)), litColor, 0.15);
-            if (b.neon) drawNeonTrim(bodyTx, bodyTy, bodyW, bodyH, b.neonColor);
+            if (b.neon) drawNeonTrim(bodyTx, bodyTy, bodyW, bodyH, b.neonColor, b.seedTint);
+            if (b.searchlight) drawSearchlight(b, bodyTx, bodyTy - fullH * 0.15 - 26);
             // tapering spire
             ctx.fillStyle = rgb(wall.map(v => Math.max(0, v - 20)));
             ctx.beginPath();
@@ -734,9 +974,11 @@
     }
 
     let last = performance.now();
+    let gameTime = 0;
     function loop(now){
         const dt = Math.min(0.033, (now - last) / 1000);
         last = now;
+        gameTime += dt;
         update(dt);
         updateCamera();
         render();
