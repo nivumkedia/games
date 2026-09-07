@@ -60,6 +60,11 @@ h2{font-size:20px;color:#aaa;margin-bottom:30px;font-weight:normal;letter-spacin
 </div></div></div>
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script>
+// ===== SPEECH HOMEWORK SHOP TIERS =====
+// shopTier=1 -> one lap, shopTier=3 -> one lap in 3D mode, shopTier=5 or absent -> full race.
+const shopParams=new URLSearchParams(location.search);
+const shopTier=shopParams.get('shopTier');
+
 const canvas=document.getElementById('gameCanvas'),ctx=canvas.getContext('2d'),W=800,H=600;
 const canvas3D=document.getElementById('canvas3D');
 const TRACKS=[
@@ -94,7 +99,8 @@ laser:{color:'#ff2244',speedMult:0.35,spin:1,shape:'laser'}
 let touchSteerDir=0,touchGas=false,touchBrake=false;
 let trackDecorations=[],skidMarks=[];
 const CAR_COLORS=['#ff3333','#3399ff','#33cc33','#ffcc00','#ff66cc','#cc66ff'];
-const TOTAL_LAPS=3,NITRO_MAX=3,NITRO_RECHARGE_TIME=8000;
+let TOTAL_LAPS=(shopTier==='1'||shopTier==='3')?1:3;
+const NITRO_MAX=3,NITRO_RECHARGE_TIME=8000;
 var orbs=[],hazards=[],missiles=[],MAX_ORBS=18;
 var POWERUP_TYPES=[{name:'Boost',color:'#ff4444',icon:'\u{1F680}'},{name:'Shield',color:'#4488ff',icon:'\u{1F6E1}'},{name:'Banana',color:'#ffcc00',icon:'\u{1F34C}'},{name:'Lightning',color:'#ffff00',icon:'\u26A1'},{name:'Missile',color:'#33cc33',icon:'\u{1F3AF}'},{name:'Star',color:'#ff88ff',icon:'\u2B50'},{name:'Oil',color:'#9933ff',icon:'\u{1F6E2}'},{name:'Mega Boost',color:'#ff8800',icon:'\u{1F525}'},{name:'Ghost',color:'#88ffff',icon:'\u{1F47B}'},{name:'Bomb',color:'#ff0000',icon:'\u{1F4A3}'}];
 
@@ -219,6 +225,21 @@ document.getElementById('mode1P').addEventListener('click',function(){multiplaye
 document.getElementById('mode2P').addEventListener('click',function(){multiplayer=true;is3D=false;this.classList.add('active');document.getElementById('mode1P').classList.remove('active');document.getElementById('mode3D').classList.remove('active');document.getElementById('controlsHint').innerHTML='P1: WASD + Space + E &nbsp;\u2022&nbsp; P2: Arrows + Enter + /'});
 document.getElementById('mode3D').addEventListener('click',function(){multiplayer=false;is3D=true;this.classList.add('active');document.getElementById('mode1P').classList.remove('active');document.getElementById('mode2P').classList.remove('active');document.getElementById('controlsHint').textContent='WASD / Arrows to drive \u2022 Space = Nitro \u2022 E = Power-up \u2022 3D Chase Cam'});
 document.getElementById('startBtn').addEventListener('click',function(){menuScreen.style.display='none';resultsScreen.style.display='none';initRace(selectedTrack)});
+
+// ===== SPEECH HOMEWORK SHOP TIER LOCK =====
+if(shopTier==='1'){
+  document.getElementById('mode2P').disabled=true;
+  document.getElementById('mode3D').disabled=true;
+  document.getElementById('mode2P').style.opacity='0.4';
+  document.getElementById('mode3D').style.opacity='0.4';
+}else if(shopTier==='3'){
+  document.getElementById('mode3D').click();
+  document.getElementById('mode1P').disabled=true;
+  document.getElementById('mode2P').disabled=true;
+  document.getElementById('mode3D').disabled=true;
+  document.getElementById('mode1P').style.opacity='0.4';
+  document.getElementById('mode2P').style.opacity='0.4';
+}
 document.getElementById('replayBtn').addEventListener('click',function(){resultsScreen.style.display='none';initRace(selectedTrack)});
 document.getElementById('menuBtn').addEventListener('click',function(){resultsScreen.style.display='none';menuScreen.style.display='flex';state='menu'});
 function showResults(){var table=document.getElementById('resultsTable');table.innerHTML='';var sorted=[].concat(cars).sort(function(a,b){return a.finishPos-b.finishPos});sorted.forEach(function(car,i){var row=document.createElement('div'),pos=i+1,name=car.isPlayer2?'P2':car.isPlayer?'P1'+(multiplayer?'':''):'CAR '+cars.indexOf(car);if(!multiplayer&&car.isPlayer)name='YOU';var time=car.didNotFinish?'DNF':formatTime(car.totalTime);row.innerHTML='<span>'+pos+getOrdinal(pos)+' <span style="display:inline-block;width:12px;height:12px;background:'+car.color+';border-radius:2px;margin-right:8px;vertical-align:middle;"></span>'+name+'</span><span>'+time+'</span>';if(car.isPlayer&&!car.isPlayer2)row.style.color='#ff4444';if(car.isPlayer2)row.style.color='#3399ff';table.appendChild(row)});resultsScreen.style.display='flex'}

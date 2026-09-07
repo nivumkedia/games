@@ -89,7 +89,7 @@
     <canvas id="game" width="960" height="540"></canvas>
 </div>
 
-<div id="hud">Move: <b>Arrow Keys</b> &nbsp;·&nbsp; Jump: <b>SPACE / UP</b> &nbsp;·&nbsp; Fight: <b>Z</b> block, <b>X</b> counter, <b>A</b> slash, <b>S</b> flank</div>
+<div id="hud">Move: <b>Arrow Keys</b> &nbsp;·&nbsp; Jump: <b>SPACE / UP</b> &nbsp;·&nbsp; Fight: <b>Z</b> block, <b>X</b> counter, <b>A</b> slash, <b>S</b> flank, <b>Q</b> duck</div>
 <div id="progress-wrap">
     <div id="progress-label">City Progress</div>
     <div id="progress-bar-bg"><div id="progress-bar-fill"></div></div>
@@ -410,6 +410,26 @@
         });
     }
 
+    // 8. swinger — introduces Q. Every 1-3s it winds up a swing at your
+    // head; duck it with Q within 1s or it kills you. Duck it and you get
+    // 1.5s to finish it off with A.
+    {
+        const b = buildings[8];
+        enemies.push({
+            type: 'swinger',
+            x: b.x + b.width * 0.5 - 18,
+            y: b.y - 66,
+            w: 36, h: 66,
+            alive: true,
+            comboStep: 0,
+            hitFlash: 0,
+            deathTimer: 0,
+            swingState: 'idle',
+            swingTimer: randRange(1, 3),
+            swingStateTimer: 0
+        });
+    }
+
     // ---------- player: humanoid robot ----------
     const player = {
         x: buildings[7].x + 10,
@@ -432,7 +452,7 @@
         const k = e.key.toLowerCase();
         keys[k] = true;
         if ([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k)) e.preventDefault();
-        if (k === 'z' || k === 'x' || k === 'a' || k === 's') handleCombatKey(k);
+        if (k === 'z' || k === 'x' || k === 'a' || k === 's' || k === 'q') handleCombatKey(k);
     });
     window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 
@@ -447,9 +467,16 @@
         player.combatTimer = 0;
         // give any nearby enemy a fresh start rather than an unfair reset mid-attempt
         for (const e of enemies){
-            if (e.alive) e.comboStep = 0;
+            if (e.alive){
+                e.comboStep = 0;
+                e.pressedKeys = [];
+            }
             e.punishPose = null;
             e.punishLunge = 0;
+            if (e.type === 'swinger' && e.alive){
+                e.swingState = 'idle';
+                e.swingTimer = randRange(1, 3);
+            }
         }
         deathSequence = null;
         deathFlash = 0.3;
@@ -459,6 +486,9 @@
 
     // S doesn't exist as a move until you actually reach the flanker enemy
     let sUnlocked = false;
+    // Q doesn't exist as a move until you reach the swinger enemy
+    let qUnlocked = false;
+    const SWING_ENGAGE_RANGE = 220; // how close you need to be for its swing to threaten you
 
     // wrong key / wrong order -> the enemy blocks whatever you just tried,
     // then strikes you down. A brief, readable two-beat sequence instead of
@@ -504,6 +534,33 @@
                     e.walkPhase = (e.walkPhase || 0) + dt * 8;
                 }
             }
+
+            // swinger: a timed dodge fight. Every 1-3s it winds up a swing at
+            // your head; duck it with Q inside the 1s telegraph or it kills
+            // you. Duck it and you get 1.5s to finish it with A.
+            if (e.type === 'swinger' && e.alive){
+                if (e.swingState === 'idle'){
+                    e.swingTimer -= dt;
+                    if (e.swingTimer <= 0){
+                        e.swingState = 'telegraph';
+                        e.swingStateTimer = 1.0;
+                    }
+                } else if (e.swingState === 'telegraph'){
+                    e.swingStateTimer -= dt;
+                    if (e.swingStateTimer <= 0){
+                        e.swingState = 'idle';
+                        e.swingTimer = randRange(1, 3);
+                        spawnEffect(player.x + player.w / 2, player.y + player.h * 0.3, '#ff3030', 0.35);
+                        respawnPlayer();
+                    }
+                } else if (e.swingState === 'open'){
+                    e.swingStateTimer -= dt;
+                    if (e.swingStateTimer <= 0){
+                        e.swingState = 'idle';
+                        e.swingTimer = randRange(1, 3);
+                    }
+                }
+            }
         }
     }
 
@@ -519,9 +576,49 @@
     function handleCombatKey(k){
         if (deathSequence && deathSequence.phase) return; // mid punish sequence — no interrupting it
         if (k === 's' && !sUnlocked) return; // S doesn't exist yet
+        if (k === 'q' && !qUnlocked) return; // Q doesn't exist yet
+
+        // swinger enemies are a completely different mechanic — a timed
+        // dodge, not a key-order puzzle — so handle them before anything else
+        if (k === 'q' || k === 'a'){
+            for (const e of enemies){
+                if (!e.alive || e.type !== 'swinger') continue;
+                const dist = Math.hypot(
+                    (e.x + e.w / 2) - (player.x + player.w / 2),
+                    (e.y + e.h / 2) - (player.y + player.h / 2)
+                );
+                if (dist > SWING_ENGAGE_RANGE) continue;
+                if (k === 'q' && e.swingState === 'telegraph'){
+                    e.swingState = 'open';
+                    e.swingStateTimer = 1.5; // window to finish it off
+                    player.combatPose = 'duck';
+                    player.combatTimer = 0.4;
+                    spawnEffect(player.x + player.w / 2, player.y + player.h * 0.3, '#3dffb0', 0.3);
+                    return;
+                }
+                if (k === 'a' && e.swingState === 'open'){
+                    player.combatPose = 'kill';
+                    player.combatTimer = 0.35;
+                    e.alive = false;
+                    e.deathTimer = 0.5;
+                    e.deathParticles = [];
+                    for (let i = 0; i < 7; i++){
+                        const ang = (i / 7) * Math.PI * 2 + rand() * 0.6;
+                        e.deathParticles.push({
+                            vx: Math.cos(ang), vy: Math.sin(ang) - 0.4,
+                            color: i % 2 === 0 ? '#c9ccd0' : '#3dffb0',
+                            size: 3 + rand() * 3
+                        });
+                    }
+                    spawnEffect(e.x + e.w / 2, e.y + e.h * 0.45, '#ffffff', 0.3);
+                    return;
+                }
+            }
+        }
+
         let target = null, bestDist = Infinity;
         for (const e of enemies){
-            if (!e.alive) continue;
+            if (!e.alive || e.type === 'swinger') continue; // handled above, not the block-combo system
             const dx = (e.x + e.w / 2) - (player.x + player.w / 2);
             const dy = (e.y + e.h / 2) - (player.y + player.h / 2);
             const dist = Math.hypot(dx, dy);
@@ -648,6 +745,7 @@
         }
         if (deathFlash > 0) deathFlash = Math.max(0, deathFlash - dt);
         if (!sUnlocked && player.x >= buildings[5].x - 40) sUnlocked = true;
+        if (!qUnlocked && player.x >= buildings[8].x - 40) qUnlocked = true;
         updateEnemies(dt);
 
         if (deathSequence && deathSequence.phase){
@@ -1433,7 +1531,18 @@
         // with a motion trail while it's actually whipping back and forth
         let swingAngle;
         let glowOverride = null;
-        if (e.punishPose === 'block'){
+        if (e.type === 'swinger'){
+            if (e.swingState === 'telegraph'){
+                // raised high overhead, aimed at the player's head
+                swingAngle = -2.2;
+                glowOverride = '#ff3030';
+            } else if (e.swingState === 'open'){
+                swingAngle = 1.4; // recoiled wide open after missing
+                glowOverride = '#3dffb0';
+            } else {
+                swingAngle = Math.sin(gameTime * 1.5 + e.x * 0.01) * 0.4; // relaxed idle sway
+            }
+        } else if (e.punishPose === 'block'){
             swingAngle = -0.9; // raises its own blade to catch your wrong move
             glowOverride = '#ffdd55';
         } else if (e.punishPose === 'strike'){
@@ -1453,7 +1562,7 @@
         else swingAngle = 1.3;                              // forced back onto itself
 
         const isCounterAttack = e.type === 'duelist' && e.comboStep === 3;
-        if ((e.comboStep === 0 || isCounterAttack) && !e.punishPose){
+        if (e.type !== 'swinger' && (e.comboStep === 0 || isCounterAttack) && !e.punishPose){
             const trailSpeed = (isCharger || isCounterAttack) ? (isCounterAttack ? 3.2 : 2.6) : 7;
             const trailAmp = (isCharger || isCounterAttack) ? 1.4 : 0.9;
             for (const off of [0.22, 0.4]){
@@ -1536,7 +1645,8 @@
 
         ctx.save();
         ctx.translate(cx, cy);
-        ctx.scale(player.facing, 1);
+        if (player.combatPose === 'duck') ctx.translate(0, player.h * 0.18);
+        ctx.scale(player.facing, player.combatPose === 'duck' ? 0.7 : 1);
         if (player.combatPose === 'staggered') ctx.rotate(-0.12); // knocked off balance
         else if (player.combatPose === 'hit') ctx.rotate(0.22);   // reeling from the strike
 
