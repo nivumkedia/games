@@ -1137,6 +1137,8 @@
     .fb-pin-del { background: none; border: none; color: #7a9ab8; cursor: pointer; font-size: 13px; padding: 0; line-height: 1; flex-shrink: 0; }
     .fb-pin-del:hover { color: #e53935; }
     .fb-empty { font-size: 11px; color: #7a9ab8; text-align: center; padding: 6px 0; }
+    .fb-clear-all { background: none; border: 1px solid #2a3a4a; color: #7a9ab8; font-size: 11px; border-radius: 6px; padding: 4px 8px; cursor: pointer; margin-bottom: 6px; }
+    .fb-clear-all:hover { color: #e53935; border-color: #e53935; }
     .fb-input-row { display: flex; gap: 6px; }
     #fb-input {
         flex: 1; background: #162030; border: 1px solid #2a3a4a; border-radius: 7px;
@@ -1404,18 +1406,6 @@
                 ${game.tags.map(t => `<span class="game-tag">${t}</span>`).join(' ')}
                 <div class="play-overlay"><span class="play-btn-label">▶ Play</span></div>
             `;
-
-            // feedback badge
-            const fbData = JSON.parse(localStorage.getItem('playmerth_feedback') || '{}');
-            const pins = fbData[game.name] || [];
-            if (pins.length > 0) {
-                const btn = document.createElement('button');
-                btn.className = 'card-fb-btn';
-                btn.innerHTML = `📌 ${pins.length}`;
-                btn.title = 'View feedback';
-                btn.addEventListener('click', e => { e.stopPropagation(); showFeedbackView(game.name); });
-                card.appendChild(btn);
-            }
 
             grid.appendChild(card);
         });
@@ -2453,6 +2443,14 @@
         if (!game) { list.innerHTML = '<div class="fb-empty">Load a game first to pin feedback.</div>'; return; }
         const pins = load()[game] || [];
         if (!pins.length) { list.innerHTML = '<div class="fb-empty">No feedback yet — type something below!</div>'; return; }
+        const clearBtn = document.createElement('button');
+        clearBtn.className = 'fb-clear-all';
+        clearBtn.textContent = 'Clear all';
+        clearBtn.addEventListener('click', () => {
+            if (!confirm(`Delete all feedback for ${game}?`)) return;
+            const d = load(); d[game] = []; save(d); renderPins(game);
+        });
+        list.appendChild(clearBtn);
         [...pins].reverse().forEach((p, ri) => {
             const i = pins.length - 1 - ri;
             const row = document.createElement('div');

@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tech Fighter</title>
+<style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html, body {
+        height:100%;
+        background:#bfe4ff;
+        font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        overflow:hidden;
+    }
+    #wrap {
+        position:relative;
+        width:100vw;
+        height:100vh;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+    }
+    canvas {
+        display:block;
+        image-rendering:auto;
+        box-shadow:0 0 0 2px rgba(0,0,0,0.05);
+    }
+    #hud {
+        position:fixed;
+        top:14px;
+        left:14px;
+        background:rgba(255,255,255,0.85);
+        border:1px solid rgba(0,0,0,0.08);
+        border-radius:12px;
+        padding:10px 16px;
+        font-size:0.85em;
+        color:#2c3e50;
+        box-shadow:0 4px 14px rgba(0,0,0,0.08);
+    }
+    #hud b { color:#1565c0; }
+    #progress-wrap {
+        position:fixed;
+        top:14px;
+        right:14px;
+        width:220px;
+        background:rgba(255,255,255,0.85);
+        border:1px solid rgba(0,0,0,0.08);
+        border-radius:12px;
+        padding:10px 14px;
+        box-shadow:0 4px 14px rgba(0,0,0,0.08);
+    }
+    #progress-label {
+        font-size:0.72em;
+        font-weight:700;
+        letter-spacing:0.04em;
+        text-transform:uppercase;
+        color:#5b6b78;
+        margin-bottom:6px;
+    }
+    #progress-bar-bg {
+        width:100%;
+        height:8px;
+        border-radius:5px;
+        background:rgba(0,0,0,0.08);
+        overflow:hidden;
+    }
+    #progress-bar-fill {
+        height:100%;
+        width:0%;
+        border-radius:5px;
+        background:linear-gradient(90deg,#7cd992,#4fa3ff,#5b6b78);
+        transition:width 0.15s ease;
+    }
+    #title-badge {
+        position:fixed;
+        bottom:14px;
+        left:14px;
+        font-weight:800;
+        font-size:1.3em;
+        color:#1c2b39;
+        letter-spacing:0.02em;
+        text-shadow:0 2px 0 rgba(255,255,255,0.6);
+    }
+</style>
+</head>
+<body>
+
+<div id="wrap">
+    <canvas id="game" width="960" height="540"></canvas>
+</div>
+
+<div id="hud">Move: <b>Arrow Keys / WASD</b> &nbsp;·&nbsp; Jump: <b>SPACE / UP</b></div>
+<div id="progress-wrap">
+    <div id="progress-label">City Progress</div>
+    <div id="progress-bar-bg"><div id="progress-bar-fill"></div></div>
+</div>
+<div id="title-badge">TECH FIGHTER</div>
+
+<script>
+(function(){
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+
+    function fitCanvas(){
+        const scale = Math.min(window.innerWidth / W, window.innerHeight / H, 1.4);
+        canvas.style.width = (W * scale) + 'px';
+        canvas.style.height = (H * scale) + 'px';
+    }
+    window.addEventListener('resize', fitCanvas);
+    fitCanvas();
+
+    // ---------- seeded RNG so the city layout is stable across reloads ----------
+    let seed = 1337;
+    function rand(){
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+        return (seed % 10000) / 10000;
+    }
+    function randRange(a, b){ return a + rand() * (b - a); }
+
+    // ---------- world generation: suburban -> urban -> metropolis -> cyberpunk ----------
+    // Everything below is driven by continuous curves over t (0..1), not hard
+    // zone cutoffs, so one stage eases into the next instead of snapping.
+    const GROUND_Y = 440;
+    const NUM_BUILDINGS = 90;
+    function smoothstep(a, b, t){
+        const x = Math.max(0, Math.min(1, (t - a) / (b - a)));
+        return x * x * (3 - 2 * x);
+    }
+    const NEON_COLORS = ['#ff2fd6', '#38f2ff', '#b060ff', '#3dffb0'];
+
+    // how "developed" the city is at this point (0 = sleepy suburb, 1 = full skyline)
+    function densityForT(t){ return smoothstep(0.06, 0.62, t); }
+    // how far into the neon/cyberpunk era we are (only ramps up late)
+    function cyberForT(t){ return smoothstep(0.60, 0.97, t); }
+
+    function styleWeights(t){
+        return {
+            house:   Math.max(0, 1 - smoothstep(0.10, 0.30, t)),
+            brick:   smoothstep(0.10, 0.30, t) * Math.max(0, 1 - smoothstep(0.55, 0.85, t)),
+            glass:   smoothstep(0.14, 0.36, t),
+            stepped: smoothstep(0.38, 0.64, t),
+            spire:   smoothstep(0.44, 0.70, t)
+        };
+    }
+    function pickStyle(t){
+        const w = styleWeights(t);
+        const total = w.house + w.brick + w.glass + w.stepped + w.spire;
+        let roll = rand() * total;
+        for (const key of ['house', 'brick', 'glass', 'stepped', 'spire']){
+            roll -= w[key];
+            if (roll <= 0) return key === 'house' ? 'house' : key === 'brick' ? 'brickTower' : key === 'glass' ? 'glassTower' : key === 'stepped' ? 'steppedTower' : 'spireTower';
+        }
+        return 'glassTower';
+    }
+
+    const buildings = [];
+    {
+        let x = -200;
+        for (let i = 0; i < NUM_BUILDINGS; i++){
+            const t = i / (NUM_BUILDINGS - 1);
+            const density = densityForT(t);
+            const cyber = cyberForT(t);
+
+            const width = randRange(lerp(150, 95, density), lerp(230, 190, density));
+            const minH = lerp(50, 140, density);
+            const maxH = lerp(110, 640, Math.pow(density, 1.25));
+            const height = randRange(minH, maxH);
+            const style = pickStyle(t);
+
+            const gap = randRange(55, 75) + density * randRange(50, 120);
+            buildings.push({
+                x, width,
+                y: GROUND_Y - height,
+                height,
+                t, density, cyber,
+                style,
+                neon: rand() < cyber,
+                neonColor: NEON_COLORS[Math.floor(rand() * NEON_COLORS.length)],
+                seedTint: rand()
+            });
+            x += width + gap;
+        }
+    }
+    const WORLD_LENGTH = buildings[buildings.length - 1].x + buildings[buildings.length - 1].width + 200;
+
+    function buildingAt(px){
+        for (const b of buildings){
+            if (px >= b.x && px <= b.x + b.width) return b;
+        }
+        return null;
+    }
+
+    // ---------- player: humanoid robot ----------
+    const player = {
+        x: buildings[0].x + 40,
+        y: buildings[0].y - 60,
+        w: 30, h: 58,
+        vx: 0, vy: 0,
+        onGround: false,
+        facing: 1,
+        runPhase: 0,
+        coyote: 0
+    };
+    const GRAVITY = 1500;
+    const MOVE_SPEED = 260;
+    const JUMP_VEL = -620;
+    const COYOTE_TIME = 0.09;
+
+    const keys = {};
+    window.addEventListener('keydown', e => {
+        keys[e.key.toLowerCase()] = true;
+        if ([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(e.key.toLowerCase())) e.preventDefault();
+    });
+    window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+    let lastRespawnBuildingIdx = 0;
+
+    function update(dt){
+        // horizontal input
+        let dir = 0;
+        if (keys['arrowleft'] || keys['a']) dir -= 1;
+        if (keys['arrowright'] || keys['d']) dir += 1;
+        if (dir !== 0) player.facing = dir;
+        player.vx = dir * MOVE_SPEED;
+
+        // jump
+        const wantsJump = keys[' '] || keys['arrowup'] || keys['w'];
+        if (wantsJump && (player.onGround || player.coyote > 0)) {
+            player.vy = JUMP_VEL;
+            player.onGround = false;
+            player.coyote = 0;
+        }
+
+        // physics
+        player.vy += GRAVITY * dt;
+        player.x += player.vx * dt;
+        player.y += player.vy * dt;
+
+        // rooftop collision (landing only, moving downward)
+        player.onGround = false;
+        const feetX = player.x + player.w / 2;
+        const b = buildingAt(feetX);
+        if (b && player.vy >= 0){
+            const feetY = player.y + player.h;
+            if (feetY >= b.y && feetY - player.vy * dt <= b.y + 4){
+                player.y = b.y - player.h;
+                player.vy = 0;
+                player.onGround = true;
+                player.coyote = COYOTE_TIME;
+                lastRespawnBuildingIdx = buildings.indexOf(b);
+            }
+        }
+        if (!player.onGround) player.coyote = Math.max(0, player.coyote - dt);
+
+        // fell into a gap -> soft respawn on the last rooftop stood on
+        if (player.y > GROUND_Y + 300) {
+            const rb = buildings[lastRespawnBuildingIdx];
+            player.x = rb.x + rb.width / 2 - player.w / 2;
+            player.y = rb.y - player.h;
+            player.vx = 0; player.vy = 0;
+        }
+
+        // clamp to world
+        player.x = Math.max(-100, Math.min(WORLD_LENGTH + 100, player.x));
+
+        // run animation phase
+        if (player.onGround && dir !== 0) player.runPhase += dt * 10;
+        else if (player.onGround) player.runPhase = 0;
+
+        // progress bar
+        const progress = Math.max(0, Math.min(1, player.x / WORLD_LENGTH));
+        document.getElementById('progress-bar-fill').style.width = (progress * 100).toFixed(1) + '%';
+    }
+
+    // ---------- camera ----------
+    const camera = { x: 0, y: 0 };
+    function updateCamera(){
+        const targetX = player.x - W / 2;
+        const targetY = (player.y - H * 0.58);
+        camera.x += (targetX - camera.x) * 0.12;
+        camera.y += (Math.min(0, targetY) - camera.y) * 0.08;
+        camera.x = Math.max(-150, Math.min(WORLD_LENGTH - W + 150, camera.x));
+    }
+
+    // ---------- palette: suburban -> urban -> metropolis -> cyberpunk ----------
+    function lerp(a, b, t){ return a + (b - a) * t; }
+    function lerpColor(c1, c2, t){
+        return [
+            Math.round(lerp(c1[0], c2[0], t)),
+            Math.round(lerp(c1[1], c2[1], t)),
+            Math.round(lerp(c1[2], c2[2], t))
+        ];
+    }
+    function rgb(c, a){ return a === undefined ? `rgb(${c[0]},${c[1]},${c[2]})` : `rgba(${c[0]},${c[1]},${c[2]},${a})`; }
+    function multiLerp(stops, t){
+        if (t <= stops[0].t) return stops[0].c;
+        if (t >= stops[stops.length - 1].t) return stops[stops.length - 1].c;
+        for (let i = 0; i < stops.length - 1; i++){
+            if (t >= stops[i].t && t <= stops[i + 1].t){
+                const lt = (t - stops[i].t) / (stops[i + 1].t - stops[i].t);
+                return lerpColor(stops[i].c, stops[i + 1].c, lt);
+            }
+        }
+        return stops[stops.length - 1].c;
+    }
+
+    // stage stops: suburban(day) -> urban(hazy day) -> metropolis(dusk) -> cyberpunk(neon night)
+    const SKY_TOP_STOPS = [
+        { t: 0,    c: [140, 200, 245] },
+        { t: 0.26, c: [120, 160, 205] },
+        { t: 0.54, c: [90, 95, 150] },
+        { t: 0.80, c: [35, 25, 70] },
+        { t: 1,    c: [12, 8, 35] }
+    ];
+    const SKY_BOT_STOPS = [
+        { t: 0,    c: [225, 245, 250] },
+        { t: 0.26, c: [195, 205, 220] },
+        { t: 0.54, c: [235, 170, 140] },
+        { t: 0.80, c: [120, 60, 110] },
+        { t: 1,    c: [50, 20, 60] }
+    ];
+    const SKYLINE_STOPS = [
+        { t: 0,    c: [150, 205, 150] },
+        { t: 0.26, c: [120, 135, 150] },
+        { t: 0.54, c: [70, 75, 100] },
+        { t: 0.80, c: [40, 30, 60] },
+        { t: 1,    c: [20, 15, 35] }
+    ];
+    const GROUND_STOPS = [
+        { t: 0,    c: [120, 170, 110] },
+        { t: 0.26, c: [95, 100, 105] },
+        { t: 0.54, c: [65, 68, 75] },
+        { t: 0.80, c: [30, 28, 40] },
+        { t: 1,    c: [15, 12, 25] }
+    ];
+
+    function currentProgress(){
+        return Math.max(0, Math.min(1, camera.x / WORLD_LENGTH));
+    }
+
+    function drawBackground(){
+        const p = currentProgress();
+        const skyTop = multiLerp(SKY_TOP_STOPS, p);
+        const skyBot = multiLerp(SKY_BOT_STOPS, p);
+        const g = ctx.createLinearGradient(0, 0, 0, H);
+        g.addColorStop(0, rgb(skyTop));
+        g.addColorStop(1, rgb(skyBot));
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+
+        // sun by day, neon moon by night
+        ctx.save();
+        if (p < 0.7){
+            ctx.globalAlpha = 0.9 - p * 0.5;
+            ctx.fillStyle = '#fff6d8';
+            ctx.beginPath();
+            ctx.arc(W * 0.82, H * 0.18, 46, 0, Math.PI * 2);
+            ctx.fill();
+        } else {
+            const glowT = (p - 0.7) / 0.3;
+            ctx.globalAlpha = 0.5 + glowT * 0.4;
+            ctx.fillStyle = '#ff5fe0';
+            ctx.shadowColor = '#ff5fe0';
+            ctx.shadowBlur = 40;
+            ctx.beginPath();
+            ctx.arc(W * 0.8, H * 0.16, 34, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+        ctx.restore();
+
+        // distant skyline silhouette (denser + taller as the city grows)
+        const skylineColor = multiLerp(SKYLINE_STOPS, p);
+        ctx.fillStyle = rgb(skylineColor);
+        ctx.globalAlpha = 0.6;
+        const parX = -camera.x * 0.25;
+        const towerW = 46;
+        const baseY = GROUND_Y - 40;
+        ctx.beginPath();
+        ctx.moveTo(-200, baseY);
+        for (let x = -200; x < W + 200; x += towerW){
+            const n = Math.floor((x + parX) / towerW);
+            const h = 40 + Math.abs(Math.sin(n * 12.9898) * 43758.5453 % 1) * (60 + p * 170);
+            const localX = x - ((parX) % towerW);
+            ctx.lineTo(localX, baseY - h);
+            ctx.lineTo(localX + towerW, baseY - h);
+        }
+        ctx.lineTo(W + 200, baseY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // faint neon glow rising off the skyline once we're deep in cyberpunk territory
+        if (p > 0.78){
+            const glowA = ((p - 0.78) / 0.22) * 0.25;
+            ctx.save();
+            ctx.globalAlpha = glowA;
+            const beamG = ctx.createLinearGradient(0, baseY - 220, 0, baseY);
+            beamG.addColorStop(0, 'rgba(255,60,220,0)');
+            beamG.addColorStop(1, 'rgba(120,80,255,0.5)');
+            ctx.fillStyle = beamG;
+            ctx.fillRect(0, baseY - 220, W, 220);
+            ctx.restore();
+        }
+
+        // ground strip
+        ctx.fillStyle = rgb(multiLerp(GROUND_STOPS, p));
+        ctx.fillRect(0, GROUND_Y - camera.y, W, H - (GROUND_Y - camera.y));
+
+        // wet-neon reflective streaks on the cyberpunk-stage road
+        if (p > 0.75){
+            ctx.save();
+            ctx.globalAlpha = ((p - 0.75) / 0.25) * 0.5;
+            for (let i = 0; i < 6; i++){
+                const rx = ((i * 173 - camera.x * 0.6) % (W + 200)) - 100;
+                ctx.strokeStyle = i % 2 === 0 ? '#ff2fd6' : '#38f2ff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(rx, GROUND_Y - camera.y + 10);
+                ctx.lineTo(rx + 40, H);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+    }
+
+    // ---------- window grid helper: shared by every skyscraper style ----------
+    function drawWindowGrid(sx, topY, width, spanH, cols, rows, litColor, dimAlpha){
+        const padX = width * 0.1, padY = 10;
+        const cellW = (width - padX * 2) / cols;
+        const cellH = Math.min(24, (spanH - padY * 2) / rows);
+        for (let r = 0; r < rows; r++){
+            for (let c = 0; c < cols; c++){
+                const wx = sx + padX + c * cellW + cellW * 0.18;
+                const wy = topY + padY + r * cellH + cellH * 0.18;
+                if (wy > GROUND_Y - camera.y + 40) continue;
+                const lit = ((r * 7 + c * 13 + Math.floor(sx)) % 5) !== 0;
+                ctx.fillStyle = lit ? litColor : `rgba(20,25,35,${dimAlpha})`;
+                ctx.fillRect(wx, wy, cellW * 0.64, cellH * 0.6);
+            }
+        }
+    }
+
+    function drawNeonTrim(sx, sy, w, h, color){
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 10;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy + h);
+        ctx.lineTo(sx, sy);
+        ctx.lineTo(sx + w, sy);
+        ctx.lineTo(sx + w, sy + h);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    }
+
+    function drawHolographicSign(sx, sy, w, color){
+        ctx.save();
+        const signW = Math.min(w * 0.7, 46);
+        const signH = 16;
+        const px = sx + w / 2 - signW / 2;
+        const py = sy + 14;
+        ctx.globalAlpha = 0.75;
+        ctx.fillStyle = color;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 12;
+        ctx.fillRect(px, py, signW, 4);
+        ctx.fillRect(px, py + 6, signW * 0.6, 4);
+        ctx.fillRect(px, py + 12, signW * 0.8, 4);
+        ctx.restore();
+    }
+
+    function drawBuilding(b){
+        const sx = b.x - camera.x;
+        const sy = b.y - camera.y;
+        const fullH = GROUND_Y - b.y + 60;
+
+        if (b.style === 'house'){
+            const wall = lerpColor([248, 232, 200], [225, 205, 175], b.seedTint);
+            ctx.fillStyle = rgb(wall);
+            ctx.fillRect(sx, sy, b.width, fullH);
+            drawWindowGrid(sx, sy, b.width, b.height, Math.max(2, Math.round(b.width / 55)), 2, 'rgba(255,235,180,0.65)', 0.15);
+            // terracotta roof ledge
+            ctx.fillStyle = '#b96a55';
+            ctx.fillRect(sx - 2, sy - 8, b.width + 4, 12);
+            ctx.fillStyle = 'rgba(255,255,255,0.3)';
+            ctx.fillRect(sx - 2, sy - 8, b.width + 4, 2);
+            // chimney
+            ctx.fillStyle = '#8a5a4a';
+            ctx.fillRect(sx + b.width * 0.72, sy - 26, 10, 20);
+            return;
+        }
+
+        if (b.style === 'glassTower'){
+            const wallLit = lerpColor([170, 195, 210], [120, 150, 195], b.t);
+            const grad = ctx.createLinearGradient(sx, sy, sx + b.width, sy);
+            grad.addColorStop(0, rgb(wallLit));
+            grad.addColorStop(0.45, rgb(wallLit.map(v => Math.min(255, v + 35))));
+            grad.addColorStop(1, rgb(wallLit.map(v => Math.max(0, v - 25))));
+            ctx.fillStyle = grad;
+            ctx.fillRect(sx, sy, b.width, fullH);
+            const litColor = b.neon ? 'rgba(255,90,230,0.55)' : 'rgba(210,235,255,0.55)';
+            drawWindowGrid(sx, sy, b.width, b.height, Math.max(3, Math.round(b.width / 26)), Math.max(4, Math.round(b.height / 26)), litColor, 0.12);
+            // flat roof + AC unit
+            ctx.fillStyle = 'rgba(255,255,255,0.35)';
+            ctx.fillRect(sx - 2, sy - 3, b.width + 4, 3);
+            ctx.fillStyle = '#5b6b78';
+            ctx.fillRect(sx + b.width * 0.15, sy - 12, b.width * 0.22, 10);
+            if (b.neon) drawNeonTrim(sx, sy, b.width, fullH, b.neonColor);
+            if (b.neon && b.height > 420) drawHolographicSign(sx, sy, b.width, b.neonColor);
+            return;
+        }
+
+        if (b.style === 'brickTower'){
+            const wall = lerpColor([200, 170, 150], [140, 120, 115], b.t);
+            ctx.fillStyle = rgb(wall);
+            ctx.fillRect(sx, sy, b.width, fullH);
+            drawWindowGrid(sx, sy, b.width, b.height, Math.max(3, Math.round(b.width / 32)), Math.max(3, Math.round(b.height / 30)), 'rgba(255,225,160,0.6)', 0.18);
+            ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            ctx.fillRect(sx - 2, sy - 3, b.width + 4, 3);
+            // water tower silhouette
+            ctx.fillStyle = '#3d3530';
+            ctx.beginPath();
+            ctx.moveTo(sx + b.width * 0.5 - 8, sy - 4);
+            ctx.lineTo(sx + b.width * 0.5 + 8, sy - 4);
+            ctx.lineTo(sx + b.width * 0.5 + 6, sy - 20);
+            ctx.lineTo(sx + b.width * 0.5 - 6, sy - 20);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillRect(sx + b.width * 0.5 - 6, sy - 22, 12, 4);
+            if (b.neon) drawNeonTrim(sx, sy, b.width, fullH, b.neonColor);
+            return;
+        }
+
+        if (b.style === 'steppedTower'){
+            const dayColor = lerpColor([150, 165, 185], [95, 105, 130], b.t);
+            const wall = lerpColor(dayColor, [55, 45, 80], b.cyber);
+            const tiers = [
+                { hFrac: 1.0,  wFrac: 1.0 },
+                { hFrac: 0.62, wFrac: 0.68 },
+                { hFrac: 0.30, wFrac: 0.42 }
+            ];
+            for (const tier of tiers){
+                const tw = b.width * tier.wFrac;
+                const th = fullH * tier.hFrac;
+                const tx = sx + (b.width - tw) / 2;
+                const ty = sy + b.height - (th - (GROUND_Y - b.y - b.height + 60)) ;
+                const drawTy = GROUND_Y - camera.y + 60 - th;
+                ctx.fillStyle = rgb(wall.map(v => Math.min(255, v + tier.wFrac * 15)));
+                ctx.fillRect(tx, drawTy, tw, th);
+                const cols = Math.max(2, Math.round(tw / 26));
+                const rows = Math.max(2, Math.round(th / 26));
+                const litColor = b.neon ? 'rgba(120,200,255,0.55)' : 'rgba(210,225,255,0.5)';
+                drawWindowGrid(tx, drawTy, tw, th, cols, rows, litColor, 0.15);
+                ctx.fillStyle = 'rgba(255,255,255,0.3)';
+                ctx.fillRect(tx - 1, drawTy - 2, tw + 2, 2);
+                if (b.neon) drawNeonTrim(tx, drawTy, tw, th, b.neonColor);
+            }
+            // rooftop antenna array
+            ctx.strokeStyle = b.neon ? b.neonColor : 'rgba(255,255,255,0.5)';
+            if (b.neon){ ctx.shadowColor = b.neonColor; ctx.shadowBlur = 8; }
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(sx + b.width * 0.5, sy - 6);
+            ctx.lineTo(sx + b.width * 0.5, sy - 34);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            return;
+        }
+
+        if (b.style === 'spireTower'){
+            const dayColor = lerpColor([160, 170, 190], [100, 110, 135], b.t);
+            const wall = lerpColor(dayColor, [50, 40, 75], b.cyber);
+            const bodyH = fullH * 0.85;
+            const bodyTy = GROUND_Y - camera.y + 60 - bodyH;
+            const bodyW = b.width * 0.7;
+            const bodyTx = sx + (b.width - bodyW) / 2;
+            ctx.fillStyle = rgb(wall);
+            ctx.fillRect(bodyTx, bodyTy, bodyW, bodyH);
+            const litColor = b.neon ? 'rgba(180,120,255,0.55)' : 'rgba(220,230,255,0.5)';
+            drawWindowGrid(bodyTx, bodyTy, bodyW, bodyH, Math.max(2, Math.round(bodyW / 24)), Math.max(4, Math.round(bodyH / 26)), litColor, 0.15);
+            if (b.neon) drawNeonTrim(bodyTx, bodyTy, bodyW, bodyH, b.neonColor);
+            // tapering spire
+            ctx.fillStyle = rgb(wall.map(v => Math.max(0, v - 20)));
+            ctx.beginPath();
+            ctx.moveTo(bodyTx, bodyTy);
+            ctx.lineTo(bodyTx + bodyW, bodyTy);
+            ctx.lineTo(bodyTx + bodyW * 0.5, bodyTy - fullH * 0.15 - 10);
+            ctx.closePath();
+            ctx.fill();
+            // mast + blinking light
+            ctx.strokeStyle = '#8fa0ab';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(bodyTx + bodyW * 0.5, bodyTy - fullH * 0.15 - 10);
+            ctx.lineTo(bodyTx + bodyW * 0.5, bodyTy - fullH * 0.15 - 26);
+            ctx.stroke();
+            ctx.fillStyle = '#ff5a5a';
+            ctx.shadowColor = '#ff5a5a';
+            ctx.shadowBlur = 6;
+            ctx.beginPath();
+            ctx.arc(bodyTx + bodyW * 0.5, bodyTy - fullH * 0.15 - 28, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            return;
+        }
+    }
+
+    function drawBuildings(){
+        for (const b of buildings){
+            const sx = b.x - camera.x;
+            if (sx + b.width < -60 || sx > W + 60) continue;
+            drawBuilding(b);
+            // rooftop platform ledge (the actual jump surface), always on top for clarity
+            const sy = b.y - camera.y;
+            ctx.fillStyle = 'rgba(255,255,255,0.4)';
+            ctx.fillRect(sx - 2, sy - 2, b.width + 4, 2);
+        }
+    }
+
+    // ---------- humanoid robot ----------
+    function drawRobot(){
+        const sx = player.x - camera.x;
+        const sy = player.y - camera.y;
+        const cx = sx + player.w / 2;
+        const cy = sy + player.h / 2;
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(player.facing, 1);
+
+        const walk = player.onGround ? Math.sin(player.runPhase) : 0;
+        const jumpPose = !player.onGround;
+
+        // legs
+        ctx.fillStyle = '#5b6b78';
+        ctx.save();
+        ctx.translate(-6, player.h * 0.12);
+        ctx.rotate(jumpPose ? -0.35 : walk * 0.5);
+        ctx.fillRect(-4, 0, 8, player.h * 0.34);
+        ctx.fillStyle = '#37474f';
+        ctx.fillRect(-5, player.h * 0.34 - 2, 10, 5);
+        ctx.restore();
+
+        ctx.fillStyle = '#5b6b78';
+        ctx.save();
+        ctx.translate(6, player.h * 0.12);
+        ctx.rotate(jumpPose ? 0.5 : -walk * 0.5);
+        ctx.fillRect(-4, 0, 8, player.h * 0.34);
+        ctx.fillStyle = '#37474f';
+        ctx.fillRect(-5, player.h * 0.34 - 2, 10, 5);
+        ctx.restore();
+
+        // torso
+        const torsoGrad = ctx.createLinearGradient(-11, -player.h*0.22, 11, player.h*0.14);
+        torsoGrad.addColorStop(0, '#c7d2d8');
+        torsoGrad.addColorStop(0.5, '#8fa0ab');
+        torsoGrad.addColorStop(1, '#5c6b76');
+        ctx.fillStyle = torsoGrad;
+        roundRect(-11, -player.h * 0.22, 22, player.h * 0.38, 5);
+        ctx.fill();
+
+        // chest core light
+        ctx.fillStyle = '#4fd8ff';
+        ctx.shadowColor = '#4fd8ff';
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(0, -player.h * 0.06, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // arms
+        ctx.fillStyle = '#8fa0ab';
+        ctx.save();
+        ctx.translate(-11, -player.h * 0.16);
+        ctx.rotate(jumpPose ? -0.9 : -walk * 0.5);
+        ctx.fillRect(-4, 0, 8, player.h * 0.26);
+        ctx.restore();
+
+        ctx.save();
+        ctx.translate(11, -player.h * 0.16);
+        ctx.rotate(jumpPose ? 0.6 : walk * 0.5);
+        ctx.fillRect(-4, 0, 8, player.h * 0.26);
+        ctx.restore();
+
+        // head
+        ctx.fillStyle = '#c7d2d8';
+        roundRect(-9, -player.h * 0.46, 18, 16, 4);
+        ctx.fill();
+
+        // visor
+        ctx.fillStyle = '#0d1b22';
+        roundRect(-7, -player.h * 0.43, 14, 6, 2);
+        ctx.fill();
+        ctx.fillStyle = '#4fd8ff';
+        ctx.shadowColor = '#4fd8ff';
+        ctx.shadowBlur = 6;
+        ctx.fillRect(-5, -player.h * 0.42, 10, 3);
+        ctx.shadowBlur = 0;
+
+        // antenna
+        ctx.strokeStyle = '#8fa0ab';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, -player.h * 0.46);
+        ctx.lineTo(0, -player.h * 0.56);
+        ctx.stroke();
+        ctx.fillStyle = '#ff5a5a';
+        ctx.beginPath();
+        ctx.arc(0, -player.h * 0.57, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+    }
+
+    function roundRect(x, y, w, h, r){
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+    }
+
+    function render(){
+        drawBackground();
+        drawBuildings();
+        drawRobot();
+    }
+
+    let last = performance.now();
+    function loop(now){
+        const dt = Math.min(0.033, (now - last) / 1000);
+        last = now;
+        update(dt);
+        updateCamera();
+        render();
+        requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+})();
+</script>
+
+</body>
+</html>
