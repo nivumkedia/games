@@ -89,7 +89,7 @@
     <canvas id="game" width="960" height="540"></canvas>
 </div>
 
-<div id="hud">Move: <b>Arrow Keys</b> &nbsp;·&nbsp; Jump: <b>SPACE / UP</b> &nbsp;·&nbsp; Fight: <b>Z</b> block, <b>X</b> counter, <b>A</b> kill</div>
+<div id="hud">Move: <b>Arrow Keys</b> &nbsp;·&nbsp; Jump: <b>SPACE / UP</b> &nbsp;·&nbsp; Fight: <b>Z</b> block, <b>X</b> counter, <b>A</b> slash</div>
 <div id="progress-wrap">
     <div id="progress-label">City Progress</div>
     <div id="progress-bar-bg"><div id="progress-bar-fill"></div></div>
@@ -274,35 +274,101 @@
     }
 
     // ---------- enemies ----------
+    // Every building across these stretches gets an enemy — no random
+    // skipping, no gaps. Whatever building is next, there's a fight on it.
+    const enemies = [];
+
     // first enemy type: a plain, no-frills sword grunt — this is the suburban
     // stretch of the city, so nothing fancy yet. Beaten with Z (block) then
     // X (counter) then A (kill), strictly in that order.
-    const enemies = [];
-    {
-        let sinceLast = 3;
-        for (const b of buildings){
-            sinceLast++;
-            if (b.style === 'house' && b.t > 0.03 && b.t < 0.24 && sinceLast > 2 && rand() < 0.5){
-                enemies.push({
-                    type: 'swordGrunt',
-                    x: b.x + b.width * 0.5 - 14,
-                    y: b.y - 50,
-                    w: 28, h: 50,
-                    alive: true,
-                    comboStep: 0,   // 0 = expects Z, 1 = expects X, 2 = expects A
-                    hitFlash: 0,
-                    deathTimer: 0
-                });
-                sinceLast = 0;
-            }
+    for (const b of buildings){
+        if (b.t > 0.03 && b.t < 0.20){
+            enemies.push({
+                type: 'swordGrunt',
+                x: b.x + b.width * 0.5 - 18,
+                y: b.y - 66,
+                w: 36, h: 66,
+                alive: true,
+                comboStep: 0,
+                comboSequence: ['z', 'x', 'a'],
+                hitFlash: 0,
+                deathTimer: 0
+            });
+        }
+    }
+
+    // second enemy type: patrols its rooftop while slashing. Blocking (Z)
+    // only stops its sword — its legs keep walking through the whole fight,
+    // it never freezes. Same Z -> X -> A kill sequence as the first type.
+    for (const b of buildings){
+        if (b.t >= 0.20 && b.t < 0.38){
+            const margin = Math.min(18, b.width * 0.15);
+            const patrolMinX = b.x + margin;
+            const patrolMaxX = Math.max(patrolMinX, b.x + b.width - margin - 36);
+            enemies.push({
+                type: 'swordPatroller',
+                x: (patrolMinX + patrolMaxX) / 2,
+                y: b.y - 66,
+                w: 36, h: 66,
+                alive: true,
+                comboStep: 0,
+                comboSequence: ['z', 'x', 'a'],
+                hitFlash: 0,
+                deathTimer: 0,
+                patrolMinX, patrolMaxX,
+                patrolDir: rand() < 0.5 ? 1 : -1,
+                patrolSpeed: 55,
+                walkPhase: 0
+            });
+        }
+    }
+
+    // third enemy type: charges straight at you, mid-slash the whole time.
+    // Sequence is X (counter) -> A (slash) -> Z -> Z, not the usual Z-X-A.
+    for (const b of buildings){
+        if (b.t >= 0.38 && b.t < 0.58){
+            const margin = Math.min(14, b.width * 0.12);
+            enemies.push({
+                type: 'chargerSlasher',
+                x: b.x + b.width * 0.5 - 18,
+                y: b.y - 66,
+                w: 36, h: 66,
+                alive: true,
+                comboStep: 0,
+                comboSequence: ['x', 'a', 'z', 'z'],
+                hitFlash: 0,
+                deathTimer: 0,
+                homeMinX: b.x + margin,
+                homeMaxX: Math.max(b.x + margin, b.x + b.width - margin - 36),
+                facing: 1
+            });
+        }
+    }
+
+    // fourth enemy type: counters your first attempt, then attacks back with
+    // its own strike before you can finish it. Sequence is Z -> X -> A ->
+    // X -> A — beat it once, then beat it again.
+    for (const b of buildings){
+        if (b.t >= 0.58 && b.t < 0.80){
+            enemies.push({
+                type: 'duelist',
+                x: b.x + b.width * 0.5 - 18,
+                y: b.y - 66,
+                w: 36, h: 66,
+                alive: true,
+                comboStep: 0,
+                comboSequence: ['z', 'x', 'a', 'x', 'a'],
+                hitFlash: 0,
+                deathTimer: 0
+            });
         }
     }
 
     // ---------- player: humanoid robot ----------
     const player = {
         x: buildings[0].x + 40,
-        y: buildings[0].y - 60,
-        w: 30, h: 58,
+        y: buildings[0].y - 74,
+        w: 40, h: 74,
         vx: 0, vy: 0,
         onGround: false,
         facing: 1,
@@ -313,7 +379,7 @@
         combatTimer: 0
     };
     const COYOTE_TIME = 0.09;
-    const SWORD_REACH = 62; // how far the player's sword can reach an enemy
+    const SWORD_REACH = 78; // how far the player's sword can reach an enemy
 
     const keys = {};
     window.addEventListener('keydown', e => {
@@ -334,16 +400,61 @@
         player.combatPose = 'idle';
         player.combatTimer = 0;
         // give any nearby enemy a fresh start rather than an unfair reset mid-attempt
-        for (const e of enemies) if (e.alive) e.comboStep = 0;
+        for (const e of enemies){
+            if (e.alive) e.comboStep = 0;
+            e.punishPose = null;
+            e.punishLunge = 0;
+        }
+        deathSequence = null;
         deathFlash = 0.3;
     }
 
     let deathFlash = 0;
 
+    // wrong key / wrong order -> the enemy blocks whatever you just tried,
+    // then strikes you down. A brief, readable two-beat sequence instead of
+    // an instant cut to black.
+    let deathSequence = null; // { phase:'block'|'strike', timer, enemy }
+    function startPunishSequence(target){
+        deathSequence = { phase: 'block', timer: 0.3, enemy: target };
+        target.punishPose = 'block';
+        target.punishLunge = 0;
+        player.combatPose = 'staggered';
+        player.combatTimer = 999;
+        spawnEffect(
+            (player.x + player.w / 2 + target.x + target.w / 2) / 2,
+            (player.y + target.y) / 2,
+            '#ffdd55', 0.3
+        );
+    }
+
     function updateEnemies(dt){
         for (const e of enemies){
             if (e.hitFlash > 0) e.hitFlash = Math.max(0, e.hitFlash - dt);
             if (!e.alive && e.deathTimer > 0) e.deathTimer = Math.max(0, e.deathTimer - dt);
+
+            // patrollers keep walking their rooftop no matter what — blocking
+            // their sword never stops their legs, even mid-fight
+            if (e.type === 'swordPatroller' && e.alive){
+                e.x += e.patrolDir * e.patrolSpeed * dt;
+                if (e.x <= e.patrolMinX){ e.x = e.patrolMinX; e.patrolDir = 1; }
+                if (e.x >= e.patrolMaxX){ e.x = e.patrolMaxX; e.patrolDir = -1; }
+                e.walkPhase += dt * 8;
+            }
+
+            // chargers rush straight at the player, mid-slash the whole way,
+            // staying within their own rooftop
+            if (e.type === 'chargerSlasher' && e.alive){
+                const playerCx = player.x + player.w / 2;
+                const myCx = e.x + e.w / 2;
+                e.facing = playerCx >= myCx ? 1 : -1;
+                const closeEnough = Math.abs(playerCx - myCx) < SWORD_REACH * 0.75;
+                if (!closeEnough){
+                    e.x += e.facing * 95 * dt;
+                    e.x = Math.max(e.homeMinX, Math.min(e.homeMaxX, e.x));
+                    e.walkPhase = (e.walkPhase || 0) + dt * 8;
+                }
+            }
         }
     }
 
@@ -357,6 +468,7 @@
     }
 
     function handleCombatKey(k){
+        if (deathSequence && deathSequence.phase) return; // mid punish sequence — no interrupting it
         let target = null, bestDist = Infinity;
         for (const e of enemies){
             if (!e.alive) continue;
@@ -370,10 +482,16 @@
         const midX = (player.x + player.w / 2 + target.x + target.w / 2) / 2;
         const midY = (player.y + target.y) / 2;
 
-        const expected = ['z', 'x', 'a'][target.comboStep];
+        // each enemy carries its own key sequence — defaults to Z, X, A
+        const seq = target.comboSequence || ['z', 'x', 'a'];
+        const expected = seq[target.comboStep];
         if (k === expected){
             target.comboStep++;
             target.hitFlash = 0.25;
+            const isFinalBlow = target.comboStep >= seq.length;
+
+            // each key has its own animation/effect, independent of whether
+            // it happens to be the finishing blow
             if (k === 'z'){
                 player.combatPose = 'block';
                 player.combatTimer = 0.3;
@@ -382,10 +500,13 @@
                 player.combatPose = 'counter';
                 player.combatTimer = 0.28;
                 spawnEffect(target.x + target.w / 2, target.y + target.h * 0.4, '#ff5a3d', 0.4);
-            } else { // 'a' — the kill
+            } else { // 'a'
                 player.combatPose = 'kill';
                 player.combatTimer = 0.35;
                 spawnEffect(target.x + target.w / 2, target.y + target.h * 0.45, '#ffffff', 0.3);
+            }
+
+            if (isFinalBlow){
                 target.alive = false;
                 target.deathTimer = 0.5;
                 target.deathParticles = [];
@@ -397,22 +518,27 @@
                         size: 3 + rand() * 3
                     });
                 }
+                spawnEffect(target.x + target.w / 2, target.y + target.h * 0.45, '#ffffff', 0.3);
             }
         } else {
-            respawnPlayer();
+            startPunishSequence(target);
         }
     }
 
     function update(dt){
+        const frozen = deathSequence && deathSequence.phase; // punished — no moving, no fighting back
+
         // horizontal input
         let dir = 0;
-        if (keys['arrowleft']) dir -= 1;
-        if (keys['arrowright']) dir += 1;
+        if (!frozen){
+            if (keys['arrowleft']) dir -= 1;
+            if (keys['arrowright']) dir += 1;
+        }
         if (dir !== 0) player.facing = dir;
         player.vx = dir * MOVE_SPEED;
 
         // jump
-        const wantsJump = keys[' '] || keys['arrowup'];
+        const wantsJump = !frozen && (keys[' '] || keys['arrowup']);
         if (wantsJump && (player.onGround || player.coyote > 0)) {
             player.vy = JUMP_VEL;
             player.onGround = false;
@@ -449,6 +575,29 @@
         }
         if (deathFlash > 0) deathFlash = Math.max(0, deathFlash - dt);
         updateEnemies(dt);
+
+        if (deathSequence && deathSequence.phase){
+            const seq = deathSequence;
+            seq.timer -= dt;
+            if (seq.phase === 'block'){
+                if (seq.timer <= 0){
+                    seq.phase = 'strike';
+                    seq.timer = 0.32;
+                    seq.enemy.punishPose = 'strike';
+                    player.combatPose = 'hit';
+                }
+            } else if (seq.phase === 'strike'){
+                // enemy visibly lunges forward through the strike
+                seq.enemy.punishLunge = 1 - Math.max(0, seq.timer) / 0.32;
+                if (seq.timer <= 0){
+                    spawnEffect(player.x + player.w / 2, player.y + player.h * 0.4, '#ff3030', 0.35);
+                    seq.enemy.punishPose = null;
+                    seq.enemy.punishLunge = 0;
+                    deathSequence = null;
+                    respawnPlayer();
+                }
+            }
+        }
         for (let i = effects.length - 1; i >= 0; i--){
             if (gameTime - effects[i].start > effects[i].duration) effects.splice(i, 1);
         }
@@ -1042,22 +1191,30 @@
 
     // little radiating spark burst, used for blocks/counters/kills
     function drawSparkBurst(cx, cy, color, progress){
-        const n = 6;
+        const n = 8;
         ctx.save();
         ctx.globalAlpha = Math.max(0, 1 - progress);
         ctx.strokeStyle = color;
         ctx.shadowColor = color;
-        ctx.shadowBlur = 8;
-        ctx.lineWidth = 2;
+        ctx.shadowBlur = 12;
+        ctx.lineWidth = 3;
         for (let i = 0; i < n; i++){
             const a = (i / n) * Math.PI * 2;
-            const r0 = 3 + progress * 4;
-            const r1 = 3 + progress * 16;
+            const r0 = 4 + progress * 8;
+            const r1 = 4 + progress * 28;
             ctx.beginPath();
             ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
             ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
             ctx.stroke();
         }
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, 1 - progress * 1.6);
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowBlur = 16;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
         ctx.restore();
     }
 
@@ -1090,28 +1247,50 @@
             ctx.restore();
         }
 
+        // lunges toward the player while delivering the punishing strike
+        const lungeDir = Math.sign((player.x + player.w / 2) - (e.x + e.w / 2)) || 1;
+        const lungeX = (e.punishLunge || 0) * lungeDir * 22;
+
+        const isPatroller = e.type === 'swordPatroller';
+        const isCharger = e.type === 'chargerSlasher';
+        const walking = (isPatroller || isCharger) && e.alive;
+        const facingDir = isPatroller ? e.patrolDir : (isCharger ? e.facing : 1);
+
         ctx.save();
         ctx.globalAlpha = alpha;
-        ctx.translate(sx + e.w / 2, sy + e.h / 2);
+        ctx.translate(sx + e.w / 2 + lungeX, sy + e.h / 2);
+        if (isPatroller || isCharger) ctx.scale(facingDir, 1);
         if (dying) ctx.rotate(deathT * 1.7);
         if (dying) ctx.scale(1 + deathT * 0.15, 1 - deathT * 0.3);
 
-        // legs, with a knee-joint highlight for some real shape
+        // legs, with a knee-joint highlight for some real shape — patrollers
+        // keep walking through the whole fight, blocking only stops the sword
         const legGrad = ctx.createLinearGradient(0, -e.h * 0.1, 0, e.h * 0.42);
         legGrad.addColorStop(0, '#8b9198');
         legGrad.addColorStop(1, '#5e6469');
+        const legSwing = walking ? Math.sin(e.walkPhase) * 0.5 : 0;
+        ctx.save();
+        ctx.translate(-5.5, e.h * 0.08);
+        ctx.rotate(legSwing);
         ctx.fillStyle = legGrad;
-        roundRect(-9, e.h * 0.08, 7, e.h * 0.34, 2);
-        ctx.fill();
-        roundRect(2, e.h * 0.08, 7, e.h * 0.34, 2);
+        roundRect(-3.5, 0, 7, e.h * 0.34, 2);
         ctx.fill();
         ctx.fillStyle = '#454a4f';
-        ctx.fillRect(-9, e.h * 0.08 + e.h * 0.16, 7, 3);
-        ctx.fillRect(2, e.h * 0.08 + e.h * 0.16, 7, 3);
-        // feet
+        ctx.fillRect(-3.5, e.h * 0.16, 7, 3);
         ctx.fillStyle = '#3a3f44';
-        ctx.fillRect(-10, e.h * 0.42, 9, 5);
-        ctx.fillRect(1, e.h * 0.42, 9, 5);
+        ctx.fillRect(-4.5, e.h * 0.34, 9, 5);
+        ctx.restore();
+        ctx.save();
+        ctx.translate(5.5, e.h * 0.08);
+        ctx.rotate(-legSwing);
+        ctx.fillStyle = legGrad;
+        roundRect(-3.5, 0, 7, e.h * 0.34, 2);
+        ctx.fill();
+        ctx.fillStyle = '#454a4f';
+        ctx.fillRect(-3.5, e.h * 0.16, 7, 3);
+        ctx.fillStyle = '#3a3f44';
+        ctx.fillRect(-4.5, e.h * 0.34, 9, 5);
+        ctx.restore();
 
         // torso — flat-ish grey with just a hint of shading (this is a basic
         // suburban-tier grunt, not a fancy machine — but "basic" still needs
@@ -1123,6 +1302,9 @@
         ctx.fillStyle = torsoGrad;
         roundRect(-10, -e.h * 0.22, 20, e.h * 0.36, 4);
         ctx.fill();
+        ctx.strokeStyle = 'rgba(20,22,25,0.5)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
         ctx.fillStyle = 'rgba(0,0,0,0.15)';
         roundRect(-10, e.h * 0.08, 20, 4, 2);
         ctx.fill();
@@ -1149,6 +1331,9 @@
         ctx.fillStyle = '#9aa0a6';
         roundRect(-8, -e.h * 0.46, 16, 16, 3);
         ctx.fill();
+        ctx.strokeStyle = 'rgba(20,22,25,0.5)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
         ctx.fillStyle = e.hitFlash > 0 ? '#ff4444' : '#22272c';
         ctx.beginPath();
         ctx.moveTo(-6, -e.h * 0.40);
@@ -1173,17 +1358,36 @@
         // sword arm: fast up/down swing while idle, held poses once engaged,
         // with a motion trail while it's actually whipping back and forth
         let swingAngle;
-        if (e.comboStep === 0) swingAngle = Math.sin(gameTime * 7 + e.x * 0.01) * 0.9;
+        let glowOverride = null;
+        if (e.punishPose === 'block'){
+            swingAngle = -0.9; // raises its own blade to catch your wrong move
+            glowOverride = '#ffdd55';
+        } else if (e.punishPose === 'strike'){
+            swingAngle = lerp(-0.9, 1.6, Math.min(1, (e.punishLunge || 0) * 1.3));
+            glowOverride = '#ff3030';
+        } else if (e.comboStep === 0 && isCharger){
+            // a big, committed, continuous slash — this is what "doing A"
+            // reads as: a full arcing swing, not a quick twitch
+            swingAngle = Math.sin(gameTime * 2.6 + e.x * 0.01) * 1.5;
+        } else if (e.comboStep === 0) swingAngle = Math.sin(gameTime * 7 + e.x * 0.01) * 0.9;
         else if (e.comboStep === 1) swingAngle = -1.1;      // stopped cold by the block
+        else if (e.type === 'duelist' && e.comboStep === 3){
+            // beaten once already — it recovers and comes back with its own
+            // attack instead of just standing there hurt
+            swingAngle = Math.sin(gameTime * 3.2 + e.x * 0.01) * 1.4;
+        }
         else swingAngle = 1.3;                              // forced back onto itself
 
-        if (e.comboStep === 0){
+        const isCounterAttack = e.type === 'duelist' && e.comboStep === 3;
+        if ((e.comboStep === 0 || isCounterAttack) && !e.punishPose){
+            const trailSpeed = (isCharger || isCounterAttack) ? (isCounterAttack ? 3.2 : 2.6) : 7;
+            const trailAmp = (isCharger || isCounterAttack) ? 1.4 : 0.9;
             for (const off of [0.22, 0.4]){
                 ctx.save();
                 ctx.translate(12, -e.h * 0.1);
-                ctx.rotate(Math.sin(gameTime * 7 - off + e.x * 0.01) * 0.9);
+                ctx.rotate(Math.sin(gameTime * trailSpeed - off + e.x * 0.01) * trailAmp);
                 ctx.globalAlpha = alpha * (0.16 - off * 0.2);
-                drawBlade(e.h * 0.4, 5, null);
+                drawBlade(e.h * 0.4, 7, null);
                 ctx.restore();
             }
         }
@@ -1194,34 +1398,10 @@
         roundRect(-3, 0, 6, e.h * 0.18, 2);
         ctx.fill();
         ctx.translate(0, e.h * 0.16);
-        drawBlade(e.h * 0.4, 6, e.comboStep >= 1 ? '#ff5a3d' : null, 0.9);
+        drawBlade(e.h * 0.4, 8, glowOverride || (e.comboStep >= 1 ? '#ff5a3d' : null), 0.9);
         ctx.restore();
 
         ctx.restore();
-
-        // Z / X / A progress pips above its head
-        if (e.alive){
-            const labels = ['Z', 'X', 'A'];
-            for (let i = 0; i < 3; i++){
-                const px = sx + e.w / 2 - 20 + i * 20;
-                const py = sy - e.h * 0.5 - 16;
-                const active = i < e.comboStep;
-                ctx.save();
-                if (active){ ctx.shadowColor = '#3dffb0'; ctx.shadowBlur = 6; }
-                ctx.fillStyle = active ? '#3dffb0' : 'rgba(0,0,0,0.45)';
-                ctx.beginPath();
-                ctx.arc(px, py, 7.5, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.restore();
-                ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-                ctx.lineWidth = 1;
-                ctx.stroke();
-                ctx.fillStyle = active ? '#08331f' : 'rgba(255,255,255,0.75)';
-                ctx.font = 'bold 9px sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText(labels[i], px, py + 3);
-            }
-        }
     }
 
     function drawDeathParticles(e, sx, sy){
@@ -1253,6 +1433,8 @@
         ctx.save();
         ctx.translate(cx, cy);
         ctx.scale(player.facing, 1);
+        if (player.combatPose === 'staggered') ctx.rotate(-0.12); // knocked off balance
+        else if (player.combatPose === 'hit') ctx.rotate(0.22);   // reeling from the strike
 
         const walk = player.onGround ? Math.sin(player.runPhase) : 0;
         const jumpPose = !player.onGround;
@@ -1284,6 +1466,9 @@
         ctx.fillStyle = torsoGrad;
         roundRect(-11, -player.h * 0.22, 22, player.h * 0.38, 5);
         ctx.fill();
+        ctx.strokeStyle = 'rgba(20,30,38,0.45)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
 
         // chest core light
         ctx.fillStyle = '#4fd8ff';
@@ -1321,6 +1506,13 @@
             swordAlpha = 1;
             glowColor = '#ffffff';
             if (p > 0.05 && p < 0.9){ slashFrom = startA; slashTo = swordArmAngle; }
+        } else if (player.combatPose === 'staggered'){
+            swordArmAngle = 0.45; // sword dips, wide open
+            swordAlpha = 0.7;
+        } else if (player.combatPose === 'hit'){
+            swordArmAngle = 1.1; // knocked completely aside
+            swordAlpha = 0.5;
+            glowColor = null;
         } else {
             swordArmAngle = jumpPose ? 0.6 : walk * 0.5;
             swordAlpha = 0.55; // resting/sheathed look
@@ -1340,7 +1532,7 @@
         ctx.save();
         ctx.globalAlpha = swordAlpha;
         ctx.translate(0, player.h * 0.24);
-        drawBlade(swordLen, 7, glowColor, player.combatPose !== 'idle' ? 1 : 0.4);
+        drawBlade(swordLen, 9, glowColor, player.combatPose !== 'idle' ? 1 : 0.4);
         ctx.restore();
         ctx.restore();
 
@@ -1348,6 +1540,9 @@
         ctx.fillStyle = '#c7d2d8';
         roundRect(-9, -player.h * 0.46, 18, 16, 4);
         ctx.fill();
+        ctx.strokeStyle = 'rgba(20,30,38,0.45)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
 
         // visor
         ctx.fillStyle = '#0d1b22';
