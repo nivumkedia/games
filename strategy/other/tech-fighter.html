@@ -89,7 +89,7 @@
     <canvas id="game" width="960" height="540"></canvas>
 </div>
 
-<div id="hud">Move: <b>Arrow Keys</b> &nbsp;·&nbsp; Jump: <b>SPACE / UP</b> &nbsp;·&nbsp; Fight: <b>Z</b> block, <b>X</b> counter, <b>A</b> slash</div>
+<div id="hud">Move: <b>Arrow Keys</b> &nbsp;·&nbsp; Jump: <b>SPACE / UP</b> &nbsp;·&nbsp; Fight: <b>Z</b> block, <b>X</b> counter, <b>A</b> slash, <b>S</b> flank</div>
 <div id="progress-wrap">
     <div id="progress-label">City Progress</div>
     <div id="progress-bar-bg"><div id="progress-bar-fill"></div></div>
@@ -359,10 +359,61 @@
         });
     }
 
+    // 5. flanker — introduces the S key. It attacks, you block, it blocks
+    // your counter — the answer is to hit S and strike from the other side.
+    // Blocks S into A (or A into S), anywhere — kill length is 3.
+    {
+        const b = buildings[5];
+        enemies.push({
+            type: 'flanker',
+            x: b.x + b.width * 0.5 - 18,
+            y: b.y - 66,
+            w: 36, h: 66,
+            alive: true,
+            comboStep: 0,
+            blocks: ['sa'],
+            hitFlash: 0,
+            deathTimer: 0
+        });
+    }
+
+    // 6. guardian — blocks S into A, S into X, and A into Z (or any of those
+    // reversed). Kill length is 3.
+    {
+        const b = buildings[6];
+        enemies.push({
+            type: 'guardian',
+            x: b.x + b.width * 0.5 - 18,
+            y: b.y - 66,
+            w: 36, h: 66,
+            alive: true,
+            comboStep: 0,
+            blocks: ['sa', 'sx', 'az'],
+            hitFlash: 0,
+            deathTimer: 0
+        });
+    }
+
+    // 7. warden — four 4-letter blocks. Kill length is 5.
+    {
+        const b = buildings[7];
+        enemies.push({
+            type: 'warden',
+            x: b.x + b.width * 0.5 - 18,
+            y: b.y - 66,
+            w: 36, h: 66,
+            alive: true,
+            comboStep: 0,
+            blocks: ['azxs', 'asxz', 'axzs', 'azsx'],
+            hitFlash: 0,
+            deathTimer: 0
+        });
+    }
+
     // ---------- player: humanoid robot ----------
     const player = {
-        x: buildings[0].x + 40,
-        y: buildings[0].y - 74,
+        x: buildings[7].x + 10,
+        y: buildings[7].y - 74,
         w: 40, h: 74,
         vx: 0, vy: 0,
         onGround: false,
@@ -385,7 +436,7 @@
     });
     window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 
-    let lastRespawnBuildingIdx = 0;
+    let lastRespawnBuildingIdx = 7;
 
     function respawnPlayer(){
         const rb = buildings[lastRespawnBuildingIdx];
@@ -405,6 +456,9 @@
     }
 
     let deathFlash = 0;
+
+    // S doesn't exist as a move until you actually reach the flanker enemy
+    let sUnlocked = false;
 
     // wrong key / wrong order -> the enemy blocks whatever you just tried,
     // then strikes you down. A brief, readable two-beat sequence instead of
@@ -464,6 +518,7 @@
 
     function handleCombatKey(k){
         if (deathSequence && deathSequence.phase) return; // mid punish sequence — no interrupting it
+        if (k === 's' && !sUnlocked) return; // S doesn't exist yet
         let target = null, bestDist = Infinity;
         for (const e of enemies){
             if (!e.alive) continue;
@@ -592,6 +647,7 @@
             if (player.combatTimer <= 0) player.combatPose = 'idle';
         }
         if (deathFlash > 0) deathFlash = Math.max(0, deathFlash - dt);
+        if (!sUnlocked && player.x >= buildings[5].x - 40) sUnlocked = true;
         updateEnemies(dt);
 
         if (deathSequence && deathSequence.phase){
@@ -1538,7 +1594,7 @@
         // front (sword) arm — pose depends on combat state
         const swordLen = player.h * 0.58;
         let swordArmAngle, swordAlpha, glowColor = '#4fd8ff';
-        let slashFrom = null, slashTo = null;
+        let slashFrom = null, slashTo = null, slashColor = '#bfe9ff';
         if (player.combatPose === 'block'){
             swordArmAngle = -0.75; // raised diagonal guard
             swordAlpha = 1;
@@ -1554,6 +1610,15 @@
             swordAlpha = 1;
             glowColor = '#ffffff';
             if (p > 0.05 && p < 0.9){ slashFrom = startA; slashTo = swordArmAngle; }
+        } else if (player.combatPose === 'sideAttack'){
+            // a low, wide horizontal sweep — a flanking strike, not the
+            // overhead arc of the finishing blow
+            const p = 1 - Math.max(0, player.combatTimer) / 0.3;
+            const startA = 1.4, endA = -0.2;
+            swordArmAngle = lerp(startA, endA, Math.min(1, p * 1.3));
+            swordAlpha = 1;
+            glowColor = '#3dffb0';
+            if (p > 0.05 && p < 0.9){ slashFrom = startA; slashTo = swordArmAngle; slashColor = '#3dffb0'; }
         } else if (player.combatPose === 'staggered'){
             swordArmAngle = 0.45; // sword dips, wide open
             swordAlpha = 0.7;
@@ -1569,7 +1634,7 @@
         if (slashFrom !== null){
             // already inside the translate(cx,cy)+scale(facing,1) transform,
             // so this is local space — same origin the sword arm itself uses
-            drawSlashArc(11, -player.h * 0.16, player.h * 0.5, slashFrom, slashTo, '#bfe9ff', 0.8);
+            drawSlashArc(11, -player.h * 0.16, player.h * 0.5, slashFrom, slashTo, slashColor, 0.8);
         }
 
         ctx.save();
