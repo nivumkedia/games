@@ -89,7 +89,7 @@
     <canvas id="game" width="960" height="540"></canvas>
 </div>
 
-<div id="hud">Move: <b>Arrow Keys / WASD</b> &nbsp;·&nbsp; Jump: <b>SPACE / UP</b></div>
+<div id="hud">Move: <b>Arrow Keys</b> &nbsp;·&nbsp; Jump: <b>SPACE / UP</b> &nbsp;·&nbsp; Fight: <b>Z</b> block, <b>X</b> counter, <b>A</b> kill</div>
 <div id="progress-wrap">
     <div id="progress-label">City Progress</div>
     <div id="progress-bar-bg"><div id="progress-bar-fill"></div></div>
@@ -273,6 +273,31 @@
         return null;
     }
 
+    // ---------- enemies ----------
+    // first enemy type: a plain, no-frills sword grunt — this is the suburban
+    // stretch of the city, so nothing fancy yet. Beaten with Z (block) then
+    // X (counter) then A (kill), strictly in that order.
+    const enemies = [];
+    {
+        let sinceLast = 3;
+        for (const b of buildings){
+            sinceLast++;
+            if (b.style === 'house' && b.t > 0.03 && b.t < 0.24 && sinceLast > 2 && rand() < 0.5){
+                enemies.push({
+                    type: 'swordGrunt',
+                    x: b.x + b.width * 0.5 - 14,
+                    y: b.y - 50,
+                    w: 28, h: 50,
+                    alive: true,
+                    comboStep: 0,   // 0 = expects Z, 1 = expects X, 2 = expects A
+                    hitFlash: 0,
+                    deathTimer: 0
+                });
+                sinceLast = 0;
+            }
+        }
+    }
+
     // ---------- player: humanoid robot ----------
     const player = {
         x: buildings[0].x + 40,
@@ -282,29 +307,112 @@
         onGround: false,
         facing: 1,
         runPhase: 0,
-        coyote: 0
+        coyote: 0,
+        // combat: 'idle' | 'block' | 'countered' | 'kill'
+        combatPose: 'idle',
+        combatTimer: 0
     };
     const COYOTE_TIME = 0.09;
+    const SWORD_REACH = 62; // how far the player's sword can reach an enemy
 
     const keys = {};
     window.addEventListener('keydown', e => {
-        keys[e.key.toLowerCase()] = true;
-        if ([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(e.key.toLowerCase())) e.preventDefault();
+        const k = e.key.toLowerCase();
+        keys[k] = true;
+        if ([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k)) e.preventDefault();
+        if (k === 'z' || k === 'x' || k === 'a') handleCombatKey(k);
     });
     window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 
     let lastRespawnBuildingIdx = 0;
 
+    function respawnPlayer(){
+        const rb = buildings[lastRespawnBuildingIdx];
+        player.x = rb.x + rb.width / 2 - player.w / 2;
+        player.y = rb.y - player.h;
+        player.vx = 0; player.vy = 0;
+        player.combatPose = 'idle';
+        player.combatTimer = 0;
+        // give any nearby enemy a fresh start rather than an unfair reset mid-attempt
+        for (const e of enemies) if (e.alive) e.comboStep = 0;
+        deathFlash = 0.3;
+    }
+
+    let deathFlash = 0;
+
+    function updateEnemies(dt){
+        for (const e of enemies){
+            if (e.hitFlash > 0) e.hitFlash = Math.max(0, e.hitFlash - dt);
+            if (!e.alive && e.deathTimer > 0) e.deathTimer = Math.max(0, e.deathTimer - dt);
+        }
+    }
+
+    // Z -> X -> A, strictly in order, against whichever alive enemy is
+    // actually in sword range. Wrong key, wrong order, or nothing in range
+    // and doing it right still fails you if you're not close enough — the
+    // enemy gets the opening instead.
+    const effects = []; // transient visual-only fx: {x,y,color,start,duration}
+    function spawnEffect(x, y, color, duration){
+        effects.push({ x, y, color, start: gameTime, duration: duration || 0.35 });
+    }
+
+    function handleCombatKey(k){
+        let target = null, bestDist = Infinity;
+        for (const e of enemies){
+            if (!e.alive) continue;
+            const dx = (e.x + e.w / 2) - (player.x + player.w / 2);
+            const dy = (e.y + e.h / 2) - (player.y + player.h / 2);
+            const dist = Math.hypot(dx, dy);
+            if (dist <= SWORD_REACH && dist < bestDist){ bestDist = dist; target = e; }
+        }
+        if (!target) return; // nothing in reach — key does nothing
+
+        const midX = (player.x + player.w / 2 + target.x + target.w / 2) / 2;
+        const midY = (player.y + target.y) / 2;
+
+        const expected = ['z', 'x', 'a'][target.comboStep];
+        if (k === expected){
+            target.comboStep++;
+            target.hitFlash = 0.25;
+            if (k === 'z'){
+                player.combatPose = 'block';
+                player.combatTimer = 0.3;
+                spawnEffect(midX, midY, '#dfe6ea', 0.3);
+            } else if (k === 'x'){
+                player.combatPose = 'counter';
+                player.combatTimer = 0.28;
+                spawnEffect(target.x + target.w / 2, target.y + target.h * 0.4, '#ff5a3d', 0.4);
+            } else { // 'a' — the kill
+                player.combatPose = 'kill';
+                player.combatTimer = 0.35;
+                spawnEffect(target.x + target.w / 2, target.y + target.h * 0.45, '#ffffff', 0.3);
+                target.alive = false;
+                target.deathTimer = 0.5;
+                target.deathParticles = [];
+                for (let i = 0; i < 7; i++){
+                    const a = (i / 7) * Math.PI * 2 + rand() * 0.6;
+                    target.deathParticles.push({
+                        vx: Math.cos(a), vy: Math.sin(a) - 0.4,
+                        color: i % 2 === 0 ? '#c9ccd0' : '#ff5a3d',
+                        size: 3 + rand() * 3
+                    });
+                }
+            }
+        } else {
+            respawnPlayer();
+        }
+    }
+
     function update(dt){
         // horizontal input
         let dir = 0;
-        if (keys['arrowleft'] || keys['a']) dir -= 1;
-        if (keys['arrowright'] || keys['d']) dir += 1;
+        if (keys['arrowleft']) dir -= 1;
+        if (keys['arrowright']) dir += 1;
         if (dir !== 0) player.facing = dir;
         player.vx = dir * MOVE_SPEED;
 
         // jump
-        const wantsJump = keys[' '] || keys['arrowup'] || keys['w'];
+        const wantsJump = keys[' '] || keys['arrowup'];
         if (wantsJump && (player.onGround || player.coyote > 0)) {
             player.vy = JUMP_VEL;
             player.onGround = false;
@@ -333,11 +441,16 @@
         if (!player.onGround) player.coyote = Math.max(0, player.coyote - dt);
 
         // fell into a gap -> soft respawn on the last rooftop stood on
-        if (player.y > GROUND_Y + 300) {
-            const rb = buildings[lastRespawnBuildingIdx];
-            player.x = rb.x + rb.width / 2 - player.w / 2;
-            player.y = rb.y - player.h;
-            player.vx = 0; player.vy = 0;
+        if (player.y > GROUND_Y + 300) respawnPlayer();
+
+        if (player.combatTimer > 0){
+            player.combatTimer -= dt;
+            if (player.combatTimer <= 0) player.combatPose = 'idle';
+        }
+        if (deathFlash > 0) deathFlash = Math.max(0, deathFlash - dt);
+        updateEnemies(dt);
+        for (let i = effects.length - 1; i >= 0; i--){
+            if (gameTime - effects[i].start > effects[i].duration) effects.splice(i, 1);
         }
 
         // clamp to world
@@ -862,6 +975,274 @@
         }
     }
 
+    // ---------- shared sword rendering ----------
+    // draws a proper tapered blade + crossguard + grip + glowing edge,
+    // extending downward (+y) from the local origin (the hand)
+    function drawBlade(length, baseWidth, glowColor, edgeAlpha){
+        ctx.fillStyle = '#2a2e33';
+        ctx.beginPath(); ctx.arc(0, -5, 3.2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#3a3f45';
+        ctx.fillRect(-2, -5, 4, 6);
+        ctx.fillStyle = '#6b7178';
+        ctx.fillRect(-8, 1, 16, 3.5);
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.fillRect(-8, 1, 16, 1);
+
+        const bw = baseWidth;
+        const bladeGrad = ctx.createLinearGradient(-bw / 2, 5, bw / 2, 5);
+        bladeGrad.addColorStop(0, '#8f9aa1');
+        bladeGrad.addColorStop(0.45, '#eef3f5');
+        bladeGrad.addColorStop(0.55, '#eef3f5');
+        bladeGrad.addColorStop(1, '#6f7a82');
+        ctx.fillStyle = bladeGrad;
+        ctx.beginPath();
+        ctx.moveTo(-bw / 2, 5);
+        ctx.lineTo(bw / 2, 5);
+        ctx.lineTo(bw / 2 - 1.5, 5 + length * 0.82);
+        ctx.lineTo(0, 5 + length);
+        ctx.lineTo(-(bw / 2 - 1.5), 5 + length * 0.82);
+        ctx.closePath();
+        ctx.fill();
+
+        if (glowColor){
+            ctx.save();
+            ctx.globalAlpha = edgeAlpha === undefined ? 1 : edgeAlpha;
+            ctx.strokeStyle = glowColor;
+            ctx.shadowColor = glowColor;
+            ctx.shadowBlur = 7;
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            ctx.moveTo(0, 6);
+            ctx.lineTo(0, 5 + length * 0.96);
+            ctx.stroke();
+            ctx.restore();
+        }
+    }
+
+    // a bright curved swoosh sweeping through the arc a blade just traveled
+    function drawSlashArc(cx, cy, radius, fromAngle, toAngle, color, alpha){
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = color;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 14;
+        ctx.lineWidth = 5;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, fromAngle, toAngle, toAngle < fromAngle);
+        ctx.stroke();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+        ctx.shadowBlur = 4;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, fromAngle, toAngle, toAngle < fromAngle);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    // little radiating spark burst, used for blocks/counters/kills
+    function drawSparkBurst(cx, cy, color, progress){
+        const n = 6;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, 1 - progress);
+        ctx.strokeStyle = color;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 8;
+        ctx.lineWidth = 2;
+        for (let i = 0; i < n; i++){
+            const a = (i / n) * Math.PI * 2;
+            const r0 = 3 + progress * 4;
+            const r1 = 3 + progress * 16;
+            ctx.beginPath();
+            ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
+            ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+
+    // ---------- enemies ----------
+    function drawEnemy(e){
+        const sx = e.x - camera.x;
+        const sy = e.y - camera.y;
+        if (sx < -100 || sx > W + 100) return;
+        const dying = !e.alive;
+        const deathT = dying ? 1 - Math.max(0, e.deathTimer) / 0.5 : 0; // 0..1
+        const alpha = dying ? Math.max(0, 1 - deathT * 1.3) : 1;
+        if (dying && e.deathParticles) drawDeathParticles(e, sx, sy);
+        if (dying && alpha <= 0) return;
+
+        // danger aura once the player is close enough to actually engage
+        const inRange = e.alive && Math.hypot(
+            (e.x + e.w / 2) - (player.x + player.w / 2),
+            (e.y + e.h / 2) - (player.y + player.h / 2)
+        ) <= SWORD_REACH;
+        if (inRange){
+            const pulse = 0.25 + 0.2 * Math.sin(gameTime * 8);
+            ctx.save();
+            ctx.globalAlpha = pulse;
+            ctx.fillStyle = '#ff3b3b';
+            ctx.shadowColor = '#ff3b3b';
+            ctx.shadowBlur = 16;
+            ctx.beginPath();
+            ctx.ellipse(sx + e.w / 2, sy + e.h * 0.55, e.w * 0.9, e.h * 0.55, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.translate(sx + e.w / 2, sy + e.h / 2);
+        if (dying) ctx.rotate(deathT * 1.7);
+        if (dying) ctx.scale(1 + deathT * 0.15, 1 - deathT * 0.3);
+
+        // legs, with a knee-joint highlight for some real shape
+        const legGrad = ctx.createLinearGradient(0, -e.h * 0.1, 0, e.h * 0.42);
+        legGrad.addColorStop(0, '#8b9198');
+        legGrad.addColorStop(1, '#5e6469');
+        ctx.fillStyle = legGrad;
+        roundRect(-9, e.h * 0.08, 7, e.h * 0.34, 2);
+        ctx.fill();
+        roundRect(2, e.h * 0.08, 7, e.h * 0.34, 2);
+        ctx.fill();
+        ctx.fillStyle = '#454a4f';
+        ctx.fillRect(-9, e.h * 0.08 + e.h * 0.16, 7, 3);
+        ctx.fillRect(2, e.h * 0.08 + e.h * 0.16, 7, 3);
+        // feet
+        ctx.fillStyle = '#3a3f44';
+        ctx.fillRect(-10, e.h * 0.42, 9, 5);
+        ctx.fillRect(1, e.h * 0.42, 9, 5);
+
+        // torso — flat-ish grey with just a hint of shading (this is a basic
+        // suburban-tier grunt, not a fancy machine — but "basic" still needs
+        // real form, not a solid rectangle)
+        const torsoGrad = ctx.createLinearGradient(-10, -e.h * 0.22, 10, e.h * 0.12);
+        torsoGrad.addColorStop(0, '#a8aeb4');
+        torsoGrad.addColorStop(0.5, '#8e949a');
+        torsoGrad.addColorStop(1, '#666c71');
+        ctx.fillStyle = torsoGrad;
+        roundRect(-10, -e.h * 0.22, 20, e.h * 0.36, 4);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(0,0,0,0.15)';
+        roundRect(-10, e.h * 0.08, 20, 4, 2);
+        ctx.fill();
+
+        // pauldron (shoulder plate) on the sword side — gives it silhouette
+        ctx.fillStyle = '#767c82';
+        ctx.beginPath();
+        ctx.moveTo(6, -e.h * 0.2);
+        ctx.lineTo(17, -e.h * 0.16);
+        ctx.lineTo(15, -e.h * 0.02);
+        ctx.lineTo(6, -e.h * 0.06);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = e.hitFlash > 0 ? '#ff5050' : 'rgba(0,0,0,0.25)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // off-arm
+        ctx.fillStyle = '#7d8389';
+        roundRect(-15, -e.h * 0.14, 6, e.h * 0.22, 2);
+        ctx.fill();
+
+        // head — angular, slanted visor so it actually reads as "hostile"
+        ctx.fillStyle = '#9aa0a6';
+        roundRect(-8, -e.h * 0.46, 16, 16, 3);
+        ctx.fill();
+        ctx.fillStyle = e.hitFlash > 0 ? '#ff4444' : '#22272c';
+        ctx.beginPath();
+        ctx.moveTo(-6, -e.h * 0.40);
+        ctx.lineTo(6, -e.h * 0.42);
+        ctx.lineTo(6, -e.h * 0.37);
+        ctx.lineTo(-6, -e.h * 0.35);
+        ctx.closePath();
+        ctx.fill();
+        if (e.hitFlash > 0){
+            ctx.save();
+            ctx.shadowColor = '#ff4444';
+            ctx.shadowBlur = 8;
+            ctx.fillStyle = '#ff4444';
+            ctx.fillRect(-5, -e.h * 0.395, 10, 2.5);
+            ctx.restore();
+        }
+        // small side vents on the helmet
+        ctx.fillStyle = '#5e6469';
+        ctx.fillRect(-9, -e.h * 0.42, 2, 6);
+        ctx.fillRect(7, -e.h * 0.42, 2, 6);
+
+        // sword arm: fast up/down swing while idle, held poses once engaged,
+        // with a motion trail while it's actually whipping back and forth
+        let swingAngle;
+        if (e.comboStep === 0) swingAngle = Math.sin(gameTime * 7 + e.x * 0.01) * 0.9;
+        else if (e.comboStep === 1) swingAngle = -1.1;      // stopped cold by the block
+        else swingAngle = 1.3;                              // forced back onto itself
+
+        if (e.comboStep === 0){
+            for (const off of [0.22, 0.4]){
+                ctx.save();
+                ctx.translate(12, -e.h * 0.1);
+                ctx.rotate(Math.sin(gameTime * 7 - off + e.x * 0.01) * 0.9);
+                ctx.globalAlpha = alpha * (0.16 - off * 0.2);
+                drawBlade(e.h * 0.4, 5, null);
+                ctx.restore();
+            }
+        }
+        ctx.save();
+        ctx.translate(12, -e.h * 0.1);
+        ctx.rotate(swingAngle);
+        ctx.fillStyle = '#7d8389';
+        roundRect(-3, 0, 6, e.h * 0.18, 2);
+        ctx.fill();
+        ctx.translate(0, e.h * 0.16);
+        drawBlade(e.h * 0.4, 6, e.comboStep >= 1 ? '#ff5a3d' : null, 0.9);
+        ctx.restore();
+
+        ctx.restore();
+
+        // Z / X / A progress pips above its head
+        if (e.alive){
+            const labels = ['Z', 'X', 'A'];
+            for (let i = 0; i < 3; i++){
+                const px = sx + e.w / 2 - 20 + i * 20;
+                const py = sy - e.h * 0.5 - 16;
+                const active = i < e.comboStep;
+                ctx.save();
+                if (active){ ctx.shadowColor = '#3dffb0'; ctx.shadowBlur = 6; }
+                ctx.fillStyle = active ? '#3dffb0' : 'rgba(0,0,0,0.45)';
+                ctx.beginPath();
+                ctx.arc(px, py, 7.5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+                ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.fillStyle = active ? '#08331f' : 'rgba(255,255,255,0.75)';
+                ctx.font = 'bold 9px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(labels[i], px, py + 3);
+            }
+        }
+    }
+
+    function drawDeathParticles(e, sx, sy){
+        for (const p of e.deathParticles){
+            const t = 1 - Math.max(0, e.deathTimer) / 0.5;
+            const px = sx + e.w / 2 + p.vx * t * 40;
+            const py = sy + e.h / 2 + p.vy * t * 40 + t * t * 60;
+            ctx.save();
+            ctx.globalAlpha = Math.max(0, 1 - t);
+            ctx.fillStyle = p.color;
+            ctx.shadowColor = p.color;
+            ctx.shadowBlur = 5;
+            ctx.fillRect(px - p.size / 2, py - p.size / 2, p.size, p.size);
+            ctx.restore();
+        }
+    }
+
+    function drawEnemies(){
+        for (const e of enemies) drawEnemy(e);
+    }
+
     // ---------- humanoid robot ----------
     function drawRobot(){
         const sx = player.x - camera.x;
@@ -913,7 +1294,7 @@
         ctx.fill();
         ctx.shadowBlur = 0;
 
-        // arms
+        // back arm
         ctx.fillStyle = '#8fa0ab';
         ctx.save();
         ctx.translate(-11, -player.h * 0.16);
@@ -921,10 +1302,46 @@
         ctx.fillRect(-4, 0, 8, player.h * 0.26);
         ctx.restore();
 
+        // front (sword) arm — pose depends on combat state
+        const swordLen = player.h * 0.58;
+        let swordArmAngle, swordAlpha, glowColor = '#4fd8ff';
+        let slashFrom = null, slashTo = null;
+        if (player.combatPose === 'block'){
+            swordArmAngle = -0.75; // raised diagonal guard
+            swordAlpha = 1;
+        } else if (player.combatPose === 'counter'){
+            const p = 1 - Math.max(0, player.combatTimer) / 0.28;
+            swordArmAngle = lerp(-0.75, -0.1, Math.min(1, p * 2)); // sharp forward thrust
+            swordAlpha = 1;
+            glowColor = '#ff5a3d';
+        } else if (player.combatPose === 'kill'){
+            const p = 1 - Math.max(0, player.combatTimer) / 0.35;
+            const startA = -1.3, endA = 1.5;
+            swordArmAngle = lerp(startA, endA, Math.min(1, p * 1.25));
+            swordAlpha = 1;
+            glowColor = '#ffffff';
+            if (p > 0.05 && p < 0.9){ slashFrom = startA; slashTo = swordArmAngle; }
+        } else {
+            swordArmAngle = jumpPose ? 0.6 : walk * 0.5;
+            swordAlpha = 0.55; // resting/sheathed look
+        }
+
+        if (slashFrom !== null){
+            // already inside the translate(cx,cy)+scale(facing,1) transform,
+            // so this is local space — same origin the sword arm itself uses
+            drawSlashArc(11, -player.h * 0.16, player.h * 0.5, slashFrom, slashTo, '#bfe9ff', 0.8);
+        }
+
         ctx.save();
         ctx.translate(11, -player.h * 0.16);
-        ctx.rotate(jumpPose ? 0.6 : walk * 0.5);
+        ctx.rotate(swordArmAngle);
+        ctx.fillStyle = '#8fa0ab';
         ctx.fillRect(-4, 0, 8, player.h * 0.26);
+        ctx.save();
+        ctx.globalAlpha = swordAlpha;
+        ctx.translate(0, player.h * 0.24);
+        drawBlade(swordLen, 7, glowColor, player.combatPose !== 'idle' ? 1 : 0.4);
+        ctx.restore();
         ctx.restore();
 
         // head
@@ -970,7 +1387,19 @@
     function render(){
         drawBackground();
         drawBuildings();
+        drawEnemies();
         drawRobot();
+        for (const fx of effects){
+            const progress = (gameTime - fx.start) / fx.duration;
+            drawSparkBurst(fx.x - camera.x, fx.y - camera.y, fx.color, progress);
+        }
+        if (deathFlash > 0){
+            ctx.save();
+            ctx.globalAlpha = (deathFlash / 0.3) * 0.55;
+            ctx.fillStyle = '#ff2020';
+            ctx.fillRect(0, 0, W, H);
+            ctx.restore();
+        }
     }
 
     let last = performance.now();
