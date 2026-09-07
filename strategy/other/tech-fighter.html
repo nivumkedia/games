@@ -274,94 +274,89 @@
     }
 
     // ---------- enemies ----------
-    // Every building across these stretches gets an enemy — no random
-    // skipping, no gaps. Whatever building is next, there's a fight on it.
+    // Exactly one of each, back to back starting at the second building —
+    // grunt, then patroller, then charger, then duelist. Nothing else in
+    // the whole level after that.
     const enemies = [];
 
-    // first enemy type: a plain, no-frills sword grunt — this is the suburban
-    // stretch of the city, so nothing fancy yet. Beaten with Z (block) then
-    // X (counter) then A (kill), strictly in that order.
-    for (const b of buildings){
-        if (b.t > 0.03 && b.t < 0.20){
-            enemies.push({
-                type: 'swordGrunt',
-                x: b.x + b.width * 0.5 - 18,
-                y: b.y - 66,
-                w: 36, h: 66,
-                alive: true,
-                comboStep: 0,
-                comboSequence: ['z', 'x', 'a'],
-                hitFlash: 0,
-                deathTimer: 0
-            });
-        }
+    // 1. sword grunt — plain, no-frills. In its starting state it blocks X:
+    // press X first and it blocks your attack and kills you. The real answer
+    // is A and Z, in EITHER order (AZ or ZA both work).
+    {
+        const b = buildings[1];
+        enemies.push({
+            type: 'swordGrunt',
+            x: b.x + b.width * 0.5 - 18,
+            y: b.y - 66,
+            w: 36, h: 66,
+            alive: true,
+            comboStep: 0,
+            blocks: ['x'], // any single X press fails — kill length is 2
+            hitFlash: 0,
+            deathTimer: 0
+        });
     }
 
-    // second enemy type: patrols its rooftop while slashing. Blocking (Z)
-    // only stops its sword — its legs keep walking through the whole fight,
-    // it never freezes. Same Z -> X -> A kill sequence as the first type.
-    for (const b of buildings){
-        if (b.t >= 0.20 && b.t < 0.38){
-            const margin = Math.min(18, b.width * 0.15);
-            const patrolMinX = b.x + margin;
-            const patrolMaxX = Math.max(patrolMinX, b.x + b.width - margin - 36);
-            enemies.push({
-                type: 'swordPatroller',
-                x: (patrolMinX + patrolMaxX) / 2,
-                y: b.y - 66,
-                w: 36, h: 66,
-                alive: true,
-                comboStep: 0,
-                comboSequence: ['z', 'x', 'a'],
-                hitFlash: 0,
-                deathTimer: 0,
-                patrolMinX, patrolMaxX,
-                patrolDir: rand() < 0.5 ? 1 : -1,
-                patrolSpeed: 55,
-                walkPhase: 0
-            });
-        }
+    // 2. sword patroller — walks its rooftop the whole fight; blocking its
+    // sword never stops its legs. Same Z -> X -> A sequence.
+    {
+        const b = buildings[2];
+        const margin = Math.min(18, b.width * 0.15);
+        const patrolMinX = b.x + margin;
+        const patrolMaxX = Math.max(patrolMinX, b.x + b.width - margin - 36);
+        enemies.push({
+            type: 'swordPatroller',
+            x: (patrolMinX + patrolMaxX) / 2,
+            y: b.y - 66,
+            w: 36, h: 66,
+            alive: true,
+            comboStep: 0,
+            blocks: ['xa'], // X into A (or A into X), anywhere — kill length is 3
+            hitFlash: 0,
+            deathTimer: 0,
+            patrolMinX, patrolMaxX,
+            patrolDir: rand() < 0.5 ? 1 : -1,
+            patrolSpeed: 55,
+            walkPhase: 0
+        });
     }
 
-    // third enemy type: charges straight at you, mid-slash the whole time.
-    // Sequence is X (counter) -> A (slash) -> Z -> Z, not the usual Z-X-A.
-    for (const b of buildings){
-        if (b.t >= 0.38 && b.t < 0.58){
-            const margin = Math.min(14, b.width * 0.12);
-            enemies.push({
-                type: 'chargerSlasher',
-                x: b.x + b.width * 0.5 - 18,
-                y: b.y - 66,
-                w: 36, h: 66,
-                alive: true,
-                comboStep: 0,
-                comboSequence: ['x', 'a', 'z', 'z'],
-                hitFlash: 0,
-                deathTimer: 0,
-                homeMinX: b.x + margin,
-                homeMaxX: Math.max(b.x + margin, b.x + b.width - margin - 36),
-                facing: 1
-            });
-        }
+    // 3. charger slasher — rushes straight at you, mid-slash the whole time.
+    // Sequence is X (counter) -> A (slash) -> Z -> Z.
+    {
+        const b = buildings[3];
+        const margin = Math.min(14, b.width * 0.12);
+        enemies.push({
+            type: 'chargerSlasher',
+            x: b.x + b.width * 0.5 - 18,
+            y: b.y - 66,
+            w: 36, h: 66,
+            alive: true,
+            comboStep: 0,
+            blocks: ['azx'], // A,Z,X (or X,Z,A) anywhere — kill length is 4
+            hitFlash: 0,
+            deathTimer: 0,
+            homeMinX: b.x + margin,
+            homeMaxX: Math.max(b.x + margin, b.x + b.width - margin - 36),
+            facing: 1
+        });
     }
 
-    // fourth enemy type: counters your first attempt, then attacks back with
-    // its own strike before you can finish it. Sequence is Z -> X -> A ->
-    // X -> A — beat it once, then beat it again.
-    for (const b of buildings){
-        if (b.t >= 0.58 && b.t < 0.80){
-            enemies.push({
-                type: 'duelist',
-                x: b.x + b.width * 0.5 - 18,
-                y: b.y - 66,
-                w: 36, h: 66,
-                alive: true,
-                comboStep: 0,
-                comboSequence: ['z', 'x', 'a', 'x', 'a'],
-                hitFlash: 0,
-                deathTimer: 0
-            });
-        }
+    // 4. duelist — counters your first attempt, then attacks back with its
+    // own strike before you can finish it. Z -> X -> A -> X -> A.
+    {
+        const b = buildings[4];
+        enemies.push({
+            type: 'duelist',
+            x: b.x + b.width * 0.5 - 18,
+            y: b.y - 66,
+            w: 36, h: 66,
+            alive: true,
+            comboStep: 0,
+            blocks: ['za', 'xz'], // Z into A, or X into Z (either direction) — kill length is 3
+            hitFlash: 0,
+            deathTimer: 0
+        });
     }
 
     // ---------- player: humanoid robot ----------
@@ -386,7 +381,7 @@
         const k = e.key.toLowerCase();
         keys[k] = true;
         if ([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k)) e.preventDefault();
-        if (k === 'z' || k === 'x' || k === 'a') handleCombatKey(k);
+        if (k === 'z' || k === 'x' || k === 'a' || k === 's') handleCombatKey(k);
     });
     window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 
@@ -482,13 +477,30 @@
         const midX = (player.x + player.w / 2 + target.x + target.w / 2) / 2;
         const midY = (player.y + target.y) / 2;
 
-        // each enemy carries its own key sequence — defaults to Z, X, A
-        const seq = target.comboSequence || ['z', 'x', 'a'];
-        const expected = seq[target.comboStep];
-        if (k === expected){
-            target.comboStep++;
+        // an enemy is beaten by pressing (block length + 1) keys total, as
+        // long as: no two presses in a row are the same letter, and the
+        // presses-so-far never spell out one of the enemy's blocks — forward
+        // OR backward. Any other combination of that length works.
+        target.pressedKeys = target.pressedKeys || [];
+        const blocks = target.blocks || ['z']; // fallback shouldn't normally be hit
+        const killLength = blocks[0].length + 1;
+
+        const lastKey = target.pressedKeys[target.pressedKeys.length - 1];
+        const repeatFail = lastKey === k;
+
+        const tentative = target.pressedKeys.concat([k]).join('');
+        const blockFail = blocks.some(b => {
+            const rev = b.split('').reverse().join('');
+            return tentative.includes(b) || tentative.includes(rev);
+        });
+
+        const correct = !repeatFail && !blockFail;
+        if (correct) target.pressedKeys.push(k);
+
+        if (correct){
+            target.comboStep = target.pressedKeys.length;
             target.hitFlash = 0.25;
-            const isFinalBlow = target.comboStep >= seq.length;
+            const isFinalBlow = target.pressedKeys.length >= killLength;
 
             // each key has its own animation/effect, independent of whether
             // it happens to be the finishing blow
@@ -500,6 +512,12 @@
                 player.combatPose = 'counter';
                 player.combatTimer = 0.28;
                 spawnEffect(target.x + target.w / 2, target.y + target.h * 0.4, '#ff5a3d', 0.4);
+            } else if (k === 's'){
+                // strikes from the flank — the sword sweeps in from behind
+                // the enemy instead of the front
+                player.combatPose = 'sideAttack';
+                player.combatTimer = 0.3;
+                spawnEffect(target.x + target.w / 2, target.y + target.h * 0.5, '#3dffb0', 0.35);
             } else { // 'a'
                 player.combatPose = 'kill';
                 player.combatTimer = 0.35;
@@ -1401,6 +1419,36 @@
         drawBlade(e.h * 0.4, 8, glowOverride || (e.comboStep >= 1 ? '#ff5a3d' : null), 0.9);
         ctx.restore();
 
+        ctx.restore();
+
+        if (e.alive) drawBlockLabel(e, sx, sy);
+    }
+
+    // what this enemy blocks, as a small readable tag above its head
+    function enemyBlockLabel(e){
+        if (!e.blocks) return '';
+        return 'BLOCKS ' + e.blocks.map(b => b.toUpperCase()).join(', ');
+    }
+
+    function drawBlockLabel(e, sx, sy){
+        const text = enemyBlockLabel(e);
+        if (!text) return;
+        const cx2 = sx + e.w / 2;
+        const topY = sy - e.h * 0.5 - 16;
+        ctx.save();
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        const padX = 8, padY = 5;
+        const textW = ctx.measureText(text).width;
+        const boxW = textW + padX * 2, boxH = 16 + padY;
+        roundRect(cx2 - boxW / 2, topY - boxH, boxW, boxH, 6);
+        ctx.fillStyle = 'rgba(20,10,10,0.75)';
+        ctx.fill();
+        ctx.strokeStyle = '#ff5a3d';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        ctx.fillStyle = '#ffb3a0';
+        ctx.fillText(text, cx2, topY - boxH / 2 + 4);
         ctx.restore();
     }
 
