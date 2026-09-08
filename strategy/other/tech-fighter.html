@@ -89,7 +89,7 @@
     <canvas id="game" width="960" height="540"></canvas>
 </div>
 
-<div id="hud">Move: <b>Arrow Keys</b> &nbsp;·&nbsp; Jump: <b>SPACE / UP</b> &nbsp;·&nbsp; Fight: <b>Z</b> block, <b>X</b> counter, <b>A</b> slash, <b>S</b> flank, <b>Q</b> duck</div>
+<div id="hud">Move: <b>Arrow Keys</b> &nbsp;·&nbsp; Jump: <b>SPACE / UP</b> &nbsp;·&nbsp; Fight: <b>Z</b> block, <b>X</b> counter, <b>A</b> slash, <b>S</b> flank, <b>Q</b> duck, <b>C</b> flip</div>
 <div id="progress-wrap">
     <div id="progress-label">City Progress</div>
     <div id="progress-bar-bg"><div id="progress-bar-fill"></div></div>
@@ -430,10 +430,31 @@
         });
     }
 
+    // 9. phantom — introduces C: jump, flip, and land on the other side of
+    // it, then you have 1s to finish the combo from there. Blocks CAZX
+    // (kill length 5) — C itself is always safe to open with since a single
+    // press can never complete a 4-letter block, but following it with
+    // exactly A, Z, X is the trap.
+    {
+        const b = buildings[9];
+        enemies.push({
+            type: 'phantom',
+            x: b.x + b.width * 0.5 - 18,
+            y: b.y - 66,
+            w: 36, h: 66,
+            alive: true,
+            comboStep: 0,
+            blocks: ['cazx'],
+            hitFlash: 0,
+            deathTimer: 0,
+            comboWindowTimer: 0
+        });
+    }
+
     // ---------- player: humanoid robot ----------
     const player = {
-        x: buildings[8].x + 10,
-        y: buildings[8].y - 74,
+        x: buildings[9].x + 10,
+        y: buildings[9].y - 74,
         w: 40, h: 74,
         vx: 0, vy: 0,
         onGround: false,
@@ -452,11 +473,11 @@
         const k = e.key.toLowerCase();
         keys[k] = true;
         if ([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k)) e.preventDefault();
-        if (k === 'z' || k === 'x' || k === 'a' || k === 's' || k === 'q') handleCombatKey(k);
+        if (k === 'z' || k === 'x' || k === 'a' || k === 's' || k === 'q' || k === 'c') handleCombatKey(k);
     });
     window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 
-    let lastRespawnBuildingIdx = 8;
+    let lastRespawnBuildingIdx = 9;
 
     function respawnPlayer(){
         const rb = buildings[lastRespawnBuildingIdx];
@@ -470,6 +491,7 @@
             if (e.alive){
                 e.comboStep = 0;
                 e.pressedKeys = [];
+                e.comboWindowTimer = 0;
             }
             e.punishPose = null;
             e.punishLunge = 0;
@@ -489,6 +511,8 @@
     // Q doesn't exist as a move until you reach the swinger enemy
     let qUnlocked = false;
     const SWING_ENGAGE_RANGE = 220; // how close you need to be for its swing to threaten you
+    // C doesn't exist as a move until you reach the phantom enemy
+    let cUnlocked = false;
 
     // wrong key / wrong order -> the enemy blocks whatever you just tried,
     // then strikes you down. A brief, readable two-beat sequence instead of
@@ -511,6 +535,16 @@
         for (const e of enemies){
             if (e.hitFlash > 0) e.hitFlash = Math.max(0, e.hitFlash - dt);
             if (!e.alive && e.deathTimer > 0) e.deathTimer = Math.max(0, e.deathTimer - dt);
+
+            // the 1s window C opens to finish a combo — run out of time and
+            // it kills you, same as any other wrong move
+            if (e.alive && e.comboWindowTimer > 0){
+                e.comboWindowTimer -= dt;
+                if (e.comboWindowTimer <= 0){
+                    e.comboWindowTimer = 0;
+                    if (!(deathSequence && deathSequence.phase)) startPunishSequence(e);
+                }
+            }
 
             // patrollers keep walking their rooftop no matter what — blocking
             // their sword never stops their legs, even mid-fight
@@ -590,6 +624,7 @@
         if (deathSequence && deathSequence.phase) return; // mid punish sequence — no interrupting it
         if (k === 's' && !sUnlocked) return; // S doesn't exist yet
         if (k === 'q' && !qUnlocked) return; // Q doesn't exist yet
+        if (k === 'c' && !cUnlocked) return; // C doesn't exist yet
 
         // swinger enemies are a completely different mechanic — a timed
         // dodge, not a key-order puzzle — so handle them before anything else
@@ -683,6 +718,17 @@
                 player.combatPose = 'sideAttack';
                 player.combatTimer = 0.3;
                 spawnEffect(target.x + target.w / 2, target.y + target.h * 0.5, '#3dffb0', 0.35);
+            } else if (k === 'c'){
+                // jump, flip, and land on the opposite side of the enemy —
+                // then you've got 1 second to finish the combo from there
+                const targetCx = target.x + target.w / 2;
+                const wasLeft = (player.x + player.w / 2) < targetCx;
+                player.x = wasLeft ? (targetCx + 25) : (targetCx - 25 - player.w);
+                player.facing = wasLeft ? -1 : 1;
+                player.combatPose = 'flip';
+                player.combatTimer = 0.6;
+                target.comboWindowTimer = 1.0;
+                spawnEffect(targetCx, target.y + target.h * 0.3, '#b060ff', 0.35);
             } else { // 'a'
                 player.combatPose = 'kill';
                 player.combatTimer = 0.35;
@@ -759,6 +805,7 @@
         if (deathFlash > 0) deathFlash = Math.max(0, deathFlash - dt);
         if (!sUnlocked && player.x >= buildings[5].x - 40) sUnlocked = true;
         if (!qUnlocked && player.x >= buildings[8].x - 40) qUnlocked = true;
+        if (!cUnlocked && player.x >= buildings[9].x - 40) cUnlocked = true;
         updateEnemies(dt);
 
         if (deathSequence && deathSequence.phase){
@@ -1672,6 +1719,17 @@
         ctx.scale(player.facing, player.combatPose === 'duck' ? 0.42 : 1);
         if (player.combatPose === 'staggered') ctx.rotate(-0.12); // knocked off balance
         else if (player.combatPose === 'hit') ctx.rotate(0.22);   // reeling from the strike
+        else if (player.combatPose === 'flip'){
+            // a real parabolic arc at the same peak height as your normal
+            // jump (4h*t*(1-t) is exactly the shape of constant-gravity
+            // projectile motion) — rises, somersaults near the peak, then
+            // accelerates back down to a clean landing, same as falling
+            // normally off a regular jump
+            const fp = 1 - Math.max(0, player.combatTimer) / 0.6;
+            const spinT = Math.min(1, fp / 0.8);
+            ctx.translate(0, -4 * MAX_JUMP_RISE * fp * (1 - fp)); // jump arc
+            ctx.rotate(spinT * Math.PI * 2); // one full somersault
+        }
 
         const walk = player.onGround ? Math.sin(player.runPhase) : 0;
         const jumpPose = !player.onGround;
