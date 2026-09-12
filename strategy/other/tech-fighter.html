@@ -89,7 +89,7 @@
     <canvas id="game" width="960" height="540"></canvas>
 </div>
 
-<div id="hud">Move: <b>Arrow Keys</b> &nbsp;·&nbsp; Jump: <b>SPACE / UP</b> &nbsp;·&nbsp; Fight: <b>Z</b> block, <b>X</b> counter, <b>A</b> slash, <b>S</b> flank, <b>Q</b> duck, <b>C</b> flip, <b>W</b> kick</div>
+<div id="hud">Move: <b>Arrow Keys</b> &nbsp;·&nbsp; Jump: <b>SPACE / UP</b> &nbsp;·&nbsp; Fight: <b>Z</b> block, <b>X</b> counter, <b>A</b> slash, <b>S</b> flank, <b>Q</b> duck, <b>C</b> flip, <b>W</b> duck</div>
 <div id="progress-wrap">
     <div id="progress-label">City Progress</div>
     <div id="progress-bar-bg"><div id="progress-bar-fill"></div></div>
@@ -476,8 +476,9 @@
         });
     }
 
-    // 11. kicker — a regular headswing, but W alone ducks it AND kills it in
-    // one move (duck -> legs spring up -> flip -> kick).
+    // 11. kicker — a regular headswing, ducked with W (same timing/rules as
+    // Q on the swinger); no follow-up key — once you're back up, the kick
+    // lands automatically.
     {
         const b = buildings[11];
         enemies.push({
@@ -492,14 +493,37 @@
             swingState: 'idle',
             swingTimer: randRange(1, 3),
             swingStateTimer: 0,
-            duckKillKey: 'w'
+            duckKey: 'w',
+            finishPose: 'kick',
+            autoFinish: true
+        });
+    }
+
+    // 12. resister — introduces resistance: W is required somewhere in the
+    // combo, but the enemy resists it as a finishing blow, so landing on W
+    // at kill length doesn't actually kill it — you need a different key to
+    // close it out. Also blocks A outright.
+    {
+        const b = buildings[12];
+        enemies.push({
+            type: 'resister',
+            x: b.x + b.width * 0.5 - 18,
+            y: b.y - 66,
+            w: 36, h: 66,
+            alive: true,
+            comboStep: 0,
+            blocks: ['a'],
+            resist: 'w',
+            requiredKey: 'w',
+            hitFlash: 0,
+            deathTimer: 0
         });
     }
 
     // ---------- player: humanoid robot ----------
     const player = {
-        x: buildings[11].x + 10,
-        y: buildings[11].y - 74,
+        x: buildings[12].x + 10,
+        y: buildings[12].y - 74,
         w: 40, h: 74,
         vx: 0, vy: 0,
         onGround: false,
@@ -522,7 +546,7 @@
     });
     window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 
-    let lastRespawnBuildingIdx = 11;
+    let lastRespawnBuildingIdx = 12;
 
     function respawnPlayer(){
         const rb = buildings[lastRespawnBuildingIdx];
@@ -577,7 +601,7 @@
     // shared finishing-blow logic for any "duckable" (swingState) enemy
     function killSwingerEnemy(e, pose){
         player.combatPose = pose || 'kill';
-        player.combatTimer = pose === 'duckKick' ? 0.9 : 0.35;
+        player.combatTimer = pose === 'duckKick' ? 0.9 : (pose === 'kick' ? 0.6 : 0.35);
         e.alive = false;
         e.deathTimer = 0.5;
         e.deathParticles = [];
@@ -681,7 +705,11 @@
                 } else if (e.swingState === 'open'){
                     e.swingStateTimer -= dt;
                     if (e.swingStateTimer <= 0){
-                        if (e.openWindowKills && !(deathSequence && deathSequence.phase)){
+                        if (e.autoFinish){
+                            // no follow-up key needed — once you're back on
+                            // your feet from the duck, the kick lands itself
+                            killSwingerEnemy(e, e.finishPose);
+                        } else if (e.openWindowKills && !(deathSequence && deathSequence.phase)){
                             spawnEffect(player.x + player.w / 2, player.y + player.h * 0.3, '#ff3030', 0.35);
                             respawnPlayer();
                         } else {
@@ -735,9 +763,9 @@
                     return;
                 }
 
-                if (k === 'q' && e.swingState === 'telegraph'){
+                if (k === (e.duckKey || 'q') && e.swingState === 'telegraph'){
                     e.swingState = 'open';
-                    e.swingStateTimer = e.openWindowDuration || 1.5;
+                    e.swingStateTimer = e.autoFinish ? (e.autoFinishDelay != null ? e.autoFinishDelay : 0.6) : (e.openWindowDuration || 1.5);
                     player.combatPose = 'duck';
                     player.combatTimer = 0.4;
                     spawnEffect(player.x + player.w / 2, player.y + player.h * 0.3, '#3dffb0', 0.3);
@@ -758,7 +786,7 @@
                         spawnEffect(e.x + e.w / 2, e.y + e.h * 0.4, '#b060ff', 0.3);
                         return;
                     }
-                    killSwingerEnemy(e);
+                    killSwingerEnemy(e, e.finishPose);
                     return;
                 }
 
@@ -809,7 +837,15 @@
         if (correct){
             target.comboStep = target.pressedKeys.length;
             target.hitFlash = 0.25;
-            const isFinalBlow = target.pressedKeys.length >= killLength;
+            // resistance: some enemies shrug off one specific key as a
+            // finishing blow — everything about the press still lands
+            // (animation, hit flash, it's added to the sequence) but it
+            // just doesn't kill, so you need a different key to close it out.
+            // requiredKey is separate: that key must show up somewhere in
+            // the sequence before any finishing blow counts at all.
+            const isFinalBlow = target.pressedKeys.length >= killLength
+                && k !== target.resist
+                && (!target.requiredKey || target.pressedKeys.includes(target.requiredKey));
 
             // each key has its own animation/effect, independent of whether
             // it happens to be the finishing blow
@@ -1769,7 +1805,9 @@
     // what this enemy blocks, as a small readable tag above its head
     function enemyBlockLabel(e){
         if (!e.blocks) return '';
-        return 'BLOCKS ' + e.blocks.map(b => b.toUpperCase()).join(', ');
+        let text = 'BLOCKS ' + e.blocks.map(b => b.toUpperCase()).join(', ');
+        if (e.resist) text += ' · RESISTS ' + e.resist.toUpperCase();
+        return text;
     }
 
     function drawBlockLabel(e, sx, sy){
@@ -1857,6 +1895,16 @@
             ctx.translate(0, -4 * (MAX_JUMP_RISE * 0.6) * hopT * (1 - hopT));
             ctx.rotate(Math.min(1, hopT / 0.85) * Math.PI); // half flip, lands facing forward
             kickE = Math.sin(Math.min(1, Math.max(0, (kp - 0.78) / 0.22)) * Math.PI); // kick hump near the peak
+        }
+
+        // finishing kick thrown from standing (already got up from the duck
+        // earlier) — straight into the hop+flip+kick, no re-crouch first
+        if (player.combatPose === 'kick'){
+            const kp = 1 - Math.max(0, player.combatTimer) / 0.6;
+            const hopT = Math.min(1, Math.max(0, kp / 0.75));
+            ctx.translate(0, -4 * (MAX_JUMP_RISE * 0.6) * hopT * (1 - hopT));
+            ctx.rotate(Math.min(1, hopT / 0.85) * Math.PI); // half flip, lands facing forward
+            kickE = Math.sin(Math.min(1, Math.max(0, (kp - 0.3) / 0.4)) * Math.PI); // kick hump near the peak
         }
 
         const walk = player.onGround ? Math.sin(player.runPhase) : 0;
