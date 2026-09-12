@@ -499,10 +499,11 @@
         });
     }
 
-    // 12. resister — introduces resistance: W is required somewhere in the
-    // combo, but the enemy resists it as a finishing blow, so landing on W
-    // at kill length doesn't actually kill it — you need a different key to
-    // close it out. Also blocks A outright.
+    // 12. resister — a headswing ducked with W (same as the kicker), then
+    // introduces resistance: W is required somewhere in the finishing combo,
+    // but the enemy resists it as a finishing blow, so landing on W at kill
+    // length doesn't actually kill it — you need a different key to close
+    // it out. Also blocks A outright.
     {
         const b = buildings[12];
         enemies.push({
@@ -516,7 +517,12 @@
             resist: 'w',
             requiredKey: 'w',
             hitFlash: 0,
-            deathTimer: 0
+            deathTimer: 0,
+            swingState: 'idle',
+            swingTimer: randRange(1, 3),
+            swingStateTimer: 0,
+            duckKey: 'w',
+            duckHandoff: true
         });
     }
 
@@ -764,11 +770,18 @@
                 }
 
                 if (k === (e.duckKey || 'q') && e.swingState === 'telegraph'){
-                    e.swingState = 'open';
-                    e.swingStateTimer = e.autoFinish ? (e.autoFinishDelay != null ? e.autoFinishDelay : 0.6) : (e.openWindowDuration || 1.5);
                     player.combatPose = 'duck';
                     player.combatTimer = 0.4;
                     spawnEffect(player.x + player.w / 2, player.y + player.h * 0.3, '#3dffb0', 0.3);
+                    if (e.duckHandoff){
+                        // duck is just the opener — hand this enemy off to
+                        // the regular blocks/resistance combo system to
+                        // actually finish it
+                        e.swingState = null;
+                        return;
+                    }
+                    e.swingState = 'open';
+                    e.swingStateTimer = e.autoFinish ? (e.autoFinishDelay != null ? e.autoFinishDelay : 0.6) : (e.openWindowDuration || 1.5);
                     return;
                 }
 
@@ -803,7 +816,12 @@
             const dx = (e.x + e.w / 2) - (player.x + player.w / 2);
             const dy = (e.y + e.h / 2) - (player.y + player.h / 2);
             const dist = Math.hypot(dx, dy);
-            if (dist <= SWORD_REACH && dist < bestDist){ bestDist = dist; target = e; }
+            // an enemy handed off from a duck (e.g. the resister) can be
+            // ducked from as far as SWING_ENGAGE_RANGE, so it needs to stay
+            // reachable at that same range right after — not shrink to the
+            // tighter melee-only SWORD_REACH the stationary puzzle enemies use
+            const reach = e.duckHandoff ? SWING_ENGAGE_RANGE : SWORD_REACH;
+            if (dist <= reach && dist < bestDist){ bestDist = dist; target = e; }
         }
         if (!target) return; // nothing in reach — key does nothing
 

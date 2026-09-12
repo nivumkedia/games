@@ -37,7 +37,7 @@
 </head>
 <body>
 <div id="wrap"><canvas id="game" width="960" height="540"></canvas></div>
-<div id="help"><b>←</b>/<b>→</b> move &nbsp;·&nbsp; <b>↑</b> jump &nbsp;·&nbsp; <b>Z</b> punch &nbsp;·&nbsp; <b>A</b> kick &nbsp;·&nbsp; <b>X</b> block &nbsp;·&nbsp; <b>Enter</b> start</div>
+<div id="help"><b>←</b>/<b>→</b> move &nbsp;·&nbsp; <b>↑</b> jump &nbsp;·&nbsp; <b>S</b> duck &nbsp;·&nbsp; <b>W</b> lean &nbsp;·&nbsp; <b>X</b> punch &nbsp;·&nbsp; <b>A</b> kick &nbsp;·&nbsp; <b>Q</b> low kick &nbsp;·&nbsp; <b>C</b> low punch &nbsp;·&nbsp; <b>Z</b> block &nbsp;·&nbsp; <b>Enter</b> start</div>
 <script>
 const cv = document.getElementById('game');
 const ctx = cv.getContext('2d');
@@ -46,17 +46,21 @@ const GROUND = 452;
 const LEFT_WALL = 70, RIGHT_WALL = W - 70;
 
 const ATTACKS = {
-    punch: { startup:5,  active:4, recovery:9,  dmg:6,  reach:66, top:-132, bottom:-94, kb:3.2, kbUp:0,    name:'punch' },
-    kick:  { startup:10, active:6, recovery:18, dmg:12, reach:84, top:-96,  bottom:-46, kb:7,   kbUp:-3.2, name:'kick'  }
+    punch: { startup:45, active:4, recovery:9,  dmg:6,  reach:62, top:-132, bottom:-94, kb:3.2, kbUp:0,    name:'punch' },
+    kick:  { startup:10, active:6, recovery:18, dmg:12, reach:52, top:-140, bottom:-96, kb:7,   kbUp:-3.2, name:'kick'  },
+    lowkick: { startup:8, active:5, recovery:14, dmg:8, reach:58, top:-64,  bottom:-4,  kb:5,   kbUp:0,    name:'lowkick' },
+    lowpunch: { startup:14, active:4, recovery:10, dmg:5, reach:56, top:-70, bottom:-30, kb:2.5, kbUp:0,   name:'lowpunch' }
 };
 
 const keys = {};
 addEventListener('keydown', e => {
-    if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyZ','KeyA','KeyX','Space','Enter'].includes(e.code)) e.preventDefault();
+    if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyZ','KeyA','KeyX','KeyS','KeyQ','KeyC','KeyW','Space','Enter'].includes(e.code)) e.preventDefault();
     if (!keys[e.code]) keys[e.code + '_p'] = true;
     keys[e.code] = true;
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+document.addEventListener('visibilitychange', () => { if (document.hidden) for (const k in keys) keys[k] = false; });
 function pressed(code) { if (keys[code + '_p']) { keys[code + '_p'] = false; return true; } return false; }
 function clearPresses() { for (const k in keys) if (k.endsWith('_p')) keys[k] = false; }
 
@@ -65,7 +69,8 @@ function makeFighter(x, facing, isBot, color, name) {
         x, y:GROUND, vx:0, vy:0, facing, isBot, color, name,
         hp:100, state:'idle', timer:0, attack:null, hasHit:false,
         onGround:true, blocking:false, walkPhase:0, flash:0,
-        botTimer:0, botPlan:'wait', comboCount:0
+        botTimer:0, botPlan:'wait', comboCount:0, blockSince:null, attackStartFrame:0,
+        reactAttackId:-1, reactChoice:null
     };
 }
 
@@ -75,7 +80,7 @@ const p2 = makeFighter(660, -1, true, '#d84315', 'BOT');
 let mode = 'title';
 let round = 1, winsP1 = 0, winsP2 = 0;
 let banner = '', bannerTimer = 0;
-let freeze = 0, shake = 0, timeLeft = 60 * 60;
+let freeze = 0, shake = 0, timeLeft = 60 * 60, frame = 0;
 const particles = [];
 
 function resetRound() {
@@ -83,7 +88,7 @@ function resetRound() {
     for (const f of [p1, p2]) {
         f.y = GROUND; f.vx = 0; f.vy = 0; f.hp = 100;
         f.state = 'idle'; f.timer = 0; f.attack = null; f.hasHit = false;
-        f.onGround = true; f.blocking = false; f.flash = 0; f.comboCount = 0;
+        f.onGround = true; f.blocking = false; f.flash = 0; f.comboCount = 0; f.blockSince = null;
     }
     p1.facing = 1; p2.facing = -1;
     timeLeft = 60 * 60;
@@ -110,52 +115,69 @@ function beginAttack(f, kind) {
     f.attack = ATTACKS[kind];
     f.timer = 0;
     f.hasHit = false;
-    f.vx *= 0.2;
+    f.attackStartFrame = frame;
+    f.vx = kind === 'kick' ? f.facing * 2.4 : (kind === 'lowkick' ? f.facing * 1.6 : f.vx * 0.2);
 }
 
 function canAct(f) {
-    return f.state === 'idle' || f.state === 'walk' || f.state === 'block';
+    return f.state === 'idle' || f.state === 'walk' || f.state === 'block' || f.state === 'duck' || f.state === 'parry' || f.state === 'lean';
 }
 
-function hurt(f, atk, fromFacing) {
+function hurtTop(f) {
+    return f.state === 'duck' ? 92 : 152;
+}
+
+function hurt(f, atk, fromFacing, isParry) {
     const blocked = f.blocking && f.onGround && Math.sign(fromFacing) !== Math.sign(f.facing);
-    const dmg = blocked ? atk.dmg * 0.18 : atk.dmg;
+    const parry = blocked && isParry;
+    const dmg = parry ? 0 : (blocked ? atk.dmg * 0.18 : atk.dmg);
     f.hp = Math.max(0, f.hp - dmg);
-    f.vx = fromFacing * atk.kb * (blocked ? 0.35 : 1);
+    f.vx = fromFacing * atk.kb * (parry ? 0.1 : (blocked ? 0.35 : 1));
     if (!blocked && atk.kbUp) { f.vy = atk.kbUp; f.onGround = false; }
-    f.state = blocked ? 'block' : 'hurt';
+    f.state = blocked ? (parry ? 'parry' : 'block') : 'hurt';
     f.timer = 0;
     f.attack = null;
-    f.hurtDur = blocked ? 8 : (atk === ATTACKS.kick ? 24 : 15);
+    f.hurtDur = blocked ? (parry ? 18 : 8) : (atk === ATTACKS.kick ? 24 : 15);
     f.flash = blocked ? 4 : 9;
     const hy = f.y + (atk.top + atk.bottom) / 2;
-    burst(f.x + fromFacing * -10, hy, blocked ? '#78909c' : '#ff7043', blocked ? 6 : 14, blocked ? 2 : 4.5);
-    freeze = blocked ? 2 : (atk === ATTACKS.kick ? 7 : 4);
-    shake = blocked ? 2 : (atk === ATTACKS.kick ? 9 : 5);
-    return blocked;
+    burst(f.x + fromFacing * -10, hy, parry ? '#ffd54f' : (blocked ? '#78909c' : '#ff7043'), parry ? 18 : (blocked ? 6 : 14), parry ? 5.5 : (blocked ? 2 : 4.5));
+    freeze = parry ? 11 : (blocked ? 2 : (atk === ATTACKS.kick ? 7 : 4));
+    shake = parry ? 4 : (blocked ? 2 : (atk === ATTACKS.kick ? 9 : 5));
+    return { blocked, parry };
 }
 
 function updateFighter(f, foe) {
     const live = mode === 'fight';
 
     if (live && canAct(f)) {
-        let move = 0, jump = false, punch = false, kick = false, block = false;
+        let move = 0, jump = false, punch = false, kick = false, lowkick = false, lowpunch = false, block = false, duck = false, lean = false;
         if (f.isBot) {
             const inp = botThink(f, foe);
-            move = inp.move; jump = inp.jump; punch = inp.punch; kick = inp.kick; block = inp.block;
+            move = inp.move; jump = inp.jump; punch = inp.punch; kick = inp.kick; lowkick = inp.lowkick; lowpunch = inp.lowpunch; block = inp.block; duck = inp.duck; lean = inp.lean;
         } else {
             move = (keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0);
             jump = pressed('ArrowUp');
-            punch = pressed('KeyZ');
+            punch = pressed('KeyX');
             kick = pressed('KeyA');
-            block = !!keys.KeyX;
+            lowkick = pressed('KeyQ');
+            lowpunch = pressed('KeyC');
+            block = !!keys.KeyZ;
+            duck = !!keys.KeyS;
+            lean = !!keys.KeyW;
         }
 
+        const wasBlocking = f.blocking;
         f.blocking = block && f.onGround;
+        if (f.blocking && !wasBlocking) f.blockSince = frame;
+        if (!f.blocking) f.blockSince = null;
 
         if (punch) beginAttack(f, 'punch');
         else if (kick) beginAttack(f, 'kick');
+        else if (lowkick) beginAttack(f, 'lowkick');
+        else if (lowpunch) beginAttack(f, 'lowpunch');
         else if (f.blocking) { f.state = 'block'; f.vx *= 0.6; }
+        else if (duck && f.onGround) { f.state = 'duck'; f.vx *= 0.55; }
+        else if (lean && f.onGround) { f.state = 'lean'; f.vx *= 0.5; }
         else {
             if (jump && f.onGround) { f.vy = -13.5; f.onGround = false; }
             const speed = f.onGround ? 3.6 : 2.8;
@@ -170,6 +192,7 @@ function updateFighter(f, foe) {
         }
     } else if (!canAct(f)) {
         f.blocking = false;
+        f.blockSince = null;
     }
 
     if (f.state === 'attack') {
@@ -180,17 +203,27 @@ function updateFighter(f, foe) {
             const hx1 = f.facing > 0 ? f.x + 14 : f.x - 14 - a.reach;
             const hx2 = hx1 + a.reach;
             const bx1 = foe.x - 20, bx2 = foe.x + 20;
-            const by1 = foe.y - 152, by2 = foe.y - 4;
+            const by1 = foe.y - hurtTop(foe), by2 = foe.y - 4;
             if (hx2 > bx1 && hx1 < bx2 && foe.y + a.bottom > by1 && foe.y + a.top < by2 && foe.state !== 'hurt') {
                 f.hasHit = true;
-                const blocked = hurt(foe, a, f.facing);
-                if (!blocked) f.comboCount++;
+                if (a.name === 'punch' && foe.state === 'lean') {
+                    burst(foe.x - foe.facing * 12, foe.y + (a.top + a.bottom) / 2, '#ffffff', 7, 2.4);
+                    f.comboCount = 0;
+                } else {
+                const isParry = a === ATTACKS.punch && foe.blocking && foe.blockSince !== null && foe.blockSince <= f.attackStartFrame + a.startup;
+                const result = hurt(foe, a, f.facing, isParry);
+                if (!result.blocked) f.comboCount++;
+                if (result.parry) {
+                    f.state = 'hurt'; f.timer = 0; f.hurtDur = 20; f.attack = null;
+                    f.vx = -f.facing * 4; f.flash = 6; f.comboCount = 0;
+                }
+                }
             }
         }
         if (f.timer >= a.startup + a.active + a.recovery) {
             f.state = 'idle'; f.attack = null; f.comboCount = 0;
         }
-    } else if (f.state === 'hurt' || (f.state === 'block' && f.hurtDur > 0 && f.timer < f.hurtDur)) {
+    } else if (f.state === 'hurt' || ((f.state === 'block' || f.state === 'parry') && f.hurtDur > 0 && f.timer < f.hurtDur)) {
         f.timer++;
         f.vx *= 0.9;
         if (f.timer >= f.hurtDur) { f.state = 'idle'; f.hurtDur = 0; }
@@ -228,7 +261,7 @@ function separate(a, b) {
 }
 
 function botThink(f, foe) {
-    const out = { move:0, jump:false, punch:false, kick:false, block:false };
+    const out = { move:0, jump:false, punch:false, kick:false, lowkick:false, lowpunch:false, block:false, duck:false, lean:false };
     const dist = Math.abs(foe.x - f.x);
     const dir = Math.sign(foe.x - f.x) || 1;
     const foeAttacking = foe.state === 'attack';
@@ -239,13 +272,26 @@ function botThink(f, foe) {
         f.botTimer = 8 + Math.floor(Math.random() * 12);
         const r = Math.random();
         if (dist > 150) f.botPlan = 'approach';
-        else if (dist > 95) f.botPlan = r < 0.65 ? 'approach' : (r < 0.85 ? 'kick' : 'retreat');
-        else if (dist > 50) f.botPlan = r < 0.45 ? 'punch' : (r < 0.7 ? 'kick' : (r < 0.88 ? 'wait' : 'retreat'));
-        else f.botPlan = r < 0.5 ? 'punch' : (r < 0.7 ? 'retreat' : 'wait');
+        else if (dist > 95) f.botPlan = r < 0.6 ? 'approach' : (r < 0.8 ? 'kick' : (r < 0.9 ? 'lowkick' : 'retreat'));
+        else if (dist > 50) f.botPlan = r < 0.35 ? 'punch' : (r < 0.55 ? 'kick' : (r < 0.72 ? 'lowkick' : (r < 0.84 ? 'lowpunch' : (r < 0.92 ? 'wait' : 'retreat'))));
+        else f.botPlan = r < 0.35 ? 'punch' : (r < 0.55 ? 'lowpunch' : (r < 0.75 ? 'lowkick' : (r < 0.88 ? 'retreat' : 'wait')));
     }
 
-    if (foeStartup && dist < 110 && Math.random() < 0.35) {
-        out.block = true;
+    if (foe.state === 'duck' && dist < 76) {
+        out[Math.random() < 0.5 ? 'lowkick' : 'lowpunch'] = true;
+        return out;
+    }
+    if (foeAttacking && f.reactAttackId !== foe.attackStartFrame) {
+        f.reactAttackId = foe.attackStartFrame;
+        const r = Math.random();
+        if (foe.attack.name === 'punch') {
+            f.reactChoice = r < 0.28 ? 'lean' : r < 0.5 ? 'duck' : r < 0.72 ? 'block' : 'none';
+        } else {
+            f.reactChoice = r < 0.22 ? 'duck' : r < 0.42 ? 'block' : 'none';
+        }
+    }
+    if (foeStartup && dist < 120 && f.reactChoice && f.reactChoice !== 'none') {
+        out[f.reactChoice] = true;
         return out;
     }
     if (foe.state === 'hurt' && dist < 90 && Math.random() < 0.5) {
@@ -258,131 +304,166 @@ function botThink(f, foe) {
         case 'retreat': out.move = -dir; if (Math.random() < 0.02) out.jump = true; break;
         case 'punch': if (dist < 74) out.punch = true; else out.move = dir; break;
         case 'kick': if (dist < 92) out.kick = true; else out.move = dir; break;
+        case 'lowkick': if (dist < 78) out.lowkick = true; else out.move = dir; break;
+        case 'lowpunch': if (dist < 68) out.lowpunch = true; else out.move = dir; break;
         default: if (Math.random() < 0.04) out.jump = true;
     }
     return out;
 }
 
-function pt(x, y, deg, len) {
-    const r = deg * Math.PI / 180;
-    return { x: x + Math.cos(r) * len, y: y + Math.sin(r) * len };
+const STANCE = { hipY:-66, torso:48, neck:22, lean:5, headX:0, ffx:30, ffy:0, bfx:-32, bfy:0, fhx:30, fhy:-130, bhx:8, bhy:-136 };
+
+const POSE = {
+    punchLoad: { lean:-3,  fhx:8,  fhy:-132, bhx:2,   bhy:-138, hipY:-68 },
+    punchHit:  { lean:11,  fhx:66, fhy:-124, bhx:-4,  bhy:-134, bfx:-28, bfy:-7 },
+    kickLoad:  { lean:-8,  ffx:24, ffy:-64,  fhx:14,  fhy:-126, bhx:-6,  bhy:-132, hipY:-62 },
+    kickHit:   { lean:-24, ffx:60, ffy:-108, fhx:-16, fhy:-110, bhx:-34, bhy:-96,  headX:-4, hipY:-64, bfx:-30, bfy:-5 },
+    lowkickLoad: { lean:-6, ffx:16, ffy:8,   fhx:10,  fhy:-128, bhx:-4,  bhy:-134, hipY:-60 },
+    lowkickHit:  { lean:-13, ffx:60, ffy:6,  fhx:-10, fhy:-118, bhx:-26, bhy:-108, hipY:-56, bfx:-30, bfy:-3 },
+    lowpunchLoad: { lean:2,  fhx:14, fhy:-96, bhx:4,  bhy:-136, hipY:-64 },
+    lowpunchHit:  { lean:9,  fhx:58, fhy:-90, bhx:-2, bhy:-134, hipY:-64, bfx:-26, bfy:-4 },
+    guard:     { lean:-3,  ffx:26, bfx:-30,  fhx:24,  fhy:-124, bhx:12,  bhy:-130, hipY:-58 },
+    kungfu:    { lean:-9,  ffx:44, ffy:-8,   bfx:-42, fhx:38,   fhy:-98, bhx:-20,  bhy:-118, headX:-4, hipY:-56 },
+    air:       { ffx:26,   ffy:-34, bfx:-18, bfy:-52, fhx:16,   fhy:-146, bhx:-8, bhy:-140, hipY:-62 },
+    reel:      { lean:-16, ffx:24, bfx:-40,  fhx:-4,  fhy:-118, bhx:-24, bhy:-124, headX:-7, hipY:-62 },
+    duck:      { lean:44,  hipY:-46, ffx:30, bfx:-32, fhx:46, fhy:-52, bhx:24, bhy:-64 },
+    lean:      { lean:-40, headX:-6, fhx:-10, fhy:-116, bhx:-24, bhy:-122, hipY:-64 }
+};
+
+const over = (base, mod) => Object.assign({}, base, mod);
+const easeOut = e => 1 - (1 - e) * (1 - e);
+function mix(a, b, e) {
+    const o = {};
+    for (const k in a) o[k] = a[k] + (b[k] - a[k]) * e;
+    return o;
 }
 
 function poseOf(f) {
-    const g = { lean:0, head:0, backArm:[10,-70], frontArm:[25,-60], backLeg:[96,88], frontLeg:[84,92] };
     const t = f.timer;
-    if (f.state === 'walk') {
-        const s = Math.sin(f.walkPhase);
-        g.frontLeg = [84 + 30 * s, 92 - 14 * Math.max(0, s)];
-        g.backLeg = [96 - 30 * s, 88 + 14 * Math.max(0, -s)];
-        g.frontArm = [25 - 14 * s, -60];
-        g.backArm = [10 + 14 * s, -70];
-        g.lean = 2;
-    } else if (!f.onGround) {
-        g.frontLeg = [50, 118]; g.backLeg = [112, 134];
-        g.frontArm = [-30, -50]; g.backArm = [-5, -80];
-        g.lean = 3;
+    let p = Object.assign({}, STANCE);
+
+    if (!f.onGround) {
+        p = over(p, POSE.air);
     } else {
-        const bob = Math.sin(Date.now() / 260) * 2;
-        g.frontLeg = [84, 92 + bob * 0.4];
-        g.backLeg = [96, 88 - bob * 0.4];
+        const bob = Math.sin(Date.now() / 300) * 1.6;
+        p.hipY += bob;
+        p.fhy += bob * 0.6;
+        p.bhy += bob * 0.6;
+        if (f.state === 'walk') {
+            const s = Math.sin(f.walkPhase);
+            p.hipY -= Math.abs(s) * 2.5;
+            p.lean += s * 2;
+        }
     }
 
     if (f.state === 'attack') {
         const a = f.attack;
-        const total = a.startup + a.active + a.recovery;
-        let e;
-        if (t < a.startup) e = t / a.startup * 0.6;
-        else if (t < a.startup + a.active) e = 1;
-        else e = Math.max(0, 1 - (t - a.startup - a.active) / a.recovery);
-        const L = (from, to) => [from[0] + (to[0] - from[0]) * e, from[1] + (to[1] - from[1]) * e];
-        if (a === ATTACKS.punch) {
-            g.frontArm = L(g.frontArm, [0, 0]);
-            g.backArm = L(g.backArm, [30, -95]);
-            g.lean = 6 * e;
-            g.frontLeg = L(g.frontLeg, [70, 96]);
-        } else {
-            g.frontLeg = L(g.frontLeg, [-12, 2]);
-            g.backLeg = L(g.backLeg, [104, 84]);
-            g.frontArm = L(g.frontArm, [140, 120]);
-            g.backArm = L(g.backArm, [-40, -70]);
-            g.lean = -7 * e;
-        }
+        const poseKey = { punch:'punch', kick:'kick', lowkick:'lowkick', lowpunch:'lowpunch' }[a.name];
+        const load = over(p, POSE[poseKey + 'Load']);
+        const hit = over(p, POSE[poseKey + 'Hit']);
+        if (t < a.startup) p = mix(p, load, easeOut(t / a.startup));
+        else if (t < a.startup + a.active) p = mix(load, hit, Math.min(1, easeOut((t - a.startup) / a.active * 1.8)));
+        else p = mix(hit, p, easeOut((t - a.startup - a.active) / a.recovery));
     } else if (f.state === 'block') {
-        g.frontArm = [8, -85]; g.backArm = [0, -88];
-        g.lean = -6; g.head = -2;
-        g.frontLeg = [78, 96]; g.backLeg = [100, 86];
+        p = over(p, POSE.guard);
+    } else if (f.state === 'parry') {
+        p = over(p, POSE.kungfu);
+    } else if (f.state === 'duck') {
+        p = over(p, POSE.duck);
+    } else if (f.state === 'lean') {
+        p = over(p, POSE.lean);
     } else if (f.state === 'hurt') {
         const e = Math.max(0, 1 - t / Math.max(1, f.hurtDur));
-        g.lean = -14 * e; g.head = -6 * e;
-        g.frontArm = [-50 * e + 25 * (1 - e), -20];
-        g.backArm = [-20, -95];
-        g.frontLeg = [74, 100]; g.backLeg = [104, 84];
+        p = mix(p, over(p, POSE.reel), e);
     }
-    return g;
+    return p;
+}
+
+function ik(ox, oy, tx, ty, l1, l2, dir) {
+    let dx = tx - ox, dy = ty - oy;
+    let d = Math.hypot(dx, dy);
+    const max = l1 + l2 - 0.01;
+    if (d > max) { const s = max / d; dx *= s; dy *= s; d = max; }
+    if (d < 0.01) { dx = 0.01; d = 0.01; }
+    const a = (l1 * l1 - l2 * l2 + d * d) / (2 * d);
+    const h = Math.sqrt(Math.max(0, l1 * l1 - a * a));
+    const ux = dx / d, uy = dy / d;
+    return {
+        joint: { x: ox + ux * a + uy * h * dir, y: oy + uy * a - ux * h * dir },
+        end: { x: ox + dx, y: oy + dy }
+    };
 }
 
 function drawFighter(f) {
-    const g = poseOf(f);
+    const p = poseOf(f);
     ctx.save();
     ctx.translate(f.x, f.y);
     ctx.scale(f.facing, 1);
 
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.strokeStyle = f.flash > 0 ? '#ffffff' : f.color;
-    ctx.fillStyle = f.flash > 0 ? '#ffffff' : f.color;
+    const col = f.flash > 0 ? '#ffffff' : f.color;
+    ctx.strokeStyle = col;
+    ctx.fillStyle = col;
 
-    const hip = { x:0, y:-76 };
-    const sh = { x:g.lean * 0.9, y:-122 };
-    const headC = { x:sh.x + g.lean * 0.5 + g.head, y:-142 };
+    const hip = { x:0, y:p.hipY };
+    const tl = p.torso;
+    const lx = Math.max(-tl + 0.01, Math.min(tl - 0.01, p.lean));
+    const ly = Math.sqrt(tl * tl - lx * lx);
+    const sh = { x:lx, y:p.hipY - ly };
+    const headC = { x:lx + (lx / tl) * p.neck + p.headX, y:sh.y - (ly / tl) * p.neck };
 
-    const drawLimb = (o, ang, l1, l2, w) => {
-        const j = pt(o.x, o.y, ang[0], l1);
-        const e = pt(j.x, j.y, ang[1], l2);
+    const backLeg = ik(hip.x, hip.y, p.bfx, p.bfy, 38, 38, 1);
+    const frontLeg = ik(hip.x, hip.y, p.ffx, p.ffy, 38, 38, 1);
+    const backArm = ik(sh.x, sh.y, p.bhx, p.bhy, 28, 26, -1);
+    const frontArm = ik(sh.x, sh.y, p.fhx, p.fhy, 28, 26, -1);
+
+    const limb = (o, seg, w) => {
         ctx.lineWidth = w;
         ctx.beginPath();
-        ctx.moveTo(o.x, o.y); ctx.lineTo(j.x, j.y); ctx.lineTo(e.x, e.y);
+        ctx.moveTo(o.x, o.y);
+        ctx.lineTo(seg.joint.x, seg.joint.y);
+        ctx.lineTo(seg.end.x, seg.end.y);
         ctx.stroke();
-        return e;
     };
 
-    ctx.globalAlpha = 0.55;
-    drawLimb(hip, g.backLeg, 38, 38, 7);
-    drawLimb(sh, g.backArm, 28, 26, 6);
+    ctx.globalAlpha = 0.5;
+    limb(hip, backLeg, 12);
+    limb(sh, backArm, 10);
     ctx.globalAlpha = 1;
 
-    ctx.lineWidth = 8;
+    ctx.lineWidth = 17;
     ctx.beginPath();
     ctx.moveTo(hip.x, hip.y);
     ctx.lineTo(sh.x, sh.y);
     ctx.stroke();
 
-    drawLimb(hip, g.frontLeg, 38, 38, 7);
-    const hand = drawLimb(sh, g.frontArm, 28, 26, 6);
+    limb(hip, frontLeg, 12);
+    limb(sh, frontArm, 10);
 
     ctx.beginPath();
-    ctx.arc(headC.x, headC.y, 14, 0, Math.PI * 2);
+    ctx.arc(headC.x, headC.y, 17, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.arc(headC.x + 6, headC.y - 2, 2.6, 0, Math.PI * 2);
+    ctx.arc(headC.x + 7, headC.y - 2, 3, 0, Math.PI * 2);
     ctx.fill();
 
     if (f.state === 'attack' && f.timer >= f.attack.startup && f.timer < f.attack.startup + f.attack.active) {
-        ctx.globalAlpha = 0.5;
+        const tip = (f.attack === ATTACKS.punch || f.attack === ATTACKS.lowpunch) ? frontArm.end : frontLeg.end;
+        ctx.globalAlpha = 0.55;
         ctx.fillStyle = '#ffd54f';
         ctx.beginPath();
-        ctx.arc(hand.x, hand.y, 9, 0, Math.PI * 2);
+        ctx.arc(tip.x, tip.y, 12, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalAlpha = 1;
     }
 
     if (f.blocking && f.state === 'block') {
-        ctx.strokeStyle = 'rgba(66,133,244,0.45)';
-        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(66,133,244,0.5)';
+        ctx.lineWidth = 4;
         ctx.beginPath();
-        ctx.arc(6, -104, 40, -Math.PI * 0.62, Math.PI * 0.42);
+        ctx.arc(6, p.hipY - 44, 44, -Math.PI * 0.62, Math.PI * 0.42);
         ctx.stroke();
     }
     ctx.restore();
@@ -495,23 +576,25 @@ function drawBanner() {
 
 function drawTitle() {
     ctx.fillStyle = 'rgba(255,255,255,0.82)';
-    ctx.beginPath(); ctx.roundRect(W / 2 - 250, 140, 500, 250, 18); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(W / 2 - 280, 110, 560, 300, 18); ctx.fill();
     ctx.strokeStyle = 'rgba(40,70,100,0.25)'; ctx.lineWidth = 2; ctx.stroke();
 
     ctx.textAlign = 'center';
     ctx.fillStyle = '#1d3c5c';
     ctx.font = 'bold 54px Segoe UI, sans-serif';
-    ctx.fillText('STICK FIGHTER', W / 2, 215);
+    ctx.fillText('STICK FIGHTER', W / 2, 185);
     ctx.font = '17px Segoe UI, sans-serif';
     ctx.fillStyle = '#4a6a8a';
-    ctx.fillText('First to 2 rounds wins', W / 2, 252);
-    ctx.fillText('← → move  ·  ↑ jump  ·  Z punch  ·  A kick  ·  X block', W / 2, 294);
+    ctx.fillText('First to 2 rounds wins', W / 2, 222);
+    ctx.fillText('← → move  ·  ↑ jump  ·  S duck  ·  W lean', W / 2, 264);
+    ctx.fillText('X punch  ·  A kick  ·  Q low kick  ·  C low punch  ·  Z block', W / 2, 292);
     ctx.font = 'bold 22px Segoe UI, sans-serif';
     ctx.fillStyle = '#1565c0';
-    ctx.fillText('Press ENTER to fight', W / 2, 348);
+    ctx.fillText('Press ENTER to fight', W / 2, 352);
 }
 
 function step() {
+    frame++;
     if (freeze > 0) { freeze--; }
     else {
         if (mode === 'intro') {
