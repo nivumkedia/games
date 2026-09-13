@@ -37,24 +37,26 @@
 </head>
 <body>
 <div id="wrap"><canvas id="game" width="960" height="540"></canvas></div>
-<div id="help"><b>←</b>/<b>→</b> move &nbsp;·&nbsp; <b>↑</b> jump &nbsp;·&nbsp; <b>S</b> duck &nbsp;·&nbsp; <b>W</b> lean &nbsp;·&nbsp; <b>X</b> punch &nbsp;·&nbsp; <b>A</b> kick &nbsp;·&nbsp; <b>Q</b> low kick &nbsp;·&nbsp; <b>C</b> low punch &nbsp;·&nbsp; <b>Z</b> block &nbsp;·&nbsp; <b>Enter</b> start</div>
+<div id="help"><b>←</b>/<b>→</b> move &nbsp;·&nbsp; <b>↑</b> jump &nbsp;·&nbsp; <b>S</b> duck &nbsp;·&nbsp; <b>W</b> lean &nbsp;·&nbsp; <b>X</b> punch &nbsp;·&nbsp; <b>A</b> kick &nbsp;·&nbsp; <b>Q</b> low kick &nbsp;·&nbsp; <b>C</b> low punch &nbsp;·&nbsp; <b>D</b> spin kick &nbsp;·&nbsp; <b>Z</b> block &nbsp;·&nbsp; <b>Enter</b> start</div>
 <script>
 const cv = document.getElementById('game');
 const ctx = cv.getContext('2d');
 const W = cv.width, H = cv.height;
 const GROUND = 452;
 const LEFT_WALL = 70, RIGHT_WALL = W - 70;
+const LAUNCH_RISE = 300, LAUNCH_FALL = 240, LAUNCH_PEAK_Y = 90;
 
 const ATTACKS = {
-    punch: { startup:45, active:4, recovery:9,  dmg:6,  reach:62, top:-132, bottom:-94, kb:3.2, kbUp:0,    name:'punch' },
-    kick:  { startup:10, active:6, recovery:18, dmg:12, reach:52, top:-140, bottom:-96, kb:7,   kbUp:-3.2, name:'kick'  },
-    lowkick: { startup:8, active:5, recovery:14, dmg:8, reach:58, top:-64,  bottom:-4,  kb:5,   kbUp:0,    name:'lowkick' },
-    lowpunch: { startup:14, active:4, recovery:10, dmg:5, reach:56, top:-70, bottom:-30, kb:2.5, kbUp:0,   name:'lowpunch' }
+    punch: { startup:9, active:4, recovery:7,  dmg:6,  reach:62, top:-132, bottom:-94, kb:3.2, kbUp:0,    name:'punch' },
+    kick:  { startup:8, active:5, recovery:7,  dmg:12, reach:52, top:-140, bottom:-96, kb:7,   kbUp:-3.2, name:'kick'  },
+    lowkick: { startup:7, active:4, recovery:7, dmg:8, reach:58, top:-64,  bottom:-4,  kb:5,   kbUp:0,    name:'lowkick' },
+    lowpunch: { startup:8, active:4, recovery:7, dmg:5, reach:56, top:-70, bottom:-30, kb:2.5, kbUp:0,   name:'lowpunch' },
+    spinkick: { startup:60, active:6, recovery:10, dmg:50, reach:66, top:-134, bottom:-70, kb:9, kbUp:-4, name:'spinkick' }
 };
 
 const keys = {};
 addEventListener('keydown', e => {
-    if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyZ','KeyA','KeyX','KeyS','KeyQ','KeyC','KeyW','Space','Enter'].includes(e.code)) e.preventDefault();
+    if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyZ','KeyA','KeyX','KeyS','KeyQ','KeyC','KeyW','KeyD','Space','Enter'].includes(e.code)) e.preventDefault();
     if (!keys[e.code]) keys[e.code + '_p'] = true;
     keys[e.code] = true;
 });
@@ -70,7 +72,9 @@ function makeFighter(x, facing, isBot, color, name) {
         hp:100, state:'idle', timer:0, attack:null, hasHit:false,
         onGround:true, blocking:false, walkPhase:0, flash:0,
         botTimer:0, botPlan:'wait', comboCount:0, blockSince:null, attackStartFrame:0,
-        reactAttackId:-1, reactChoice:null
+        reactAttackId:-1, reactChoice:null,
+        finisherReady:false, finisherTimer:0, whiffPunish:false, whiffPunishTimer:0,
+        launchX0:0, launchY0:0, launchDir:1, launchXPeak:0, launchYPeak:0, chaseX0:0
     };
 }
 
@@ -87,8 +91,9 @@ function resetRound() {
     p1.x = 300; p2.x = 660;
     for (const f of [p1, p2]) {
         f.y = GROUND; f.vx = 0; f.vy = 0; f.hp = 100;
-        f.state = 'idle'; f.timer = 0; f.attack = null; f.hasHit = false;
+        f.state = 'bow'; f.timer = 0; f.attack = null; f.hasHit = false;
         f.onGround = true; f.blocking = false; f.flash = 0; f.comboCount = 0; f.blockSince = null;
+        f.finisherReady = false; f.finisherTimer = 0; f.whiffPunish = false; f.whiffPunishTimer = 0;
     }
     p1.facing = 1; p2.facing = -1;
     timeLeft = 60 * 60;
@@ -116,7 +121,13 @@ function beginAttack(f, kind) {
     f.timer = 0;
     f.hasHit = false;
     f.attackStartFrame = frame;
-    f.vx = kind === 'kick' ? f.facing * 2.4 : (kind === 'lowkick' ? f.facing * 1.6 : f.vx * 0.2);
+    if (kind === 'spinkick') {
+        f.vy = -12.5;
+        f.onGround = false;
+        f.vx = f.facing * 2;
+    } else {
+        f.vx = kind === 'kick' ? f.facing * 2.4 : (kind === 'lowkick' ? f.facing * 1.6 : f.vx * 0.2);
+    }
 }
 
 function canAct(f) {
@@ -128,7 +139,7 @@ function hurtTop(f) {
 }
 
 function hurt(f, atk, fromFacing, isParry) {
-    const blocked = f.blocking && f.onGround && Math.sign(fromFacing) !== Math.sign(f.facing);
+    const blocked = atk.name !== 'spinkick' && f.blocking && f.onGround && Math.sign(fromFacing) !== Math.sign(f.facing);
     const parry = blocked && isParry;
     const dmg = parry ? 0 : (blocked ? atk.dmg * 0.18 : atk.dmg);
     f.hp = Math.max(0, f.hp - dmg);
@@ -137,33 +148,41 @@ function hurt(f, atk, fromFacing, isParry) {
     f.state = blocked ? (parry ? 'parry' : 'block') : 'hurt';
     f.timer = 0;
     f.attack = null;
-    f.hurtDur = blocked ? (parry ? 18 : 8) : (atk === ATTACKS.kick ? 24 : 15);
+    f.whiffPunish = false;
+    const heavy = atk === ATTACKS.kick || atk === ATTACKS.spinkick;
+    f.hurtDur = blocked ? (parry ? 18 : 8) : (atk === ATTACKS.spinkick ? 32 : (heavy ? 24 : 15));
     f.flash = blocked ? 4 : 9;
     const hy = f.y + (atk.top + atk.bottom) / 2;
     burst(f.x + fromFacing * -10, hy, parry ? '#ffd54f' : (blocked ? '#78909c' : '#ff7043'), parry ? 18 : (blocked ? 6 : 14), parry ? 5.5 : (blocked ? 2 : 4.5));
-    freeze = parry ? 11 : (blocked ? 2 : (atk === ATTACKS.kick ? 7 : 4));
-    shake = parry ? 4 : (blocked ? 2 : (atk === ATTACKS.kick ? 9 : 5));
+    freeze = parry ? 11 : (blocked ? 2 : (atk === ATTACKS.spinkick ? 12 : (heavy ? 7 : 4)));
+    shake = parry ? 4 : (blocked ? 2 : (atk === ATTACKS.spinkick ? 15 : (heavy ? 9 : 5)));
     return { blocked, parry };
 }
 
 function updateFighter(f, foe) {
     const live = mode === 'fight';
 
+    if (f.finisherTimer > 0) { f.finisherTimer--; if (f.finisherTimer <= 0) f.finisherReady = false; }
+    if (f.whiffPunishTimer > 0) { f.whiffPunishTimer--; if (f.whiffPunishTimer <= 0) f.whiffPunish = false; }
+
+    let move = 0, jump = false, punch = false, kick = false, lowkick = false, lowpunch = false, spinkick = false, block = false, duck = false, lean = false;
+    if (!f.isBot) {
+        move = (keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0);
+        jump = pressed('ArrowUp');
+        punch = pressed('KeyX');
+        kick = pressed('KeyA');
+        lowkick = pressed('KeyQ');
+        lowpunch = pressed('KeyC');
+        spinkick = pressed('KeyD');
+        block = !!keys.KeyZ;
+        duck = !!keys.KeyS;
+        lean = !!keys.KeyW;
+    }
+
     if (live && canAct(f)) {
-        let move = 0, jump = false, punch = false, kick = false, lowkick = false, lowpunch = false, block = false, duck = false, lean = false;
         if (f.isBot) {
             const inp = botThink(f, foe);
-            move = inp.move; jump = inp.jump; punch = inp.punch; kick = inp.kick; lowkick = inp.lowkick; lowpunch = inp.lowpunch; block = inp.block; duck = inp.duck; lean = inp.lean;
-        } else {
-            move = (keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0);
-            jump = pressed('ArrowUp');
-            punch = pressed('KeyX');
-            kick = pressed('KeyA');
-            lowkick = pressed('KeyQ');
-            lowpunch = pressed('KeyC');
-            block = !!keys.KeyZ;
-            duck = !!keys.KeyS;
-            lean = !!keys.KeyW;
+            move = inp.move; jump = inp.jump; punch = inp.punch; kick = inp.kick; lowkick = inp.lowkick; lowpunch = inp.lowpunch; spinkick = inp.spinkick; block = inp.block; duck = inp.duck; lean = inp.lean;
         }
 
         const wasBlocking = f.blocking;
@@ -175,6 +194,7 @@ function updateFighter(f, foe) {
         else if (kick) beginAttack(f, 'kick');
         else if (lowkick) beginAttack(f, 'lowkick');
         else if (lowpunch) beginAttack(f, 'lowpunch');
+        else if (spinkick && f.onGround && f.finisherReady) { beginAttack(f, 'spinkick'); f.finisherReady = false; f.finisherTimer = 0; }
         else if (f.blocking) { f.state = 'block'; f.vx *= 0.6; }
         else if (duck && f.onGround) { f.state = 'duck'; f.vx *= 0.55; }
         else if (lean && f.onGround) { f.state = 'lean'; f.vx *= 0.5; }
@@ -204,22 +224,39 @@ function updateFighter(f, foe) {
             const hx2 = hx1 + a.reach;
             const bx1 = foe.x - 20, bx2 = foe.x + 20;
             const by1 = foe.y - hurtTop(foe), by2 = foe.y - 4;
-            if (hx2 > bx1 && hx1 < bx2 && foe.y + a.bottom > by1 && foe.y + a.top < by2 && foe.state !== 'hurt') {
+            const hOverlap = hx2 > bx1 && hx1 < bx2;
+            const vOverlap = foe.y + a.bottom > by1 && foe.y + a.top < by2;
+            if (hOverlap && foe.state !== 'hurt') {
                 f.hasHit = true;
+                if (vOverlap) {
                 if (a.name === 'punch' && foe.state === 'lean') {
                     burst(foe.x - foe.facing * 12, foe.y + (a.top + a.bottom) / 2, '#ffffff', 7, 2.4);
                     f.comboCount = 0;
                 } else {
                 const isParry = a === ATTACKS.punch && foe.blocking && foe.blockSince !== null && foe.blockSince <= f.attackStartFrame + a.startup;
+                const wasWhiffPunish = foe.whiffPunish;
                 const result = hurt(foe, a, f.facing, isParry);
-                if (!result.blocked) f.comboCount++;
+                if (!result.blocked) {
+                    f.comboCount++;
+                    if (a.name !== 'spinkick') { f.finisherReady = true; f.finisherTimer = 50; }
+                    if (wasWhiffPunish) {
+                        foe.state = 'launchRise'; foe.timer = 0; foe.onGround = false; foe.vx = 0; foe.vy = 0;
+                        foe.launchX0 = foe.x; foe.launchY0 = foe.y; foe.launchDir = f.facing;
+                        f.state = 'executing'; f.timer = 0; f.attack = null; f.vx = 0; f.comboCount = 0;
+                        f.finisherReady = false; f.finisherTimer = 0;
+                        freeze = 16; shake = 14;
+                        burst(foe.x, foe.y - 80, '#ffd54f', 22, 6);
+                    }
+                }
                 if (result.parry) {
                     f.state = 'hurt'; f.timer = 0; f.hurtDur = 20; f.attack = null;
                     f.vx = -f.facing * 4; f.flash = 6; f.comboCount = 0;
                 }
                 }
+                }
             }
         }
+        if (f.timer >= a.startup + a.active && !f.hasHit && !f.whiffPunish) { f.whiffPunish = true; f.whiffPunishTimer = 26; }
         if (f.timer >= a.startup + a.active + a.recovery) {
             f.state = 'idle'; f.attack = null; f.comboCount = 0;
         }
@@ -227,14 +264,55 @@ function updateFighter(f, foe) {
         f.timer++;
         f.vx *= 0.9;
         if (f.timer >= f.hurtDur) { f.state = 'idle'; f.hurtDur = 0; }
+    } else if (f.state === 'launchRise') {
+        f.timer++;
+        const e = easeOut(Math.min(1, f.timer / LAUNCH_RISE));
+        f.y = f.launchY0 + (LAUNCH_PEAK_Y - f.launchY0) * e;
+        f.x = Math.max(LEFT_WALL, Math.min(RIGHT_WALL, f.launchX0 + f.launchDir * 50 * e));
+        if (f.timer >= LAUNCH_RISE) {
+            f.state = 'launchFall'; f.timer = 0;
+            f.launchYPeak = f.y; f.launchXPeak = f.x;
+        }
+    } else if (f.state === 'launchFall') {
+        f.timer++;
+        const e = Math.min(1, f.timer / LAUNCH_FALL);
+        f.y = f.launchYPeak + (GROUND - f.launchYPeak) * (e * e);
+        if (f.timer >= LAUNCH_FALL) {
+            f.y = GROUND; f.onGround = true; f.vx = 0; f.vy = 0;
+            f.state = 'pinned'; f.timer = 0; f.hp = 0;
+        }
+    } else if (f.state === 'executing') {
+        f.timer++;
+        if (f.timer >= LAUNCH_RISE) { f.state = 'chasing'; f.timer = 0; f.chaseX0 = f.x; }
+    } else if (f.state === 'chasing') {
+        f.timer++;
+        const e = Math.min(1, f.timer / LAUNCH_FALL);
+        const targetX = Math.max(LEFT_WALL, Math.min(RIGHT_WALL, foe.launchXPeak - f.facing * 26));
+        if (e < 0.7) {
+            f.x = f.chaseX0 + (targetX - f.chaseX0) * (e / 0.7);
+            f.y = GROUND;
+        } else {
+            const je = (e - 0.7) / 0.3;
+            f.x = targetX;
+            f.y = GROUND - Math.sin(je * Math.PI) * 70;
+        }
+        if (f.timer >= LAUNCH_FALL) {
+            f.x = targetX; f.y = GROUND; f.onGround = true;
+            f.state = 'pinning'; f.timer = 0;
+            freeze = 18; shake = 16;
+            burst(foe.x, foe.y - 30, '#ff2d2d', 24, 6);
+        }
     }
 
-    if (!f.onGround) {
-        f.vy += 0.62;
-        f.state = f.state === 'attack' || f.state === 'hurt' ? f.state : 'idle';
+    const scripted = f.state === 'launchRise' || f.state === 'launchFall' || f.state === 'executing' || f.state === 'chasing';
+    if (!scripted) {
+        if (!f.onGround) {
+            f.vy += 0.62;
+            f.state = f.state === 'attack' || f.state === 'hurt' ? f.state : 'idle';
+        }
+        f.x += f.vx;
+        f.y += f.vy;
     }
-    f.x += f.vx;
-    f.y += f.vy;
 
     if (f.y >= GROUND) {
         if (!f.onGround) burst(f.x, GROUND, '#c8b18a', 5, 2);
@@ -261,11 +339,13 @@ function separate(a, b) {
 }
 
 function botThink(f, foe) {
-    const out = { move:0, jump:false, punch:false, kick:false, lowkick:false, lowpunch:false, block:false, duck:false, lean:false };
+    const out = { move:0, jump:false, punch:false, kick:false, lowkick:false, lowpunch:false, spinkick:false, block:false, duck:false, lean:false };
     const dist = Math.abs(foe.x - f.x);
     const dir = Math.sign(foe.x - f.x) || 1;
     const foeAttacking = foe.state === 'attack';
     const foeStartup = foeAttacking && foe.timer < foe.attack.startup + foe.attack.active;
+
+    if (f.finisherReady && dist < 100) { out.spinkick = true; return out; }
 
     f.botTimer--;
     if (f.botTimer <= 0) {
@@ -311,7 +391,7 @@ function botThink(f, foe) {
     return out;
 }
 
-const STANCE = { hipY:-66, torso:48, neck:22, lean:5, headX:0, ffx:30, ffy:0, bfx:-32, bfy:0, fhx:30, fhy:-130, bhx:8, bhy:-136 };
+const STANCE = { hipY:-60, torso:48, neck:22, lean:8, headX:0, ffx:32, ffy:-2, bfx:-30, bfy:0, fhx:36, fhy:-108, bhx:-8, bhy:-118 };
 
 const POSE = {
     punchLoad: { lean:-3,  fhx:8,  fhy:-132, bhx:2,   bhy:-138, hipY:-68 },
@@ -322,12 +402,18 @@ const POSE = {
     lowkickHit:  { lean:-13, ffx:60, ffy:6,  fhx:-10, fhy:-118, bhx:-26, bhy:-108, hipY:-56, bfx:-30, bfy:-3 },
     lowpunchLoad: { lean:2,  fhx:14, fhy:-96, bhx:4,  bhy:-136, hipY:-64 },
     lowpunchHit:  { lean:9,  fhx:58, fhy:-90, bhx:-2, bhy:-134, hipY:-64, bfx:-26, bfy:-4 },
+    spinkickLoad: { lean:0,  ffx:8,  ffy:-42, bfx:-6, bfy:-46, fhx:8,   fhy:-142, bhx:-8, bhy:-142, hipY:-54, headX:0 },
+    spinkickHit:  { lean:-14, ffx:74, ffy:-96, bfx:-10, bfy:-58, fhx:-32, fhy:-108, bhx:22, bhy:-70, hipY:-56, headX:-6 },
     guard:     { lean:-3,  ffx:26, bfx:-30,  fhx:24,  fhy:-124, bhx:12,  bhy:-130, hipY:-58 },
     kungfu:    { lean:-9,  ffx:44, ffy:-8,   bfx:-42, fhx:38,   fhy:-98, bhx:-20,  bhy:-118, headX:-4, hipY:-56 },
     air:       { ffx:26,   ffy:-34, bfx:-18, bfy:-52, fhx:16,   fhy:-146, bhx:-8, bhy:-140, hipY:-62 },
     reel:      { lean:-16, ffx:24, bfx:-40,  fhx:-4,  fhy:-118, bhx:-24, bhy:-124, headX:-7, hipY:-62 },
     duck:      { lean:44,  hipY:-46, ffx:30, bfx:-32, fhx:46, fhy:-52, bhx:24, bhy:-64 },
-    lean:      { lean:-40, headX:-6, fhx:-10, fhy:-116, bhx:-24, bhy:-122, hipY:-64 }
+    lean:      { lean:-40, headX:-6, fhx:-10, fhy:-116, bhx:-24, bhy:-122, hipY:-64 },
+    bow:       { lean:20,  headX:-6, ffx:16, bfx:-16, fhx:34,  fhy:-90,  bhx:30,  bhy:-92, hipY:-62 },
+    pinned:    { lean:47,  headX:-16, hipY:-14, ffx:34, ffy:-4, bfx:-32, bfy:-4, fhx:-32, fhy:-16, bhx:34, bhy:-14 },
+    pinning:   { lean:-12, headX:-2, ffx:44,  ffy:-2, bfx:-16, fhx:22,  fhy:-152, bhx:-10, bhy:-142, hipY:-64 },
+    tumble:    { lean:-10, headX:8,  hipY:-58, ffx:14,  ffy:-38, bfx:-22, bfy:-52, fhx:-24, fhy:-92, bhx:26, bhy:-70 }
 };
 
 const over = (base, mod) => Object.assign({}, base, mod);
@@ -358,7 +444,7 @@ function poseOf(f) {
 
     if (f.state === 'attack') {
         const a = f.attack;
-        const poseKey = { punch:'punch', kick:'kick', lowkick:'lowkick', lowpunch:'lowpunch' }[a.name];
+        const poseKey = { punch:'punch', kick:'kick', lowkick:'lowkick', lowpunch:'lowpunch', spinkick:'spinkick' }[a.name];
         const load = over(p, POSE[poseKey + 'Load']);
         const hit = over(p, POSE[poseKey + 'Hit']);
         if (t < a.startup) p = mix(p, load, easeOut(t / a.startup));
@@ -372,6 +458,18 @@ function poseOf(f) {
         p = over(p, POSE.duck);
     } else if (f.state === 'lean') {
         p = over(p, POSE.lean);
+    } else if (f.state === 'bow') {
+        p = over(p, POSE.bow);
+    } else if (f.state === 'pinned') {
+        p = over(p, POSE.pinned);
+    } else if (f.state === 'pinning') {
+        p = over(p, POSE.pinning);
+    } else if (f.state === 'launchRise' || f.state === 'launchFall') {
+        p = over(p, POSE.tumble);
+    } else if (f.state === 'executing') {
+        p = over(p, POSE.kungfu);
+    } else if (f.state === 'chasing') {
+        if (Math.min(1, t / LAUNCH_FALL) >= 0.7) p = over(p, POSE.air);
     } else if (f.state === 'hurt') {
         const e = Math.max(0, 1 - t / Math.max(1, f.hurtDur));
         p = mix(p, over(p, POSE.reel), e);
@@ -399,6 +497,14 @@ function drawFighter(f) {
     ctx.save();
     ctx.translate(f.x, f.y);
     ctx.scale(f.facing, 1);
+
+    if (f.state === 'attack' && f.attack === ATTACKS.spinkick && f.timer < f.attack.startup) {
+        const spin = easeOut(f.timer / f.attack.startup) * Math.PI * 2;
+        ctx.scale(Math.cos(spin), 1);
+    } else if (f.state === 'launchRise' || f.state === 'launchFall') {
+        const totalT = f.state === 'launchRise' ? f.timer : LAUNCH_RISE + f.timer;
+        ctx.scale(Math.cos(totalT * 0.13), 1);
+    }
 
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -469,38 +575,83 @@ function drawFighter(f) {
     ctx.restore();
 }
 
+function pagoda(cx, baseY, scale, color) {
+    ctx.fillStyle = color;
+    const tiers = 3;
+    for (let i = 0; i < tiers; i++) {
+        const w = (70 - i * 16) * scale;
+        const y = baseY - i * 34 * scale;
+        ctx.beginPath();
+        ctx.moveTo(cx - w / 2, y);
+        ctx.lineTo(cx, y - 22 * scale);
+        ctx.lineTo(cx + w / 2, y);
+        ctx.lineTo(cx + w / 2 - 6 * scale, y + 7 * scale);
+        ctx.lineTo(cx - w / 2 + 6 * scale, y + 7 * scale);
+        ctx.closePath();
+        ctx.fill();
+    }
+    ctx.fillRect(cx - 3 * scale, baseY - 6 * scale, 6 * scale, 26 * scale);
+}
+
 function drawBackground() {
     const sky = ctx.createLinearGradient(0, 0, 0, GROUND);
-    sky.addColorStop(0, '#9fd4f5');
-    sky.addColorStop(1, '#e4f3fb');
+    sky.addColorStop(0, '#cfe8d8');
+    sky.addColorStop(0.55, '#e6f0dc');
+    sky.addColorStop(1, '#f3ecd8');
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, W, H);
 
-    ctx.fillStyle = 'rgba(255,241,180,0.95)';
-    ctx.beginPath(); ctx.arc(802, 96, 40, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,241,180,0.25)';
-    ctx.beginPath(); ctx.arc(802, 96, 62, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,244,210,0.9)';
+    ctx.beginPath(); ctx.arc(150, 90, 36, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,244,210,0.3)';
+    ctx.beginPath(); ctx.arc(150, 90, 58, 0, Math.PI * 2); ctx.fill();
 
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    const clouds = [[150,110,44],[210,118,32],[560,80,36],[610,88,26],[380,150,28]];
-    for (const [cx, cy, r] of clouds) { ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill(); }
-
-    ctx.fillStyle = '#bcd9c4';
+    ctx.fillStyle = 'rgba(150,178,158,0.55)';
     ctx.beginPath();
-    ctx.moveTo(0, GROUND);
-    ctx.quadraticCurveTo(200, 300, 430, GROUND);
-    ctx.quadraticCurveTo(650, 290, 960, GROUND);
+    ctx.moveTo(0, 260);
+    ctx.lineTo(120, 130); ctx.lineTo(230, 230); ctx.lineTo(340, 90);
+    ctx.lineTo(470, 220); ctx.lineTo(600, 110); ctx.lineTo(760, 240);
+    ctx.lineTo(880, 140); ctx.lineTo(960, 220);
+    ctx.lineTo(960, 300); ctx.lineTo(0, 300);
     ctx.closePath(); ctx.fill();
+    pagoda(600, 232, 1.15, 'rgba(120,150,132,0.6)');
 
-    ctx.fillStyle = '#e2d3ae';
+    ctx.fillStyle = 'rgba(108,140,118,0.75)';
+    ctx.beginPath();
+    ctx.moveTo(0, GROUND - 30);
+    ctx.lineTo(90, 240); ctx.lineTo(200, 320); ctx.lineTo(330, 210);
+    ctx.lineTo(500, 330); ctx.lineTo(660, 250); ctx.lineTo(820, 340);
+    ctx.lineTo(960, 260);
+    ctx.lineTo(960, GROUND); ctx.lineTo(0, GROUND);
+    ctx.closePath(); ctx.fill();
+    pagoda(210, 316, 0.85, 'rgba(84,64,54,0.85)');
+
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    const mist = [[0,270,110,20],[250,290,140,22],[560,300,160,24],[820,280,140,20]];
+    for (const [x, y, w, h] of mist) { ctx.beginPath(); ctx.ellipse(x, y, w, h, 0, 0, Math.PI * 2); ctx.fill(); }
+
+    ctx.fillStyle = '#8a1f1f';
+    ctx.fillRect(96, 250, 16, GROUND - 250);
+    ctx.fillRect(844, 250, 16, GROUND - 250);
+    ctx.fillStyle = '#5c1414';
+    ctx.fillRect(90, 244, 28, 10);
+    ctx.fillRect(838, 244, 28, 10);
+    ctx.fillStyle = '#c8a24a';
+    ctx.beginPath(); ctx.arc(104, 300, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(852, 300, 5, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = '#d9c9a3';
     ctx.fillRect(0, GROUND, W, H - GROUND);
-    ctx.fillStyle = '#cbb98f';
-    ctx.fillRect(0, GROUND, W, 6);
-    ctx.strokeStyle = 'rgba(160,140,100,0.35)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i < W; i += 48) {
-        ctx.beginPath(); ctx.moveTo(i, GROUND + 14); ctx.lineTo(i + 26, H); ctx.stroke();
+    ctx.strokeStyle = 'rgba(120,100,70,0.3)';
+    ctx.lineWidth = 2;
+    for (let i = -1; i * 74 < W + 60; i++) {
+        ctx.beginPath(); ctx.moveTo(i * 74 + 20, GROUND); ctx.lineTo(i * 74 - 10, H); ctx.stroke();
     }
+    for (let y = GROUND + 26; y < H; y += 30) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    }
+    ctx.fillStyle = '#c8a24a';
+    ctx.fillRect(0, GROUND, W, 4);
 }
 
 function drawShadow(f) {
@@ -567,29 +718,32 @@ function drawBanner() {
     ctx.textAlign = 'center';
     ctx.font = 'bold 62px Segoe UI, sans-serif';
     ctx.lineWidth = 8;
-    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.strokeStyle = 'rgba(255,251,240,0.95)';
     ctx.strokeText(banner, W / 2, 240);
-    ctx.fillStyle = '#1d3c5c';
+    ctx.fillStyle = '#8a1f1f';
     ctx.fillText(banner, W / 2, 240);
     ctx.restore();
 }
 
 function drawTitle() {
-    ctx.fillStyle = 'rgba(255,255,255,0.82)';
-    ctx.beginPath(); ctx.roundRect(W / 2 - 280, 110, 560, 300, 18); ctx.fill();
-    ctx.strokeStyle = 'rgba(40,70,100,0.25)'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,251,240,0.9)';
+    ctx.beginPath(); ctx.roundRect(W / 2 - 290, 96, 580, 330, 18); ctx.fill();
+    ctx.strokeStyle = '#8a1f1f'; ctx.lineWidth = 4; ctx.stroke();
+    ctx.strokeStyle = '#c8a24a'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(W / 2 - 282, 104, 564, 314, 14); ctx.stroke();
 
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#1d3c5c';
+    ctx.fillStyle = '#8a1f1f';
     ctx.font = 'bold 54px Segoe UI, sans-serif';
-    ctx.fillText('STICK FIGHTER', W / 2, 185);
+    ctx.fillText('STICK FIGHTER', W / 2, 175);
     ctx.font = '17px Segoe UI, sans-serif';
     ctx.fillStyle = '#4a6a8a';
-    ctx.fillText('First to 2 rounds wins', W / 2, 222);
-    ctx.fillText('← → move  ·  ↑ jump  ·  S duck  ·  W lean', W / 2, 264);
-    ctx.fillText('X punch  ·  A kick  ·  Q low kick  ·  C low punch  ·  Z block', W / 2, 292);
+    ctx.fillText('First to 2 rounds wins', W / 2, 210);
+    ctx.fillText('← → move  ·  ↑ jump  ·  S duck  ·  W lean', W / 2, 250);
+    ctx.fillText('X punch  ·  A kick  ·  Q low kick  ·  C low punch', W / 2, 276);
+    ctx.fillText('D spin kick  ·  Z block', W / 2, 302);
     ctx.font = 'bold 22px Segoe UI, sans-serif';
-    ctx.fillStyle = '#1565c0';
+    ctx.fillStyle = '#8a1f1f';
     ctx.fillText('Press ENTER to fight', W / 2, 352);
 }
 
@@ -599,17 +753,21 @@ function step() {
     else {
         if (mode === 'intro') {
             bannerTimer--;
-            if (bannerTimer <= 40 && banner !== 'FIGHT!') { banner = 'FIGHT!'; bannerTimer = 40; }
+            if (bannerTimer <= 40 && banner !== 'FIGHT!') {
+                banner = 'FIGHT!'; bannerTimer = 40;
+                p1.state = 'idle'; p2.state = 'idle';
+            }
             if (bannerTimer <= 0) { banner = ''; mode = 'fight'; }
         }
 
         updateFighter(p1, p2);
         updateFighter(p2, p1);
-        separate(p1, p2);
+        const cinematic = ['launchRise', 'launchFall', 'executing', 'chasing'].includes(p1.state) || ['launchRise', 'launchFall', 'executing', 'chasing'].includes(p2.state);
+        if (!cinematic) separate(p1, p2);
 
         if (mode === 'fight') {
-            timeLeft--;
-            if (p1.hp <= 0 || p2.hp <= 0 || timeLeft <= 0) endRound();
+            if (!cinematic) timeLeft--;
+            if (p1.hp <= 0 || p2.hp <= 0 || (timeLeft <= 0 && !cinematic)) endRound();
         }
 
         if (mode === 'ko') {
@@ -672,6 +830,7 @@ function render() {
         ctx.font = '18px Segoe UI, sans-serif';
         ctx.fillText('Press ENTER for a rematch', W / 2, 300);
     }
+
 }
 
 function loop() {
