@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Time Matrix Generator</title>
+<meta name="description" content="A live, ever-ticking breakdown of the current moment into nested time brackets — second through millennium — rendered as a raw, draggable number matrix.">
+<meta name="theme-color" content="#07070b">
+<meta property="og:title" content="Time Matrix Generator">
+<meta property="og:description" content="A live, ever-ticking breakdown of the current moment into nested time brackets — second through millennium.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%235eead4'/%3E%3Cstop offset='1' stop-color='%23a78bfa'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='22' fill='%2307070b'/%3E%3Ccircle cx='50' cy='50' r='34' fill='none' stroke='url(%23g)' stroke-width='7'/%3E%3Cpath d='M50 30 L50 50 L66 58' fill='none' stroke='url(%23g)' stroke-width='7' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #07070b;
+    --card: rgba(22, 24, 30, 0.72);
+    --card-border: #2a2e3a;
+    --text: #e4e7ee;
+    --text-dim: #7d8394;
+    --accent: #5eead4;
+    --accent-2: #a78bfa;
+    --output-bg: #08090c;
+    --btn-bg: #1c1f29;
+    --btn-bg-hover: #262b38;
+    --mono: "SF Mono", "Menlo", "Consolas", monospace;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(94, 234, 212, 0.16), transparent 60%),
+      radial-gradient(ellipse 900px 600px at 90% 110%, rgba(167, 139, 250, 0.16), transparent 60%),
+      var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 48px 16px;
+    position: relative;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 42px 42px;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 20%, black, transparent 75%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .card {
+    position: relative;
+    width: 100%;
+    max-width: 780px;
+    background: var(--card);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid var(--card-border);
+    border-radius: 18px;
+    padding: 28px;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.02) inset,
+      0 30px 80px -30px rgba(0,0,0,0.7),
+      0 0 60px -20px rgba(94, 234, 212, 0.12);
+    z-index: 1;
+  }
+  .card::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: 19px;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(94,234,212,0.5), rgba(167,139,250,0.2) 40%, transparent 70%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+  .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 6px;
+  }
+  .eyebrow-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #06090a;
+    box-shadow: 0 0 16px rgba(94, 234, 212, 0.4);
+  }
+  h1 {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    margin: 0;
+    background: linear-gradient(90deg, #f4fdfa, var(--accent) 55%, var(--accent-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .subtitle {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin: 0 0 16px;
+    padding-left: 30px;
+  }
+  .output {
+    position: relative;
+    background: var(--output-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 18px 18px 18px 20px;
+    overflow-x: auto;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.02) inset, 0 20px 40px -25px rgba(0,0,0,0.8);
+  }
+  .output::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 14px; right: 14px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(94,234,212,0.6), rgba(167,139,250,0.6), transparent);
+  }
+  .matrix-row {
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 2;
+    white-space: pre;
+    color: var(--row-color, var(--accent));
+    transition: padding-left 0.15s ease;
+  }
+  .matrix-row .num {
+    display: inline-block;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  }
+  .matrix-row .num:hover,
+  .matrix-row .num:focus-visible {
+    background: rgba(255,255,255,0.1);
+    box-shadow: 0 0 0 1px var(--row-color, var(--accent));
+    outline: none;
+  }
+  .matrix-row .num.tick {
+    animation: flash 0.7s ease-out;
+  }
+  @keyframes flash {
+    0% { color: #ffffff; text-shadow: 0 0 10px currentColor, 0 0 20px currentColor; }
+    100% { color: inherit; text-shadow: none; }
+  }
+  .live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin: 0 0 16px 30px;
+    padding: 5px 10px 5px 8px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--card-border);
+    border-radius: 999px;
+    width: fit-content;
+  }
+  .live-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #ff5f5f;
+    box-shadow: 0 0 8px #ff5f5f;
+    animation: pulse 1s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(255,95,95,0.5), 0 0 8px #ff5f5f; }
+    50% { opacity: 0.4; box-shadow: 0 0 0 4px rgba(255,95,95,0), 0 0 8px #ff5f5f; }
+  }
+  #clock { color: var(--accent); font-weight: 600; }
+  .sliders {
+    margin-top: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .slider-row label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-dim);
+    width: 78px;
+    flex-shrink: 0;
+    font-family: var(--mono);
+  }
+  .row-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--row-color);
+    box-shadow: 0 0 6px var(--row-color);
+    flex-shrink: 0;
+  }
+  .slider-row input[type="range"] {
+    flex: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--row-color), var(--card-border) 0%);
+    outline: none;
+  }
+  .slider-row input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: var(--row-color);
+    box-shadow: 0 0 0 3px rgba(255,255,255,0.08), 0 0 10px var(--row-color);
+    cursor: pointer;
+    transition: transform 0.15s ease;
+  }
+  .slider-row input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+  .slider-row input[type="range"]::-moz-range-thumb {
+    width: 15px;
+    height: 15px;
+    border: none;
+    border-radius: 50%;
+    background: var(--row-color);
+    box-shadow: 0 0 10px var(--row-color);
+    cursor: pointer;
+  }
+  .controls {
+    margin-top: 22px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  button {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--btn-bg);
+    color: var(--text);
+    border: 1px solid var(--card-border);
+    border-radius: 9px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+  }
+  button:hover {
+    background: var(--btn-bg-hover);
+    border-color: rgba(94, 234, 212, 0.4);
+    box-shadow: 0 0 16px -4px rgba(94, 234, 212, 0.35);
+  }
+  button:active { transform: translateY(1px) scale(0.98); }
+  .speed-group {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px;
+    background: var(--btn-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 9px;
+    padding: 3px;
+  }
+  .speed-group::before {
+    content: "⏩";
+    font-size: 12px;
+    padding: 0 6px 0 4px;
+    opacity: 0.6;
+  }
+  .speed-btn {
+    background: transparent;
+    color: var(--text-dim);
+    border: none;
+    border-radius: 6px;
+    padding: 7px 11px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: var(--mono);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .speed-btn:hover { color: var(--text); }
+  .speed-btn.active {
+    background: linear-gradient(135deg, rgba(94,234,212,0.22), rgba(167,139,250,0.22));
+    color: var(--accent);
+    box-shadow: 0 0 12px -4px rgba(94, 234, 212, 0.5);
+  }
+  details {
+    margin-top: 22px;
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    background: rgba(255,255,255,0.015);
+  }
+  details[open] summary { color: var(--accent); }
+  summary {
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--text-dim);
+    transition: color 0.15s ease;
+  }
+  summary::marker { color: var(--accent); }
+  .spec-row {
+    margin-top: 14px;
+    padding-left: 12px;
+    border-left: 2px solid var(--row-color, var(--card-border));
+  }
+  .spec-row h3 {
+    font-size: 12px;
+    margin: 0 0 4px;
+    color: var(--row-color, var(--accent));
+  }
+  .spec-row p {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin: 0;
+    line-height: 1.6;
+    font-family: var(--mono);
+  }
+  footer {
+    margin-top: 22px;
+    font-size: 11px;
+    color: var(--text-dim);
+    text-align: center;
+  }
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 28px;
+    transform: translate(-50%, 12px);
+    max-width: calc(100vw - 32px);
+    background: var(--btn-bg);
+    border: 1px solid var(--card-border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 9px 16px;
+    border-radius: 999px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    z-index: 5;
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  noscript {
+    display: block;
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 16px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+
+<noscript>This page needs JavaScript enabled to compute and tick the time matrix.</noscript>
+
+<div class="card">
+  <div class="eyebrow">
+    <span class="eyebrow-icon" aria-hidden="true">◷</span>
+    <h1>Time Matrix Generator</h1>
+  </div>
+  <p class="subtitle">Progressive multi-tier truncation matrix — live, 1s tick</p>
+
+  <div class="live-badge"><span class="live-dot" aria-hidden="true"></span>LIVE <span id="clock"></span></div>
+
+  <div class="output" id="output" aria-label="Live time matrix output"></div>
+
+  <div class="sliders" id="sliders" aria-label="Row indent controls"></div>
+
+  <div class="controls">
+    <button id="resetBtn" type="button">↺ Reset Layout</button>
+    <div class="speed-group" id="speedGroup" role="group" aria-label="Time speed multiplier"></div>
+  </div>
+
+  <details>
+    <summary>System Interpretation Specs</summary>
+    <div id="specs"></div>
+  </details>
+
+  <footer>Recomputed client-side from your local clock. Click any number to see what it is.</footer>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  const ROW_DEFS = [
+    { name: "Second",     cols: ["Sec of Minute", "Sec of Hour", "Sec of Day", "Sec of Week", "Sec of Month", "Sec of Season", "Sec of Year", "Sec of Decade", "Sec of Century", "Sec of Millennium"] },
+    { name: "Minute",     cols: ["Min of Hour", "Min of Day", "Min of Week", "Min of Month", "Min of Season", "Min of Year", "Min of Decade", "Min of Century", "Min of Millennium"] },
+    { name: "Hour",       cols: ["Hour of Day", "Hour of Week", "Hour of Month", "Hour of Season", "Hour of Year", "Hour of Decade", "Hour of Century", "Hour of Millennium"] },
+    { name: "Day",        cols: ["Day of Week", "Day of Month", "Day of Season", "Day of Year", "Day of Decade", "Day of Century", "Day of Millennium"] },
+    { name: "Week",       cols: ["Week of Month", "Week of Season", "Week of Year", "Week of Decade", "Week of Century", "Week of Millennium"] },
+    { name: "Month",      cols: ["Month of Season", "Month of Year", "Month of Decade", "Month of Century", "Month of Millennium"] },
+    { name: "Season",     cols: ["Season of Year", "Season of Decade", "Season of Century", "Season of Millennium"] },
+    { name: "Year",       cols: ["Year of Decade (0-9)", "Year of Century", "Year of Millennium"] },
+    { name: "Decade",     cols: ["Decade of Century", "Decade of Millennium"] },
+    { name: "Millennium", cols: ["Current Millennium Count"] },
+  ];
+
+  function daysSinceStart(startYear, startMonthIdx, startDay, now) {
+    const start = Date.UTC(startYear, startMonthIdx, startDay);
+    const nowUTC = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+    return Math.floor((nowUTC - start) / 86400000) + 1;
+  }
+
+  function computeMatrix(now) {
+    const seconds = now.getSeconds();
+    const minute = now.getMinutes();
+    const hour = now.getHours();
+    const dow = ((now.getDay() + 6) % 7) + 1; // Mon=1..Sun=7
+    const dayOfMonth = now.getDate();
+    const month = now.getMonth() + 1;
+    const year = now.getFullYear();
+    const season = Math.floor((month - 1) / 3) + 1;
+
+    const decadeStartYear = year - ((year - 1) % 10);
+    const centuryStartYear = year - ((year - 1) % 100);
+    const millenniumStartYear = year - ((year - 1) % 1000);
+
+    const dayOfYear = daysSinceStart(year, 0, 1, now);
+    const dayOfSeason = daysSinceStart(year, (season - 1) * 3, 1, now);
+    const dayOfDecade = daysSinceStart(decadeStartYear, 0, 1, now);
+    const dayOfCentury = daysSinceStart(centuryStartYear, 0, 1, now);
+    const dayOfMillennium = daysSinceStart(millenniumStartYear, 0, 1, now);
+
+    const minOfDay = hour * 60 + minute;
+    const minOfWeek = ((dow - 1) * 24 + hour) * 60 + minute;
+    const minOfMonth = ((dayOfMonth - 1) * 24 + hour) * 60 + minute;
+    const minOfSeason = ((dayOfSeason - 1) * 24 + hour) * 60 + minute;
+    const minOfYear = ((dayOfYear - 1) * 24 + hour) * 60 + minute;
+    const minOfDecade = ((dayOfDecade - 1) * 24 + hour) * 60 + minute;
+    const minOfCentury = ((dayOfCentury - 1) * 24 + hour) * 60 + minute;
+    const minOfMillennium = ((dayOfMillennium - 1) * 24 + hour) * 60 + minute;
+
+    const hourOfWeek = (dow - 1) * 24 + hour;
+    const hourOfMonth = (dayOfMonth - 1) * 24 + hour;
+    const hourOfSeason = (dayOfSeason - 1) * 24 + hour;
+    const hourOfYear = (dayOfYear - 1) * 24 + hour;
+    const hourOfDecade = (dayOfDecade - 1) * 24 + hour;
+    const hourOfCentury = (dayOfCentury - 1) * 24 + hour;
+    const hourOfMillennium = (dayOfMillennium - 1) * 24 + hour;
+
+    const weekOf = (dayOfX) => Math.floor((dayOfX - 1) / 7) + 1;
+
+    const monthOfSeason = ((month - 1) % 3) + 1;
+    const monthOfDecade = (year - decadeStartYear) * 12 + month;
+    const monthOfCentury = (year - centuryStartYear) * 12 + month;
+    const monthOfMillennium = (year - millenniumStartYear) * 12 + month;
+
+    const seasonOfDecade = (year - decadeStartYear) * 4 + season;
+    const seasonOfCentury = (year - centuryStartYear) * 4 + season;
+    const seasonOfMillennium = (year - millenniumStartYear) * 4 + season;
+
+    const yearOfDecade = year - decadeStartYear;
+    const yearOfCentury = year - centuryStartYear + 1;
+    const yearOfMillennium = year - millenniumStartYear + 1;
+
+    const decadeOfCentury = Math.floor((year - centuryStartYear) / 10) + 1;
+    const decadeOfMillennium = Math.floor((year - millenniumStartYear) / 10) + 1;
+
+    const millenniumCount = Math.floor((millenniumStartYear - 1) / 1000) + 1;
+
+    const secOfHour = minute * 60 + seconds;
+    const secOfDay = minOfDay * 60 + seconds;
+    const secOfWeek = minOfWeek * 60 + seconds;
+    const secOfMonth = minOfMonth * 60 + seconds;
+    const secOfSeason = minOfSeason * 60 + seconds;
+    const secOfYear = minOfYear * 60 + seconds;
+    const secOfDecade = minOfDecade * 60 + seconds;
+    const secOfCentury = minOfCentury * 60 + seconds;
+    const secOfMillennium = minOfMillennium * 60 + seconds;
+
+    return [
+      [seconds, secOfHour, secOfDay, secOfWeek, secOfMonth, secOfSeason, secOfYear, secOfDecade, secOfCentury, secOfMillennium],
+      [minute, minOfDay, minOfWeek, minOfMonth, minOfSeason, minOfYear, minOfDecade, minOfCentury, minOfMillennium],
+      [hour, hourOfWeek, hourOfMonth, hourOfSeason, hourOfYear, hourOfDecade, hourOfCentury, hourOfMillennium],
+      [dow, dayOfMonth, dayOfSeason, dayOfYear, dayOfDecade, dayOfCentury, dayOfMillennium],
+      [weekOf(dayOfMonth), weekOf(dayOfSeason), weekOf(dayOfYear), weekOf(dayOfDecade), weekOf(dayOfCentury), weekOf(dayOfMillennium)],
+      [monthOfSeason, month, monthOfDecade, monthOfCentury, monthOfMillennium],
+      [season, seasonOfDecade, seasonOfCentury, seasonOfMillennium],
+      [yearOfDecade, yearOfCentury, yearOfMillennium],
+      [decadeOfCentury, decadeOfMillennium],
+      [millenniumCount],
+    ];
+  }
+
+  const ROW_COLORS = [
+    "#5eead4", "#5ee0ea", "#5ec4f0", "#7aa8f5", "#9c8ff8",
+    "#b985f0", "#d17ce0", "#e372c2", "#ee7a9a", "#f5a05e",
+  ];
+
+  const output = document.getElementById("output");
+  const slidersEl = document.getElementById("sliders");
+  const specsEl = document.getElementById("specs");
+  const clockEl = document.getElementById("clock");
+  const rowEls = [];
+  const numSpans = [];
+  const lastValues = [];
+  const indents = ROW_DEFS.map(() => 0);
+
+  ROW_DEFS.forEach((def, i) => {
+    const color = ROW_COLORS[i % ROW_COLORS.length];
+
+    const rowEl = document.createElement("div");
+    rowEl.className = "matrix-row";
+    rowEl.id = "row-" + i;
+    rowEl.style.setProperty("--row-color", color);
+
+    const spans = [];
+    def.cols.forEach((colLabel, colIdx) => {
+      if (colIdx > 0) rowEl.appendChild(document.createTextNode(" "));
+      const span = document.createElement("span");
+      span.className = "num";
+      span.tabIndex = 0;
+      span.setAttribute("role", "button");
+      span.setAttribute("aria-label", colLabel);
+      const identify = () => showToast(colLabel + " — " + span.textContent);
+      span.addEventListener("click", identify);
+      span.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          identify();
+        }
+      });
+      rowEl.appendChild(span);
+      spans.push(span);
+    });
+    numSpans.push(spans);
+    lastValues.push(def.cols.map(() => null));
+
+    output.appendChild(rowEl);
+    rowEls.push(rowEl);
+
+    const sliderRow = document.createElement("div");
+    sliderRow.className = "slider-row";
+    sliderRow.style.setProperty("--row-color", color);
+    const label = document.createElement("label");
+    const dot = document.createElement("span");
+    dot.className = "row-dot";
+    label.appendChild(dot);
+    label.appendChild(document.createTextNode(def.name));
+    const input = document.createElement("input");
+    input.type = "range";
+    input.min = "0";
+    input.max = "60";
+    input.value = "0";
+    input.setAttribute("aria-label", def.name + " row indent");
+    input.style.setProperty("--row-color", color);
+    input.addEventListener("input", () => {
+      indents[i] = parseInt(input.value, 10);
+      rowEl.style.paddingLeft = indents[i] + "ch";
+    });
+    sliderRow.appendChild(label);
+    sliderRow.appendChild(input);
+    slidersEl.appendChild(sliderRow);
+    sliderRow.dataset.index = i;
+
+    const specRow = document.createElement("div");
+    specRow.className = "spec-row";
+    specRow.style.setProperty("--row-color", color);
+    specRow.innerHTML = "<h3>Row " + (i + 1) + " — " + def.name + "</h3><p>" +
+      def.cols.map((c, idx) => (idx + 1) + ": " + c).join("<br>") + "</p>";
+    specsEl.appendChild(specRow);
+  });
+
+  function render(now) {
+    const matrix = computeMatrix(now);
+    matrix.forEach((row, i) => {
+      row.forEach((val, j) => {
+        const span = numSpans[i][j];
+        span.textContent = val;
+        if (lastValues[i][j] !== null && lastValues[i][j] !== val) {
+          span.classList.remove("tick");
+          void span.offsetWidth; // restart animation
+          span.classList.add("tick");
+        }
+        lastValues[i][j] = val;
+      });
+    });
+    clockEl.textContent = now.toLocaleTimeString([], { hour12: false });
+  }
+
+  const toast = document.getElementById("toast");
+  let toastTimer;
+  function showToast(message) {
+    toast.textContent = message;
+    toast.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove("show"), 1800);
+  }
+
+  // Simulated clock: at 1x it always equals real time. At >1x it runs ahead,
+  // anchored so speed changes never jump — except returning to 1x, which
+  // snaps straight back to the actual current time rather than continuing
+  // wherever the accelerated clock had drifted to.
+  let speedMultiplier = 1;
+  let simAnchorReal = Date.now();
+  let simAnchorSim = simAnchorReal;
+
+  // Date can only represent up to ~275760 CE — clamp so extreme multipliers
+  // freeze at that ceiling instead of overflowing into Invalid Date.
+  const MAX_SIM_TIME = 8640000000000000;
+
+  function currentSimTime() {
+    const t = simAnchorSim + (Date.now() - simAnchorReal) * speedMultiplier;
+    return Math.min(t, MAX_SIM_TIME);
+  }
+
+  const SPEEDS = [1, 10, 100, 1000, 10000, 1000000000000];
+  const speedGroupEl = document.getElementById("speedGroup");
+  const speedBtns = {};
+
+  function formatSpeed(s) {
+    if (s >= 1e12) return (s / 1e12) + "T";
+    if (s >= 1e9) return (s / 1e9) + "B";
+    if (s >= 1e6) return (s / 1e6) + "M";
+    if (s >= 1e3) return (s / 1e3) + "K";
+    return String(s);
+  }
+
+  function updateSpeedButtons() {
+    SPEEDS.forEach((s) => {
+      speedBtns[s].classList.toggle("active", s === speedMultiplier);
+    });
+  }
+
+  function setSpeed(multiplier) {
+    const realNow = Date.now();
+    simAnchorSim = multiplier === 1 ? realNow : currentSimTime();
+    simAnchorReal = realNow;
+    speedMultiplier = multiplier;
+    updateSpeedButtons();
+    showToast(multiplier === 1 ? "Back to real time" : "Speed ×" + formatSpeed(multiplier));
+    tick();
+  }
+
+  SPEEDS.forEach((s) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "speed-btn" + (s === 1 ? " active" : "");
+    btn.textContent = formatSpeed(s) + "×";
+    btn.setAttribute("aria-label", "Run the matrix at " + formatSpeed(s) + "x speed");
+    btn.addEventListener("click", () => setSpeed(s));
+    speedGroupEl.appendChild(btn);
+    speedBtns[s] = btn;
+  });
+
+  function tick() {
+    render(new Date(currentSimTime()));
+  }
+
+  tick();
+  setInterval(tick, 100);
+
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    indents.fill(0);
+    rowEls.forEach((el) => (el.style.paddingLeft = "0"));
+    document.querySelectorAll('#sliders input[type="range"]').forEach((input) => {
+      input.value = "0";
+    });
+  });
+})();
+</script>
+
+</body>
+</html>
