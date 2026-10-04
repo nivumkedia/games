@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ninja Ascension</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    background: linear-gradient(180deg, #fdf6e9 0%, #f5e8d0 100%);
+    color: #3a2a1a;
+    min-height: 100vh;
+    padding: 16px;
+  }
+  #app { max-width: 980px; margin: 0 auto; }
+  h1 {
+    text-align: center;
+    color: #8a2e1a;
+    font-size: 1.8rem;
+    letter-spacing: 2px;
+    margin-bottom: 4px;
+    text-shadow: 1px 1px 0 #fff2;
+  }
+  .subtitle { text-align: center; color: #9a6a3a; font-size: 0.85rem; margin-bottom: 16px; }
+
+  .panel {
+    background: #fffaf0;
+    border: 2px solid #d8bb8a;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 14px;
+    box-shadow: 0 2px 6px rgba(120,80,30,0.12);
+  }
+
+  .fighters-row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .fighter-card { flex: 1; min-width: 260px; background: #fff; border: 2px solid #e4cfa0; border-radius: 10px; padding: 12px 14px; }
+  .fighter-card.me { border-color: #4a7a4a; }
+  .fighter-card.ai { border-color: #8a3a3a; }
+  .fighter-name { font-weight: bold; font-size: 1.05rem; margin-bottom: 6px; display:flex; align-items:center; gap:6px; }
+  .fighter-name.me { color: #2e5e2e; }
+  .fighter-name.ai { color: #7e2a2a; }
+  .stat-line { font-size: 0.85rem; color: #5a4530; margin: 3px 0; display:flex; justify-content: space-between; }
+  .stat-line b { color: #3a2a1a; }
+  .pip-row { display:flex; gap:4px; margin: 2px 0 6px; }
+  .pip { width:14px; height:14px; border-radius:3px; background:#e8dcc0; border:1px solid #c9ae7a; }
+  .pip.filled { background:#c98a2c; border-color:#8a5a12; }
+  .pip.lvl2.filled { background:#3a7ab0; border-color:#1a4a7a; }
+  .pip.lvl3.filled { background:#a8306a; border-color:#6a1840; }
+  .pip.life.filled { background:#d13a3a; border-color:#8a1a1a; }
+
+  .btn-row { display:flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  button.move-btn {
+    flex: 1 1 100px;
+    padding: 10px 8px;
+    border-radius: 8px;
+    border: 2px solid #c9ae7a;
+    background: #fdf6e4;
+    color: #3a2a1a;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: transform 0.1s, background 0.15s;
+  }
+  button.move-btn:hover:not(:disabled) { background: #f0dcae; transform: translateY(-1px); }
+  button.move-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.move-btn.selected-level { background: #c98a2c; color: #fff; border-color: #8a5a12; }
+  button.ascend-btn {
+    width: 100%; margin-top: 10px; padding: 12px; border-radius: 8px; border: 2px solid #2e5e2e;
+    background: #4a8a4a; color: #fff; font-weight: bold; cursor: pointer; font-size: 0.95rem;
+  }
+  button.ascend-btn:hover { background: #3a7a3a; }
+
+  .level-select { display:flex; flex-wrap: wrap; gap:6px; margin-bottom: 8px; }
+  .level-select button { flex: 1 1 200px; font-size: 0.8rem; }
+
+  #log {
+    max-height: 220px;
+    overflow-y: auto;
+    background: #fbf2de;
+    border: 1px dashed #c9ae7a;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.82rem;
+    color: #5a4530;
+    line-height: 1.5;
+  }
+  #log .entry { margin-bottom: 4px; }
+  #log .entry.result { font-weight: bold; color: #3a2a1a; }
+
+  .phase-banner {
+    text-align:center; background:#8a2e1a; color:#fff; padding: 8px; border-radius: 8px;
+    font-size: 0.95rem; letter-spacing: 1px; margin-bottom: 14px;
+  }
+
+  .info-toggle { font-size: 0.78rem; color: #9a6a3a; text-decoration: underline; cursor: pointer; display:inline-block; margin-bottom: 8px; }
+  .info-box { display:none; font-size: 0.8rem; background: #f3e6c8; border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; color: #5a4530; }
+  .info-box.show { display:block; }
+
+  .elements-row, .weapon-row { display:flex; gap:10px; flex-wrap: wrap; justify-content:center; }
+  .element-btn { font-size: 2rem; padding: 14px 20px; border-radius: 12px; border: 2px solid #c9ae7a; background:#fdf6e4; cursor:pointer; }
+  .element-btn:hover { background:#f0dcae; }
+
+  .token-bag { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  .token-chip { background:#efe0c0; border:1px solid #c9ae7a; border-radius: 14px; padding: 3px 10px; font-size: 0.78rem; }
+
+  .weapon-btn { position: relative; flex: 1 1 140px; text-align:left; }
+  .weapon-cat { font-size: 0.7rem; opacity: 0.8; display:block; }
+  .cooldown-badge {
+    position:absolute; top:4px; right:6px; background:#d13a3a; color:#fff; border-radius: 50%;
+    width:20px; height:20px; font-size:0.7rem; display:flex; align-items:center; justify-content:center;
+  }
+  .weapon-btn.cat-Ultimate { border-color:#a8306a; }
+  .weapon-btn.cat-Tactical { border-color:#3a7ab0; }
+  .weapon-btn.cat-Base { border-color:#4a8a4a; }
+  .weapon-btn.deflector-btn { border-color:#8a5a12; background:#fff2d8; }
+  .weapon-btn.token-btn { border-color:#6a1840; background:#f6e0ea; }
+
+  #gameOverBanner { text-align:center; padding: 30px; }
+  #gameOverBanner h2 { font-size: 2rem; margin-bottom: 10px; }
+  #gameOverBanner.win h2 { color: #2e5e2e; }
+  #gameOverBanner.lose h2 { color: #8a2e1a; }
+  #restartBtn { margin-top: 16px; padding: 12px 28px; border-radius: 8px; border: none; background:#8a2e1a; color:#fff; font-size:1rem; cursor:pointer; }
+
+  .carrier-card { text-align:center; padding: 16px; }
+  .carrier-card .carrier-icon { font-size: 3rem; }
+</style>
+</head>
+<body>
+<div id="app">
+  <h1>🥷 Ninja Ascension</h1>
+  <div class="subtitle">Volume 1 — Tiers, Elements &amp; Weapon Carriers</div>
+
+  <div class="phase-banner" id="phaseBanner">Tier 1: Blade Stance</div>
+
+  <div id="fightPhase" class="panel" style="display:none;">
+    <span class="info-toggle" onclick="toggleInfo('fightInfo')">how does this phase work?</span>
+    <div class="info-box" id="fightInfo">
+      Both fighters pick a move each round, revealed at the same time. Win a Level 1 clash to earn a Base Point.
+      Bank 3 Base Points to fire a Level 2 move (costs the 3 points whether you win or not); winning gives a Level 2 Point.
+      Bank 3 Level 2 Points to fire a Level 3 move; winning gives a Level 3 Point. Bank 3 Level 3 Points to Ascend to the next
+      tier whenever you choose — ascending is permanent and resets your points. Higher tiers dominate lower tiers of equal
+      or lower level; ties happen when the exact same move (or move-type) meets itself.
+    </div>
+    <div class="fighters-row">
+      <div class="fighter-card me">
+        <div class="fighter-name me">🧑 You — <span id="p1TierName"></span></div>
+        <div class="stat-line">Base Points <span id="p1BasePips" class="pip-row"></span></div>
+        <div class="stat-line">Level 2 Points <span id="p1Lvl2Pips" class="pip-row"></span></div>
+        <div class="stat-line">Level 3 Points <span id="p1Lvl3Pips" class="pip-row"></span></div>
+        <button class="ascend-btn" id="ascendBtn" style="display:none;" onclick="playerAscend()">⬆ Ascend Tier</button>
+      </div>
+      <div class="fighter-card ai">
+        <div class="fighter-name ai">🤖 Rival — <span id="p2TierName"></span></div>
+        <div class="stat-line">Base Points <span id="p2BasePips" class="pip-row"></span></div>
+        <div class="stat-line">Level 2 Points <span id="p2Lvl2Pips" class="pip-row"></span></div>
+        <div class="stat-line">Level 3 Points <span id="p2Lvl3Pips" class="pip-row"></span></div>
+      </div>
+    </div>
+    <div class="level-select" id="levelSelect"></div>
+    <div class="btn-row" id="moveButtons"></div>
+  </div>
+
+  <div id="elementalPhase" class="panel" style="display:none;">
+    <span class="info-toggle" onclick="toggleInfo('elInfo')">how does this phase work?</span>
+    <div class="info-box" id="elInfo">
+      Both of you have mastered the 5 Pillars of Ninjutsu. For 4 rounds, pick an elemental card each round. Nobody wins or
+      loses — instead the clash determines which Special Element token you collect. After 4 rounds, your most-collected
+      element decides your Weapon Carrier.
+    </div>
+    <div>Harvest Round: <b id="elRoundLabel">1</b> / 4</div>
+    <div class="elements-row" id="elementButtons"></div>
+    <div class="fighters-row" style="margin-top:12px;">
+      <div class="fighter-card me">
+        <div class="fighter-name me">🧑 Your Bag</div>
+        <div class="token-bag" id="p1Bag"></div>
+      </div>
+      <div class="fighter-card ai">
+        <div class="fighter-name ai">🤖 Rival Bag</div>
+        <div class="token-bag" id="p2Bag"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="carrierReveal" class="panel" style="display:none;">
+    <div class="fighters-row">
+      <div class="fighter-card me carrier-card">
+        <div class="carrier-icon" id="p1CarrierIcon"></div>
+        <div class="fighter-name me" id="p1CarrierName"></div>
+      </div>
+      <div class="fighter-card ai carrier-card">
+        <div class="carrier-icon" id="p2CarrierIcon"></div>
+        <div class="fighter-name ai" id="p2CarrierName"></div>
+      </div>
+    </div>
+    <button class="ascend-btn" onclick="beginWeaponPhase()">⚔️ Begin the Final Duel</button>
+  </div>
+
+  <div id="weaponPhase" class="panel" style="display:none;">
+    <span class="info-toggle" onclick="toggleInfo('wInfo')">how does this phase work?</span>
+    <div class="info-box" id="wInfo">
+      Pick a weapon (each one locks on a 2-round cooldown after use), the universal Deflector, or — if you have a Master
+      Token — a secret Final Blow / Healer. Ultimate Strikes crush Tactical &amp; Base weapons; Tactical crushes Base;
+      matching categories clash and tie. Deflector beats an Ultimate Strike (and earns you 3 points!) but fails against
+      anything else, costing you a life. Score 5 points to earn a Master Token. Two Final Blow marks = instant death.
+    </div>
+    <div class="fighters-row">
+      <div class="fighter-card me">
+        <div class="fighter-name me">🧑 You</div>
+        <div class="stat-line">Lives <span id="p1LifePips" class="pip-row"></span></div>
+        <div class="stat-line">Points toward Token <b id="p1Points">0</b>/5</div>
+        <div class="stat-line">Master Tokens <b id="p1Tokens">0</b></div>
+        <div class="stat-line">Final Blow Marks <b id="p1Marks">0</b>/2</div>
+      </div>
+      <div class="fighter-card ai">
+        <div class="fighter-name ai">🤖 Rival</div>
+        <div class="stat-line">Lives <span id="p2LifePips" class="pip-row"></span></div>
+        <div class="stat-line">Points toward Token <b id="p2Points">0</b>/5</div>
+        <div class="stat-line">Master Tokens <b id="p2Tokens">0</b></div>
+        <div class="stat-line">Final Blow Marks <b id="p2Marks">0</b>/2</div>
+      </div>
+    </div>
+    <div class="weapon-row" id="weaponButtons" style="margin-top:12px;"></div>
+  </div>
+
+  <div id="gameOverBanner" class="panel" style="display:none;">
+    <h2 id="gameOverTitle"></h2>
+    <p id="gameOverText"></p>
+    <button id="restartBtn" onclick="restartGame()">Fight Again</button>
+  </div>
+
+  <div class="panel">
+    <div style="font-weight:bold; margin-bottom:6px; color:#8a2e1a;">Duel Log</div>
+    <div id="log"></div>
+  </div>
+</div>
+
+<script>
+const TIER_DEFS = [
+  { id:1, name:'Blade Stance', icon:'⚔️', moves:[
+      {key:'Slice', icon:'⚔️'}, {key:'Kick', icon:'🦵'}, {key:'Block', icon:'🛡️'}
+    ], beats:{Slice:['Kick'], Kick:['Block'], Block:['Slice']} },
+  { id:2, name:'Brawler Stance', icon:'🥊', moves:[
+      {key:'Punch', icon:'👊'}, {key:'Jump', icon:'🤾'}, {key:'Duck', icon:'🙇'}
+    ], beats:{Punch:['Jump'], Jump:['Duck'], Duck:['Punch']} },
+  { id:3, name:'Basic Ninja Stance', icon:'🤸', moves:[
+      {key:'Dash', icon:'🏃'}, {key:'Sneak', icon:'🥷'}, {key:'Flip', icon:'🤸'}
+    ], beats:{Dash:['Sneak'], Sneak:['Flip'], Flip:['Dash']} },
+  { id:4, name:'Advanced Gymnastics', icon:'🤸‍♂️', moves:[
+      {key:'Flipkick', icon:'🦵'}, {key:'Spinsweep', icon:'🌀'}, {key:'Handspring-Shield', icon:'🤾‍♂️'}
+    ], beats:{Flipkick:['Spinsweep'], Spinsweep:['Handspring-Shield'], 'Handspring-Shield':['Flipkick']} },
+  { id:5, name:'5 Pillars of Ninjutsu', icon:'🌟', moves:[
+      {key:'Taihenjutsu', icon:'🤸'}, {key:'Dakentaijutsu', icon:'👊'}, {key:'Jutaijutsu', icon:'🥋'},
+      {key:'Koppojutsu', icon:'🦴'}, {key:'Shinobi-iri', icon:'👥'}
+    ], beats:{
+      Taihenjutsu:['Dakentaijutsu','Koppojutsu'],
+      Dakentaijutsu:['Jutaijutsu','Shinobi-iri'],
+      Jutaijutsu:['Koppojutsu','Taihenjutsu'],
+      Koppojutsu:['Dakentaijutsu','Shinobi-iri'],
+      'Shinobi-iri':['Taihenjutsu','Jutaijutsu'],
+    } },
+];
+
+const ELEMENTS = ['Fire','Water','Earth','Wind'];
+const ELEMENT_ICON = {Fire:'🔥', Water:'💧', Earth:'🪨', Wind:'💨'};
+const CROSS_DROP = {
+  'Fire-Water': {a:'Ice', b:'Shadow'},
+  'Fire-Earth': {a:'Light', b:'Metal'},
+  'Fire-Wind':  {a:'Void', b:'Ice'},
+  'Water-Earth':{a:'Shadow', b:'Light'},
+  'Water-Wind': {a:'Metal', b:'Void'},
+  'Earth-Wind': {a:'Void', b:'Shadow'},
+};
+const MIRROR_DROP = {
+  Fire:  {p1:'Light', p2:'Lava'},
+  Water: {p1:'Void', p2:'Acid'},
+  Earth: {p1:'Metal', p2:'Cosmos'},
+  Wind:  {p1:'Shadow', p2:'Lightning'},
+};
+const BUCKET_MAP = {Ice:'Ice', Shadow:'Shadow', Metal:'Metal', Light:'Light', Void:'Void', Lava:'Light', Acid:'Void', Cosmos:'Metal', Lightning:'Shadow'};
+const TOKEN_ICON = {Ice:'❄️', Shadow:'👥', Metal:'🔩', Light:'☀️', Void:'🌌', Lava:'🌋', Acid:'🧪', Cosmos:'🪐', Lightning:'⚡'};
+
+const CARRIERS = {
+  Ice: { name:'Winter Abyss', icon:'❄️', weapons:[
+    {name:'Spearsword', cat:'Ultimate', icon:'🔱'},
+    {name:'Longsword', cat:'Tactical', icon:'🗡️'},
+    {name:'Fukiya', cat:'Tactical', icon:'🎯'},
+    {name:'Kusarigama', cat:'Base', icon:'⛓️'},
+    {name:'Torinawa', cat:'Base', icon:'🪢'},
+    {name:'Makibishi', cat:'Base', icon:'✴️'},
+  ]},
+  Shadow: { name:'Night Stalker', icon:'👥', weapons:[
+    {name:'Double Sword', cat:'Ultimate', icon:'⚔️'},
+    {name:'Kakute', cat:'Ultimate', icon:'💍'},
+    {name:'Ninjatō', cat:'Tactical', icon:'🗡️'},
+    {name:'Metsubushi', cat:'Tactical', icon:'💥'},
+    {name:'Shuriken', cat:'Tactical', icon:'✳️'},
+    {name:'Suntetsu', cat:'Base', icon:'📍'},
+  ]},
+  Metal: { name:'Ironclad Fortress', icon:'🔩', weapons:[
+    {name:'Greatsword', cat:'Ultimate', icon:'⚔️'},
+    {name:'Kanabō', cat:'Ultimate', icon:'🔨'},
+    {name:'Chigiriki', cat:'Ultimate', icon:'⛓️'},
+    {name:'Thicksword', cat:'Tactical', icon:'🗡️'},
+    {name:'Bō Staff', cat:'Tactical', icon:'➖'},
+    {name:'Tekko & Jitte', cat:'Base', icon:'🛡️'},
+  ]},
+  Light: { name:'Tri-Blade Nexus', icon:'☀️', weapons:[
+    {name:'Juggling Tri-Blade Nexus', cat:'Ultimate', icon:'🔄'},
+    {name:'Triple Sword', cat:'Ultimate', icon:'⚔️'},
+    {name:'Yoroi Tōshi', cat:'Ultimate', icon:'🗡️'},
+    {name:'Shikomizue', cat:'Tactical', icon:'🦯'},
+    {name:'Kusari-fundo', cat:'Base', icon:'⛓️'},
+    {name:'Kunai', cat:'Base', icon:'🔪'},
+  ]},
+  Void: { name:'Four-Blade Tempest', icon:'🌌', weapons:[
+    {name:'Four-Blade Tempest Blades', cat:'Ultimate', icon:'🌪️'},
+    {name:'Two Swords', cat:'Tactical', icon:'⚔️'},
+    {name:'Shuko', cat:'Tactical', icon:'🐾'},
+    {name:'Kog Katana', cat:'Tactical', icon:'🗡️'},
+    {name:'Outer Sword', cat:'Base', icon:'🛡️'},
+    {name:'Ashiko', cat:'Base', icon:'🦶'},
+  ]},
+};
+
+let state = null;
+
+function freshFighter() {
+  return { tier:1, base:0, lvl2:0, lvl3:0 };
+}
+function freshWeaponFighter() {
+  return { lives:3, points:0, tokens:0, marks:0, cooldowns:{}, carrierKey:null };
+}
+
+function newGame() {
+  state = {
+    phase: 'fight',
+    selectedLevel: 1,
+    p1: freshFighter(),
+    p2: freshFighter(),
+    elemental: { round:0, p1Bag:[], p2Bag:[] },
+    weapon: { p1: freshWeaponFighter(), p2: freshWeaponFighter() },
+    log: [],
+  };
+  document.getElementById('gameOverBanner').style.display = 'none';
+  document.getElementById('fightPhase').style.display = 'block';
+  document.getElementById('elementalPhase').style.display = 'none';
+  document.getElementById('carrierReveal').style.display = 'none';
+  document.getElementById('weaponPhase').style.display = 'none';
+  logMsg('A new duel begins! Both fighters start in Tier 1: Blade Stance.');
+  render();
+}
+
+function toggleInfo(id) {
+  document.getElementById(id).classList.toggle('show');
+}
+
+function logMsg(msg, isResult) {
+  state.log.push({msg, isResult});
+  const logEl = document.getElementById('log');
+  const div = document.createElement('div');
+  div.className = 'entry' + (isResult ? ' result' : '');
+  div.textContent = msg;
+  logEl.appendChild(div);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+/* ---------------- TIER FIGHT PHASE ---------------- */
+
+function tierDef(tierId) { return TIER_DEFS[tierId - 1]; }
+
+function resolveTierClash(a, b) {
+  // a, b: {tier, level, move}. Tier is the primary axis (Boss Buff: higher tier always wins);
+  // level and the loop/pentagon matchup only decide clashes within the same tier.
+  if (a.tier !== b.tier) return a.tier > b.tier ? 'a' : 'b';
+  if (a.move === b.move) return 'tie';
+  if (a.level === b.level) {
+    const def = tierDef(a.tier);
+    if (def.beats[a.move] && def.beats[a.move].includes(b.move)) return 'a';
+    if (def.beats[b.move] && def.beats[b.move].includes(a.move)) return 'b';
+    return 'tie';
+  }
+  return a.level > b.level ? 'a' : 'b';
+}
+
+function renderFightPhase() {
+  const p1 = state.p1, p2 = state.p2;
+  document.getElementById('phaseBanner').textContent = `Tier Duel — You: ${tierDef(p1.tier).name} | Rival: ${tierDef(p2.tier).name}`;
+  document.getElementById('p1TierName').textContent = `${tierDef(p1.tier).icon} ${tierDef(p1.tier).name}`;
+  document.getElementById('p2TierName').textContent = `${tierDef(p2.tier).icon} ${tierDef(p2.tier).name}`;
+
+  renderPips('p1BasePips', p1.base, 3, 'base');
+  renderPips('p1Lvl2Pips', p1.lvl2, 3, 'lvl2');
+  renderPips('p1Lvl3Pips', p1.lvl3, 3, 'lvl3');
+  renderPips('p2BasePips', p2.base, 3, 'base');
+  renderPips('p2Lvl2Pips', p2.lvl2, 3, 'lvl2');
+  renderPips('p2Lvl3Pips', p2.lvl3, 3, 'lvl3');
+
+  document.getElementById('ascendBtn').style.display = (p1.lvl3 >= 3 && p1.tier < 5) ? 'block' : 'none';
+
+  const levelSelect = document.getElementById('levelSelect');
+  levelSelect.innerHTML = '';
+  [1,2,3].forEach(lvl => {
+    const eligible = lvl === 1 || (lvl === 2 && p1.base >= 3) || (lvl === 3 && p1.lvl2 >= 3);
+    const btn = document.createElement('button');
+    btn.className = 'move-btn' + (state.selectedLevel === lvl ? ' selected-level' : '');
+    if (lvl === 1) btn.textContent = 'Level 1 — free';
+    else if (lvl === 2) btn.textContent = `Level 2 — spends 3 Base Points (you have ${p1.base}/3)`;
+    else btn.textContent = `Level 3 — spends 3 Level 2 Points (you have ${p1.lvl2}/3)`;
+    btn.disabled = !eligible;
+    btn.onclick = () => { state.selectedLevel = lvl; render(); };
+    levelSelect.appendChild(btn);
+  });
+
+  const moveButtons = document.getElementById('moveButtons');
+  moveButtons.innerHTML = '';
+  tierDef(p1.tier).moves.forEach((m, idx) => {
+    const btn = document.createElement('button');
+    btn.className = 'move-btn';
+    btn.textContent = `[${idx + 1}] ${m.icon} ${m.key}`;
+    btn.onclick = () => playerThrow(m.key);
+    moveButtons.appendChild(btn);
+  });
+}
+
+function nextEligibleLevel(current) {
+  const p1 = state.p1;
+  for (let step = 1; step <= 3; step++) {
+    const lvl = ((current - 1 + step) % 3) + 1;
+    if (lvl === 1) return 1;
+    if (lvl === 2 && p1.base >= 3) return 2;
+    if (lvl === 3 && p1.lvl2 >= 3) return 3;
+  }
+  return current;
+}
+
+document.addEventListener('keydown', (e) => {
+  if (!state || state.phase !== 'fight') return;
+  if (e.key === 'ArrowRight') {
+    e.preventDefault();
+    state.selectedLevel = nextEligibleLevel(state.selectedLevel);
+    render();
+    return;
+  }
+  const idx = parseInt(e.key, 10) - 1;
+  if (isNaN(idx)) return;
+  const buttons = document.getElementById('moveButtons').querySelectorAll('button');
+  if (buttons[idx]) buttons[idx].click();
+});
+
+function renderPips(elId, filled, max, cls) {
+  const el = document.getElementById(elId);
+  el.innerHTML = '';
+  const total = Math.max(max, filled);
+  for (let i = 0; i < total; i++) {
+    const span = document.createElement('span');
+    span.className = 'pip ' + cls + (i < filled ? ' filled' : '');
+    el.appendChild(span);
+  }
+}
+
+function playerAscend() {
+  const p1 = state.p1;
+  const from = tierDef(p1.tier).name;
+  p1.tier += 1; p1.base = 0; p1.lvl2 = 0; p1.lvl3 = 0;
+  state.selectedLevel = 1;
+  logMsg(`⬆ You permanently ascend from ${from} to ${tierDef(p1.tier).name}!`, true);
+  render();
+}
+
+function aiMaybeAscend() {
+  const p2 = state.p2;
+  if (p2.lvl3 >= 3 && p2.tier < 5 && Math.random() < 0.6) {
+    const from = tierDef(p2.tier).name;
+    p2.tier += 1; p2.base = 0; p2.lvl2 = 0; p2.lvl3 = 0;
+    logMsg(`⬆ Rival permanently ascends from ${from} to ${tierDef(p2.tier).name}!`, true);
+  }
+}
+
+function aiChooseTierMove() {
+  const p2 = state.p2;
+  const def = tierDef(p2.tier);
+  const levels = [1];
+  if (p2.base >= 3) levels.push(2);
+  if (p2.lvl2 >= 3) levels.push(3);
+  const level = levels[Math.floor(Math.random() * levels.length)];
+  const move = def.moves[Math.floor(Math.random() * def.moves.length)].key;
+  return { level, move };
+}
+
+function applyTierResult(mover, won, level) {
+  if (level === 2) { mover.base -= 3; if (won) mover.lvl2 += 1; }
+  else if (level === 3) { mover.lvl2 -= 3; if (won) mover.lvl3 += 1; }
+  else { if (won) mover.base += 1; }
+}
+
+function playerThrow(moveKey) {
+  const p1 = state.p1, p2 = state.p2;
+  const level = state.selectedLevel;
+  const aiChoice = aiChooseTierMove();
+
+  const a = { tier: p1.tier, level, move: moveKey };
+  const b = { tier: p2.tier, level: aiChoice.level, move: aiChoice.move };
+  const result = resolveTierClash(a, b);
+
+  logMsg(`You throw Lvl${level} ${moveKey} (T${p1.tier})  vs  Rival throws Lvl${aiChoice.level} ${aiChoice.move} (T${p2.tier})`);
+
+  applyTierResult(p1, result === 'a', level);
+  applyTierResult(p2, result === 'b', aiChoice.level);
+
+  if (result === 'tie') logMsg('Clash! Both moves cancel out — no points awarded.', true);
+  else if (result === 'a') logMsg(`You win the clash! +1 Level ${level} point.`, true);
+  else logMsg(`Rival wins the clash! Rival gains +1 Level ${aiChoice.level} point.`, true);
+
+  state.selectedLevel = 1;
+  aiMaybeAscend();
+
+  if (p1.tier === 5 && p1.lvl3 >= 3) { triggerElementalHarvest(); return; }
+  if (p2.tier === 5 && p2.lvl3 >= 3) { triggerElementalHarvest(); return; }
+
+  render();
+}
+
+/* ---------------- ELEMENTAL HARVEST PHASE ---------------- */
+
+function triggerElementalHarvest() {
+  state.phase = 'elemental';
+  logMsg('🌟 A Grandmaster has mastered the 5 Pillars! The physical stances freeze — the Elemental Harvest begins.', true);
+  document.getElementById('fightPhase').style.display = 'none';
+  document.getElementById('elementalPhase').style.display = 'block';
+  document.getElementById('phaseBanner').textContent = 'Elemental Alchemy Harvest';
+  render();
+}
+
+function renderElementalPhase() {
+  document.getElementById('elRoundLabel').textContent = Math.min(state.elemental.round + 1, 4);
+  const container = document.getElementById('elementButtons');
+  container.innerHTML = '';
+  ELEMENTS.forEach(el => {
+    const btn = document.createElement('button');
+    btn.className = 'element-btn';
+    btn.textContent = ELEMENT_ICON[el];
+    btn.title = el;
+    btn.onclick = () => playerPickElement(el);
+    container.appendChild(btn);
+  });
+  renderBag('p1Bag', state.elemental.p1Bag);
+  renderBag('p2Bag', state.elemental.p2Bag);
+}
+
+function renderBag(elId, bag) {
+  const el = document.getElementById(elId);
+  el.innerHTML = '';
+  bag.forEach(tok => {
+    const chip = document.createElement('span');
+    chip.className = 'token-chip';
+    chip.textContent = `${TOKEN_ICON[tok]} ${tok}`;
+    el.appendChild(chip);
+  });
+}
+
+function playerPickElement(myEl) {
+  const oppEl = ELEMENTS[Math.floor(Math.random() * ELEMENTS.length)];
+  let myToken, oppToken;
+  if (myEl === oppEl) {
+    myToken = MIRROR_DROP[myEl].p1;
+    oppToken = MIRROR_DROP[myEl].p2;
+  } else {
+    const key1 = `${myEl}-${oppEl}`, key2 = `${oppEl}-${myEl}`;
+    if (CROSS_DROP[key1]) { myToken = CROSS_DROP[key1].a; oppToken = CROSS_DROP[key1].b; }
+    else { myToken = CROSS_DROP[key2].b; oppToken = CROSS_DROP[key2].a; }
+  }
+  state.elemental.p1Bag.push(myToken);
+  state.elemental.p2Bag.push(oppToken);
+  state.elemental.round += 1;
+  logMsg(`Round ${state.elemental.round}: You threw ${ELEMENT_ICON[myEl]}${myEl}, Rival threw ${ELEMENT_ICON[oppEl]}${oppEl} — you collect ${TOKEN_ICON[myToken]} ${myToken}, Rival collects ${TOKEN_ICON[oppToken]} ${oppToken}.`, true);
+
+  if (state.elemental.round >= 4) {
+    finishHarvest();
+  } else {
+    render();
+  }
+}
+
+function dominantBucket(bag) {
+  const counts = {};
+  bag.forEach(tok => {
+    const bucket = BUCKET_MAP[tok];
+    counts[bucket] = (counts[bucket] || 0) + 1;
+  });
+  let best = null, bestCount = -1;
+  Object.keys(CARRIERS).forEach(bucket => {
+    const c = counts[bucket] || 0;
+    if (c > bestCount) { bestCount = c; best = bucket; }
+  });
+  return best;
+}
+
+function finishHarvest() {
+  const p1Bucket = dominantBucket(state.elemental.p1Bag);
+  const p2Bucket = dominantBucket(state.elemental.p2Bag);
+  state.weapon.p1.carrierKey = p1Bucket;
+  state.weapon.p2.carrierKey = p2Bucket;
+  CARRIERS[p1Bucket].weapons.forEach(w => state.weapon.p1.cooldowns[w.name] = 0);
+  CARRIERS[p2Bucket].weapons.forEach(w => state.weapon.p2.cooldowns[w.name] = 0);
+
+  logMsg(`Your dominant affinity is ${p1Bucket} → ${CARRIERS[p1Bucket].name}! Rival's is ${p2Bucket} → ${CARRIERS[p2Bucket].name}!`, true);
+
+  document.getElementById('elementalPhase').style.display = 'none';
+  document.getElementById('carrierReveal').style.display = 'block';
+  document.getElementById('phaseBanner').textContent = 'Weapon Carrier Revealed';
+
+  document.getElementById('p1CarrierIcon').textContent = CARRIERS[p1Bucket].icon;
+  document.getElementById('p1CarrierName').textContent = CARRIERS[p1Bucket].name;
+  document.getElementById('p2CarrierIcon').textContent = CARRIERS[p2Bucket].icon;
+  document.getElementById('p2CarrierName').textContent = CARRIERS[p2Bucket].name;
+}
+
+/* ---------------- WEAPON CARRIER PHASE ---------------- */
+
+function beginWeaponPhase() {
+  state.phase = 'weapon';
+  document.getElementById('carrierReveal').style.display = 'none';
+  document.getElementById('weaponPhase').style.display = 'block';
+  document.getElementById('phaseBanner').textContent = 'The Tokens & Lives Endgame';
+  logMsg('⚔️ Weapons drawn! The final duel begins — 3 Lives each.', true);
+  render();
+}
+
+function catRank(cat) { return cat === 'Ultimate' ? 3 : cat === 'Tactical' ? 2 : 1; }
+
+function renderWeaponPhase() {
+  const p1 = state.weapon.p1, p2 = state.weapon.p2;
+  renderPips('p1LifePips', p1.lives, 3, 'life');
+  renderPips('p2LifePips', p2.lives, 3, 'life');
+  document.getElementById('p1Points').textContent = p1.points;
+  document.getElementById('p2Points').textContent = p2.points;
+  document.getElementById('p1Tokens').textContent = p1.tokens;
+  document.getElementById('p2Tokens').textContent = p2.tokens;
+  document.getElementById('p1Marks').textContent = p1.marks;
+  document.getElementById('p2Marks').textContent = p2.marks;
+
+  const container = document.getElementById('weaponButtons');
+  container.innerHTML = '';
+  const carrier = CARRIERS[p1.carrierKey];
+  carrier.weapons.forEach(w => {
+    const cd = p1.cooldowns[w.name] || 0;
+    const btn = document.createElement('button');
+    btn.className = `move-btn weapon-btn cat-${w.cat}`;
+    btn.innerHTML = `${w.icon} ${w.name}<span class="weapon-cat">${w.cat}</span>` + (cd > 0 ? `<span class="cooldown-badge">${cd}</span>` : '');
+    btn.disabled = cd > 0;
+    btn.onclick = () => playerWeaponAction({ type:'weapon', name:w.name, cat:w.cat });
+    container.appendChild(btn);
+  });
+  const deflBtn = document.createElement('button');
+  deflBtn.className = 'move-btn weapon-btn deflector-btn';
+  deflBtn.innerHTML = `🛡️ The Deflector<span class="weapon-cat">Master Action</span>`;
+  deflBtn.onclick = () => playerWeaponAction({ type:'deflector' });
+  container.appendChild(deflBtn);
+
+  if (p1.tokens >= 1) {
+    ['FinalBlow','Healer'].forEach(choice => {
+      const btn = document.createElement('button');
+      btn.className = 'move-btn weapon-btn token-btn';
+      btn.innerHTML = choice === 'FinalBlow' ? `💥 Final Blow<span class="weapon-cat">Spend Token</span>` : `🩹 Healer<span class="weapon-cat">Spend Token</span>`;
+      btn.onclick = () => playerWeaponAction({ type:'token', choice });
+      container.appendChild(btn);
+    });
+  }
+}
+
+function aiWeaponAction() {
+  const ai = state.weapon.p2;
+  const carrier = CARRIERS[ai.carrierKey];
+  const legal = carrier.weapons.filter(w => (ai.cooldowns[w.name] || 0) === 0);
+
+  const options = legal.map(w => ({ type:'weapon', name:w.name, cat:w.cat }));
+  options.push({ type:'deflector' });
+  if (ai.tokens >= 1) {
+    options.push({ type:'token', choice:'FinalBlow' });
+    options.push({ type:'token', choice:'Healer' });
+  }
+  return options[Math.floor(Math.random() * options.length)];
+}
+
+function tickCooldowns(fighter) {
+  Object.keys(fighter.cooldowns).forEach(k => { if (fighter.cooldowns[k] > 0) fighter.cooldowns[k] -= 1; });
+}
+
+function awardPoints(fighter, pts) {
+  fighter.points += pts;
+  while (fighter.points >= 5) { fighter.points -= 5; fighter.tokens += 1; }
+}
+
+function describeAction(a) {
+  if (a.type === 'weapon') return `${a.name} (${a.cat})`;
+  if (a.type === 'deflector') return 'The Deflector';
+  return a.choice === 'FinalBlow' ? 'Final Blow (token)' : 'Healer (token)';
+}
+
+function playerWeaponAction(myAction) {
+  const p1 = state.weapon.p1, p2 = state.weapon.p2;
+  const aiAction = aiWeaponAction();
+  resolveWeaponRound(myAction, aiAction);
+  tickCooldowns(p1); tickCooldowns(p2);
+  checkWeaponGameOver();
+  if (state.phase === 'weapon') render();
+}
+
+function resolveWeaponRound(myAction, aiAction) {
+  const p1 = state.weapon.p1, p2 = state.weapon.p2;
+  logMsg(`You use ${describeAction(myAction)}  vs  Rival uses ${describeAction(aiAction)}`);
+
+  if (myAction.type === 'weapon') p1.cooldowns[myAction.name] = 3;
+  if (aiAction.type === 'weapon') p2.cooldowns[aiAction.name] = 3;
+  if (myAction.type === 'token') p1.tokens -= 1;
+  if (aiAction.type === 'token') p2.tokens -= 1;
+
+  const bothTokens = myAction.type === 'token' && aiAction.type === 'token';
+  const oneToken = (myAction.type === 'token') !== (aiAction.type === 'token');
+
+  if (bothTokens) {
+    resolveTokenVsToken(myAction.choice, aiAction.choice);
+    return;
+  }
+  if (oneToken) {
+    resolveTokenVsAction(myAction, aiAction);
+    return;
+  }
+  resolveWeaponVsWeapon(myAction, aiAction);
+}
+
+function applyHeal(fighter, who) {
+  const before = fighter.lives;
+  fighter.lives = Math.min(3, fighter.lives + 1);
+  if (fighter.lives > before) logMsg(`${who} heals back to ${fighter.lives} lives.`, true);
+}
+function applyMark(fighter, who) {
+  fighter.marks += 1;
+  logMsg(`${who} takes a Final Blow mark (${fighter.marks}/2)!`, true);
+}
+
+function resolveTokenVsToken(myChoice, aiChoice) {
+  const p1 = state.weapon.p1, p2 = state.weapon.p2;
+  if (myChoice === 'FinalBlow' && aiChoice === 'FinalBlow') {
+    applyMark(p2, 'Rival'); applyMark(p1, 'You');
+  } else if (myChoice === 'Healer' && aiChoice === 'Healer') {
+    applyHeal(p1, 'You'); applyHeal(p2, 'Rival');
+  } else if (myChoice === 'FinalBlow' && aiChoice === 'Healer') {
+    applyHeal(p2, 'Rival');
+    logMsg('The Healer completely overpowers your Final Blow — it is wasted!', true);
+  } else {
+    applyHeal(p1, 'You');
+    logMsg("Your Healer completely overpowers Rival's Final Blow — it is wasted!", true);
+  }
+}
+
+function resolveTokenVsAction(myAction, aiAction) {
+  const p1 = state.weapon.p1, p2 = state.weapon.p2;
+  const tokenSide = myAction.type === 'token' ? 'p1' : 'p2';
+  const choice = tokenSide === 'p1' ? myAction.choice : aiAction.choice;
+  const tokenFighter = tokenSide === 'p1' ? p1 : p2;
+  const otherFighter = tokenSide === 'p1' ? p2 : p1;
+  const tokenWho = tokenSide === 'p1' ? 'You' : 'Rival';
+  const otherWho = tokenSide === 'p1' ? 'Rival' : 'You';
+
+  if (choice === 'Healer') {
+    applyHeal(tokenFighter, tokenWho);
+  } else {
+    applyMark(otherFighter, otherWho);
+  }
+}
+
+function resolveWeaponVsWeapon(myAction, aiAction) {
+  const p1 = state.weapon.p1, p2 = state.weapon.p2;
+  if (myAction.type === 'deflector' && aiAction.type === 'deflector') {
+    logMsg('Both of you deflect — nothing happens.', true);
+    return;
+  }
+  if (myAction.type === 'deflector' || aiAction.type === 'deflector') {
+    const deflSide = myAction.type === 'deflector' ? 'p1' : 'p2';
+    const weaponAction = deflSide === 'p1' ? aiAction : myAction;
+    const deflFighter = deflSide === 'p1' ? p1 : p2;
+    const weaponFighter = deflSide === 'p1' ? p2 : p1;
+    const deflWho = deflSide === 'p1' ? 'You' : 'Rival';
+
+    if (weaponAction.cat === 'Ultimate') {
+      awardPoints(deflFighter, 3);
+      logMsg(`${deflWho} catch the Ultimate Strike with the Deflector! No damage, +3 points toward a Master Token!`, true);
+    } else {
+      deflFighter.lives -= 1;
+      awardPoints(weaponFighter, 1);
+      logMsg(`${deflWho}'s Deflector fails against the ${weaponAction.cat}! ${deflWho} lose a life.`, true);
+    }
+    return;
+  }
+
+  const r1 = catRank(myAction.cat), r2 = catRank(aiAction.cat);
+  if (r1 === r2) {
+    logMsg('Same weapon class — a clean clash, no damage.', true);
+    return;
+  }
+  if (r1 > r2) {
+    p2.lives -= 1; awardPoints(p1, 1);
+    logMsg(`Your ${myAction.cat} weapon overwhelms Rival's ${aiAction.cat}! Rival loses a life.`, true);
+  } else {
+    p1.lives -= 1; awardPoints(p2, 1);
+    logMsg(`Rival's ${aiAction.cat} weapon overwhelms your ${myAction.cat}! You lose a life.`, true);
+  }
+}
+
+function checkWeaponGameOver() {
+  const p1 = state.weapon.p1, p2 = state.weapon.p2;
+  const p1Dead = p1.lives <= 0 || p1.marks >= 2;
+  const p2Dead = p2.lives <= 0 || p2.marks >= 2;
+  if (p1Dead && p2Dead) { endGame('draw'); }
+  else if (p2Dead) { endGame('win'); }
+  else if (p1Dead) { endGame('lose'); }
+}
+
+function endGame(result) {
+  state.phase = 'gameover';
+  document.getElementById('weaponPhase').style.display = 'none';
+  const banner = document.getElementById('gameOverBanner');
+  banner.style.display = 'block';
+  banner.className = result === 'win' ? 'panel win' : result === 'lose' ? 'panel lose' : 'panel';
+  document.getElementById('gameOverTitle').textContent = result === 'win' ? '🏆 Victory!' : result === 'lose' ? '💀 Defeated' : '⚖️ Mutual Destruction';
+  document.getElementById('gameOverText').textContent = result === 'win'
+    ? 'You are the Ultimate Undefeated Grandmaster of Ninja Ascension!'
+    : result === 'lose'
+    ? 'Your rival claims the title of Grandmaster this time.'
+    : 'Both blades fell together — a mutual annihilation.';
+  logMsg(result === 'win' ? 'You win the duel!' : result === 'lose' ? 'You are defeated.' : 'Both fighters fall together.', true);
+}
+
+function restartGame() { newGame(); }
+
+/* ---------------- MASTER RENDER ---------------- */
+
+function render() {
+  if (state.phase === 'fight') renderFightPhase();
+  else if (state.phase === 'elemental') renderElementalPhase();
+  else if (state.phase === 'weapon') renderWeaponPhase();
+}
+
+newGame();
+</script>
+</body>
+</html>
