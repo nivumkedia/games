@@ -1,0 +1,1533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ascension Run</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: #05070f;
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    color: #cfe0ff;
+    overflow: hidden;
+    height: 100%;
+  }
+  #wrap { display: flex; flex-direction: column; align-items: center; padding: 14px; }
+  h1 { color: #ff2bd6; letter-spacing: 2px; margin-bottom: 2px; font-size: 1.6rem; text-shadow: 0 0 14px rgba(255,43,214,0.65), 0 0 2px #fff; }
+  .subtitle { color: #6ad4e8; font-size: 0.82rem; margin-bottom: 10px; letter-spacing: 0.5px; }
+
+  #stage {
+    position: relative; width: 900px; height: 500px; border-radius: 12px; overflow: hidden;
+    box-shadow: 0 0 0 1px rgba(0,229,255,0.35), 0 10px 40px rgba(0,0,0,0.6), 0 0 60px rgba(255,43,214,0.15);
+    border: 2px solid #1a2438;
+    transition: transform 1.1s cubic-bezier(.5,0,.75,0);
+  }
+  #stage.zooming { transform: scale(1.7); transform-origin: 72% 55%; }
+  canvas { display: block; background: #05070f; }
+  #transitionFlash {
+    position: absolute; inset: 0; background: #020408; opacity: 0; pointer-events: none;
+    transition: opacity 0.3s ease; z-index: 20;
+  }
+
+  #hud { position: absolute; top: 0; left: 0; right: 0; padding: 10px 14px; display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; font-size: 0.85rem; }
+  #hud .pill { background: rgba(8,14,28,0.78); border: 1px solid rgba(0,229,255,0.35); border-radius: 20px; padding: 6px 14px; box-shadow: 0 2px 10px rgba(0,0,0,0.5); color: #cfe0ff; }
+  #hud .pill b { color: #5df5ff; text-shadow: 0 0 6px rgba(93,245,255,0.6); }
+
+  #banner {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: rgba(6,10,20,0.85); border: 1px solid rgba(255,43,214,0.4); color: #fff; padding: 18px 28px; border-radius: 10px;
+    text-align: center; opacity: 0; transition: opacity 0.4s; pointer-events: none; max-width: 640px;
+    box-shadow: 0 0 30px rgba(255,43,214,0.2);
+  }
+  #banner.show { opacity: 1; }
+  #banner .d-name { font-size: 1.3rem; font-weight: bold; margin-bottom: 4px; color: #5df5ff; text-shadow: 0 0 8px rgba(93,245,255,0.6); }
+  #banner .d-meta { font-size: 0.78rem; opacity: 0.85; letter-spacing: 1px; text-transform: uppercase; color: #ff8fe8; }
+
+  #overlay {
+    position: absolute; inset: 0; background: rgba(2,5,12,0.5); color: #eaf4ff;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+    text-align: center; padding: 40px; padding-bottom: 54px; z-index: 10;
+  }
+  #overlay h2 { font-size: 1.8rem; margin-bottom: 14px; color: #ff2bd6; transition: opacity 0.4s; text-shadow: 0 0 16px rgba(255,43,214,0.8), 0 2px 10px rgba(0,0,0,0.8); }
+  #overlay p { max-width: 540px; line-height: 1.6; font-size: 0.95rem; margin-bottom: 20px; color: #cfe8ff; transition: opacity 0.4s; text-shadow: 0 1px 8px rgba(0,0,0,0.9); }
+  #overlay button {
+    padding: 12px 30px; border-radius: 8px; border: 1px solid #5df5ff; background: #0d1626; color: #5df5ff;
+    font-weight: bold; font-size: 1rem; cursor: pointer; transition: opacity 0.4s, background 0.2s, color 0.2s;
+    box-shadow: 0 0 16px rgba(93,245,255,0.35);
+  }
+  #overlay button:hover { background: #5df5ff; color: #06101f; }
+  #overlay .stats { display:flex; gap: 28px; margin-bottom: 20px; }
+  #overlay .stats div { font-size: 0.85rem; }
+  #overlay .stats b { display:block; font-size: 1.4rem; color: #ff8fe8; }
+
+  .controls-hint { margin-top: 10px; font-size: 0.78rem; color: #5a7a9a; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>🏙️ Ascension Run</h1>
+  <div class="subtitle">A 3D parkour journey through all 51 districts of the vertical metropolis</div>
+  <div id="stage">
+    <canvas id="game" width="900" height="500"></canvas>
+    <div id="hud">
+      <div class="pill">🪙 <b id="coinCount">0</b></div>
+      <div class="pill">🗡️ <b id="weaponCount">0</b>/7 swords</div>
+      <div class="pill">District <b id="districtCount">51</b> of 51</div>
+    </div>
+    <div id="banner"><div class="d-name" id="bannerName"></div><div class="d-meta" id="bannerMeta"></div></div>
+    <div id="overlay">
+      <h2 id="overlayTitle">Ascension Run</h2>
+      <p id="overlayText">You wake up on the shore of District 51 — the Apex Horizon Terminus, the lowest point of the vertical metropolis. Somewhere above, past fifty districts and five tiers of glass and steel, the Zenith Arena awaits. Run, jump, and climb your way to the top.</p>
+      <button id="overlayBtn" onclick="startGame()">Start Climbing</button>
+    </div>
+    <div id="transitionFlash"></div>
+  </div>
+  <div class="controls-hint">You run forward automatically · ← → / A D to steer side-to-side · Space/↑ to Jump · press 2 (or ↓ + Jump) for a High Jump · press 1 (or Shift + Jump) for a Forward Leap, timed right to clear the green block · Shift alone mid-air to dash · run onto a glowing ramp beside a building to launch up</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ---------------- DISTRICT DATA ---------------- */
+// Dark neon-noir palettes: near-black sky at the top, a warm neon haze near the rooftops.
+// A tight blue / violet / magenta / red / white family — matching the reference's restrained
+// neon-noir palette rather than a full rainbow spread.
+const THEMES = {
+  Commercial:  { sky: ['#0d0716', '#2e1238'], plat: '#1c1430', accent: '#2a1838', glow: '#ff2bd6' },
+  Industrial:  { sky: ['#0a0810', '#241530'], plat: '#1c1826', accent: '#241a30', glow: '#b84dff' },
+  Residential: { sky: ['#050a18', '#0e1a3a'], plat: '#101830', accent: '#121f3a', glow: '#5df5ff' },
+  Civic:       { sky: ['#050a18', '#0e1f3e'], plat: '#101e30', accent: '#12233a', glow: '#5d8aff' },
+  Athletic:    { sky: ['#140508', '#330a10'], plat: '#2a1012', accent: '#2e1216', glow: '#ff3a4a' },
+};
+const NEON_PALETTE = ['#ff2bd6', '#8a5cff', '#5df5ff', '#ff3a4a', '#fff6e8'];
+
+function D(id, name, tier, level, cls) { return { id, name, tier, level, cls }; }
+
+const DISTRICTS = [
+  D(1,'The Zenith Arena Region',1,1,'Commercial'),
+  D(2,'Sol-Central Highlands',1,1,'Industrial'),
+  D(3,'The Sovereign Canopy Arc',1,1,'Residential'),
+  D(4,'The Prism-Spire Plaza',1,2,'Commercial'),
+  D(5,'The Sol-Aegis Node',1,2,'Industrial'),
+  D(6,'The Radiant Atrium Terraces',1,2,'Residential'),
+  D(7,'Horizon Gate Plaza',1,3,'Commercial'),
+  D(8,'Forge Relay Yard',1,3,'Industrial'),
+  D(9,'Jade Canopy Reach',1,3,'Residential'),
+  D(10,'The Iron-Grip Industrial Spoke',2,4,'Industrial'),
+  D(11,'The Ember-Forge Crucible',2,4,'Industrial'),
+  D(12,'The Crucible Plaza & Testing Grounds',2,4,'Commercial'),
+  D(13,'The Meridian Commerce Hub',2,5,'Commercial'),
+  D(14,'The Aegis Civic Concourse',2,5,'Civic'),
+  D(15,'The Golden Leaf Terraces',2,5,'Residential'),
+  D(16,'Cinder Rail Works',2,6,'Industrial'),
+  D(17,'Lantern Market Row',2,6,'Commercial'),
+  D(18,'Quiet Bamboo Court',2,6,'Residential'),
+  D(19,'The Sun-Forge Way Pavilion',3,7,'Athletic'),
+  D(20,'The Kage-Chassis Registry',3,7,'Civic'),
+  D(21,'The Solar-Grown Terrace Enclave',3,7,'Residential'),
+  D(22,'The Zenith Spectacle Plaza',3,8,'Commercial'),
+  D(23,'The Sol-Conduit Grid Node',3,8,'Industrial'),
+  D(24,'The Azure Horizon Terraces',3,8,'Residential'),
+  D(25,'The Civic Union Canopy',3,9,'Civic'),
+  D(26,'The Sovereign Assembly Hall',3,9,'Civic'),
+  D(27,'The Golden Canopy Terraces',3,9,'Residential'),
+  D(28,'The Amber Spire Terraces',4,10,'Residential'),
+  D(29,'The Sol-Arc Haven',4,10,'Residential'),
+  D(30,'The Coastal Arc Reserve',4,10,'Residential'),
+  D(31,'The Sapphire Spire Commons',4,11,'Residential'),
+  D(32,'The Sol-Ridge Industrial Forge',4,11,'Industrial'),
+  D(33,'The Horizon View Terraces',4,11,'Residential'),
+  D(34,'The Prism Executive Atrium',4,12,'Commercial'),
+  D(35,'The Zenith Corporate Exchange',4,12,'Commercial'),
+  D(36,'The Emerald Terrace Reserve',4,12,'Residential'),
+  D(37,'The Sol-Fringe Corporate Promenade',5,13,'Commercial'),
+  D(38,'The Sun-Gate Residential Enclave',5,13,'Residential'),
+  D(39,'The Central Transit & Grid Exchange',5,13,'Industrial'),
+  D(40,'The Azure Spire Residential Blocks',5,13,'Residential'),
+  D(41,'The Coastal Horizon Arc',5,13,'Residential'),
+  D(42,'The Crescent Bay Terraces',5,14,'Residential'),
+  D(43,'The West-Grid Residential Commons',5,14,'Residential'),
+  D(44,'The Sol-Conduit Sub-Station 14',5,14,'Industrial'),
+  D(45,'The East-Grid Residential Haven',5,14,'Residential'),
+  D(46,'The Sunrise Ocean Terraces',5,14,'Residential'),
+  D(47,'The Ocean-Gaze Commercial Arcade',5,15,'Commercial'),
+  D(48,'The South-Grid Residential Haven',5,15,'Residential'),
+  D(49,'The Sub-Grid Energy Terminal',5,15,'Industrial'),
+  D(50,'The East-Grid Residential Commons',5,15,'Residential'),
+  D(51,'The Apex Horizon Terminus',5,15,'Residential'),
+];
+
+// Each district's actual named Main Attraction from the world guide, plus a shape family so it
+// renders as something distinct: bowl (stadium/amphitheater), spire (singular tower), hall
+// (pillared civic/guild building), or plaza (domed pavilion/promenade).
+function L(id, name, shape) { return { id, name, shape }; }
+const LANDMARKS = [
+  L(1,'Apex Stadium','bowl'), L(2,'Zenith Union Terminal','plaza'), L(3,'Sovereign Canopy Gardens','plaza'),
+  L(4,'Prism Concourse','plaza'), L(5,'Aegis Citadel','hall'), L(6,'Apex Stance Academy','hall'),
+  L(7,'Horizon Gate Arch','plaza'), L(8,'Forge Relay Hub','spire'), L(9,'Jade Canopy Pavilion','plaza'),
+  L(10,'Vulcan Foundry Plaza','hall'), L(11,'Kage Forge Guildhall','hall'), L(12,'Proving Crucible','bowl'),
+  L(13,'Grand Exchange Plaza','spire'), L(14,'Hall of Arbitration','hall'), L(15,'Golden Pavilion','plaza'),
+  L(16,'Cinder Rail Hub','spire'), L(17,'Lantern Market Hall','plaza'), L(18,'Bamboo Court Pavilion','plaza'),
+  L(19,'Hall of Ten Stances','hall'), L(20,'Registry Atrium','hall'), L(21,'Terrace Promenade','plaza'),
+  L(22,'Horizon Ring Concourse','bowl'), L(23,'Central Voltage Prism','spire'), L(24,'Azure Promenade','plaza'),
+  L(25,'Hall of Public Accord','hall'), L(26,'Grand Council Amphitheater','bowl'), L(27,'Golden Arc Promenade','plaza'),
+  L(28,'Amber Promenade','plaza'), L(29,'Central Haven Gardens','plaza'), L(30,'Coastal Vista Esplanade','plaza'),
+  L(31,'Sapphire Esplanade','plaza'), L(32,'Ridge Foundry Plaza','hall'), L(33,'Horizon Promenade','plaza'),
+  L(34,'Horizon Corporate Tower','spire'), L(35,'Central Trade Concourse','spire'), L(36,'Emerald Arc Promenade','plaza'),
+  L(37,'Grand Arc Concourse','spire'), L(38,'Sun-Gate Plaza','plaza'), L(39,'Central Junction Terminal','hall'),
+  L(40,'Azure Community Arc','plaza'), L(41,'Coastal Arc Promenade','plaza'), L(42,'Crescent Promenade','plaza'),
+  L(43,'West Greenway Plaza','plaza'), L(44,'Central Transformer Vault','hall'), L(45,'East Haven Concourse','plaza'),
+  L(46,'Sunrise Esplanade','plaza'), L(47,'Ocean-Gaze Boardwalk','plaza'), L(48,'South Haven Plaza','plaza'),
+  L(49,'Core Terminal Vault','hall'), L(50,'East Commons Arcade','plaza'), L(51,'Terminus Plaza','bowl'),
+];
+
+// The 7 original custom swords from Ninja Ascension Volume 2 (Balance/Brute-Force/Framework vaults)
+const SWORDS = ['Longsword', 'Greatsword', 'Thicksword', 'Triple Sword', 'Outer Sword', 'Double Sword', 'Spearsword'];
+
+/* ---------------- LEVEL GENERATION (unchanged — physics/abstract data only) ---------------- */
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function difficultyForTier(tier) { return 6 - tier; } // Tier 5 (start) easiest, Tier 1 (end) hardest
+
+// Each district gets a skyline motif pulled from its actual name/role, not a shared classification color.
+function motifFor(d) {
+  const n = d.name.toLowerCase();
+  if (n.includes('arena') || n.includes('spectacle') || n.includes('pavilion') || n.includes('dojang')) return 'stadium';
+  if (n.includes('highlands') || n.includes('transit') || n.includes('junction') || n.includes('spoke')) return 'transit';
+  if (n.includes('forge') || n.includes('foundry') || n.includes('industrial') || n.includes('conduit') ||
+      n.includes('grid') || n.includes('station') || n.includes('terminal') || n.includes('relay') || n.includes('works')) return 'industrial';
+  if (n.includes('canopy') || n.includes('garden') || n.includes('terrace') || n.includes('haven') ||
+      n.includes('bamboo') || n.includes('reserve') || n.includes('court') || n.includes('leaf')) return 'garden';
+  if (n.includes('civic') || n.includes('assembly') || n.includes('registry') || n.includes('union') || n.includes('accord')) return 'civic';
+  if (n.includes('corporate') || n.includes('exchange') || n.includes('executive') || n.includes('commerce') ||
+      n.includes('plaza') || n.includes('promenade') || n.includes('market') || n.includes('arcade') || n.includes('row')) return 'corporate';
+  if (n.includes('coastal') || n.includes('ocean') || n.includes('terminus') || n.includes('bay') || n.includes('sunrise')) return 'coastal';
+  return 'garden';
+}
+
+function generateBackground(district, motif, length) {
+  const rand = mulberry32(district.id * 104729 + 7);
+  const items = [];
+  const span = length + 300;
+
+  // Every district gets a wall-to-wall packed skyline, regardless of motif — plus motif-specific
+  // landmarks layered on top (transit pylons, a stadium bowl, etc). Heights mix short, mid, and
+  // tall buildings (not every one a mega-tower), shapes vary, and depth is scattered, not a row.
+  const shapes = ['box', 'box', 'cyl', 'stepped', 'capped'];
+  function randSize(rnd) {
+    const roll = rnd();
+    const h = roll < 0.3 ? 18 + rnd() * 70 : roll < 0.65 ? 90 + rnd() * 160 : 220 + rnd() * 420;
+    const w = 35 + rnd() * 95;
+    return { h, w };
+  }
+  let bx = -200;
+  while (bx < span) {
+    const { h, w } = randSize(rand);
+    const shape = shapes[Math.floor(rand() * shapes.length)];
+    items.push({ x: bx, w, h, type: motif, layer: 'near', shape, jitter: rand() });
+    bx += w + 0.3 + rand() * 3;
+  }
+  let fx = -250;
+  while (fx < span) {
+    const { h, w } = randSize(rand);
+    const shape = shapes[Math.floor(rand() * shapes.length)];
+    items.push({ x: fx, w, h: h * 1.3, type: motif, layer: 'far', shape, jitter: rand() });
+    fx += w + 0.5 + rand() * 5;
+  }
+
+  if (motif === 'transit') {
+    let px = -100;
+    while (px < span) { items.push({ x: px, type: 'pylon' }); px += 90 + rand() * 25; }
+  } else if (motif === 'stadium') {
+    items.push({ x: length * 0.35, type: 'bowl' });
+    let lx = -150;
+    while (lx < span) { items.push({ x: lx, type: 'floodlight' }); lx += 130 + rand() * 35; }
+  }
+  return items;
+}
+
+// Obstacle count climbs by 2 per district as you go back toward Tier 1 (District 51 = 2, 50 = 4, ...).
+function obstacleCountFor(id) { return 2 + 2 * (51 - id); }
+
+function generateLevel(district) {
+  // One continuous wide street — no gaps to fall into. Obstacles are a shuffled mix of 4 types —
+  // Leap (green block, spiked flanks), High-Jump block, Gap opening, and Ramp (wall-run) — so
+  // order varies per district instead of following one fixed pattern.
+  const rand = mulberry32(district.id * 7919 + 13);
+  const diff = difficultyForTier(district.tier);
+  const groundY = 420;
+  const totalObstacles = obstacleCountFor(district.id);
+  const types = ['leap', 'gap', 'highblock', 'ramp'];
+  const picks = [];
+  while (picks.length < totalObstacles) {
+    const pool = [...types];
+    while (pool.length && picks.length < totalObstacles) {
+      const idx = Math.floor(rand() * pool.length);
+      picks.push(pool.splice(idx, 1)[0]);
+    }
+  }
+  const length = Math.max(1500 + diff * 260 + rand() * 500, totalObstacles * 280 + 900);
+  const platforms = [{ x: 0, y: groundY, w: length, h: 30 }];
+  const hazards = [];
+  const ramps = [];
+
+  const usableSpan = length * 0.64;
+  const startX = length * 0.26;
+  const step = usableSpan / totalObstacles;
+  for (let i = 0; i < totalObstacles; i++) {
+    const kind = picks[i];
+    const ox = startX + step * i + step * 0.2 * (rand() - 0.5);
+    if (kind === 'leap') {
+      // Spikes flank both sides (so you can't strafe around), a plain block sits in the open
+      // center lane (nothing on top of it) that you jump over.
+      const centerGap = 28 * WORLD_SCALE * 4;
+      hazards.push({ kind: 'block', x: ox, w: 125, h: 35, centerGap });
+    } else if (kind === 'gap') {
+      const half = strafeLimitWorld();
+      const gapWidth = 2.1;
+      const gapCenter = (rand() - 0.5) * 2 * (half - gapWidth * 0.7);
+      hazards.push({ kind: 'gapwall', x: ox, w: 36, h: 185, gapCenter, gapWidth });
+    } else if (kind === 'highblock') {
+      // A platform, not a hazard: High Jump lands you on top of it (too high for a normal jump
+      // or leap to reach), you run across, and running off the far end drops you back to the
+      // street — no special landing logic needed, gravity handles it once the platform ends.
+      const ledgeLen = 170 + rand() * 70;
+      platforms.push({ x: ox, y: groundY - 160, w: ledgeLen, h: 24, highblock: true, zw: 28 * WORLD_SCALE * 5 });
+    } else if (kind === 'ramp') {
+      ramps.push({ x: ox, w: 150, side: rand() < 0.5 ? -1 : 1 });
+    }
+  }
+
+  const coins = [];
+  const coinCount = 26 + Math.floor(rand() * 10);
+  for (let i = 0; i < coinCount; i++) {
+    const cx = 300 + rand() * (length - 500);
+    const high = rand() < 0.3;
+    coins.push({ x: cx, y: groundY - (high ? 70 + rand() * 40 : 26), taken: false });
+  }
+  const weapon = { x: length * (0.4 + rand() * 0.3), y: groundY - 32, name: SWORDS[district.id % SWORDS.length], taken: false };
+
+  const motif = motifFor(district);
+  const bg = generateBackground(district, motif, length);
+
+  return {
+    platforms, coins, weapon, hazards, ramps, walls: [], length, groundY, motif, bg,
+    goalX: length - 60, startX: 50, startY: groundY - 60,
+  };
+}
+
+function respawnPlayer(p, lvl) {
+  p.x = lvl.startX; p.y = lvl.startY; p.z = 0; p.vx = 0; p.vy = 0; p.jumps = 0;
+  p.rolling = false; p.rollT = 0; p.airDashUsed = false; p.wallRunning = false; p.lockT = 0;
+}
+
+/* ---------------- GAME STATE ---------------- */
+const G = {
+  districtIdx: 51,
+  district: null,
+  level: null,
+  player: {
+    x: 50, y: 360, z: 0, w: 28, h: 38, vx: 0, vy: 0, jumps: 0, onGround: false, facing: 1, animT: 0,
+    rolling: false, rollT: 0, rollCooldown: 0, airDashUsed: false, wallRunning: false, lockT: 0, lockVx: 0,
+  },
+  frame: 0,
+  introX: 90,
+  camX: 0,
+  coins: 0,
+  weapons: [],
+  phase: 'intro',
+  keys: {},
+  prevKeys: {},
+};
+
+function loadDistrict(idx) {
+  G.districtIdx = idx;
+  G.district = DISTRICTS[idx - 1];
+  G.level = generateLevel(G.district);
+  G.player.x = G.level.startX;
+  G.player.y = G.level.startY;
+  G.player.z = 0;
+  G.player.vx = 0; G.player.vy = 0; G.player.jumps = 0; G.player.onGround = false;
+  G.camX = 0;
+  document.getElementById('districtCount').textContent = idx;
+  showBanner(G.district);
+  buildLevelMeshes(G.level, THEMES[G.district.cls]);
+}
+
+function showBanner(d) {
+  const b = document.getElementById('banner');
+  const lm = LANDMARKS[d.id - 1];
+  document.getElementById('bannerName').textContent = `District ${d.id}: ${d.name}`;
+  document.getElementById('bannerMeta').textContent = `Tier ${d.tier} · Level ${d.level} · ${d.cls} — passing ${lm.name}`;
+  b.classList.add('show');
+  clearTimeout(b._t);
+  b._t = setTimeout(() => b.classList.remove('show'), 2200);
+}
+
+function startGame() {
+  // Cinematic: fade the intro text, walk onto the beach, punch-zoom into District 51.
+  const overlay = document.getElementById('overlay');
+  overlay.querySelectorAll('h2, p, button').forEach(el => el.style.opacity = 0);
+  G.phase = 'intro-walk';
+  G.introX = 90;
+  document.getElementById('stage').classList.add('zooming');
+
+  setTimeout(() => {
+    const flash = document.getElementById('transitionFlash');
+    flash.style.opacity = 1;
+    setTimeout(() => {
+      overlay.style.display = 'none';
+      document.getElementById('stage').classList.remove('zooming');
+      G.phase = 'playing';
+      loadDistrict(51);
+      setTimeout(() => { flash.style.opacity = 0; }, 60);
+    }, 320);
+  }, 1150);
+}
+
+function clearDistrict() {
+  G.phase = 'cleared';
+  const d = G.district;
+  const banner = document.getElementById('banner');
+  document.getElementById('bannerName').textContent = `District ${d.id} cleared!`;
+  document.getElementById('bannerMeta').textContent = d.id > 1 ? 'Climbing higher…' : 'The Zenith Arena awaits…';
+  banner.classList.add('show');
+  setTimeout(() => {
+    banner.classList.remove('show');
+    if (G.districtIdx <= 1) { showVictory(); }
+    else { G.phase = 'playing'; loadDistrict(G.districtIdx - 1); }
+  }, 1200);
+}
+
+function showVictory() {
+  G.phase = 'victory';
+  const overlay = document.getElementById('overlay');
+  overlay.querySelectorAll('h2, p, button').forEach(el => el.style.opacity = 1);
+  document.getElementById('overlayTitle').textContent = '🏆 You Reach the Zenith Arena';
+  document.getElementById('overlayText').innerHTML = `
+    Fifty-one districts, five tiers, one long climb — and you've made it to the top, where the Apex Stadium waits for the
+    next Ninja Ascension tournament.<br><br>
+    <div class="stats">
+      <div><b>${G.coins}</b>Coins collected</div>
+      <div><b>${G.weapons.length}/7</b>Swords found</div>
+    </div>`;
+  document.getElementById('overlayBtn').textContent = 'Climb Again';
+  document.getElementById('overlayBtn').onclick = restartGame;
+  overlay.style.display = 'flex';
+}
+
+function restartGame() {
+  G.coins = 0; G.weapons = [];
+  document.getElementById('coinCount').textContent = 0;
+  document.getElementById('weaponCount').textContent = 0;
+  document.getElementById('overlayBtn').onclick = startGame;
+  startGame();
+}
+
+/* ---------------- INPUT ---------------- */
+window.addEventListener('keydown', (e) => { G.keys[e.key] = true; });
+window.addEventListener('keyup', (e) => { G.keys[e.key] = false; });
+
+function keyDown(k) { return !!G.keys[k]; }
+function keyPressed(k) { return !!G.keys[k] && !G.prevKeys[k]; }
+
+/* ---------------- PHYSICS / UPDATE (unchanged from the 2D version) ---------------- */
+const GRAVITY = 0.55, JUMP_V = -10.5, MOVE_SPEED = 4.3;
+const AUTO_SPEED = MOVE_SPEED, STRAFE_SPEED = 0.11;
+const DASH_SPEED = 9.5, DASH_FRAMES = 11;
+const HIGH_JUMP_V = -16;
+const LEAP_V = -10, LEAP_FRAMES = 34, LEAP_SPEED = 8.5;
+const RAMP_LAUNCH_V = -11, RAMP_FORWARD_FRAMES = 16, RAMP_FORWARD_SPEED = 9;
+
+function updateMovingPlatforms() {
+  for (const plat of G.level.platforms) {
+    if (!plat.move) continue;
+    const off = Math.sin(G.frame * plat.move.speed + plat.move.phase) * plat.move.range;
+    if (plat.move.axis === 'x') plat.x = plat.move.base + off;
+    else plat.y = plat.move.base + off;
+  }
+}
+
+function update() {
+  G.frame += 1;
+  if (G.phase === 'intro-walk') {
+    G.introX += 2.6;
+    G.player.animT += 2.6 * 0.22;
+    G.player.facing = 1;
+    G.prevKeys = { ...G.keys };
+    return;
+  }
+  if (G.phase !== 'playing') { G.prevKeys = { ...G.keys }; return; }
+  const p = G.player, lvl = G.level;
+  updateMovingPlatforms();
+
+  // Auto-runner: forward progress is automatic. Left/right now steer side-to-side across the
+  // wide street instead of controlling forward speed.
+  const left = keyDown('ArrowLeft') || keyDown('a') || keyDown('A');
+  const right = keyDown('ArrowRight') || keyDown('d') || keyDown('D');
+  let vx = AUTO_SPEED;
+  p.animT += vx * 0.22;
+  let vz = 0;
+  if (left) vz -= STRAFE_SPEED;
+  if (right) vz += STRAFE_SPEED;
+  p.z += vz;
+  const strafeLimit = strafeLimitWorld();
+  p.z = Math.max(-strafeLimit, Math.min(strafeLimit, p.z));
+
+  // Air dash only (roll is gone). Ground moves are now Jump / High Jump / Forward Leap, below.
+  const dashKey = keyPressed('Shift') || keyPressed('x') || keyPressed('X');
+  if (dashKey && !p.onGround && !p.airDashUsed) {
+    p.airDashUsed = true;
+    p.lockT = DASH_FRAMES; p.lockVx = DASH_SPEED;
+    p.vy = Math.min(p.vy, -1.5);
+  }
+
+  if (p.lockT > 0) { p.vx = p.lockVx; p.lockT -= 1; } else { p.vx = vx; }
+
+  const jumpKey = keyPressed(' ') || keyPressed('ArrowUp') || keyPressed('w') || keyPressed('W');
+  const downHeld = keyDown('ArrowDown') || keyDown('s') || keyDown('S');
+  const shiftHeld = keyDown('Shift');
+
+  if (jumpKey && p.jumps < 2) {
+    if (p.onGround && downHeld) {
+      p.vy = HIGH_JUMP_V; // High Jump — more height, to reach an elevated ledge
+    } else if (p.onGround && shiftHeld) {
+      p.vy = LEAP_V; p.lockT = LEAP_FRAMES; p.lockVx = LEAP_SPEED; // Forward Leap — more distance
+    } else {
+      p.vy = JUMP_V;
+    }
+    p.jumps += 1;
+    p.onGround = false;
+  } else if (keyPressed('1') && p.onGround) {
+    // Direct Leap key — same move as Shift+Jump, just a single dedicated press.
+    p.vy = LEAP_V; p.lockT = LEAP_FRAMES; p.lockVx = LEAP_SPEED;
+    p.jumps = 1;
+    p.onGround = false;
+  } else if (keyPressed('2') && p.onGround) {
+    // Direct High Jump key — same move as ↓+Jump, just a single dedicated press.
+    p.vy = HIGH_JUMP_V;
+    p.jumps = 1;
+    p.onGround = false;
+  }
+
+  p.vy += GRAVITY;
+  p.x += p.vx;
+  p.y += p.vy;
+  if (p.x < 0) p.x = 0;
+
+  p.onGround = false;
+  for (const plat of lvl.platforms) {
+    const withinX = p.x + p.w > plat.x && p.x < plat.x + plat.w;
+    const withinZ = plat.zw ? Math.abs(p.z) < plat.zw / 2 : true;
+    const feetY = p.y + p.h;
+    if (withinX && withinZ && p.vy >= 0 && feetY >= plat.y && feetY - p.vy <= plat.y + 6) {
+      p.y = plat.y - p.h;
+      p.vy = 0;
+      p.onGround = true;
+      p.jumps = 0;
+      p.airDashUsed = false;
+    }
+  }
+
+  // Ramps: run onto one beside a building while grounded and it launches you — a ground-level
+  // wall-run replacement, no vertical cling required.
+  if (p.onGround) {
+    for (const ramp of lvl.ramps) {
+      const withinX = p.x + p.w > ramp.x && p.x < ramp.x + ramp.w;
+      const edge = strafeLimit * 0.4;
+      const onSide = ramp.side > 0 ? p.z > edge : p.z < -edge;
+      if (withinX && onSide) {
+        p.vy = RAMP_LAUNCH_V;
+        p.onGround = false;
+        p.jumps = 0;
+        p.lockT = RAMP_FORWARD_FRAMES; p.lockVx = RAMP_FORWARD_SPEED;
+        break;
+      }
+    }
+  }
+
+  if (p.onGround && p.x + p.w / 2 >= lvl.goalX) clearDistrict();
+
+  for (const hz of lvl.hazards) {
+    const withinX = p.x + p.w > hz.x && p.x < hz.x + hz.w;
+    if (!withinX) continue;
+    const feetY = p.y + p.h;
+    const belowTop = feetY > lvl.groundY - hz.h;
+    if (hz.kind === 'block') {
+      const inCenterLane = Math.abs(p.z) < hz.centerGap / 2;
+      if (inCenterLane) { if (belowTop) respawnPlayer(p, lvl); }
+      else { respawnPlayer(p, lvl); } // flanking spikes — no going around
+    } else { // gapwall — clear only by strafing into the opening
+      const inGap = Math.abs(p.z - hz.gapCenter) < hz.gapWidth / 2;
+      if (belowTop && !inGap) respawnPlayer(p, lvl);
+    }
+  }
+
+  if (p.y > lvl.groundY + 300) respawnPlayer(p, lvl);
+
+  for (const c of lvl.coins) {
+    if (!c.taken && Math.abs((p.x + p.w / 2) - c.x) < 24 && Math.abs((p.y + p.h / 2) - c.y) < 24) {
+      c.taken = true; G.coins += 1;
+      document.getElementById('coinCount').textContent = G.coins;
+    }
+  }
+  const w = lvl.weapon;
+  if (!w.taken && Math.abs((p.x + p.w / 2) - w.x) < 26 && Math.abs((p.y + p.h / 2) - w.y) < 26) {
+    w.taken = true; G.weapons.push(w.name);
+    document.getElementById('weaponCount').textContent = G.weapons.length;
+  }
+
+  G.camX = Math.max(0, Math.min(p.x - 320, lvl.length - 900));
+  G.prevKeys = { ...G.keys };
+}
+
+/* ====================================================================
+   3D ENGINE — everything below is new. Game-logic numbers above (p.x,
+   p.y, plat.y, etc.) stay in their original 2D-ish units; this layer
+   only converts them into Three.js world positions for rendering.
+   ==================================================================== */
+const WORLD_SCALE = 1 / 18;
+const GROUND_REF = 420;
+function h3(y2d) { return (GROUND_REF - y2d) * WORLD_SCALE; }   // height above ground, in world units
+function x3(x2d) { return x2d * WORLD_SCALE; }                   // progress along the track, in world units
+const PLATFORM_DEPTH = 28 * WORLD_SCALE * 12; // street width = 4x the player's own width, tripled
+function strafeLimitWorld() { return PLATFORM_DEPTH / 2 - 0.9; } // how far p.z can stray from center
+
+const canvasEl = document.getElementById('game');
+const renderer = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: true });
+renderer.setSize(900, 500);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0d1c);
+scene.fog = new THREE.FogExp2(0x0d1028, 0.011);
+const camera = new THREE.PerspectiveCamera(58, 900 / 500, 0.1, 600);
+camera.position.set(-6, 4, 7);
+
+// Dark sky, but much brighter than before — the city's own signage adds to a stronger moonlight.
+scene.add(new THREE.AmbientLight(0x5a6ea0, 0.85));
+const sunLight = new THREE.DirectionalLight(0xcfe0ff, 0.75);
+sunLight.position.set(-14, 30, 18);
+scene.add(sunLight);
+const fillLight = new THREE.PointLight(0xff2bd6, 0.6, 40, 2);
+fillLight.position.set(0, 3, 4);
+scene.add(fillLight);
+
+const groundMat = new THREE.MeshStandardMaterial({ color: 0x15131a, roughness: 0.75, metalness: 0.25 });
+const groundPlane = new THREE.Mesh(new THREE.PlaneGeometry(4000, 60), groundMat);
+groundPlane.rotation.x = -Math.PI / 2;
+groundPlane.position.set(0, -0.05, 2);
+scene.add(groundPlane);
+
+const levelGroup = new THREE.Group();
+scene.add(levelGroup);
+
+/* ---------------- SKYBOX: a pale moon + stars, follows the camera so it never gets left behind ---------------- */
+const skybox = new THREE.Group();
+scene.add(skybox);
+const sunMesh = new THREE.Mesh(
+  new THREE.SphereGeometry(2.6, 20, 16),
+  new THREE.MeshBasicMaterial({ color: 0xeef4ff })
+);
+sunMesh.position.set(10, 26, -50);
+skybox.add(sunMesh);
+const sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0xaecbff, transparent: true, opacity: 0.3 }));
+sunGlow.scale.set(16, 16, 1);
+sunGlow.position.copy(sunMesh.position);
+skybox.add(sunGlow);
+{
+  const starCount = 300;
+  const positions = new Float32Array(starCount * 3);
+  const starRand = mulberry32(42);
+  for (let i = 0; i < starCount; i++) {
+    positions[i * 3] = (starRand() - 0.5) * 300;
+    positions[i * 3 + 1] = starRand() * 80 + 10;
+    positions[i * 3 + 2] = -40 - starRand() * 200;
+  }
+  const starGeo = new THREE.BufferGeometry();
+  starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const starMat = new THREE.PointsMaterial({ color: 0xcfe0ff, size: 0.6, transparent: true, opacity: 0.8 });
+  skybox.add(new THREE.Points(starGeo, starMat));
+}
+
+function disposeObject(obj) {
+  obj.traverse((child) => {
+    if (child.geometry) child.geometry.dispose();
+    if (child.material) {
+      if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
+      else child.material.dispose();
+    }
+  });
+}
+function clearLevelGroup() {
+  while (levelGroup.children.length) disposeObject(levelGroup.children.pop());
+  liveScreens.length = 0;
+  landmarkAnimated.length = 0;
+}
+
+function glowMat(hex, intensity) {
+  return new THREE.MeshStandardMaterial({ color: hex, emissive: hex, emissiveIntensity: intensity || 1.4, roughness: 0.4 });
+}
+
+// Real glowing signage, like the reference poster's neon text. Drawn to a canvas and used as an
+// unlit (MeshBasicMaterial) texture so it reads as self-lit and never gets washed out by daylight.
+const SIGN_WORDS = ['忍者', '昇天', '電脳', '武器', '影', '刃', '龍', '夜', '神', '光', 'カゲ', 'ニンジャ'];
+const signTextureCache = {};
+function signTexture(word, color) {
+  const key = word + color;
+  if (signTextureCache[key]) return signTextureCache[key];
+  const cv = document.createElement('canvas');
+  cv.width = 64; cv.height = 256;
+  const c2d = cv.getContext('2d');
+  c2d.clearRect(0, 0, 64, 256);
+  c2d.font = 'bold 54px "Hiragino Sans", "Yu Gothic", "Noto Sans JP", sans-serif';
+  c2d.textAlign = 'center';
+  c2d.textBaseline = 'middle';
+  c2d.shadowColor = color; c2d.shadowBlur = 18;
+  c2d.fillStyle = color;
+  const chars = word.split('');
+  const step = 256 / (chars.length + 0.3);
+  chars.forEach((ch, i) => {
+    c2d.fillText(ch, 32, step * (i + 0.8));
+  });
+  const tex = new THREE.CanvasTexture(cv);
+  tex.needsUpdate = true;
+  signTextureCache[key] = tex;
+  return tex;
+}
+function buildSignMesh(word, color, w, h) {
+  const mat = new THREE.MeshBasicMaterial({ map: signTexture(word, color), transparent: true });
+  return new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+}
+
+function buildToriiGate(theme) {
+  const group = new THREE.Group();
+  const red = new THREE.MeshStandardMaterial({ color: 0xb3261e, roughness: 0.5, metalness: 0.2 });
+  const pillarGeo = new THREE.CylinderGeometry(0.16, 0.18, 4.2, 10);
+  const pL = new THREE.Mesh(pillarGeo, red); pL.position.set(-2.1, 2.1, 0);
+  const pR = new THREE.Mesh(pillarGeo, red); pR.position.set(2.1, 2.1, 0);
+  group.add(pL, pR);
+  const topBeam = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.28, 0.5), red);
+  topBeam.position.set(0, 4.15, 0);
+  group.add(topBeam);
+  const underBeam = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.18, 0.3), red);
+  underBeam.position.set(0, 3.7, 0);
+  group.add(underBeam);
+  const plaque = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 0.08), new THREE.MeshStandardMaterial({ color: 0x1a1210 }));
+  plaque.position.set(0, 3.9, 0.3);
+  group.add(plaque);
+  const sign = buildSignMesh('神', theme.glow, 0.4, 0.5);
+  sign.position.set(0, 3.9, 0.36);
+  group.add(sign);
+  return group;
+}
+
+// A horizontal English nameplate (the kanji sign texture is built for short vertical words).
+function nameplateTexture(text, color) {
+  const cv = document.createElement('canvas');
+  cv.width = 512; cv.height = 96;
+  const c2d = cv.getContext('2d');
+  c2d.font = 'bold 46px "Segoe UI", sans-serif';
+  c2d.textAlign = 'center'; c2d.textBaseline = 'middle';
+  c2d.shadowColor = color; c2d.shadowBlur = 16;
+  c2d.fillStyle = color;
+  c2d.fillText(text, 256, 48);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+// Each district's actual named Main Attraction, built as a distinct landmark shape — open-sided
+// so the interior (and an interior glow) is actually visible, not a solid block.
+function buildLandmark(lm, theme) {
+  const group = new THREE.Group();
+  const glow = theme.glow;
+  const stoneMat = new THREE.MeshStandardMaterial({ color: 0x14121c, roughness: 0.5, metalness: 0.35 });
+  const interiorLight = new THREE.PointLight(theme.glow, 1.4, 16, 2);
+
+  if (lm.shape === 'bowl') {
+    // thetaStart/thetaLength cut a wide gap centered on the player-facing side (local +Z, theta=0)
+    // so the crowd and duelists are actually visible from the path, not hidden behind a solid ring.
+    const base = new THREE.Mesh(
+      new THREE.CylinderGeometry(7, 9, 2.6, 24, 1, true, Math.PI * 0.39, Math.PI * 1.22),
+      new THREE.MeshStandardMaterial({ color: 0x0e0f18, roughness: 0.5, metalness: 0.4, side: THREE.DoubleSide })
+    );
+    base.position.y = 1.3;
+    group.add(base);
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(6.8, 24), new THREE.MeshStandardMaterial({ color: 0x1a1830, roughness: 0.4, metalness: 0.3 }));
+    floor.rotation.x = -Math.PI / 2; floor.position.y = 0.05;
+    group.add(floor);
+    const emblem = new THREE.Mesh(new THREE.TorusGeometry(2.2, 0.15, 8, 24), glowMat(glow, 2));
+    emblem.rotation.x = -Math.PI / 2; emblem.position.y = 0.12;
+    group.add(emblem);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(8, 0.14, 8, 32), glowMat(glow, 1.8));
+    rim.position.y = 2.6; rim.rotation.x = Math.PI / 2;
+    group.add(rim);
+    interiorLight.position.set(0, 3, 0);
+
+    // A cheering crowd around the stands, and two tiny duelists clashing center-ring — a nod to
+    // the Ninja Ascension tournaments this stadium actually hosts.
+    const crowdColors = [0xcfa876, 0x8a6a4a, 0xb08858, 0xd8c0a0, 0x6a5038];
+    for (let i = 0; i < 28; i++) {
+      const a = (i / 28) * Math.PI * 2;
+      const r = 6.3 + (i % 3) * 0.5;
+      const fan = new THREE.Mesh(
+        new THREE.BoxGeometry(0.28, 0.5, 0.28),
+        new THREE.MeshStandardMaterial({ color: crowdColors[i % crowdColors.length], roughness: 0.8 })
+      );
+      fan.position.set(Math.cos(a) * r, 1.9 + (i % 3) * 0.35, Math.sin(a) * r);
+      group.add(fan);
+      trackBob(fan, 'y', 0.12 + (i % 3) * 0.04, 0.12 + (i % 5) * 0.015, i * 1.7);
+    }
+
+    function duelist(xSign, accent) {
+      const d = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.6, 0.22), new THREE.MeshStandardMaterial({ color: 0x0a0c12, roughness: 0.5 }));
+      body.position.y = 0.3;
+      d.add(body);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8), new THREE.MeshStandardMaterial({ color: 0x06070a }));
+      head.position.y = 0.68;
+      d.add(head);
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.5, 0.04), glowMat(accent, 2));
+      blade.position.set(xSign * 0.22, 0.45, 0);
+      blade.rotation.z = xSign * 0.6;
+      d.add(blade);
+      d.position.set(xSign * 1.1, 0.12, 0);
+      group.add(d);
+      return d;
+    }
+    const duelA = duelist(-1, '#ff2bd6');
+    const duelB = duelist(1, '#5df5ff');
+    trackBob(duelA, 'x', 0.55, 0.09, 0);
+    trackBob(duelB, 'x', 0.55, 0.09, Math.PI);
+  } else if (lm.shape === 'spire') {
+    const tower = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.9, 1.6, 14, 8, 1, true, Math.PI * 0.39, Math.PI * 1.22),
+      new THREE.MeshPhysicalMaterial({ color: 0x14182a, transparent: true, opacity: 0.55, roughness: 0.1, metalness: 0.2, side: THREE.DoubleSide })
+    );
+    tower.position.y = 7;
+    group.add(tower);
+    const core = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 13, 8), glowMat(glow, 1.1));
+    core.position.y = 7;
+    group.add(core);
+    const beacon = new THREE.Mesh(new THREE.ConeGeometry(0.5, 2, 8), glowMat(glow, 2.2));
+    beacon.position.y = 15;
+    group.add(beacon);
+    for (let i = 0; i < 4; i++) {
+      const band = new THREE.Mesh(new THREE.TorusGeometry(1.35 - i * 0.2, 0.05, 6, 20), glowMat(glow, 1.5));
+      band.position.y = 2 + i * 3.2; band.rotation.x = Math.PI / 2;
+      group.add(band);
+    }
+    interiorLight.position.set(0, 7, 0);
+  } else if (lm.shape === 'hall') {
+    // Back + side walls and a roof on pillars, front left fully open so the lit interior shows.
+    const back = new THREE.Mesh(new THREE.BoxGeometry(9, 4, 0.3), stoneMat);
+    back.position.set(0, 2, -2.5);
+    group.add(back);
+    const sideL = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4, 5), stoneMat);
+    sideL.position.set(-4.5, 2, 0);
+    group.add(sideL);
+    const sideR = sideL.clone(); sideR.position.x = 4.5;
+    group.add(sideR);
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(9, 0.1, 5), new THREE.MeshStandardMaterial({ color: 0x1a1830, roughness: 0.4 }));
+    floor.position.set(0, 0.05, 0);
+    group.add(floor);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(9.6, 0.3, 5.6), new THREE.MeshStandardMaterial({ color: 0x1a1826, roughness: 0.6 }));
+    roof.position.y = 4.15;
+    group.add(roof);
+    for (let i = 0; i < 5; i++) {
+      const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 4, 8), new THREE.MeshStandardMaterial({ color: 0x201c2c, roughness: 0.4, metalness: 0.3 }));
+      pillar.position.set(-3.6 + i * 1.8, 2, 2.9);
+      group.add(pillar);
+    }
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(9, 0.08, 0.08), glowMat(glow, 1.6));
+    strip.position.set(0, 4.0, 2.95);
+    group.add(strip);
+    interiorLight.position.set(0, 2.5, -1);
+  } else { // plaza — dome held up on open supports instead of a solid base, so you see underneath it
+    const floor = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 0.2, 20), new THREE.MeshStandardMaterial({ color: 0x1a1830, roughness: 0.4, metalness: 0.3 }));
+    floor.position.y = 0.1;
+    group.add(floor);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 3.2, 8), stoneMat);
+      post.position.set(Math.cos(a) * 3.6, 1.6, Math.sin(a) * 3.6);
+      group.add(post);
+    }
+    const dome = new THREE.Mesh(
+      new THREE.SphereGeometry(4.2, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2.1),
+      new THREE.MeshPhysicalMaterial({ color: 0x1a1626, transparent: true, opacity: 0.4, roughness: 0.2, metalness: 0.3, side: THREE.DoubleSide })
+    );
+    dome.position.y = 3.2;
+    group.add(dome);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(4, 0.1, 8, 28), glowMat(glow, 1.7));
+    ring.position.y = 3.2; ring.rotation.x = Math.PI / 2;
+    group.add(ring);
+    interiorLight.position.set(0, 3, 0);
+  }
+
+  group.add(interiorLight);
+  const plate = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.1), new THREE.MeshBasicMaterial({ map: nameplateTexture(lm.name, glow), transparent: true }));
+  plate.position.set(0, 1.2, 9.1);
+  group.add(plate);
+  return group;
+}
+
+/* ---------------- LEVEL MESH BUILDERS ---------------- */
+function glassPathTexture(theme) {
+  const cv = document.createElement('canvas');
+  cv.width = 128; cv.height = 128;
+  const c2d = cv.getContext('2d');
+  c2d.fillStyle = 'rgba(10,16,30,0.0)';
+  c2d.fillRect(0, 0, 128, 128);
+  c2d.strokeStyle = theme.glow;
+  c2d.lineWidth = 4;
+  c2d.globalAlpha = 0.9;
+  c2d.strokeRect(2, 2, 124, 124);
+  c2d.lineWidth = 1.5;
+  c2d.globalAlpha = 0.4;
+  c2d.strokeRect(20, 20, 88, 88);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function buildPlatformMesh(plat, theme) {
+  const group = new THREE.Group();
+  const w = Math.max(plat.w * WORLD_SCALE, 0.4);
+
+  if (plat.highblock) {
+    // A solid red platform you land on via High Jump, run across, and fall off the far end of —
+    // narrower than the street, so it doesn't span the whole thing.
+    const zw = plat.zw || PLATFORM_DEPTH;
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(w, plat.h * WORLD_SCALE, zw),
+      new THREE.MeshStandardMaterial({ color: 0xdd1f1f, emissive: 0x3a0505, emissiveIntensity: 0.5, roughness: 0.45, metalness: 0.15 })
+    );
+    group.add(body);
+    const edge = new THREE.Mesh(new THREE.BoxGeometry(w, 0.06, zw + 0.05), glowMat('#ff2a2a', 1.6));
+    edge.position.y = (plat.h * WORLD_SCALE) / 2 + 0.03;
+    group.add(edge);
+    scene_syncPlatform(group, plat);
+    plat.mesh = group;
+    levelGroup.add(group);
+    return;
+  }
+
+  // A glowing glass walkway: a translucent slab with an illuminated tile-grid texture on top.
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(w, plat.h * WORLD_SCALE, PLATFORM_DEPTH),
+    new THREE.MeshPhysicalMaterial({ color: 0x1a2840, transparent: true, opacity: 0.5, roughness: 0.15, metalness: 0.1 })
+  );
+  group.add(body);
+
+  const tileTex = glassPathTexture(theme);
+  tileTex.repeat.set(w / 1.6, PLATFORM_DEPTH / 1.6);
+  const tiles = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, PLATFORM_DEPTH),
+    new THREE.MeshBasicMaterial({ map: tileTex, transparent: true })
+  );
+  tiles.rotation.x = -Math.PI / 2;
+  tiles.position.y = (plat.h * WORLD_SCALE) / 2 + 0.01;
+  group.add(tiles);
+
+  const edge = new THREE.Mesh(
+    new THREE.BoxGeometry(w, 0.06, PLATFORM_DEPTH + 0.05),
+    glowMat(theme.glow, 1.6)
+  );
+  edge.position.y = (plat.h * WORLD_SCALE) / 2 + 0.03;
+  group.add(edge);
+
+  scene_syncPlatform(group, plat);
+  plat.mesh = group;
+  levelGroup.add(group);
+}
+
+function buildGoalBeacon(lvl, theme) {
+  const group = new THREE.Group();
+  const baseY = h3(lvl.groundY);
+  const beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.4, 6), glowMat('#5df5ff', 2));
+  beacon.position.set(0, baseY + 1.2, 0);
+  group.add(beacon);
+  const flag = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.6, 6), glowMat(theme.glow, 2));
+  flag.position.set(0, baseY + 2.3, 0);
+  group.add(flag);
+  group.position.x = x3(lvl.goalX);
+  levelGroup.add(group);
+}
+function scene_syncPlatform(group, plat) {
+  group.position.set(x3(plat.x + plat.w / 2), h3(plat.y) - (plat.h * WORLD_SCALE) / 2, 0);
+}
+
+function buildHazardMesh(hz) {
+  const hWorld = hz.h * WORLD_SCALE;
+  if (hz.kind === 'block') {
+    // A plain block in the open center lane (nothing on top of it — just jump over), with spikes
+    // flanking both sides so you can't strafe around instead.
+    const cx = x3(hz.x + hz.w / 2);
+    const blockMat = new THREE.MeshStandardMaterial({ color: 0x2fcc3a, emissive: 0x0a3a0d, emissiveIntensity: 0.6, roughness: 0.45, metalness: 0.1 });
+    const block = new THREE.Mesh(new THREE.BoxGeometry(hz.w * WORLD_SCALE, hWorld, hz.centerGap), blockMat);
+    block.position.set(cx, hWorld / 2, 0);
+    levelGroup.add(block);
+
+    const half = strafeLimitWorld();
+    const flankFrom = hz.centerGap / 2;
+    const spikeW = 0.6;
+    for (const side of [-1, 1]) {
+      for (let d = flankFrom; d < half; d += spikeW) {
+        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.4, 4), glowMat('#ff2a2a', 1.6));
+        spike.position.set(cx, 0.7, side * (d + spikeW / 2));
+        spike.rotation.y = Math.PI / 4;
+        levelGroup.add(spike);
+      }
+    }
+  } else { // gapwall — a row of spikes with a gap you have to strafe into
+    const cx = x3(hz.x + hz.w / 2);
+    const half = strafeLimitWorld();
+    const spikeW = 0.6;
+    for (let z = -half; z < half; z += spikeW) {
+      if (Math.abs(z + spikeW / 2 - hz.gapCenter) < hz.gapWidth / 2) continue;
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.3, hWorld, 4), glowMat('#ff2a2a', 1.7));
+      spike.position.set(cx, hWorld / 2, z + spikeW / 2);
+      spike.rotation.y = Math.PI / 4;
+      levelGroup.add(spike);
+    }
+    const marker = new THREE.Mesh(new THREE.BoxGeometry(0.08, hWorld, hz.gapWidth), glowMat('#5df5ff', 0.8));
+    marker.position.set(cx, hWorld / 2, hz.gapCenter);
+    levelGroup.add(marker);
+  }
+}
+
+function buildRampMesh(ramp, theme) {
+  const edge = strafeLimitWorld();
+  const rw = ramp.w * WORLD_SCALE;
+  const rampHeight = 2.4, rampLen = 3.2;
+  const slab = new THREE.Mesh(
+    new THREE.BoxGeometry(rw, 0.15, rampLen),
+    new THREE.MeshPhysicalMaterial({ color: 0x1a2840, transparent: true, opacity: 0.6, roughness: 0.2, metalness: 0.2 })
+  );
+  const tilt = Math.atan2(rampHeight, rampLen);
+  slab.rotation.x = -tilt * ramp.side * -1; // tilt up toward the building side
+  slab.position.set(x3(ramp.x + ramp.w / 2), rampHeight / 2.6, ramp.side * (edge - rampLen / 2.4));
+  levelGroup.add(slab);
+  const glow = new THREE.Mesh(new THREE.BoxGeometry(rw, 0.04, rampLen), glowMat(theme.glow, 1.6));
+  glow.rotation.copy(slab.rotation);
+  glow.position.copy(slab.position);
+  glow.position.y += 0.09;
+  levelGroup.add(glow);
+}
+
+function buildWallMesh(wall, theme) {
+  // Styled like a chunk of building face jutting right up against the path, so wall-running
+  // reads as climbing the city itself rather than a floating strip.
+  const height = (wall.bottom - wall.top) * WORLD_SCALE;
+  const midY = h3((wall.top + wall.bottom) / 2);
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(0.9, height, PLATFORM_DEPTH),
+    new THREE.MeshStandardMaterial({ color: 0x0e0f18, roughness: 0.4, metalness: 0.5 })
+  );
+  group.add(body);
+  const litRand = mulberry32(Math.floor(wall.x) * 17 + 5);
+  const winPlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.85, height * 0.94),
+    new THREE.MeshBasicMaterial({ map: windowGridTexture(litRand, theme), transparent: true })
+  );
+  winPlane.position.z = PLATFORM_DEPTH / 2 + 0.01;
+  group.add(winPlane);
+  const edge = new THREE.Mesh(new THREE.BoxGeometry(0.06, height, PLATFORM_DEPTH + 0.05), glowMat('#00e5ff', 1.8));
+  edge.position.x = 0.48;
+  group.add(edge);
+  group.position.set(x3(wall.x), midY, 0);
+  levelGroup.add(group);
+}
+
+function buildCoinMesh(coin) {
+  const mesh = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.08, 8, 16), glowMat('#ffd84d', 1.8));
+  mesh.position.set(x3(coin.x), h3(coin.y), 0);
+  mesh.rotation.x = Math.PI / 2;
+  levelGroup.add(mesh);
+  coin.mesh = mesh;
+}
+
+function buildWeaponMesh(weapon) {
+  const group = new THREE.Group();
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.1, 0.14), glowMat('#cfe8ff', 1.2));
+  group.add(blade);
+  const hilt = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.3, 0.1), new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.8 }));
+  hilt.position.y = -0.7;
+  group.add(hilt);
+  group.rotation.z = 0.3;
+  group.position.set(x3(weapon.x), h3(weapon.y), 0);
+  levelGroup.add(group);
+  weapon.mesh = group;
+}
+
+function buildBgMesh(item, theme) {
+  // Kept close to the play-lane so the city reads as a street you're running through, not a distant backdrop.
+  // Near/far layers stack for a dense, multi-row megacity skyline instead of one thin band of buildings.
+  // Alternate sides by position so buildings flank both sides of the path, not just one.
+  // Pushed out past the (now much wider) strafeable street so nothing clips through a tower.
+  const side = Math.floor(Math.abs(item.x) * 0.37) % 2 === 0 ? 1 : -1;
+  const streetEdge = PLATFORM_DEPTH / 2;
+  const scatter = (item.jitter || 0) * (item.layer === 'far' ? 14 : 6);
+  const mag = item.layer === 'far'
+    ? streetEdge + 3 + scatter
+    : streetEdge + 0.5 + scatter;
+  const depth = side * mag;
+  const faceRot = side > 0 ? Math.PI : 0; // flip facade overlays to face the path from either side
+  if (item.type === 'bowl') {
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(9, 11, 2.2, 20, 1, true), glowMat(theme.glow, 0.5));
+    mesh.position.set(x3(item.x), 1.1, depth - side * 4);
+    levelGroup.add(mesh);
+    return;
+  }
+  if (item.type === 'pylon' || item.type === 'floodlight') {
+    const pole = new THREE.Mesh(new THREE.BoxGeometry(0.15, 4.5, 0.15), new THREE.MeshStandardMaterial({ color: 0x0a0b12, roughness: 0.6, metalness: 0.4 }));
+    pole.position.set(x3(item.x), 2.2, depth);
+    levelGroup.add(pole);
+    const top = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), glowMat(theme.glow, 2));
+    top.position.set(x3(item.x), 4.5, depth);
+    levelGroup.add(top);
+    return;
+  }
+  const h = Math.max((item.h || 100) * WORLD_SCALE, 1.1);
+  const w = Math.max((item.w || 60) * WORLD_SCALE * 0.85, 0.9);
+  const litRand = mulberry32(Math.floor(item.x) * 31 + 11);
+  const bodyColors = [0x0e0f18, 0x121320, 0x0a0b14, 0x161828];
+  const bodyColor = bodyColors[Math.floor(litRand() * bodyColors.length)];
+  const bodyMat = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.4, metalness: 0.5 });
+  const cx = x3(item.x) + w / 2;
+  const shape = item.shape || 'box';
+
+  if (shape === 'cyl') {
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.42, w * 0.5, h, 10), bodyMat);
+    body.position.set(cx, h / 2, depth);
+    levelGroup.add(body);
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(w * 0.42, 0.6, 10), glowMat(theme.glow, 1.3));
+    cap.position.set(cx, h + 0.3, depth);
+    levelGroup.add(cap);
+  } else if (shape === 'stepped') {
+    let ty = 0, tw = w;
+    for (let s = 0; s < 3; s++) {
+      const sh = h / 3;
+      const tier = new THREE.Mesh(new THREE.BoxGeometry(tw, sh, 3), bodyMat);
+      tier.position.set(cx, ty + sh / 2, depth);
+      levelGroup.add(tier);
+      ty += sh; tw *= 0.72;
+    }
+  } else if (shape === 'capped') {
+    const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, 3), bodyMat);
+    body.position.set(cx, h / 2, depth);
+    levelGroup.add(body);
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(w * 0.6, h * 0.18, 4), new THREE.MeshStandardMaterial({ color: 0x1a1a24, roughness: 0.6 }));
+    cap.position.set(cx, h + (h * 0.09), depth);
+    cap.rotation.y = Math.PI / 4;
+    levelGroup.add(cap);
+  } else {
+    const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, 3), bodyMat);
+    body.position.set(cx, h / 2, depth);
+    levelGroup.add(body);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(w * 0.9, 0.12, 3 * 0.9), new THREE.MeshStandardMaterial({ color: 0x1a1a24, roughness: 0.7 }));
+    roof.position.set(cx, h + 0.06, depth);
+    levelGroup.add(roof);
+  }
+  if (litRand() < 0.4) {
+    const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.2, 6), glowMat(theme.glow, 1.6));
+    antenna.position.set(cx + w * 0.25, h + 0.6, depth);
+    levelGroup.add(antenna);
+  }
+
+  // Real glowing kanji/katakana signage plastered up the face — unlit material, so it reads bright
+  // and legible regardless of daylight, like the reference city's signage-covered towers.
+  const signColors = NEON_PALETTE;
+  const signCount = 1 + Math.floor(litRand() * 2);
+  for (let s = 0; s < signCount; s++) {
+    const signH = h * (0.22 + litRand() * 0.3);
+    const signColor = signColors[Math.floor(litRand() * signColors.length)];
+    const word = SIGN_WORDS[Math.floor(litRand() * SIGN_WORDS.length)];
+    const sign = buildSignMesh(word, signColor, signH * 0.32, signH);
+    const sx = cx - w / 2 + 0.35 + litRand() * Math.max(0.1, w - 0.7);
+    sign.position.set(sx, 0.4 + signH / 2 + litRand() * (h * 0.3), depth - side * 1.53);
+    sign.rotation.y = faceRot;
+    levelGroup.add(sign);
+    const backing = new THREE.Mesh(new THREE.PlaneGeometry(signH * 0.4, signH * 1.06), glowMat(signColor, 0.9));
+    backing.position.set(sx, sign.position.y, depth - side * 1.51);
+    backing.rotation.y = faceRot;
+    levelGroup.add(backing);
+  }
+
+  // Big video billboard screens on roughly a third of towers.
+  if (litRand() < 0.35) {
+    const screenW = w * (0.45 + litRand() * 0.3);
+    const screenH = screenW * 0.56;
+    const screen = buildScreenMesh(theme, Math.floor(item.x) * 7 + 3, screenW, screenH);
+    screen.position.set(cx, h * (0.35 + litRand() * 0.35), depth - side * 1.54);
+    screen.rotation.y = faceRot;
+    levelGroup.add(screen);
+  }
+
+  // Hundreds of tiny lit windows, baked into one texture (not one mesh per window) — this is what
+  // actually sells "dense cyberpunk tower" without spawning thousands of draw calls.
+  const winPlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(w * 0.96, h * 0.9),
+    new THREE.MeshBasicMaterial({ map: windowGridTexture(litRand, theme), transparent: true })
+  );
+  winPlane.position.set(cx, h * 0.48, depth - side * 1.51);
+  winPlane.rotation.y = faceRot;
+  levelGroup.add(winPlane);
+}
+
+function windowGridTexture(litRand, theme) {
+  const cv = document.createElement('canvas');
+  cv.width = 128; cv.height = 512;
+  const c2d = cv.getContext('2d');
+  const cols = 9, rows = 34;
+  const cw = cv.width / cols, ch = cv.height / rows;
+  const colors = NEON_PALETTE;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (litRand() < 0.42) continue;
+      c2d.fillStyle = colors[Math.floor(litRand() * colors.length)];
+      c2d.globalAlpha = 0.65 + litRand() * 0.35;
+      const pad = 1.5;
+      c2d.fillRect(c * cw + pad, r * ch + pad, cw - pad * 2, ch - pad * 2);
+    }
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+// Big holographic billboard screens on a subset of towers, with "video" content that changes
+// every couple of seconds (not every frame, to stay cheap) — bars, ad blocks, a scan-line sweep.
+const liveScreens = [];
+// Small bits of interior motion inside landmarks (cheering crowd, clashing duelists) — just a
+// position oscillation per entry, updated every frame since there are only ever a few dozen.
+const landmarkAnimated = [];
+function trackBob(mesh, axis, amp, speed, phase) {
+  landmarkAnimated.push({ mesh, axis, base: mesh.position[axis], amp, speed, phase });
+}
+function drawScreenFrame(c2d, w, h, theme, seed) {
+  const r = mulberry32(seed);
+  c2d.fillStyle = '#05060a';
+  c2d.fillRect(0, 0, w, h);
+  const palette = NEON_PALETTE;
+  const roll = r();
+  const mode = roll < 0.5 ? 1 : roll < 0.78 ? 0 : 2; // favor the portrait/face billboard, like the reference
+  if (mode === 0) {
+    for (let i = 0; i < 6; i++) {
+      c2d.fillStyle = palette[Math.floor(r() * palette.length)];
+      c2d.globalAlpha = 0.75;
+      const bh = h / 7;
+      c2d.fillRect(w * 0.08, i * (h / 6) + 4, w * (0.3 + r() * 0.6), bh * 0.6);
+    }
+  } else if (mode === 1) {
+    c2d.fillStyle = palette[Math.floor(r() * palette.length)];
+    c2d.globalAlpha = 0.85;
+    c2d.beginPath();
+    c2d.arc(w / 2, h / 2, Math.min(w, h) * 0.32, 0, Math.PI * 2);
+    c2d.fill();
+    c2d.fillStyle = '#05060a';
+    c2d.globalAlpha = 1;
+    c2d.font = `bold ${Math.floor(h * 0.18)}px sans-serif`;
+    c2d.textAlign = 'center'; c2d.textBaseline = 'middle';
+    c2d.fillText(SIGN_WORDS[Math.floor(r() * SIGN_WORDS.length)], w / 2, h / 2);
+  } else {
+    const cols = 4, rows = 5;
+    for (let cy = 0; cy < rows; cy++) {
+      for (let cx = 0; cx < cols; cx++) {
+        if (r() < 0.4) continue;
+        c2d.fillStyle = palette[Math.floor(r() * palette.length)];
+        c2d.globalAlpha = 0.7;
+        c2d.fillRect((cx / cols) * w + 3, (cy / rows) * h + 3, w / cols - 6, h / rows - 6);
+      }
+    }
+  }
+  c2d.globalAlpha = 1;
+  c2d.strokeStyle = palette[0];
+  c2d.lineWidth = Math.max(2, w * 0.03);
+  c2d.strokeRect(1, 1, w - 2, h - 2);
+}
+function buildScreenMesh(theme, seed, w, h) {
+  const cv = document.createElement('canvas');
+  cv.width = 160; cv.height = 90;
+  const c2d = cv.getContext('2d');
+  drawScreenFrame(c2d, cv.width, cv.height, theme, seed);
+  const tex = new THREE.CanvasTexture(cv);
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex }));
+  liveScreens.push({ c2d, cv, tex, theme, seed, frame: Math.floor(Math.random() * 999) });
+  return mesh;
+}
+
+function buildOceanForLevel(lvl) {
+  const sea = new THREE.Mesh(
+    new THREE.PlaneGeometry(lvl.length * WORLD_SCALE + 80, 120),
+    new THREE.MeshStandardMaterial({ color: 0x060b16, roughness: 0.3, metalness: 0.4 })
+  );
+  sea.rotation.x = -Math.PI / 2;
+  sea.position.set(x3(lvl.length / 2), -0.3, -40);
+  levelGroup.add(sea);
+  const horizon = new THREE.Mesh(
+    new THREE.PlaneGeometry(lvl.length * WORLD_SCALE + 80, 0.1),
+    glowMat(THEMES[G.district.cls].glow, 1.2)
+  );
+  horizon.position.set(x3(lvl.length / 2), -0.25, 4);
+  levelGroup.add(horizon);
+}
+
+function buildLevelMeshes(lvl, theme) {
+  clearLevelGroup();
+  for (const plat of lvl.platforms) buildPlatformMesh(plat, theme);
+  buildGoalBeacon(lvl, theme);
+  for (const hz of lvl.hazards) buildHazardMesh(hz);
+  for (const ramp of lvl.ramps) buildRampMesh(ramp, theme);
+  for (const wall of lvl.walls) buildWallMesh(wall, theme);
+  for (const coin of lvl.coins) buildCoinMesh(coin);
+  buildWeaponMesh(lvl.weapon);
+  if (lvl.motif === 'coastal') buildOceanForLevel(lvl);
+  for (const item of lvl.bg) buildBgMesh(item, theme);
+
+  const gate = buildToriiGate(theme);
+  gate.position.set(x3(lvl.startX - 20), 0, 2.2);
+  levelGroup.add(gate);
+
+  // The district's actual named Main Attraction — big, scaled well past a regular building, and
+  // placed in the back half of the run rather than right near the start.
+  const lm = LANDMARKS[G.district.id - 1];
+  const landmark = buildLandmark(lm, theme);
+  const lmScale = 2.6;
+  landmark.scale.setScalar(lmScale);
+  const lmFrac = 0.6 + (G.district.id % 7) * 0.035;
+  const landmarkZ = -(PLATFORM_DEPTH / 2 + 5 * lmScale);
+  landmark.position.set(x3(lvl.length * lmFrac), 0, landmarkZ);
+  levelGroup.add(landmark);
+  lvl.landmarkFocus = { x: x3(lvl.length * lmFrac), z: landmarkZ };
+}
+
+/* ---------------- PLAYER MODEL ---------------- */
+function buildPlayerModel() {
+  const group = new THREE.Group();
+  const darkMat = new THREE.MeshStandardMaterial({ color: 0x0a0c12, roughness: 0.6, metalness: 0.35 });
+
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.0, 0.95), darkMat);
+  torso.position.y = 1.35;
+  group.add(torso);
+
+  const seam = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.6, 0.06), glowMat('#5df5ff', 1.3));
+  seam.position.set(0.27, 1.35, 0);
+  seam.rotation.z = 0.6;
+  group.add(seam);
+
+  function leg(zOff) {
+    const pivot = new THREE.Group();
+    pivot.position.set(0, 0.85, zOff);
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.85, 0.32), darkMat);
+    mesh.position.y = -0.42;
+    pivot.add(mesh);
+    group.add(pivot);
+    return pivot;
+  }
+  const legL = leg(-0.22), legR = leg(0.22);
+
+  function arm(zOff) {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.75, 0.26), darkMat);
+    mesh.position.set(0, 1.35, zOff);
+    group.add(mesh);
+    return mesh;
+  }
+  arm(-0.58); arm(0.58);
+
+  const hoodMat = new THREE.MeshStandardMaterial({ color: 0x06070a, roughness: 0.7 });
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 14, 12), hoodMat);
+  head.position.y = 2.15;
+  head.scale.set(0.95, 1.05, 1);
+  group.add(head);
+
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), glowMat('#ff2a2a', 3));
+  eye.position.set(0.14, 2.17, 0.36);
+  group.add(eye);
+
+  // sheathed katana on the back: visible to the chase camera
+  const scabbard = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.5, 0.08), new THREE.MeshStandardMaterial({ color: 0x3a4250, metalness: 0.5, roughness: 0.4 }));
+  scabbard.position.set(0, 1.5, -0.55);
+  scabbard.rotation.x = 0.45;
+  group.add(scabbard);
+  const guard = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.06, 0.06), new THREE.MeshStandardMaterial({ color: 0x8fa0b0, metalness: 0.7, roughness: 0.25 }));
+  guard.position.set(0, 2.15, -0.78);
+  guard.rotation.x = 0.45;
+  group.add(guard);
+  const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.4, 8), new THREE.MeshStandardMaterial({ color: 0x5a6472, roughness: 0.7 }));
+  grip.position.set(0, 2.35, -0.92);
+  grip.rotation.x = 0.45;
+  group.add(grip);
+
+  scene.add(group);
+  return { group, legL, legR, torso, head };
+}
+const playerModel = buildPlayerModel();
+
+function syncPlayerModel(p) {
+  const feetY2d = p.y + p.h;
+  const baseY = h3(feetY2d);
+  const crouch = p.rolling;
+  playerModel.group.position.set(x3(p.x + p.w / 2), baseY, p.z);
+  playerModel.group.scale.y = crouch ? 0.6 : 1;
+  playerModel.group.rotation.y = Math.PI / 2; // always faces +X (the chase camera looks the same way, so this shows the character's back/blade)
+  playerModel.group.rotation.z = p.wallRunning ? -p.facing * 0.3 : 0;
+
+  // The model is rotated 90° around Y to face world +X, which remaps local Z to world X. So a
+  // fore/aft swing in world space comes from rotating the leg pivot around local X (not Z).
+  const moving = p.onGround && Math.abs(p.vx) > 0.5;
+  if (moving) {
+    const swing = Math.sin(p.animT) * 0.7;
+    playerModel.legL.rotation.x = swing;
+    playerModel.legR.rotation.x = -swing;
+  } else if (!p.onGround) {
+    playerModel.legL.rotation.x = 0.35;
+    playerModel.legR.rotation.x = -0.15;
+  } else {
+    playerModel.legL.rotation.x = 0;
+    playerModel.legR.rotation.x = 0;
+  }
+}
+
+/* ---------------- CAMERA ---------------- */
+const camTarget = new THREE.Vector3();
+const camLook = new THREE.Vector3();
+function updateCamera(p) {
+  const px = x3(p.x + p.w / 2), py = h3(p.y + p.h), pz = p.z;
+  // Subway-Surfers-style chase cam: close behind, a bit above, tilted up so the towers loom overhead
+  // and there's more visibility of what's coming up ahead on the street.
+  camTarget.set(px - 4.5, py + 4, pz);
+  camera.position.lerp(camTarget, 0.14);
+  camLook.set(px + 6, py + 0.5, pz);
+  camera.lookAt(camLook);
+  fillLight.position.set(px, py + 3, pz);
+}
+
+/* ---------------- INTRO BEACH VISTA (3D) ---------------- */
+let introBuilt = false;
+function buildIntroScene() {
+  clearLevelGroup();
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(400, 200), new THREE.MeshStandardMaterial({ color: 0x060b16, roughness: 0.3, metalness: 0.4 }));
+  sea.rotation.x = -Math.PI / 2;
+  sea.position.set(60, -0.2, -30);
+  levelGroup.add(sea);
+
+  const sand = new THREE.Mesh(new THREE.PlaneGeometry(400, 20), new THREE.MeshStandardMaterial({ color: 0x1d1828, roughness: 0.9 }));
+  sand.rotation.x = -Math.PI / 2;
+  sand.position.set(60, -0.05, 8);
+  levelGroup.add(sand);
+
+  const neons = ['#ff2bd6', '#3dd8ff', '#ff8a3a', '#3dffa0', '#ff3a3a'];
+  const skylineRand = mulberry32(99);
+  let bx = 40, tallest = 0;
+  for (let i = 0; i < 20; i++) {
+    const h = (60 + skylineRand() * 220 + i * 4) * WORLD_SCALE;
+    const w = (20 + skylineRand() * 26) * WORLD_SCALE;
+    tallest = Math.max(tallest, h);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, 3), new THREE.MeshStandardMaterial({ color: 0x0e0f18, roughness: 0.4, metalness: 0.5 }));
+    body.position.set(bx, h / 2, -55);
+    levelGroup.add(body);
+    const neon = neons[i % neons.length];
+    const win = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.6, h * 0.5), glowMat(neon, 1.1));
+    win.position.set(bx, h * 0.55, -53.4);
+    levelGroup.add(win);
+    bx += w + 1.2;
+  }
+  const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 8), glowMat('#eafcff', 2.5));
+  beacon.position.set(40 + (bx - 40) / 2, tallest + 1, -55);
+  levelGroup.add(beacon);
+
+  introBuilt = true;
+}
+
+function syncIntro() {
+  if (!introBuilt) buildIntroScene();
+  const p = G.player;
+  p.x = G.introX; p.y = INTRO_SAND_Y2D - p.h; p.onGround = true;
+  p.vx = G.phase === 'intro-walk' ? 2.6 : 0;
+  p.vy = 0; p.rolling = false; p.wallRunning = false;
+  playerModel.group.position.set(x3(G.introX), 0, 8);
+  playerModel.group.rotation.y = Math.PI; // face toward the city (local +Z is "front"; city sits at -Z)
+  playerModel.group.scale.y = 1;
+  const moving = G.phase === 'intro-walk';
+  if (moving) {
+    const swing = Math.sin(p.animT) * 0.7;
+    playerModel.legL.rotation.z = swing;
+    playerModel.legR.rotation.z = -swing;
+  }
+  camera.position.lerp(new THREE.Vector3(0, 2.4, 16), 0.06);
+  camera.lookAt(40, 4, -40);
+}
+const INTRO_SAND_Y2D = 420;
+
+/* ---------------- RENDER ---------------- */
+function render() {
+  skybox.position.x = camera.position.x;
+
+  if (G.phase === 'intro' || G.phase === 'intro-walk') {
+    syncIntro();
+    renderer.render(scene, camera);
+    return;
+  }
+
+  introBuilt = false; // next trip to the beach rebuilds it
+  const lvl = G.level;
+  for (const plat of lvl.platforms) {
+    if (!plat.mesh) continue;
+    plat.mesh.visible = !plat.gone;
+    if (plat.gone) continue;
+    scene_syncPlatform(plat.mesh, plat);
+    if (plat.crumble && plat.landedAt >= 0) {
+      const flicker = Math.floor(G.frame / 4) % 2 === 0;
+      plat.mesh.children[0].material.opacity = flicker ? 0.5 : 1;
+      plat.mesh.children[0].material.transparent = true;
+    }
+  }
+  for (const coin of lvl.coins) {
+    if (!coin.mesh) continue;
+    coin.mesh.visible = !coin.taken;
+    coin.mesh.rotation.z += 0.08;
+  }
+  if (lvl.weapon.mesh) {
+    lvl.weapon.mesh.visible = !lvl.weapon.taken;
+    lvl.weapon.mesh.rotation.y += 0.04;
+  }
+
+  for (const a of landmarkAnimated) {
+    a.mesh.position[a.axis] = a.base + Math.sin(G.frame * a.speed + a.phase) * a.amp;
+  }
+
+  // Billboards change "channel" every couple of seconds — cheap since it's a handful of small canvases.
+  if (G.frame % 90 === 0) {
+    for (const s of liveScreens) {
+      s.frame += 1;
+      drawScreenFrame(s.c2d, s.cv.width, s.cv.height, s.theme, s.seed + s.frame);
+      s.tex.needsUpdate = true;
+    }
+  }
+
+  syncPlayerModel(G.player);
+  updateCamera(G.player);
+  renderer.render(scene, camera);
+}
+
+function loop() {
+  update();
+  render();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
