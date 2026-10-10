@@ -265,45 +265,66 @@ function generateLevel(district) {
   const groundY = 420;
   const totalObstacles = obstacleCountFor(district.id);
   const types = ['leap', 'gap', 'highblock', 'ramp'];
-  const picks = [];
-  while (picks.length < totalObstacles) {
-    const pool = [...types];
-    while (pool.length && picks.length < totalObstacles) {
-      const idx = Math.floor(rand() * pool.length);
-      picks.push(pool.splice(idx, 1)[0]);
+  const EXPLICIT_ORDERS = {
+    51: ['leap', 'gap'],
+    50: ['gap', 'highblock', 'leap', 'ramp'],
+  };
+  let picks = EXPLICIT_ORDERS[district.id];
+  if (!picks) {
+    picks = [];
+    while (picks.length < totalObstacles) {
+      const pool = [...types];
+      while (pool.length && picks.length < totalObstacles) {
+        const idx = Math.floor(rand() * pool.length);
+        picks.push(pool.splice(idx, 1)[0]);
+      }
     }
   }
-  const length = Math.max(1500 + diff * 260 + rand() * 500, totalObstacles * 280 + 900);
-  const platforms = [{ x: 0, y: groundY, w: length, h: 30 }];
+  const platforms = [];
   const hazards = [];
   const ramps = [];
 
-  const usableSpan = length * 0.64;
-  const startX = length * 0.26;
-  const step = usableSpan / totalObstacles;
+  // Sequential placement: each obstacle is placed after the PREVIOUS one's actual footprint
+  // (not an even slice of the path), so a wide obstacle can never crowd or overlap the next one.
+  const MIN_GAP = 380;
+  const startX = 500;
+  let cursor = startX;
   for (let i = 0; i < totalObstacles; i++) {
     const kind = picks[i];
-    const ox = startX + step * i + step * 0.2 * (rand() - 0.5);
+    const ox = cursor;
+    let footprint;
     if (kind === 'leap') {
       // Spikes flank both sides (so you can't strafe around), a plain block sits in the open
       // center lane (nothing on top of it) that you jump over.
       const centerGap = 28 * WORLD_SCALE * 4;
-      hazards.push({ kind: 'block', x: ox, w: 125, h: 35, centerGap });
+      footprint = 125;
+      hazards.push({ kind: 'block', x: ox, w: footprint, h: 35, centerGap });
     } else if (kind === 'gap') {
       const half = strafeLimitWorld();
       const gapWidth = 2.1;
       const gapCenter = (rand() - 0.5) * 2 * (half - gapWidth * 0.7);
-      hazards.push({ kind: 'gapwall', x: ox, w: 36, h: 185, gapCenter, gapWidth });
+      footprint = 36;
+      hazards.push({ kind: 'gapwall', x: ox, w: footprint, h: 185, gapCenter, gapWidth });
     } else if (kind === 'highblock') {
       // A platform, not a hazard: High Jump lands you on top of it (too high for a normal jump
       // or leap to reach), you run across, and running off the far end drops you back to the
       // street — no special landing logic needed, gravity handles it once the platform ends.
-      const ledgeLen = 170 + rand() * 70;
-      platforms.push({ x: ox, y: groundY - 160, w: ledgeLen, h: 24, highblock: true, zw: 28 * WORLD_SCALE * 5 });
+      footprint = 170 + rand() * 70;
+      platforms.push({ x: ox, y: groundY - 160, w: footprint, h: 24, highblock: true, zw: 28 * WORLD_SCALE * 5 });
     } else if (kind === 'ramp') {
-      ramps.push({ x: ox, w: 150, side: rand() < 0.5 ? -1 : 1 });
+      footprint = 150;
+      const side = rand() < 0.5 ? -1 : 1;
+      ramps.push({ x: ox, w: footprint, side });
+      // Lava blocks the rest of the lane so you can't just run past at ground level — the only
+      // clear path lines up with the ramp's own trigger zone.
+      const gapCenter = side * strafeLimitWorld() * 0.4;
+      hazards.push({ kind: 'gapwall', x: ox, w: footprint, h: 185, gapCenter, gapWidth: 2.3, lava: true });
     }
+    cursor = ox + footprint + MIN_GAP + rand() * 180;
   }
+
+  const length = cursor + 500;
+  platforms.unshift({ x: 0, y: groundY, w: length, h: 30 });
 
   const coins = [];
   const coinCount = 26 + Math.floor(rand() * 10);
@@ -515,6 +536,21 @@ function update() {
     p.vy = HIGH_JUMP_V;
     p.jumps = 1;
     p.onGround = false;
+  } else if (keyPressed('3') && p.onGround) {
+    // Direct wall-run key: launches off a ramp you're standing in range of (and on the correct
+    // side of — lava blocks the rest of the lane, so you have to be positioned right).
+    for (const ramp of lvl.ramps) {
+      const withinX = p.x + p.w > ramp.x && p.x < ramp.x + ramp.w;
+      const rampEdge = strafeLimit * 0.4;
+      const onSide = ramp.side > 0 ? p.z > rampEdge : p.z < -rampEdge;
+      if (withinX && onSide) {
+        p.vy = RAMP_LAUNCH_V;
+        p.onGround = false;
+        p.jumps = 0;
+        p.lockT = RAMP_FORWARD_FRAMES; p.lockVx = RAMP_FORWARD_SPEED;
+        break;
+      }
+    }
   }
 
   p.vy += GRAVITY;
@@ -536,22 +572,6 @@ function update() {
     }
   }
 
-  // Ramps: run onto one beside a building while grounded and it launches you — a ground-level
-  // wall-run replacement, no vertical cling required.
-  if (p.onGround) {
-    for (const ramp of lvl.ramps) {
-      const withinX = p.x + p.w > ramp.x && p.x < ramp.x + ramp.w;
-      const edge = strafeLimit * 0.4;
-      const onSide = ramp.side > 0 ? p.z > edge : p.z < -edge;
-      if (withinX && onSide) {
-        p.vy = RAMP_LAUNCH_V;
-        p.onGround = false;
-        p.jumps = 0;
-        p.lockT = RAMP_FORWARD_FRAMES; p.lockVx = RAMP_FORWARD_SPEED;
-        break;
-      }
-    }
-  }
 
   if (p.onGround && p.x + p.w / 2 >= lvl.goalX) clearDistrict();
 
@@ -905,16 +925,19 @@ function buildPlatformMesh(plat, theme) {
   const w = Math.max(plat.w * WORLD_SCALE, 0.4);
 
   if (plat.highblock) {
-    // A solid red platform you land on via High Jump, run across, and fall off the far end of —
-    // narrower than the street, so it doesn't span the whole thing.
+    // A solid red block, planted on the ground all the way up to the surface you land on —
+    // not floating — narrower than the street so it doesn't span the whole thing.
     const zw = plat.zw || PLATFORM_DEPTH;
+    const topLocalY = (plat.h * WORLD_SCALE) / 2;
+    const bodyHeight = h3(plat.y); // ground (world y=0) up to the landing surface
     const body = new THREE.Mesh(
-      new THREE.BoxGeometry(w, plat.h * WORLD_SCALE, zw),
+      new THREE.BoxGeometry(w, bodyHeight, zw),
       new THREE.MeshStandardMaterial({ color: 0xdd1f1f, emissive: 0x3a0505, emissiveIntensity: 0.5, roughness: 0.45, metalness: 0.15 })
     );
+    body.position.y = topLocalY - bodyHeight / 2;
     group.add(body);
     const edge = new THREE.Mesh(new THREE.BoxGeometry(w, 0.06, zw + 0.05), glowMat('#ff2a2a', 1.6));
-    edge.position.y = (plat.h * WORLD_SCALE) / 2 + 0.03;
+    edge.position.y = topLocalY + 0.03;
     group.add(edge);
     scene_syncPlatform(group, plat);
     plat.mesh = group;
@@ -967,10 +990,33 @@ function scene_syncPlatform(group, plat) {
   group.position.set(x3(plat.x + plat.w / 2), h3(plat.y) - (plat.h * WORLD_SCALE) / 2, 0);
 }
 
+function lavaTexture() {
+  const cv = document.createElement('canvas');
+  cv.width = 64; cv.height = 64;
+  const c2d = cv.getContext('2d');
+  c2d.fillStyle = '#4a0a02';
+  c2d.fillRect(0, 0, 64, 64);
+  const r = mulberry32(7);
+  const colors = ['#ff5a1a', '#ff8a2a', '#ffcf4a', '#c22a0a'];
+  for (let i = 0; i < 26; i++) {
+    c2d.fillStyle = colors[Math.floor(r() * colors.length)];
+    c2d.globalAlpha = 0.6 + r() * 0.4;
+    const x = r() * 64, y = r() * 64, rad = 3 + r() * 7;
+    c2d.beginPath(); c2d.arc(x, y, rad, 0, Math.PI * 2); c2d.fill();
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+  tex.needsUpdate = true;
+  return tex;
+}
+const LAVA_MAT = () => new THREE.MeshStandardMaterial({
+  map: lavaTexture(), emissive: 0xff5a1a, emissiveIntensity: 0.9, roughness: 0.6, metalness: 0,
+});
+
 function buildHazardMesh(hz) {
   const hWorld = hz.h * WORLD_SCALE;
   if (hz.kind === 'block') {
-    // A plain block in the open center lane (nothing on top of it — just jump over), with spikes
+    // A plain block in the open center lane (nothing on top of it — just jump over), with lava
     // flanking both sides so you can't strafe around instead.
     const cx = x3(hz.x + hz.w / 2);
     const blockMat = new THREE.MeshStandardMaterial({ color: 0x2fcc3a, emissive: 0x0a3a0d, emissiveIntensity: 0.6, roughness: 0.45, metalness: 0.1 });
@@ -980,25 +1026,29 @@ function buildHazardMesh(hz) {
 
     const half = strafeLimitWorld();
     const flankFrom = hz.centerGap / 2;
-    const spikeW = 0.6;
     for (const side of [-1, 1]) {
-      for (let d = flankFrom; d < half; d += spikeW) {
-        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.4, 4), glowMat('#ff2a2a', 1.6));
-        spike.position.set(cx, 0.7, side * (d + spikeW / 2));
-        spike.rotation.y = Math.PI / 4;
-        levelGroup.add(spike);
-      }
+      const flankW = half - flankFrom;
+      const pool = new THREE.Mesh(new THREE.PlaneGeometry(hz.w * WORLD_SCALE, flankW), LAVA_MAT());
+      pool.rotation.x = -Math.PI / 2;
+      pool.position.set(cx, 0.03, side * (flankFrom + flankW / 2));
+      levelGroup.add(pool);
+      const glow = new THREE.Mesh(new THREE.PlaneGeometry(hz.w * WORLD_SCALE, flankW), glowMat('#ff5a1a', 0.35));
+      glow.rotation.x = -Math.PI / 2;
+      glow.position.set(cx, 0.04, side * (flankFrom + flankW / 2));
+      levelGroup.add(glow);
     }
-  } else { // gapwall — a row of spikes with a gap you have to strafe into
+  } else { // gapwall — a lavafall curtain with a gap you have to strafe into
     const cx = x3(hz.x + hz.w / 2);
     const half = strafeLimitWorld();
-    const spikeW = 0.6;
-    for (let z = -half; z < half; z += spikeW) {
-      if (Math.abs(z + spikeW / 2 - hz.gapCenter) < hz.gapWidth / 2) continue;
-      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.3, hWorld, 4), glowMat('#ff2a2a', 1.7));
-      spike.position.set(cx, hWorld / 2, z + spikeW / 2);
-      spike.rotation.y = Math.PI / 4;
-      levelGroup.add(spike);
+    const stripW = 0.6;
+    for (let z = -half; z < half; z += stripW) {
+      if (Math.abs(z + stripW / 2 - hz.gapCenter) < hz.gapWidth / 2) continue;
+      const fall = new THREE.Mesh(new THREE.PlaneGeometry(stripW * 0.92, hWorld), LAVA_MAT());
+      fall.position.set(cx, hWorld / 2, z + stripW / 2);
+      levelGroup.add(fall);
+      const backFall = fall.clone();
+      backFall.rotation.y = Math.PI;
+      levelGroup.add(backFall);
     }
     const marker = new THREE.Mesh(new THREE.BoxGeometry(0.08, hWorld, hz.gapWidth), glowMat('#5df5ff', 0.8));
     marker.position.set(cx, hWorld / 2, hz.gapCenter);
@@ -1007,18 +1057,27 @@ function buildHazardMesh(hz) {
 }
 
 function buildRampMesh(ramp, theme) {
-  const edge = strafeLimitWorld();
   const rw = ramp.w * WORLD_SCALE;
-  const rampHeight = 2.4, rampLen = 3.2;
+  const rampHeight = 2.4, rampRun = 3.2;
+  // The box's own edge length has to be the hypotenuse of the rise/run triangle — using the run
+  // distance directly (the old bug) left the slab short of both its intended height and length
+  // once tilted.
+  const surfaceLen = Math.sqrt(rampRun * rampRun + rampHeight * rampHeight);
+  const tilt = Math.atan2(rampHeight, rampRun);
+
+  // Low edge sits at the ramp's strafe-trigger threshold, rising away from the street center.
+  const triggerEdge = strafeLimitWorld() * 0.4;
+  const centerZ = ramp.side * (triggerEdge + rampRun / 2);
+
   const slab = new THREE.Mesh(
-    new THREE.BoxGeometry(rw, 0.15, rampLen),
+    new THREE.BoxGeometry(rw, 0.15, surfaceLen),
     new THREE.MeshPhysicalMaterial({ color: 0x1a2840, transparent: true, opacity: 0.6, roughness: 0.2, metalness: 0.2 })
   );
-  const tilt = Math.atan2(rampHeight, rampLen);
-  slab.rotation.x = -tilt * ramp.side * -1; // tilt up toward the building side
-  slab.position.set(x3(ramp.x + ramp.w / 2), rampHeight / 2.6, ramp.side * (edge - rampLen / 2.4));
+  slab.rotation.x = -tilt * ramp.side; // low at center, high toward the building side
+  slab.position.set(x3(ramp.x + ramp.w / 2), rampHeight / 2, centerZ);
   levelGroup.add(slab);
-  const glow = new THREE.Mesh(new THREE.BoxGeometry(rw, 0.04, rampLen), glowMat(theme.glow, 1.6));
+
+  const glow = new THREE.Mesh(new THREE.BoxGeometry(rw, 0.04, surfaceLen), glowMat(theme.glow, 1.6));
   glow.rotation.copy(slab.rotation);
   glow.position.copy(slab.position);
   glow.position.y += 0.09;
