@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Speech Homework</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background:
+      radial-gradient(720px 520px at 8% -6%, rgba(79,176,232,0.16), transparent 60%),
+      radial-gradient(680px 480px at 108% 10%, rgba(111,207,151,0.16), transparent 60%),
+      radial-gradient(600px 460px at 50% 115%, rgba(255,193,79,0.12), transparent 60%),
+      linear-gradient(160deg, #eef6ff 0%, #f6fbf6 100%);
+    background-attachment: fixed;
+    color: #22303f;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  .screen { display: none; min-height: 100vh; }
+  .screen.active { display: block; animation: screenIn 0.35s ease; }
+  @keyframes screenIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ===== LANDING ===== */
+  #landing.active {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  #landing.active::before {
+    content: "";
+    position: absolute;
+    width: 480px;
+    height: 480px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(79,176,232,0.22), rgba(111,207,151,0.12) 60%, transparent 75%);
+    z-index: 0;
+    animation: heroPulse 6s ease-in-out infinite;
+  }
+  @keyframes heroPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+  #landing h1 {
+    font-size: 2.6rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, #1c5d8a, #2e86c1 55%, #219150);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    margin-bottom: 48px;
+    position: relative;
+    z-index: 1;
+  }
+  #landing p.tag {
+    color: #5a7184;
+    margin-bottom: 40px;
+    font-size: 1.05rem;
+  }
+  .role-buttons {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    justify-content: center;
+    position: relative;
+    z-index: 1;
+  }
+  .role-btn {
+    width: 190px;
+    height: 190px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    color: #fff;
+    box-shadow: 0 16px 34px rgba(46,134,193,0.36), inset 0 2px 0 rgba(255,255,255,0.3);
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+  }
+  .role-btn:hover { transform: translateY(-5px) scale(1.03); box-shadow: 0 22px 42px rgba(46,134,193,0.44), inset 0 2px 0 rgba(255,255,255,0.35); }
+  .role-btn:active { transform: translateY(-1px) scale(1.01); }
+  .role-btn .emoji { display: block; font-size: 2.6rem; margin-bottom: 12px; }
+  #btn-start { background: linear-gradient(135deg, #57bdf0, #2e86c1 70%); }
+
+  /* ===== SHARED TOPBAR ===== */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 14px 24px;
+    background: rgba(255,255,255,0.72);
+    border-bottom: 1px solid rgba(28,93,138,0.08);
+    border-radius: 0 0 20px 20px;
+    position: sticky;
+    top: 0;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    z-index: 10;
+    box-shadow: 0 4px 16px rgba(31,45,61,0.06);
+  }
+  .topbar h2 { font-size: 1.2rem; font-weight: 800; color: #1c5d8a; letter-spacing: -0.01em; }
+  .coin-badge {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: linear-gradient(135deg, #fff6da, #ffedb0);
+    color: #8a6400;
+    border: 1px solid #f0d98a;
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-weight: 800;
+    font-size: 0.95rem;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 2px 6px rgba(180,140,0,0.12);
+  }
+
+  #shop-view .container {
+    max-width: 960px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 80vh;
+  }
+  .shop-error {
+    color: #b3311c;
+    font-weight: 700;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    background: #fdecea;
+    border: 1px solid #f6c9c2;
+    border-radius: 12px;
+  }
+
+  .shop-layout { display: flex; gap: 20px; align-items: flex-start; }
+
+  .shop-sidebar {
+    width: 260px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: #fff;
+    border: 1px solid rgba(28,93,138,0.06);
+    border-radius: 20px;
+    padding: 10px;
+    box-shadow: 0 6px 20px rgba(31,45,61,0.07);
+  }
+  .shop-sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    cursor: pointer;
+    font-weight: 700;
+    color: #22303f;
+    transition: background 0.15s ease, transform 0.1s ease;
+  }
+  .shop-sidebar-item:hover { background: #eaf4ff; }
+  .shop-sidebar-item.selected {
+    background: linear-gradient(135deg, #4fb0e8, #2e86c1);
+    color: #fff;
+    box-shadow: 0 6px 14px rgba(46,134,193,0.3);
+  }
+  .shop-sidebar-icon {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: rgba(28,93,138,0.06);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+  }
+  .shop-sidebar-item.selected .shop-sidebar-icon { background: rgba(255,255,255,0.2); }
+
+  .shop-main {
+    flex: 1;
+    min-width: 0;
+    background: #fff;
+    border: 1px solid rgba(28,93,138,0.06);
+    border-radius: 20px;
+    padding: 24px;
+    box-shadow: 0 6px 20px rgba(31,45,61,0.07);
+  }
+  .shop-main-header { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+  .shop-main-icon {
+    flex-shrink: 0;
+    width: 72px;
+    height: 72px;
+    border-radius: 18px;
+    background: linear-gradient(160deg, #eaf4ff, #d7e9fb);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.4rem;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
+  }
+  .shop-main-title { font-weight: 800; font-size: 1.4rem; color: #22303f; }
+
+  .shop-coin-panel {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(135deg, #fff6da, #ffedb0);
+    border: 1px solid #f0d98a;
+    border-radius: 16px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+  }
+  .shop-coin-panel .label { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #8a6400; margin-bottom: 4px; }
+  .shop-coin-panel .amount { font-size: 1.8rem; font-weight: 800; color: #6b4c00; }
+
+  .shop-tier-row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .shop-tier-btn {
+    flex: 1;
+    min-width: 140px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    background: linear-gradient(160deg, #fbfdff, #f2f9ff);
+    border: 1px solid #cfe6f9;
+    border-radius: 16px;
+    padding: 18px 10px 16px;
+    text-align: center;
+    cursor: pointer;
+    color: #1c5d8a;
+    transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .shop-tier-btn:hover { background: linear-gradient(160deg, #e4f2ff, #d7e9fb); transform: translateY(-3px); box-shadow: 0 8px 18px rgba(46,134,193,0.2); }
+  .shop-tier-btn .price {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #fff6da, #ffd977);
+    color: #8a6400;
+    font-weight: 800;
+    font-size: 1rem;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), 0 2px 6px rgba(180,140,0,0.18);
+  }
+  .shop-tier-btn .desc { font-size: 0.8rem; font-weight: 700; color: #5a7184; }
+
+  @media (max-width: 640px) {
+    .shop-layout { flex-direction: column; }
+    .shop-sidebar { width: 100%; flex-direction: row; overflow-x: auto; }
+    .shop-sidebar-item { flex-shrink: 0; }
+  }
+
+  .back-btn {
+    background: #fff;
+    border: 1px solid #d7e3ec;
+    color: #2e86c1;
+    padding: 8px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .back-btn:hover { background: #eaf4ff; border-color: #cfe6f9; }
+
+  .container { max-width: 760px; margin: 0 auto; padding: 24px; }
+
+  #login-view .container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 80vh;
+  }
+  #login-view .card { max-width: 380px; width: 100%; }
+
+  /* generic */
+  .card {
+    background: #fff;
+    border: 1px solid rgba(28,93,138,0.06);
+    border-radius: 18px;
+    padding: 20px;
+    margin-bottom: 18px;
+    box-shadow: 0 6px 20px rgba(31,45,61,0.07);
+  }
+  label { font-size: 0.8rem; color: #5a7184; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 8px; }
+  select, input[type=text], input[type=password], textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid #d7e3ec;
+    font-size: 1rem;
+    font-family: inherit;
+    background: #fbfdff;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  select:focus, input[type=text]:focus, input[type=password]:focus, textarea:focus {
+    outline: none;
+    border-color: #7fb8e0;
+    box-shadow: 0 0 0 3px rgba(46,134,193,0.14);
+  }
+  textarea { resize: vertical; min-height: 90px; }
+  .exercise-row {
+    border: 1px solid #d7e3ec;
+    border-radius: 12px;
+    padding: 10px;
+    margin-bottom: 10px;
+    background: #fbfdff;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .exercise-row:focus-within { border-color: #7fb8e0; box-shadow: 0 0 0 3px rgba(46,134,193,0.1); }
+  .exercise-row .exercise-box {
+    min-height: 60px;
+    border: none;
+    background: transparent;
+    padding: 4px;
+  }
+  .exercise-row .exercise-box:focus { outline: none; }
+  .exercise-time {
+    display: none;
+    width: 160px;
+    margin-top: 8px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid #d7e3ec;
+    background: #fff;
+    font-size: 0.85rem;
+  }
+
+  .exercise-display-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #f0f4f8;
+  }
+  .exercise-display-row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .exercise-display-time {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #219150;
+    white-space: nowrap;
+    background: #eaf9f0;
+    padding: 3px 10px;
+    border-radius: 999px;
+  }
+
+  .week-calendar { display: flex; gap: 8px; }
+  .week-day {
+    flex: 1;
+    text-align: center;
+    padding: 10px 4px;
+    border-radius: 14px;
+    border: 1px solid #eef3f7;
+    background: #fbfdff;
+    transition: border-color 0.15s ease;
+  }
+  .week-day .dow { font-size: 0.7rem; color: #7a8ea1; text-transform: uppercase; font-weight: 800; letter-spacing: 0.03em; }
+  .week-day .num { font-weight: 800; font-size: 1.1rem; margin: 2px 0 8px; color: #22303f; }
+  .week-day.today {
+    border-color: #2e86c1;
+    border-width: 2px;
+    background: linear-gradient(180deg, #f2f9ff, #fbfdff);
+    box-shadow: 0 0 0 4px rgba(46,134,193,0.1);
+  }
+
+  .week-slots { display: flex; flex-direction: column; gap: 4px; }
+  .week-slot {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 6px 2px;
+    border-radius: 8px;
+    border: 1px solid #eef3f7;
+    background: #fff;
+    color: #7a8ea1;
+    pointer-events: none;
+    cursor: default;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+  }
+  .week-slot.clickable { pointer-events: auto; cursor: pointer; }
+  .week-slot.clickable:hover { border-color: #2e86c1; background: #eaf4ff; transform: scale(1.04); }
+  .week-slot.done { background: linear-gradient(135deg, #e5f7ec, #d4f2e0); border-color: #6fcf97; color: #1a7440; }
+
+  .btn {
+    background: linear-gradient(135deg, #4fb0e8, #2e86c1);
+    color: #fff;
+    border: none;
+    padding: 11px 20px;
+    border-radius: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 0.95rem;
+    box-shadow: 0 4px 12px rgba(46,134,193,0.28);
+    transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+  }
+  .btn:hover { filter: brightness(1.05); transform: translateY(-1px); box-shadow: 0 6px 16px rgba(46,134,193,0.34); }
+  .btn:active { transform: translateY(0); }
+  .btn.secondary { background: #eaf4ff; color: #1c5d8a; box-shadow: none; border: 1px solid #cfe6f9; }
+  .btn.secondary:hover { background: #d7e9fb; box-shadow: none; }
+  .btn.green { background: linear-gradient(135deg, #6fcf97, #219150); box-shadow: 0 4px 12px rgba(33,145,80,0.28); }
+  .btn.danger { background: linear-gradient(135deg, #ee7b64, #e0563f); box-shadow: 0 4px 12px rgba(224,86,63,0.28); }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+  .client-btn-row { display: flex; flex-wrap: wrap; gap: 10px; }
+  .client-btn {
+    padding: 12px 18px;
+    border-radius: 14px;
+    border: 1px solid #cfe6f9;
+    background: linear-gradient(160deg, #f2f9ff, #eaf4ff);
+    color: #1c5d8a;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .client-btn:hover { background: linear-gradient(160deg, #e4f2ff, #d7e9fb); transform: translateY(-2px); box-shadow: 0 6px 14px rgba(46,134,193,0.18); }
+  .add-client-btn {
+    background: linear-gradient(135deg, #6fcf97, #219150);
+    border-color: #219150;
+    color: #fff;
+    font-size: 1.2rem;
+    padding: 12px 20px;
+  }
+  .add-client-btn:hover { background: linear-gradient(135deg, #6fcf97, #1a7440); }
+  .client-btn-wrap { position: relative; display: inline-block; }
+  .client-btn-wrap .client-btn { padding-right: 30px; }
+  .client-btn-delete {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    width: 18px;
+    height: 18px;
+    line-height: 16px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: rgba(28,93,138,0.12);
+    color: #1c5d8a;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .client-btn-delete:hover { background: #e0563f; color: #fff; }
+
+  .passage-text {
+    font-size: 1.3rem;
+    line-height: 1.9;
+    color: #22303f;
+    white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+
+<a href="../ailuradix.html" style="position:fixed;bottom:14px;left:14px;z-index:9999;background:rgba(10,15,28,0.85);color:#f2f4f8;text-decoration:none;font:600 13px 'Segoe UI',Tahoma,sans-serif;padding:8px 14px;border-radius:999px;border:1px solid rgba(255,255,255,0.15);backdrop-filter:blur(6px);box-shadow:0 4px 14px rgba(0,0,0,0.3);">← Ailuradix</a>
+
+<!-- ===== LANDING ===== -->
+<div id="landing" class="screen active">
+  <h1>Speech Therapy Homework</h1>
+  <div class="role-buttons">
+    <button class="role-btn" id="btn-start">
+      Start
+    </button>
+  </div>
+</div>
+
+<!-- ===== LOGIN ===== -->
+<div id="login-view" class="screen">
+  <div class="topbar">
+    <h2>Log in</h2>
+    <button class="back-btn" onclick="goHome()">← Home</button>
+  </div>
+  <div class="container">
+    <div class="card">
+      <label>Username</label>
+      <input type="text" id="login-username" onkeydown="if(event.key==='Enter') document.getElementById('login-password').focus();">
+      <div style="margin-top:14px;">
+        <label>Password</label>
+        <input type="password" id="login-password" onkeydown="if(event.key==='Enter') submitLogin();">
+      </div>
+      <div id="login-error" style="color:#e0563f; font-size:0.85rem; margin-top:6px; display:none;">Incorrect username or password.</div>
+      <button class="btn" style="margin-top:12px;" onclick="submitLogin()">Log in</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== CLIENT ===== -->
+<div id="client-view" class="screen">
+  <div class="topbar">
+    <h2>Client</h2>
+    <button class="back-btn" onclick="goHome()">← Home</button>
+  </div>
+  <div class="container">
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between;">
+        <div><strong id="active-client-name"></strong></div>
+        <div class="coin-badge">🪙 <span id="client-coin-count">0</span></div>
+      </div>
+      <div style="margin-top:14px;">
+        <label>Exercise</label>
+        <div class="passage-text" id="client-exercise-display"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <label>This week</label>
+      <div id="client-week-calendar" class="week-calendar"></div>
+    </div>
+
+    <div class="card">
+      <button class="btn" onclick="openShop()">🪙 Shop</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== SHOP ===== -->
+<div id="shop-view" class="screen">
+  <div class="topbar">
+    <h2>Shop</h2>
+    <div class="coin-badge">🪙 <span id="shop-coin-count">0</span></div>
+    <button class="back-btn" onclick="showScreen('client-view')">← Back</button>
+  </div>
+  <div class="container">
+    <div id="shop-error" class="shop-error" style="display:none;"></div>
+    <div class="shop-layout">
+      <div class="shop-sidebar" id="shop-sidebar"></div>
+      <div class="shop-main" id="shop-main"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== THERAPIST ===== -->
+<div id="therapist-view" class="screen">
+  <div class="topbar">
+    <h2>Therapist</h2>
+    <button class="back-btn" onclick="goHome()">← Home</button>
+  </div>
+  <div class="container">
+
+    <div class="card">
+      <label>Clients</label>
+      <div id="therapist-client-list" class="client-btn-row"></div>
+      <div id="add-client-form" class="row" style="margin-top:10px; display:none;">
+        <input type="text" id="therapist-new-client" placeholder="Username...">
+        <input type="password" id="therapist-new-client-password" placeholder="Password...">
+        <button class="btn green" onclick="therapistAddClient()">Save</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== CLIENT DETAIL (therapist view of one client) ===== -->
+<div id="client-detail-view" class="screen">
+  <div class="topbar">
+    <h2 id="detail-client-name"></h2>
+    <div class="coin-badge">🪙 <span id="detail-coin-count">0</span></div>
+    <button class="back-btn" onclick="showScreen('therapist-view'); renderTherapistView();">← Therapist</button>
+  </div>
+  <div class="container">
+
+    <div class="card">
+      <label>Exercises</label>
+      <div id="exercise-boxes"></div>
+      <div class="row" style="margin-top:8px;">
+        <button class="btn" onclick="saveExercise()">Save</button>
+        <span id="exercise-saved-note" style="color:#219150; font-weight:600; font-size:0.9rem; display:none;">Saved ✓</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <label>This week's progress</label>
+      <div id="detail-week-calendar" class="week-calendar"></div>
+    </div>
+
+    <div class="card">
+      <button class="btn danger" onclick="deleteActiveDetailClient()">Remove client</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ===================== DATA ===================== */
+function loadClients() {
+  return JSON.parse(localStorage.getItem('st_clients') || '[]');
+}
+function saveClients(list) {
+  localStorage.setItem('st_clients', JSON.stringify(list));
+}
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+/* ===================== NAV ===================== */
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function goHome() { showScreen('landing'); }
+
+document.getElementById('btn-start').addEventListener('click', () => {
+  showScreen('login-view');
+  document.getElementById('login-username').value = '';
+  document.getElementById('login-password').value = '';
+  document.getElementById('login-error').style.display = 'none';
+  document.getElementById('login-username').focus();
+});
+
+/* ===================== LOGIN / CLIENT FLOW ===================== */
+const THERAPIST_USERNAME = 'salomi';
+const THERAPIST_PASSWORD = 'brick-churn-buffet';
+let activeClientId = null;
+
+function submitLogin() {
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+
+  if (username.toLowerCase() === THERAPIST_USERNAME && password === THERAPIST_PASSWORD) {
+    showScreen('therapist-view');
+    renderTherapistView();
+    return;
+  }
+
+  const client = loadClients().find(c =>
+    c.name.toLowerCase() === username.toLowerCase() && (c.password || '') === password
+  );
+  if (client) {
+    activeClientId = client.id;
+    showScreen('client-view');
+    document.getElementById('active-client-name').textContent = client.name;
+    document.getElementById('client-coin-count').textContent = client.coins || 0;
+    const exercises = clientExercises(client).filter(e => e.text.trim() !== '');
+    const displayEl = document.getElementById('client-exercise-display');
+    displayEl.innerHTML = '';
+    if (exercises.length === 0) {
+      displayEl.textContent = 'No exercise assigned yet.';
+    } else {
+      exercises.forEach(entry => {
+        const row = document.createElement('div');
+        row.className = 'exercise-display-row';
+        const text = document.createElement('span');
+        text.textContent = entry.text;
+        row.appendChild(text);
+        if (entry.time) {
+          const time = document.createElement('span');
+          time.className = 'exercise-display-time';
+          time.textContent = entry.time;
+          row.appendChild(time);
+        }
+        displayEl.appendChild(row);
+      });
+    }
+    renderWeekCalendar('client-week-calendar', client, true);
+    return;
+  }
+
+  document.getElementById('login-error').style.display = 'block';
+}
+
+/* ===================== WEEK CALENDAR ===================== */
+const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function dateKey(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function getWeekDates(today) {
+  const start = new Date(today);
+  start.setDate(start.getDate() - start.getDay());
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    days.push(d);
+  }
+  return days;
+}
+
+const DAY_PARTS = [
+  { key: 'morning', label: 'Morning' },
+  { key: 'afternoon', label: 'Afternoon' },
+  { key: 'evening', label: 'Evening' }
+];
+
+function renderWeekCalendar(containerId, client, clickable) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  const today = new Date();
+  const todayKey = dateKey(today);
+  const checkins = client.checkins || {};
+
+  getWeekDates(today).forEach(d => {
+    const key = dateKey(d);
+    const isToday = key === todayKey;
+    const dayCheckins = checkins[key] || {};
+
+    const cell = document.createElement('div');
+    cell.className = 'week-day' + (isToday ? ' today' : '');
+
+    const header = document.createElement('div');
+    header.innerHTML = `<div class="dow">${DOW_LABELS[d.getDay()]}</div><div class="num">${d.getDate()}</div>`;
+    cell.appendChild(header);
+
+    const slots = document.createElement('div');
+    slots.className = 'week-slots';
+    DAY_PARTS.forEach(part => {
+      const done = !!dayCheckins[part.key];
+      const slot = document.createElement('div');
+      slot.className = 'week-slot' + (done ? ' done' : '') + (clickable && isToday ? ' clickable' : '');
+      slot.textContent = part.label;
+      if (clickable && isToday) {
+        slot.onclick = () => toggleTodayCheckin(part.key);
+      }
+      slots.appendChild(slot);
+    });
+    cell.appendChild(slots);
+
+    container.appendChild(cell);
+  });
+}
+
+function toggleTodayCheckin(part) {
+  if (!activeClientId) return;
+  const clients = loadClients();
+  const client = clients.find(c => c.id === activeClientId);
+  if (!client) return;
+  client.checkins = client.checkins || {};
+  const key = dateKey(new Date());
+  client.checkins[key] = client.checkins[key] || {};
+  const nowDone = !client.checkins[key][part];
+  client.checkins[key][part] = nowDone;
+  client.coins = (client.coins || 0) + (nowDone ? 1 : -1);
+  if (client.coins < 0) client.coins = 0;
+  saveClients(clients);
+  renderWeekCalendar('client-week-calendar', client, true);
+  document.getElementById('client-coin-count').textContent = client.coins;
+}
+
+/* ===================== SHOP ===================== */
+const DEFAULT_TIERS = [
+  { cost: 1, desc: 'One level' },
+  { cost: 3, desc: 'Until you die' },
+  { cost: 5, desc: '10 lives' }
+];
+
+const SHOP_GAMES = [
+  { name: 'Fortress Fury', icon: '🏰', path: 'games/fortress-fury.html', tiers: [
+      { cost: 1, desc: '5 waves' },
+      { cost: 3, desc: '20 waves' },
+      { cost: 5, desc: 'Until you die' }
+    ] },
+  { name: 'Sky Vaulter', icon: '🦘', path: 'games/sky-vaulter.html', tiers: DEFAULT_TIERS },
+  { name: 'Platformer Adventure', icon: '🕹️', path: 'games/platformer-adventure.html', tiers: DEFAULT_TIERS },
+  { name: 'Mystic Forge', icon: '⚗️', path: 'games/mystic-forge.html', tiers: [
+      { cost: 1, desc: '5 combine tries' },
+      { cost: 3, desc: '5 new discoveries' },
+      { cost: 5, desc: 'Unlimited' }
+    ] },
+  { name: 'Lemon Tycoon', icon: '🍋', path: 'games/lemon-tycoon.html', tiers: [
+      { cost: 1, desc: '1 day' },
+      { cost: 3, desc: '1 season' },
+      { cost: 5, desc: 'Endless' }
+    ] },
+  { name: 'Nitro Blaze', icon: '🏎️', path: 'games/nitro-blaze.html', tiers: [
+      { cost: 1, desc: 'One lap' },
+      { cost: 3, desc: 'One lap, 3D mode' },
+      { cost: 5, desc: 'Full race' }
+    ] },
+  { name: 'Monster Escape', icon: '👾', path: 'games/monster-escape.html', tiers: DEFAULT_TIERS },
+  { name: 'Block Blast', icon: '🧱', path: 'games/block-blast.html', tiers: DEFAULT_TIERS }
+];
+
+let selectedShopGameIndex = 0;
+
+function openShop() {
+  showScreen('shop-view');
+  document.getElementById('shop-error').style.display = 'none';
+  renderShop();
+}
+
+function selectShopGame(index) {
+  selectedShopGameIndex = index;
+  renderShop();
+}
+
+function renderShop() {
+  const client = loadClients().find(c => c.id === activeClientId);
+  if (!client) return;
+  const coins = client.coins || 0;
+  document.getElementById('shop-coin-count').textContent = coins;
+
+  const sidebarEl = document.getElementById('shop-sidebar');
+  sidebarEl.innerHTML = '';
+  SHOP_GAMES.forEach((game, i) => {
+    const item = document.createElement('div');
+    item.className = 'shop-sidebar-item' + (i === selectedShopGameIndex ? ' selected' : '');
+    item.innerHTML = `<span class="shop-sidebar-icon">${game.icon || '🎮'}</span><span>${game.name}</span>`;
+    item.onclick = () => selectShopGame(i);
+    sidebarEl.appendChild(item);
+  });
+
+  const game = SHOP_GAMES[selectedShopGameIndex];
+  const mainEl = document.getElementById('shop-main');
+  mainEl.innerHTML = '';
+
+  const header = document.createElement('div');
+  header.className = 'shop-main-header';
+  header.innerHTML = `<div class="shop-main-icon">${game.icon || '🎮'}</div><div class="shop-main-title">${game.name}</div>`;
+  mainEl.appendChild(header);
+
+  const coinPanel = document.createElement('div');
+  coinPanel.className = 'shop-coin-panel';
+  coinPanel.innerHTML = `<div><div class="label">Your coins</div><div class="amount">🪙 ${coins}</div></div>`;
+  mainEl.appendChild(coinPanel);
+
+  const row = document.createElement('div');
+  row.className = 'shop-tier-row';
+  game.tiers.forEach(tier => {
+    const btn = document.createElement('div');
+    btn.className = 'shop-tier-btn';
+    btn.innerHTML = `<span class="price">${tier.cost} 🪙</span><span class="desc">${tier.desc}</span>`;
+    btn.onclick = () => buyPlay(game, tier);
+    row.appendChild(btn);
+  });
+  mainEl.appendChild(row);
+}
+
+function buyPlay(game, tier) {
+  const clients = loadClients();
+  const client = clients.find(c => c.id === activeClientId);
+  if (!client) return;
+
+  const coins = client.coins || 0;
+  const errorEl = document.getElementById('shop-error');
+  if (coins < tier.cost) {
+    errorEl.textContent = `Not enough coins — ${game.name} (${tier.desc}) costs ${tier.cost} 🪙, you have ${coins}.`;
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  client.coins = coins - tier.cost;
+  saveClients(clients);
+  errorEl.style.display = 'none';
+  renderShop();
+
+  window.open(`${game.path}?shopTier=${tier.cost}`, '_blank');
+}
+
+/* ===================== THERAPIST FLOW ===================== */
+let activeDetailClientId = null;
+
+function renderTherapistView() {
+  renderTherapistClientList();
+}
+
+function renderTherapistClientList() {
+  const clients = loadClients();
+  const listEl = document.getElementById('therapist-client-list');
+  listEl.innerHTML = '';
+  clients.forEach(c => {
+    const wrap = document.createElement('span');
+    wrap.className = 'client-btn-wrap';
+
+    const btn = document.createElement('button');
+    btn.className = 'client-btn';
+    btn.textContent = c.name;
+    btn.onclick = () => {
+      activeDetailClientId = c.id;
+      showScreen('client-detail-view');
+      renderClientDetail(c.id);
+    };
+
+    const del = document.createElement('button');
+    del.className = 'client-btn-delete';
+    del.textContent = '×';
+    del.title = 'Remove client';
+    del.onclick = (e) => {
+      e.stopPropagation();
+      deleteClient(c.id);
+    };
+
+    wrap.appendChild(btn);
+    wrap.appendChild(del);
+    listEl.appendChild(wrap);
+  });
+
+  const addBtn = document.createElement('button');
+  addBtn.className = 'client-btn add-client-btn';
+  addBtn.textContent = '+';
+  addBtn.onclick = showAddClientForm;
+  listEl.appendChild(addBtn);
+}
+
+function showAddClientForm() {
+  document.getElementById('add-client-form').style.display = 'flex';
+  const input = document.getElementById('therapist-new-client');
+  input.value = '';
+  document.getElementById('therapist-new-client-password').value = '';
+  input.focus();
+}
+
+function therapistAddClient() {
+  const input = document.getElementById('therapist-new-client');
+  const passwordInput = document.getElementById('therapist-new-client-password');
+  const name = input.value.trim();
+  const password = passwordInput.value;
+  if (!name || !password) return;
+  const clients = loadClients();
+  clients.push({ id: uid(), name, password });
+  saveClients(clients);
+  input.value = '';
+  passwordInput.value = '';
+  document.getElementById('add-client-form').style.display = 'none';
+  renderTherapistClientList();
+}
+
+function renderClientDetail(clientId) {
+  const clients = loadClients();
+  const client = clients.find(c => c.id === clientId);
+  if (!client) { showScreen('therapist-view'); renderTherapistView(); return; }
+  document.getElementById('detail-client-name').textContent = client.name;
+  document.getElementById('detail-coin-count').textContent = client.coins || 0;
+  renderExerciseBoxes(clientExercises(client));
+  document.getElementById('exercise-saved-note').style.display = 'none';
+  renderWeekCalendar('detail-week-calendar', client, false);
+}
+
+function clientExercises(client) {
+  if (Array.isArray(client.exercises)) {
+    return client.exercises.map(e => typeof e === 'string' ? { text: e, time: '' } : e);
+  }
+  return client.exercise ? [{ text: client.exercise, time: '' }] : [{ text: '', time: '' }];
+}
+
+function renderExerciseBoxes(exercises) {
+  const container = document.getElementById('exercise-boxes');
+  container.innerHTML = '';
+  (exercises.length ? exercises : [{ text: '', time: '' }]).forEach(entry => addExerciseRow(entry, null, false));
+}
+
+function addExerciseRow(entry, afterEl, focus) {
+  entry = entry || { text: '', time: '' };
+
+  const row = document.createElement('div');
+  row.className = 'exercise-row';
+
+  const box = document.createElement('textarea');
+  box.className = 'exercise-box';
+  box.placeholder = 'Type an exercise for this client...';
+  box.value = entry.text || '';
+
+  const timeInput = document.createElement('input');
+  timeInput.type = 'text';
+  timeInput.className = 'exercise-time';
+  timeInput.placeholder = 'Time (e.g. 20secs)';
+  timeInput.value = entry.time || '';
+  timeInput.style.display = entry.time ? 'block' : 'none';
+
+  box.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      timeInput.style.display = 'block';
+      timeInput.focus();
+    }
+  });
+  timeInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addExerciseRow(null, row, true);
+    }
+  });
+
+  row.appendChild(box);
+  row.appendChild(timeInput);
+
+  const container = document.getElementById('exercise-boxes');
+  if (afterEl && afterEl.nextSibling) {
+    container.insertBefore(row, afterEl.nextSibling);
+  } else {
+    container.appendChild(row);
+  }
+  if (focus !== false) box.focus();
+  return row;
+}
+
+function saveExercise() {
+  if (!activeDetailClientId) return;
+  const clients = loadClients();
+  const client = clients.find(c => c.id === activeDetailClientId);
+  if (!client) return;
+  const rows = document.querySelectorAll('#exercise-boxes .exercise-row');
+  client.exercises = Array.from(rows).map(row => ({
+    text: row.querySelector('.exercise-box').value,
+    time: row.querySelector('.exercise-time').value
+  }));
+  delete client.exercise;
+  saveClients(clients);
+
+  const note = document.getElementById('exercise-saved-note');
+  note.style.display = 'inline';
+  clearTimeout(saveExercise._timer);
+  saveExercise._timer = setTimeout(() => { note.style.display = 'none'; }, 1500);
+}
+
+function deleteClient(clientId) {
+  if (!confirm('Remove this client?')) return;
+  let clients = loadClients().filter(c => c.id !== clientId);
+  saveClients(clients);
+  if (activeDetailClientId === clientId) {
+    activeDetailClientId = null;
+    showScreen('therapist-view');
+  }
+  renderTherapistClientList();
+}
+
+function deleteActiveDetailClient() {
+  if (!activeDetailClientId) return;
+  deleteClient(activeDetailClientId);
+}
+
+/* ===================== UTIL ===================== */
+function escapeHtml(str) {
+  return str.replace(/[&<>"']/g, m => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[m]));
+}
+</script>
+</body>
+</html>

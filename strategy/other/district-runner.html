@@ -462,6 +462,7 @@ function keyPressed(k) { return !!G.keys[k] && !G.prevKeys[k]; }
 /* ---------------- PHYSICS / UPDATE (unchanged from the 2D version) ---------------- */
 const GRAVITY = 0.55, JUMP_V = -10.5, MOVE_SPEED = 4.3;
 const AUTO_SPEED = MOVE_SPEED, STRAFE_SPEED = 0.11;
+const AUTO_SPEED_RAMP = 1.1; // top speed by the end of a district = AUTO_SPEED + this (subtle)
 const DASH_SPEED = 9.5, DASH_FRAMES = 11;
 const HIGH_JUMP_V = -16;
 const LEAP_V = -10, LEAP_FRAMES = 34, LEAP_SPEED = 8.5;
@@ -493,7 +494,10 @@ function update() {
   // wide street instead of controlling forward speed.
   const left = keyDown('ArrowLeft') || keyDown('a') || keyDown('A');
   const right = keyDown('ArrowRight') || keyDown('d') || keyDown('D');
-  let vx = AUTO_SPEED;
+  // Speed ramps up the further you get through the district — capped so it never gets
+  // unfairly fast, and resets back to normal at the start of the next one.
+  const progress = Math.min(1, p.x / lvl.length);
+  const vx = AUTO_SPEED + progress * AUTO_SPEED_RAMP;
   p.animT += vx * 0.22;
   let vz = 0;
   if (left) vz -= STRAFE_SPEED;
@@ -572,6 +576,14 @@ function update() {
     }
   }
 
+  // High-jump blocks are solid — running into the side without clearing the top kills you.
+  for (const plat of lvl.platforms) {
+    if (!plat.highblock) continue;
+    const withinX = p.x + p.w > plat.x && p.x < plat.x + plat.w;
+    const withinZ = plat.zw ? Math.abs(p.z) < plat.zw / 2 : true;
+    const feetY = p.y + p.h;
+    if (withinX && withinZ && feetY > plat.y + 2) respawnPlayer(p, lvl);
+  }
 
   if (p.onGround && p.x + p.w / 2 >= lvl.goalX) clearDistrict();
 
@@ -690,6 +702,7 @@ function clearLevelGroup() {
   while (levelGroup.children.length) disposeObject(levelGroup.children.pop());
   liveScreens.length = 0;
   landmarkAnimated.length = 0;
+  lavaMaterials.length = 0;
 }
 
 function glowMat(hex, intensity) {
@@ -990,18 +1003,32 @@ function scene_syncPlatform(group, plat) {
   group.position.set(x3(plat.x + plat.w / 2), h3(plat.y) - (plat.h * WORLD_SCALE) / 2, 0);
 }
 
-function lavaTexture() {
+// Real molten rock: a dark cooled-crust base cracked open by bright glowing veins and blobs,
+// tiled so the animated scroll below reads as continuous flow instead of a repeating sticker.
+function lavaTexture(seed) {
   const cv = document.createElement('canvas');
   cv.width = 64; cv.height = 64;
   const c2d = cv.getContext('2d');
-  c2d.fillStyle = '#4a0a02';
+  c2d.fillStyle = '#1a0603';
   c2d.fillRect(0, 0, 64, 64);
-  const r = mulberry32(7);
-  const colors = ['#ff5a1a', '#ff8a2a', '#ffcf4a', '#c22a0a'];
-  for (let i = 0; i < 26; i++) {
-    c2d.fillStyle = colors[Math.floor(r() * colors.length)];
-    c2d.globalAlpha = 0.6 + r() * 0.4;
-    const x = r() * 64, y = r() * 64, rad = 3 + r() * 7;
+  const r = mulberry32(seed || 7);
+  const hot = ['#ff6a1a', '#ff9a2a', '#ffd24a', '#d8380a'];
+  // glowing veins (irregular cracks)
+  for (let v = 0; v < 5; v++) {
+    c2d.strokeStyle = hot[Math.floor(r() * hot.length)];
+    c2d.lineWidth = 1.5 + r() * 2.5;
+    c2d.globalAlpha = 0.7 + r() * 0.3;
+    c2d.beginPath();
+    let vx = r() * 64, vy = 0;
+    c2d.moveTo(vx, vy);
+    while (vy < 64) { vx += (r() - 0.5) * 22; vy += 10 + r() * 10; c2d.lineTo(vx, vy); }
+    c2d.stroke();
+  }
+  // molten blobs/bubbles
+  for (let i = 0; i < 20; i++) {
+    c2d.fillStyle = hot[Math.floor(r() * hot.length)];
+    c2d.globalAlpha = 0.55 + r() * 0.4;
+    const x = r() * 64, y = r() * 64, rad = 2 + r() * 5;
     c2d.beginPath(); c2d.arc(x, y, rad, 0, Math.PI * 2); c2d.fill();
   }
   const tex = new THREE.CanvasTexture(cv);
@@ -1009,9 +1036,19 @@ function lavaTexture() {
   tex.needsUpdate = true;
   return tex;
 }
-const LAVA_MAT = () => new THREE.MeshStandardMaterial({
-  map: lavaTexture(), emissive: 0xff5a1a, emissiveIntensity: 0.9, roughness: 0.6, metalness: 0,
-});
+
+// Tracked so the render loop can scroll the texture (flowing/falling) and pulse the glow
+// (bubbling) every frame — cleared and rebuilt along with the rest of the level.
+const lavaMaterials = [];
+function lavaMat(mode) {
+  const tex = lavaTexture(Math.floor(Math.random() * 99999));
+  tex.repeat.set(1, mode === 'fall' ? 2.5 : 1.4);
+  const mat = new THREE.MeshStandardMaterial({
+    map: tex, emissive: 0xff5a1a, emissiveIntensity: 1.0, roughness: 0.55, metalness: 0,
+  });
+  lavaMaterials.push({ mat, tex, mode, phase: Math.random() * Math.PI * 2 });
+  return mat;
+}
 
 function buildHazardMesh(hz) {
   const hWorld = hz.h * WORLD_SCALE;
@@ -1028,7 +1065,7 @@ function buildHazardMesh(hz) {
     const flankFrom = hz.centerGap / 2;
     for (const side of [-1, 1]) {
       const flankW = half - flankFrom;
-      const pool = new THREE.Mesh(new THREE.PlaneGeometry(hz.w * WORLD_SCALE, flankW), LAVA_MAT());
+      const pool = new THREE.Mesh(new THREE.PlaneGeometry(hz.w * WORLD_SCALE, flankW), lavaMat('pool'));
       pool.rotation.x = -Math.PI / 2;
       pool.position.set(cx, 0.03, side * (flankFrom + flankW / 2));
       levelGroup.add(pool);
@@ -1037,17 +1074,27 @@ function buildHazardMesh(hz) {
       glow.position.set(cx, 0.04, side * (flankFrom + flankW / 2));
       levelGroup.add(glow);
     }
-  } else { // gapwall — a lavafall curtain with a gap you have to strafe into
+  } else { // gapwall — one solid, continuous lavafall curtain on each side of the gap
     const cx = x3(hz.x + hz.w / 2);
     const half = strafeLimitWorld();
-    const stripW = 0.6;
-    for (let z = -half; z < half; z += stripW) {
-      if (Math.abs(z + stripW / 2 - hz.gapCenter) < hz.gapWidth / 2) continue;
-      const fall = new THREE.Mesh(new THREE.PlaneGeometry(stripW * 0.92, hWorld), LAVA_MAT());
-      fall.position.set(cx, hWorld / 2, z + stripW / 2);
+    const gapFrom = hz.gapCenter - hz.gapWidth / 2;
+    const gapTo = hz.gapCenter + hz.gapWidth / 2;
+    const spans = [[-half, gapFrom], [gapTo, half]];
+    for (const [z0, z1] of spans) {
+      const spanW = z1 - z0;
+      if (spanW <= 0.05) continue;
+      const mat = lavaMat('fall');
+      mat.map.repeat.set(Math.max(1, spanW / 0.6), mat.map.repeat.y);
+      // PlaneGeometry's width runs along local X by default, same axis as the direction of
+      // travel — rotated 90° around Y here so its width actually spans Z (across the path,
+      // facing the player head-on) instead of lying edge-on to them.
+      const fall = new THREE.Mesh(new THREE.PlaneGeometry(spanW, hWorld), mat);
+      fall.rotation.y = Math.PI / 2;
+      fall.position.set(cx, hWorld / 2, (z0 + z1) / 2);
       levelGroup.add(fall);
-      const backFall = fall.clone();
-      backFall.rotation.y = Math.PI;
+      const backFall = new THREE.Mesh(new THREE.PlaneGeometry(spanW, hWorld), mat);
+      backFall.rotation.y = -Math.PI / 2;
+      backFall.position.copy(fall.position);
       levelGroup.add(backFall);
     }
     const marker = new THREE.Mesh(new THREE.BoxGeometry(0.08, hWorld, hz.gapWidth), glowMat('#5df5ff', 0.8));
@@ -1565,6 +1612,18 @@ function render() {
 
   for (const a of landmarkAnimated) {
     a.mesh.position[a.axis] = a.base + Math.sin(G.frame * a.speed + a.phase) * a.amp;
+  }
+
+  // Lava: the texture scrolls (falling curtains scroll fast and straight down; pools drift
+  // slower, more like a simmering surface), and the glow pulses to read as bubbling.
+  for (const l of lavaMaterials) {
+    if (l.mode === 'fall') {
+      l.tex.offset.y = (l.tex.offset.y + 0.045) % 1;
+    } else {
+      l.tex.offset.y = (l.tex.offset.y + 0.006) % 1;
+      l.tex.offset.x = (l.tex.offset.x + 0.003) % 1;
+    }
+    l.mat.emissiveIntensity = 0.75 + Math.sin(G.frame * 0.09 + l.phase) * 0.35;
   }
 
   // Billboards change "channel" every couple of seconds — cheap since it's a handful of small canvases.
