@@ -583,6 +583,8 @@ function update() {
     const withinZ = plat.zw ? Math.abs(p.z) < plat.zw / 2 : true;
     const feetY = p.y + p.h;
     if (withinX && withinZ && feetY > plat.y + 2) respawnPlayer(p, lvl);
+    // lava pools beside the block: touching down in them sends you back
+    if (withinX && !withinZ && feetY > lvl.groundY - 4) respawnPlayer(p, lvl);
   }
 
   if (p.onGround && p.x + p.w / 2 >= lvl.goalX) clearDistrict();
@@ -703,6 +705,7 @@ function clearLevelGroup() {
   liveScreens.length = 0;
   landmarkAnimated.length = 0;
   lavaMaterials.length = 0;
+  lavaFalls.length = 0;
 }
 
 function glowMat(hex, intensity) {
@@ -955,6 +958,22 @@ function buildPlatformMesh(plat, theme) {
     scene_syncPlatform(group, plat);
     plat.mesh = group;
     levelGroup.add(group);
+
+    // Lava pools beside the block, out to the street edge, so the only way past is up and over.
+    const cx = x3(plat.x + plat.w / 2);
+    const half = PLATFORM_DEPTH / 2;
+    const flankW = half - zw / 2;
+    for (const side of [-1, 1]) {
+      const zMid = side * (zw / 2 + flankW / 2);
+      const pool = new THREE.Mesh(new THREE.PlaneGeometry(w, flankW), lavaMat('pool'));
+      pool.rotation.x = -Math.PI / 2;
+      pool.position.set(cx, 0.03, zMid);
+      levelGroup.add(pool);
+      const glow = new THREE.Mesh(new THREE.PlaneGeometry(w, flankW), glowMat('#ff5a1a', 0.35));
+      glow.rotation.x = -Math.PI / 2;
+      glow.position.set(cx, 0.04, zMid);
+      levelGroup.add(glow);
+    }
     return;
   }
 
@@ -1037,14 +1056,58 @@ function lavaTexture(seed) {
   return tex;
 }
 
+// Falling lava gets long vertical streaks of molten rock instead of the pool's blobby crust,
+// so the downward scroll reads as a pour rather than a sliding wallpaper.
+function lavafallTexture(seed) {
+  const cv = document.createElement('canvas');
+  cv.width = 64; cv.height = 128;
+  const c2d = cv.getContext('2d');
+  c2d.fillStyle = '#2a0903';
+  c2d.fillRect(0, 0, 64, 128);
+  const r = mulberry32(seed || 11);
+  const hot = ['#ff6a1a', '#ff9a2a', '#ffd24a', '#d8380a', '#ff4a10'];
+  for (let s = 0; s < 18; s++) {
+    c2d.strokeStyle = hot[Math.floor(r() * hot.length)];
+    c2d.lineWidth = 1.5 + r() * 5;
+    c2d.globalAlpha = 0.45 + r() * 0.5;
+    const x0 = r() * 64, wob = 1 + r() * 3, freq = 0.04 + r() * 0.05, ph = r() * 6.28;
+    // drawn at x and x±64 so streaks crossing the edge stay seamless when the texture tiles
+    for (const off of [-64, 0, 64]) {
+      c2d.beginPath();
+      for (let y = 0; y <= 128; y += 4) {
+        const x = x0 + off + Math.sin(y * freq + ph) * wob;
+        if (y === 0) c2d.moveTo(x, y); else c2d.lineTo(x, y);
+      }
+      c2d.stroke();
+    }
+  }
+  // bright drips riding the flow
+  for (let i = 0; i < 14; i++) {
+    c2d.fillStyle = r() < 0.5 ? '#ffe27a' : '#ffb03a';
+    c2d.globalAlpha = 0.6 + r() * 0.4;
+    const x = r() * 64, y = r() * 128;
+    c2d.beginPath(); c2d.ellipse(x, y, 1.2 + r() * 1.5, 3 + r() * 6, 0, 0, Math.PI * 2); c2d.fill();
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+// Lavafall curtains whose vertices ripple every frame, so the sheet sways and bulges like a
+// real pour instead of standing there as a flat ruler-straight panel.
+const lavaFalls = [];
+
 // Tracked so the render loop can scroll the texture (flowing/falling) and pulse the glow
 // (bubbling) every frame — cleared and rebuilt along with the rest of the level.
 const lavaMaterials = [];
 function lavaMat(mode) {
-  const tex = lavaTexture(Math.floor(Math.random() * 99999));
-  tex.repeat.set(1, mode === 'fall' ? 2.5 : 1.4);
+  const seed = Math.floor(Math.random() * 99999);
+  const tex = mode === 'fall' ? lavafallTexture(seed) : lavaTexture(seed);
+  tex.repeat.set(1, mode === 'fall' ? 1.2 : 1.4);
   const mat = new THREE.MeshStandardMaterial({
     map: tex, emissive: 0xff5a1a, emissiveIntensity: 1.0, roughness: 0.55, metalness: 0,
+    side: mode === 'fall' ? THREE.DoubleSide : THREE.FrontSide,
   });
   lavaMaterials.push({ mat, tex, mode, phase: Math.random() * Math.PI * 2 });
   return mat;
@@ -1083,19 +1146,37 @@ function buildHazardMesh(hz) {
     for (const [z0, z1] of spans) {
       const spanW = z1 - z0;
       if (spanW <= 0.05) continue;
+      const zMid = (z0 + z1) / 2;
       const mat = lavaMat('fall');
-      mat.map.repeat.set(Math.max(1, spanW / 0.6), mat.map.repeat.y);
-      // PlaneGeometry's width runs along local X by default, same axis as the direction of
-      // travel — rotated 90° around Y here so its width actually spans Z (across the path,
-      // facing the player head-on) instead of lying edge-on to them.
-      const fall = new THREE.Mesh(new THREE.PlaneGeometry(spanW, hWorld), mat);
+      mat.map.repeat.set(Math.max(1, spanW / 1.2), mat.map.repeat.y);
+      // Subdivided so the render loop can ripple it. PlaneGeometry's width runs along local X by
+      // default, same axis as the direction of travel — rotated 90° around Y here so its width
+      // actually spans Z (across the path, facing the player head-on). Double-sided material,
+      // so one sheet reads from both the approach and after you pass through the gap.
+      const geo = new THREE.PlaneGeometry(spanW, hWorld, Math.max(4, Math.ceil(spanW * 5)), 28);
+      const fall = new THREE.Mesh(geo, mat);
       fall.rotation.y = Math.PI / 2;
-      fall.position.set(cx, hWorld / 2, (z0 + z1) / 2);
+      fall.position.set(cx, hWorld / 2, zMid);
       levelGroup.add(fall);
-      const backFall = new THREE.Mesh(new THREE.PlaneGeometry(spanW, hWorld), mat);
-      backFall.rotation.y = -Math.PI / 2;
-      backFall.position.copy(fall.position);
-      levelGroup.add(backFall);
+      lavaFalls.push({ geo, base: Float32Array.from(geo.attributes.position.array), h: hWorld, phase: Math.random() * 6.28 });
+
+      // Rocky lip the lava pours over, so the curtain comes from somewhere.
+      const lip = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.45, spanW + 0.2),
+        new THREE.MeshStandardMaterial({ color: 0x3a2418, roughness: 0.95 }));
+      lip.position.set(cx, hWorld + 0.1, zMid);
+      levelGroup.add(lip);
+
+      // Molten pool it lands in, covering the whole deadly footprint — the old curtain sat in
+      // the middle of a kill zone you couldn't see.
+      const poolLen = hz.w * WORLD_SCALE;
+      const pool = new THREE.Mesh(new THREE.PlaneGeometry(poolLen, spanW), lavaMat('pool'));
+      pool.rotation.x = -Math.PI / 2;
+      pool.position.set(cx, 0.03, zMid);
+      levelGroup.add(pool);
+      const splash = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(poolLen, 1.6), spanW), glowMat('#ffb03a', 0.9));
+      splash.rotation.x = -Math.PI / 2;
+      splash.position.set(cx, 0.04, zMid);
+      levelGroup.add(splash);
     }
     const marker = new THREE.Mesh(new THREE.BoxGeometry(0.08, hWorld, hz.gapWidth), glowMat('#5df5ff', 0.8));
     marker.position.set(cx, hWorld / 2, hz.gapCenter);
@@ -1624,6 +1705,20 @@ function render() {
       l.tex.offset.x = (l.tex.offset.x + 0.003) % 1;
     }
     l.mat.emissiveIntensity = 0.75 + Math.sin(G.frame * 0.09 + l.phase) * 0.35;
+  }
+
+  // Lavafalls: rolling ripples that grow toward the bottom, where the pour is heaviest.
+  for (const f of lavaFalls) {
+    const arr = f.geo.attributes.position.array, b = f.base, t = G.frame;
+    for (let i = 0; i < arr.length; i += 3) {
+      const x = b[i], y = b[i + 1];
+      const down = (f.h / 2 - y) / f.h; // 0 at the lip, 1 at the ground
+      const amp = 0.04 + down * down * 0.22;
+      arr[i + 2] = amp * (Math.sin(x * 3.1 + y * 0.8 - t * 0.12 + f.phase)
+        + 0.6 * Math.sin(x * 7.3 - y * 2.1 - t * 0.21 + f.phase * 1.7));
+    }
+    f.geo.attributes.position.needsUpdate = true;
+    f.geo.computeVertexNormals();
   }
 
   // Billboards change "channel" every couple of seconds — cheap since it's a handful of small canvases.
