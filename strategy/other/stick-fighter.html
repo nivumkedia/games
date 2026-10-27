@@ -68,9 +68,6 @@
         animation:fade .6s 1.1s both;
     }
 
-    #homeScreen { background:#fff; }
-    #homeScreen h2 { font-size:42px; color:#1f2a36; }
-    #homeScreen p { margin-top:10px; color:#4d6d84; font-size:18px; }
 
     @keyframes drop { from { opacity:0; transform:translateY(-80px) rotate(-3deg) scale(1.2); } to { opacity:1; transform:rotate(-3deg); } }
     @keyframes fade { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:none; } }
@@ -87,10 +84,7 @@
     <div id="hint">or press Enter</div>
 </div>
 
-<div id="homeScreen" class="screen hidden">
-    <h2>Home</h2>
-    <p>The home page comes next.</p>
-</div>
+<div id="homeScreen" class="screen hidden"></div>
 
 <script>
 const cv = document.getElementById('bg');
@@ -151,7 +145,7 @@ function pagoda(cx, baseY, s) {
 // legs half the height, arms reaching mid-thigh). Poses are joint angles in degrees:
 // torso is measured from straight up, limbs from straight down; positive = toward the
 // direction the fighter faces.
-const BONE = { thigh: 46, shin: 44, torso: 60, neck: 7, head: 11, upper: 31, fore: 29 };
+const BONE = { thigh: 46, shin: 44, torso: 60, neck: 6, head: 12.5, upper: 31, fore: 29 };
 const POSES = {
     guard:   { torso: 6,   tilt: 4,   fThigh: 30,  fShin: 2,    bThigh: -14, bShin: -38,
                fUpper: 38, fFore: 162, bUpper: 22, bFore: 148 },
@@ -216,7 +210,7 @@ function drawFighter(x, hipY, s, dir, color, pose, bob, phase, alpha = 1) {
     ctx.translate(x, hipY);
     ctx.scale(dir, 1);
     ctx.strokeStyle = color; ctx.fillStyle = color;
-    ctx.lineWidth = 6 * s; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.lineWidth = 10 * s; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     const neck = P('neck'), head = P('head'), sh = P('sh');
     ctx.beginPath();
     ctx.moveTo(...P('bf')); ctx.lineTo(...P('bk')); ctx.lineTo(...P('hip'));
@@ -230,7 +224,7 @@ function drawFighter(x, hipY, s, dir, color, pose, bob, phase, alpha = 1) {
     const ang = Math.atan2(head[1] - neck[1], head[0] - neck[0]);
     const flap = Math.sin(t * 0.12 + phase) * 4 * s;
     ctx.translate(head[0], head[1]); ctx.rotate(ang + Math.PI / 2);
-    ctx.lineWidth = 3 * s;
+    ctx.lineWidth = 4.5 * s;
     ctx.beginPath();
     ctx.moveTo(-10 * s, -3 * s);
     ctx.quadraticCurveTo(-22 * s, -6 * s + flap, -33 * s, 2 * s + flap);
@@ -364,7 +358,7 @@ function stepIntro(ground, s, L) {
     }
     if (introT === IMPACT + 16) burst(L.kickX - 26 * s, ground - 4, ['#d6b07c', '#e8c99a'], 10, 2 * s, 0.12);
     if (V && introT > IMPACT) stepVictim(ground, s, L);
-    if (introT === 150) showHome();
+    if (introT === 150) homeT = 0;
 }
 
 function drawImpact(s) {
@@ -412,9 +406,12 @@ function draw() {
     const s = Math.max(0.9, Math.min(1.8, H / 520));
     const L = layout(ground, s);
     L.camMax = W * 0.14;
-    stepIntro(ground, s, L);
-    // camera drifts right to follow the run and leave room for the knockdown
-    camX = introT < 0 ? 0 : L.camMax * easeInOut(clamp01((introT - DIP) / (IMPACT + 24 - DIP)));
+    if (homeT >= 0) { homeT++; camX = 0; }
+    else {
+        stepIntro(ground, s, L);
+        // camera drifts right to follow the run and leave room for the knockdown
+        camX = introT < 0 ? 0 : L.camMax * easeInOut(clamp01((introT - DIP) / (IMPACT + 24 - DIP)));
+    }
 
     hills(H * 0.62, 120, '#b4d6e6', 1.3, camX * 0.25);
     pagoda(W * 0.16 - camX * 0.4, H * 0.6, Math.min(1.2, W / 1200));
@@ -428,6 +425,135 @@ function draw() {
         ctx.beginPath(); ctx.moveTo(x, ground + 6); ctx.lineTo(x - 60, H); ctx.stroke();
     }
 
+    if (homeT >= 0) drawHome(ground, s);
+    else drawIntroFighters(ground, s, L);
+    ctx.restore();
+
+    // cherry petals
+    ctx.fillStyle = 'rgba(244,143,177,0.85)';
+    for (const p of petals) {
+        p.y += p.v; p.w += 0.03;
+        if (p.y > 1.05) { p.y = -0.05; p.x = Math.random(); }
+        ctx.beginPath();
+        ctx.ellipse(p.x * W + Math.sin(p.w) * 20, p.y * H, p.r, p.r * 0.6, p.w, 0, 7);
+        ctx.fill();
+    }
+
+    // white-out that clears the intro, then fades away to reveal the home page
+    const white = homeT >= 0 ? 1 - homeT / 30 : (introT - 118) / 30;
+    if (white > 0) {
+        ctx.fillStyle = `rgba(255,255,255,${clamp01(white)})`;
+        ctx.fillRect(0, 0, W, H);
+    }
+    requestAnimationFrame(draw);
+}
+
+// ---------- Home page: your fighter in the middle, the 4 starting moves around him ----------
+let homeT = -1;
+const MOVE_POSES = {
+    highPunch: { torso: 12,  tilt: 0,   fThigh: 34,  fShin: 4,   bThigh: -26, bShin: -34,
+                 fUpper: 98, fFore: 96,  bUpper: 30, bFore: 156 },
+    lowPunch:  { torso: 30,  tilt: -10, fThigh: 58,  fShin: -4,  bThigh: -30, bShin: -62,
+                 fUpper: 64, fFore: 66,  bUpper: 26, bFore: 150 },
+    highKick:  { torso: -32, tilt: 22,  fThigh: 128, fShin: 126, bThigh: -6,  bShin: -4,
+                 fUpper: 62, fFore: 144, bUpper: -64, bFore: -30 },
+    lowKick:   { torso: -8,  tilt: 6,   fThigh: 72,  fShin: 78,  bThigh: -10, bShin: -10,
+                 fUpper: 40, fFore: 160, bUpper: 22, bFore: 146 }
+};
+const MOVES = [
+    { id: 'highPunch', label: 'HIGH PUNCH', side: -1, row: 0 },
+    { id: 'lowPunch',  label: 'LOW PUNCH',  side: -1, row: 1 },
+    { id: 'highKick',  label: 'HIGH KICK',  side: 1,  row: 0 },
+    { id: 'lowKick',   label: 'LOW KICK',   side: 1,  row: 1 }
+];
+let mouse = { x: -1, y: -1 }, hoverMove = null, homeMove = null, homeMoveT = 0;
+
+function moveCircles(ground, s) {
+    const r = 46 * s;
+    return MOVES.map((m, i) => ({
+        ...m, i, r,
+        x: W / 2 + m.side * Math.min(W * 0.3, 250 * s),
+        y: ground - (m.row === 0 ? 205 : 80) * s
+    }));
+}
+
+// fits a pose inside a circle by its own bounding box
+function drawMoveIcon(c, pop, hover) {
+    const J = solve(MOVE_POSES[c.id]);
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const k in J) {
+        if (k === 'low') continue;
+        const pad = k === 'head' ? BONE.head : 5;
+        x0 = Math.min(x0, J[k][0] - pad); x1 = Math.max(x1, J[k][0] + pad);
+        y0 = Math.min(y0, J[k][1] - pad); y1 = Math.max(y1, J[k][1] + pad);
+    }
+    const R = c.r * pop * (hover ? 1.08 : 1);
+    const k = (R * 1.45) / Math.max(x1 - x0, y1 - y0);
+    ctx.save();
+    if (hover) { ctx.shadowColor = 'rgba(255,200,60,0.85)'; ctx.shadowBlur = 22; }
+    ctx.fillStyle = '#111';
+    ctx.beginPath(); ctx.arc(c.x, c.y, R, 0, 7); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = 5 * (R / 46);
+    const gold = ctx.createLinearGradient(c.x, c.y - R, c.x, c.y + R);
+    gold.addColorStop(0, '#ffe58a'); gold.addColorStop(0.5, '#d4a017'); gold.addColorStop(1, '#a87708');
+    ctx.strokeStyle = gold;
+    ctx.stroke();
+    ctx.beginPath(); ctx.arc(c.x, c.y, R - 7 * (R / 46), 0, 7);
+    ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(212,160,23,0.55)'; ctx.stroke();
+    drawFighter(c.x - (x0 + x1) / 2 * k, c.y - (y0 + y1) / 2 * k, k, 1, '#f5c542', MOVE_POSES[c.id], 0, c.i);
+    ctx.restore();
+
+    ctx.save();
+    ctx.globalAlpha = pop;
+    ctx.font = `800 ${Math.round(13 * c.r / 46)}px Segoe UI, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.letterSpacing = '1px';
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.strokeText(c.label, c.x, c.y + c.r + 20 * (c.r / 46));
+    ctx.fillStyle = '#1f2a36';
+    ctx.fillText(c.label, c.x, c.y + c.r + 20 * (c.r / 46));
+    ctx.restore();
+}
+
+function drawHome(ground, s) {
+    const hs = s * 1.45, x = W / 2;
+    // round training mat under the fighter
+    ctx.fillStyle = '#c9a36f';
+    ctx.beginPath(); ctx.ellipse(x, ground + 16 * hs, 120 * hs, 22 * hs, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#f3dfb8';
+    ctx.beginPath(); ctx.ellipse(x, ground + 12 * hs, 112 * hs, 18 * hs, 0, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#c62828'; ctx.lineWidth = 3 * hs;
+    ctx.beginPath(); ctx.ellipse(x, ground + 12 * hs, 92 * hs, 13 * hs, 0, 0, 7); ctx.stroke();
+    const floorY = ground + 12 * hs;
+    ctx.fillStyle = 'rgba(120,85,40,0.25)';
+    ctx.beginPath(); ctx.ellipse(x, floorY, 44 * hs, 7 * hs, 0, 0, 7); ctx.fill();
+
+    // clicking a move circle makes your fighter show it: snap out, hold, return to guard
+    let pose = POSES.guard, bob = Math.sin(t * 0.06) * 3 * hs;
+    if (homeMove) {
+        homeMoveT++;
+        const n = homeMoveT, strike = MOVE_POSES[homeMove];
+        pose = n < 6 ? blend(POSES.guard, strike, easeOut(n / 6))
+             : n < 20 ? strike
+             : blend(strike, POSES.guard, easeInOut((n - 20) / 12));
+        bob = 0;
+        if (n >= 32) homeMove = null;
+    }
+    drawFighter(x, floorY - standHeight(pose, hs), hs, 1, '#1565c0', pose, bob, 0);
+
+    hoverMove = null;
+    for (const c of moveCircles(ground, s)) {
+        const pop = easeOut((homeT - 24 - c.i * 6) / 12);
+        if (pop <= 0) continue;
+        const hover = Math.hypot(mouse.x - c.x, mouse.y - c.y) < c.r;
+        if (hover && pop >= 1) hoverMove = c.id;
+        drawMoveIcon(c, pop, hover);
+    }
+    cv.style.cursor = hoverMove ? 'pointer' : 'default';
+}
+
+function drawIntroFighters(ground, s, L) {
     ctx.save();
     ctx.translate(-camX, 0);
     const A = attackerState(ground, s, L), B = victimState(ground, s, L);
@@ -458,24 +584,6 @@ function draw() {
     ctx.globalAlpha = 1;
     drawImpact(s);
     ctx.restore();
-    ctx.restore();
-
-    // cherry petals
-    ctx.fillStyle = 'rgba(244,143,177,0.85)';
-    for (const p of petals) {
-        p.y += p.v; p.w += 0.03;
-        if (p.y > 1.05) { p.y = -0.05; p.x = Math.random(); }
-        ctx.beginPath();
-        ctx.ellipse(p.x * W + Math.sin(p.w) * 20, p.y * H, p.r, p.r * 0.6, p.w, 0, 7);
-        ctx.fill();
-    }
-
-    // white-out that clears the scene before the home page
-    if (introT > 118) {
-        ctx.fillStyle = `rgba(255,255,255,${clamp01((introT - 118) / 30)})`;
-        ctx.fillRect(0, 0, W, H);
-    }
-    requestAnimationFrame(draw);
 }
 draw();
 
@@ -486,12 +594,14 @@ function play() {
     startScreen.classList.add('hidden');
     introT = 0;
 }
-function showHome() {
-    homeScreen.classList.remove('hidden');
-}
 document.getElementById('playBtn').addEventListener('click', play);
 addEventListener('keydown', e => {
     if (e.code === 'Enter' && introT < 0) play();
+});
+cv.addEventListener('mousemove', e => { mouse = { x: e.clientX, y: e.clientY }; });
+cv.addEventListener('mouseleave', () => { mouse = { x: -1, y: -1 }; });
+cv.addEventListener('click', () => {
+    if (hoverMove) { homeMove = hoverMove; homeMoveT = 0; }
 });
 </script>
 </body>

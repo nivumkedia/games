@@ -83,18 +83,18 @@
     }
     #help-btn {
         position:fixed;
-        bottom:14px;
+        top:82px;
         right:14px;
-        background:rgba(255,255,255,0.9);
-        border:1px solid rgba(0,0,0,0.1);
-        border-radius:20px;
-        padding:8px 16px;
-        font:700 0.85em 'Segoe UI', Tahoma, sans-serif;
-        color:#1565c0;
+        background:#1565c0;
+        border:none;
+        border-radius:12px;
+        padding:9px 18px;
+        font:700 0.9em 'Segoe UI', Tahoma, sans-serif;
+        color:#fff;
         cursor:pointer;
-        box-shadow:0 4px 14px rgba(0,0,0,0.08);
+        box-shadow:0 4px 14px rgba(21,101,192,0.3);
     }
-    #help-btn:hover { background:#fff; }
+    #help-btn:hover { background:#1976d2; }
     #tutorial {
         position:fixed;
         inset:0;
@@ -185,7 +185,7 @@
     <div id="progress-bar-bg"><div id="progress-bar-fill"></div></div>
 </div>
 <div id="title-badge">TECH FIGHTER</div>
-<button id="help-btn">? How to Play</button>
+<button id="help-btn">📘 Tutorial</button>
 
 <div id="tutorial">
     <div id="tut-card">
@@ -632,6 +632,32 @@
         });
     }
 
+    // 13. shifter — a stationary block-combo enemy whose block changes
+    // every few seconds, cycling through three. Each shift wipes any
+    // half-finished combo (no penalty), so you either fire off a full
+    // 3-key combo for the current block fast, or wait for the block you
+    // planned for.
+    {
+        const b = buildings[13];
+        const shiftCycle = ['zx', 'as', 'xa'];
+        enemies.push({
+            type: 'shifter',
+            x: b.x + b.width * 0.5 - 18,
+            y: b.y - 66,
+            w: 36, h: 66,
+            alive: true,
+            comboStep: 0,
+            blocks: [shiftCycle[0]],
+            shiftCycle,
+            shiftIndex: 0,
+            shiftInterval: 3.5,
+            shiftTimer: 3.5,
+            shiftFlash: 0,
+            hitFlash: 0,
+            deathTimer: 0
+        });
+    }
+
     // ---------- player: humanoid robot ----------
     const player = {
         x: buildings[12].x + 10,
@@ -687,6 +713,7 @@
             title: 'Tricky Enemies',
             body: `<ul>
                     <li><b>Head swingers</b> wind up a big swing when you get close. Duck it within about a second or it hits you. Backing away mid-windup also dodges it. What you do after the duck, and how fast, depends on the enemy.</li>
+                    <li><b>Shifters</b> change their block every few seconds, and a change wipes any combo you've started. Be quick, or be patient.</li>
                     <li><b>Openers:</b> some enemies only accept one specific first move.</li>
                     <li><span class="tut-tag">RESISTS W</span> means that key can't be the final blow. It still lands, so finish with something else. Some enemies won't go down until a certain move has landed somewhere in the combo.</li>
                     <li><b>Movers</b> keep walking or charge at you. Stay in range while you fight.</li>
@@ -700,7 +727,7 @@
                     <li>When an enemy introduces a new key, it's probably the key that enemy wants.</li>
                     <li>Losing costs nothing. Experiment.</li>
                 </ul>
-                <p>Open this again anytime with <b>? How to Play</b> or <kbd>H</kbd>.</p>`
+                <p>Open this again anytime with the <b>Tutorial</b> button or <kbd>H</kbd>.</p>`
         }
     ];
     const TUTORIAL_SEEN_KEY = 'techFighterTutorialSeen';
@@ -713,7 +740,7 @@
     function renderTutorial(){
         const page = TUTORIAL_PAGES[tutorialPage];
         const lastPage = tutorialPage === TUTORIAL_PAGES.length - 1;
-        document.getElementById('tut-step').textContent = 'How to Play · ' + (tutorialPage + 1) + ' of ' + TUTORIAL_PAGES.length;
+        document.getElementById('tut-step').textContent = 'Tutorial · ' + (tutorialPage + 1) + ' of ' + TUTORIAL_PAGES.length;
         document.getElementById('tut-title').textContent = page.title;
         document.getElementById('tut-body').innerHTML = page.body;
         document.getElementById('tut-dots').innerHTML = TUTORIAL_PAGES
@@ -863,6 +890,23 @@
                 if (e.comboWindowTimer <= 0){
                     e.comboWindowTimer = 0;
                     if (!(deathSequence && deathSequence.phase)) startPunishSequence(e);
+                }
+            }
+
+            // shifter: swaps to the next block in its cycle on a timer, and
+            // a shift wipes whatever combo you had going against it
+            if (e.shiftCycle && e.alive){
+                if (e.shiftFlash > 0) e.shiftFlash = Math.max(0, e.shiftFlash - dt);
+                e.shiftTimer -= dt;
+                if (e.shiftTimer <= 0){
+                    e.shiftIndex = (e.shiftIndex + 1) % e.shiftCycle.length;
+                    e.blocks = [e.shiftCycle[e.shiftIndex]];
+                    e.shiftTimer = e.shiftInterval;
+                    e.shiftFlash = 0.4;
+                    e.pressedKeys = [];
+                    e.comboStep = 0;
+                    e.comboWindowTimer = 0;
+                    spawnEffect(e.x + e.w / 2, e.y - 10, '#4fa3ff', 0.35);
                 }
             }
 
@@ -2054,11 +2098,21 @@
         roundRect(cx2 - boxW / 2, topY - boxH, boxW, boxH, 6);
         ctx.fillStyle = 'rgba(20,10,10,0.75)';
         ctx.fill();
-        ctx.strokeStyle = '#ff5a3d';
-        ctx.lineWidth = 1.2;
+        // a shifter's tag flashes blue the moment its block changes
+        const shifted = e.shiftFlash > 0;
+        ctx.strokeStyle = shifted ? '#4fa3ff' : '#ff5a3d';
+        ctx.lineWidth = shifted ? 2.4 : 1.2;
         ctx.stroke();
-        ctx.fillStyle = '#ffb3a0';
+        ctx.fillStyle = shifted ? '#cfe6ff' : '#ffb3a0';
         ctx.fillText(text, cx2, topY - boxH / 2 + 4);
+        // ...and drains a little bar until the next change
+        if (e.shiftCycle){
+            const frac = Math.max(0, e.shiftTimer) / e.shiftInterval;
+            ctx.fillStyle = 'rgba(20,10,10,0.35)';
+            ctx.fillRect(cx2 - boxW / 2 + 4, topY + 3, boxW - 8, 3);
+            ctx.fillStyle = '#4fa3ff';
+            ctx.fillRect(cx2 - boxW / 2 + 4, topY + 3, (boxW - 8) * frac, 3);
+        }
         ctx.restore();
     }
 

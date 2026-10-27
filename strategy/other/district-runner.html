@@ -706,6 +706,8 @@ function clearLevelGroup() {
   landmarkAnimated.length = 0;
   lavaMaterials.length = 0;
   lavaFalls.length = 0;
+  lavaSurfaces.length = 0;
+  lavaBubbles.length = 0;
 }
 
 function glowMat(hex, intensity) {
@@ -965,14 +967,7 @@ function buildPlatformMesh(plat, theme) {
     const flankW = half - zw / 2;
     for (const side of [-1, 1]) {
       const zMid = side * (zw / 2 + flankW / 2);
-      const pool = new THREE.Mesh(new THREE.PlaneGeometry(w, flankW), lavaMat('pool'));
-      pool.rotation.x = -Math.PI / 2;
-      pool.position.set(cx, LAVA_Y, zMid);
-      levelGroup.add(pool);
-      const glow = new THREE.Mesh(new THREE.PlaneGeometry(w, flankW), lavaGlowMat('#ff5a1a', 0.3));
-      glow.rotation.x = -Math.PI / 2;
-      glow.position.set(cx, LAVA_Y + 0.01, zMid);
-      levelGroup.add(glow);
+      buildLavaPool(cx, zMid, w, flankW);
     }
     return;
   }
@@ -1106,6 +1101,70 @@ function lavaGlowMat(hex, opacity) {
   return new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending });
 }
 
+// A molten pool with real depth instead of a painted decal: a heaving, subdivided surface that
+// swells and rolls, ringed by lumps of cooled black rock, with crust plates drifting on top and
+// glowing bubbles that swell up out of it and pop.
+const lavaSurfaces = [];
+const lavaBubbles = [];
+const LAVA_SURFACE_Y = LAVA_Y + 0.12;
+const rockMat = new THREE.MeshStandardMaterial({ color: 0x1c1410, roughness: 1, flatShading: true });
+const crustMat = new THREE.MeshStandardMaterial({ color: 0x2a1610, emissive: 0x401004, emissiveIntensity: 0.6, roughness: 1, flatShading: true });
+const bubbleMat = new THREE.MeshStandardMaterial({ color: 0xffb03a, emissive: 0xff7a1a, emissiveIntensity: 1.6, roughness: 0.3 });
+function lumpyRock(size, r) {
+  const geo = new THREE.DodecahedronGeometry(size, 0);
+  const a = geo.attributes.position.array;
+  for (let i = 0; i < a.length; i += 3) {
+    const k = 0.75 + r() * 0.5;
+    a[i] *= k; a[i + 1] *= 0.55 + r() * 0.3; a[i + 2] *= k;
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+function buildLavaPool(cx, zMid, len, width) {
+  const r = mulberry32(Math.floor(Math.random() * 99999));
+  const geo = new THREE.PlaneGeometry(len, width, Math.max(6, Math.ceil(len * 3)), Math.max(4, Math.ceil(width * 3)));
+  const surface = new THREE.Mesh(geo, lavaMat('pool'));
+  surface.rotation.x = -Math.PI / 2;
+  surface.position.set(cx, LAVA_SURFACE_Y, zMid);
+  levelGroup.add(surface);
+  lavaSurfaces.push({ geo, base: Float32Array.from(geo.attributes.position.array), len, width, phase: r() * 6.28 });
+
+  // Cooled-rock rim along every edge, low enough not to hide the player.
+  const perim = 2 * (len + width);
+  const count = Math.ceil(perim / 0.35);
+  for (let i = 0; i < count; i++) {
+    let d = (i / count) * perim, x, z;
+    if (d < len) { x = d - len / 2; z = -width / 2; }
+    else if ((d -= len) < width) { x = len / 2; z = d - width / 2; }
+    else if ((d -= width) < len) { x = len / 2 - d; z = width / 2; }
+    else { d -= len; x = -len / 2; z = width / 2 - d; }
+    const rock = new THREE.Mesh(lumpyRock(0.16 + r() * 0.14, r), rockMat);
+    rock.position.set(cx + x + (r() - 0.5) * 0.12, LAVA_SURFACE_Y + 0.02, zMid + z + (r() - 0.5) * 0.12);
+    rock.rotation.y = r() * 6.28;
+    levelGroup.add(rock);
+  }
+
+  // Crust plates floating on the melt.
+  const plates = Math.ceil(len * width / 2.5);
+  for (let i = 0; i < plates; i++) {
+    const plate = new THREE.Mesh(lumpyRock(0.12 + r() * 0.16, r), crustMat);
+    plate.scale.y = 0.35;
+    plate.position.set(cx + (r() - 0.5) * len * 0.8, LAVA_SURFACE_Y + 0.03, zMid + (r() - 0.5) * width * 0.8);
+    levelGroup.add(plate);
+    landmarkAnimated.push({ mesh: plate, axis: 'y', base: plate.position.y, amp: 0.03, speed: 0.04 + r() * 0.03, phase: r() * 6.28 });
+  }
+
+  const bubbles = Math.ceil(len * width / 1.5);
+  for (let i = 0; i < bubbles; i++) {
+    const b = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 8), bubbleMat);
+    b.position.set(cx + (r() - 0.5) * len * 0.85, LAVA_SURFACE_Y, zMid + (r() - 0.5) * width * 0.85);
+    b.scale.setScalar(0.001);
+    levelGroup.add(b);
+    lavaBubbles.push({ mesh: b, t: Math.floor(r() * 120), life: 60 + Math.floor(r() * 80), size: 0.07 + r() * 0.1,
+      cx, zMid, len, width });
+  }
+}
+
 // Tracked so the render loop can scroll the texture (flowing/falling) and pulse the glow
 // (bubbling) every frame — cleared and rebuilt along with the rest of the level.
 const lavaMaterials = [];
@@ -1136,14 +1195,7 @@ function buildHazardMesh(hz) {
     const flankFrom = hz.centerGap / 2;
     for (const side of [-1, 1]) {
       const flankW = half - flankFrom;
-      const pool = new THREE.Mesh(new THREE.PlaneGeometry(hz.w * WORLD_SCALE, flankW), lavaMat('pool'));
-      pool.rotation.x = -Math.PI / 2;
-      pool.position.set(cx, LAVA_Y, side * (flankFrom + flankW / 2));
-      levelGroup.add(pool);
-      const glow = new THREE.Mesh(new THREE.PlaneGeometry(hz.w * WORLD_SCALE, flankW), lavaGlowMat('#ff5a1a', 0.3));
-      glow.rotation.x = -Math.PI / 2;
-      glow.position.set(cx, LAVA_Y + 0.01, side * (flankFrom + flankW / 2));
-      levelGroup.add(glow);
+      buildLavaPool(cx, side * (flankFrom + flankW / 2), hz.w * WORLD_SCALE, flankW);
     }
   } else { // gapwall — one solid, continuous lavafall curtain on each side of the gap
     const cx = x3(hz.x + hz.w / 2);
@@ -1177,13 +1229,10 @@ function buildHazardMesh(hz) {
       // Molten pool it lands in, covering the whole deadly footprint — the old curtain sat in
       // the middle of a kill zone you couldn't see.
       const poolLen = hz.w * WORLD_SCALE;
-      const pool = new THREE.Mesh(new THREE.PlaneGeometry(poolLen, spanW), lavaMat('pool'));
-      pool.rotation.x = -Math.PI / 2;
-      pool.position.set(cx, LAVA_Y, zMid);
-      levelGroup.add(pool);
+      buildLavaPool(cx, zMid, poolLen, spanW);
       const splash = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(poolLen, 1.6), spanW), lavaGlowMat('#ffb03a', 0.45));
       splash.rotation.x = -Math.PI / 2;
-      splash.position.set(cx, LAVA_Y + 0.01, zMid);
+      splash.position.set(cx, LAVA_Y + 0.2, zMid);
       levelGroup.add(splash);
     }
     const marker = new THREE.Mesh(new THREE.BoxGeometry(0.08, hWorld, hz.gapWidth), glowMat('#5df5ff', 0.8));
@@ -1727,6 +1776,33 @@ function render() {
     }
     f.geo.attributes.position.needsUpdate = true;
     f.geo.computeVertexNormals();
+  }
+
+  // Lava pools: the surface heaves in slow rolling swells.
+  for (const l of lavaSurfaces) {
+    const arr = l.geo.attributes.position.array, b = l.base, t = G.frame;
+    for (let i = 0; i < arr.length; i += 3) {
+      const x = b[i], y = b[i + 1];
+      // pinned flat at the edges so the surface meets the rock rim instead of floating off it
+      const edge = Math.min(1, (l.len / 2 - Math.abs(x)) * 3, (l.width / 2 - Math.abs(y)) * 3);
+      arr[i + 2] = edge * (0.06 * Math.sin(x * 2.2 + t * 0.05 + l.phase) * Math.cos(y * 2.7 - t * 0.04)
+        + 0.03 * Math.sin(x * 5.1 - y * 4.3 + t * 0.09 + l.phase));
+    }
+    l.geo.attributes.position.needsUpdate = true;
+    l.geo.computeVertexNormals();
+  }
+  // Bubbles swell up out of the melt, hang a moment, pop, then reappear somewhere else.
+  for (const bb of lavaBubbles) {
+    bb.t++;
+    if (bb.t >= bb.life) {
+      bb.t = 0;
+      bb.mesh.position.x = bb.cx + (Math.random() - 0.5) * bb.len * 0.85;
+      bb.mesh.position.z = bb.zMid + (Math.random() - 0.5) * bb.width * 0.85;
+    }
+    const k = bb.t / bb.life;
+    const grow = k < 0.8 ? k / 0.8 : 1 + (k - 0.8) * 2;
+    bb.mesh.scale.set(bb.size * grow, bb.size * grow * 0.7, bb.size * grow);
+    bb.mesh.visible = k < 0.92;
   }
 
   // Billboards change "channel" every couple of seconds — cheap since it's a handful of small canvases.
