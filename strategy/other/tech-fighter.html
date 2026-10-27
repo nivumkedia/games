@@ -81,6 +81,96 @@
         letter-spacing:0.02em;
         text-shadow:0 2px 0 rgba(255,255,255,0.6);
     }
+    #help-btn {
+        position:fixed;
+        bottom:14px;
+        right:14px;
+        background:rgba(255,255,255,0.9);
+        border:1px solid rgba(0,0,0,0.1);
+        border-radius:20px;
+        padding:8px 16px;
+        font:700 0.85em 'Segoe UI', Tahoma, sans-serif;
+        color:#1565c0;
+        cursor:pointer;
+        box-shadow:0 4px 14px rgba(0,0,0,0.08);
+    }
+    #help-btn:hover { background:#fff; }
+    #tutorial {
+        position:fixed;
+        inset:0;
+        display:none;
+        align-items:center;
+        justify-content:center;
+        background:rgba(191,228,255,0.7);
+        backdrop-filter:blur(3px);
+        z-index:10;
+    }
+    #tutorial.open { display:flex; }
+    #tut-card {
+        width:min(560px, 92vw);
+        background:#fff;
+        border-radius:18px;
+        padding:26px 30px 20px;
+        box-shadow:0 18px 50px rgba(21,101,192,0.22);
+        color:#2c3e50;
+    }
+    #tut-step {
+        font-size:0.72em;
+        font-weight:700;
+        letter-spacing:0.06em;
+        text-transform:uppercase;
+        color:#5b6b78;
+    }
+    #tut-card h2 { margin:4px 0 12px; color:#1c2b39; font-size:1.45em; }
+    #tut-body { font-size:0.95em; line-height:1.5; min-height:200px; }
+    #tut-body p { margin-bottom:10px; }
+    #tut-body ul { margin:0 0 10px 20px; }
+    #tut-body li { margin-bottom:6px; }
+    #tut-body kbd {
+        display:inline-block;
+        min-width:22px;
+        padding:1px 6px;
+        border:1px solid #c6d3df;
+        border-bottom-width:3px;
+        border-radius:6px;
+        background:#f4f8fc;
+        font:700 0.85em 'Segoe UI', Tahoma, sans-serif;
+        color:#1565c0;
+        text-align:center;
+    }
+    .tut-tag {
+        display:inline-block;
+        padding:1px 8px;
+        border:1px solid #ff5a3d;
+        border-radius:6px;
+        background:rgba(20,10,10,0.75);
+        color:#ffd0c4;
+        font:bold 0.75em sans-serif;
+    }
+    #tut-nav {
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        margin-top:16px;
+    }
+    #tut-dots span {
+        display:inline-block;
+        width:8px; height:8px;
+        margin-right:6px;
+        border-radius:50%;
+        background:#d5e2ee;
+    }
+    #tut-dots span.on { background:#1565c0; }
+    #tut-nav button {
+        border:none;
+        border-radius:10px;
+        padding:9px 18px;
+        font:700 0.9em 'Segoe UI', Tahoma, sans-serif;
+        cursor:pointer;
+    }
+    #tut-back { background:#eef3f8; color:#5b6b78; margin-right:8px; }
+    #tut-next { background:#1565c0; color:#fff; }
+    #tut-back:disabled { visibility:hidden; }
 </style>
 </head>
 <body>
@@ -95,6 +185,22 @@
     <div id="progress-bar-bg"><div id="progress-bar-fill"></div></div>
 </div>
 <div id="title-badge">TECH FIGHTER</div>
+<button id="help-btn">? How to Play</button>
+
+<div id="tutorial">
+    <div id="tut-card">
+        <div id="tut-step"></div>
+        <h2 id="tut-title"></h2>
+        <div id="tut-body"></div>
+        <div id="tut-nav">
+            <div id="tut-dots"></div>
+            <div>
+                <button id="tut-back">Back</button>
+                <button id="tut-next">Next</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
 (function(){
@@ -543,9 +649,115 @@
     const COYOTE_TIME = 0.09;
     const SWORD_REACH = 78; // how far the player's sword can reach an enemy
 
+    // ---------- tutorial ----------
+    // Teaches the rules every fight is built on, never the answer to a
+    // specific enemy — working out each combo is the game.
+    const TUTORIAL_PAGES = [
+        {
+            title: 'Welcome to Tech Fighter',
+            body: `<p>You're a robot fighting your way across the city's rooftops, from the quiet suburbs all the way to the neon skyline.</p>
+                <ul>
+                    <li><kbd>←</kbd> <kbd>→</kbd> to run, <kbd>Space</kbd> or <kbd>↑</kbd> to jump between roofs.</li>
+                    <li>Every enemy blocks your path. Beat them all to finish the city.</li>
+                    <li>Fall into a gap or lose a fight and you're back on the last rooftop you stood on, as many times as it takes.</li>
+                </ul>`
+        },
+        {
+            title: 'Reading an Enemy',
+            body: `<p>Most enemies wear a tag like <span class="tut-tag">BLOCKS ZX</span> above their head. That's everything you need to beat them.</p>
+                <ul>
+                    <li>Get close, then type a combo of fight keys.</li>
+                    <li>A finishing combo is <b>one key longer</b> than the block. Block 1 letter, finish in 2 keys. Block 4 letters, finish in 5.</li>
+                    <li>Your combo can <b>never contain a blocked sequence</b>, forwards <b>or backwards</b>, anywhere in it.</li>
+                    <li>You can <b>never press the same key twice in a row</b>.</li>
+                </ul>
+                <p>One wrong key and the enemy blocks it and strikes you down. Start the combo over.</p>`
+        },
+        {
+            title: 'Your Moves',
+            body: `<ul>
+                    <li><kbd>Z</kbd> block, <kbd>X</kbd> counter, <kbd>A</kbd> slash. These work from the start.</li>
+                    <li>New moves unlock only when you reach the enemy that introduces them, so a key that does nothing yet just hasn't been unlocked.</li>
+                    <li><kbd>S</kbd> flank: strike from the side.</li>
+                    <li><kbd>C</kbd> flip: leap over to the enemy's other side. Once you land, you have <b>1 second</b> to finish the combo.</li>
+                    <li><kbd>Q</kbd> and <kbd>W</kbd> are ducks. More on those next.</li>
+                </ul>`
+        },
+        {
+            title: 'Tricky Enemies',
+            body: `<ul>
+                    <li><b>Head swingers</b> wind up a big swing when you get close. Duck it within about a second or it hits you. Backing away mid-windup also dodges it. What you do after the duck, and how fast, depends on the enemy.</li>
+                    <li><b>Openers:</b> some enemies only accept one specific first move.</li>
+                    <li><span class="tut-tag">RESISTS W</span> means that key can't be the final blow. It still lands, so finish with something else. Some enemies won't go down until a certain move has landed somewhere in the combo.</li>
+                    <li><b>Movers</b> keep walking or charge at you. Stay in range while you fight.</li>
+                </ul>`
+        },
+        {
+            title: 'Ready?',
+            body: `<ul>
+                    <li>Read the tag and plan the whole combo <b>before</b> you get close.</li>
+                    <li>Check it backwards too. That's the usual trap.</li>
+                    <li>When an enemy introduces a new key, it's probably the key that enemy wants.</li>
+                    <li>Losing costs nothing. Experiment.</li>
+                </ul>
+                <p>Open this again anytime with <b>? How to Play</b> or <kbd>H</kbd>.</p>`
+        }
+    ];
+    const TUTORIAL_SEEN_KEY = 'techFighterTutorialSeen';
+    const tutorialEl = document.getElementById('tutorial');
+    const tutBack = document.getElementById('tut-back');
+    const tutNext = document.getElementById('tut-next');
+    let tutorialOpen = false;
+    let tutorialPage = 0;
+
+    function renderTutorial(){
+        const page = TUTORIAL_PAGES[tutorialPage];
+        const lastPage = tutorialPage === TUTORIAL_PAGES.length - 1;
+        document.getElementById('tut-step').textContent = 'How to Play · ' + (tutorialPage + 1) + ' of ' + TUTORIAL_PAGES.length;
+        document.getElementById('tut-title').textContent = page.title;
+        document.getElementById('tut-body').innerHTML = page.body;
+        document.getElementById('tut-dots').innerHTML = TUTORIAL_PAGES
+            .map((_, i) => '<span class="' + (i === tutorialPage ? 'on' : '') + '"></span>').join('');
+        tutBack.disabled = tutorialPage === 0;
+        tutNext.textContent = lastPage ? "Let's Fight" : 'Next';
+    }
+
+    function openTutorial(){
+        tutorialOpen = true;
+        tutorialPage = 0;
+        for (const k in keys) keys[k] = false; // don't keep running on a held key
+        tutorialEl.classList.add('open');
+        renderTutorial();
+    }
+
+    function closeTutorial(){
+        tutorialOpen = false;
+        tutorialEl.classList.remove('open');
+        try { localStorage.setItem(TUTORIAL_SEEN_KEY, '1'); } catch (err) {}
+        canvas.focus();
+    }
+
+    function tutorialStep(delta){
+        const nextPage = tutorialPage + delta;
+        if (nextPage >= TUTORIAL_PAGES.length) closeTutorial();
+        else if (nextPage >= 0){ tutorialPage = nextPage; renderTutorial(); }
+    }
+
+    tutBack.addEventListener('click', () => tutorialStep(-1));
+    tutNext.addEventListener('click', () => tutorialStep(1));
+    document.getElementById('help-btn').addEventListener('click', e => { e.currentTarget.blur(); openTutorial(); });
+
     const keys = {};
     window.addEventListener('keydown', e => {
         const k = e.key.toLowerCase();
+        if (tutorialOpen){
+            if (k === 'arrowright' || k === 'enter' || k === ' ') tutorialStep(1);
+            else if (k === 'arrowleft') tutorialStep(-1);
+            else if (k === 'escape' || k === 'h') closeTutorial();
+            e.preventDefault();
+            return;
+        }
+        if (k === 'h'){ openTutorial(); return; }
         keys[k] = true;
         if ([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k)) e.preventDefault();
         if (k === 'z' || k === 'x' || k === 'a' || k === 's' || k === 'q' || k === 'c' || k === 'w') handleCombatKey(k);
@@ -2101,12 +2313,16 @@
         const dt = Math.min(0.033, (now - last) / 1000);
         last = now;
         gameTime += dt;
-        update(dt);
+        if (!tutorialOpen) update(dt);
         updateCamera();
         render();
         requestAnimationFrame(loop);
     }
     requestAnimationFrame(loop);
+
+    let tutorialSeen = false;
+    try { tutorialSeen = localStorage.getItem(TUTORIAL_SEEN_KEY) === '1'; } catch (err) {}
+    if (!tutorialSeen) openTutorial();
 })();
 </script>
 

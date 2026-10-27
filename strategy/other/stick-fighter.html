@@ -119,12 +119,13 @@ function cloud(x, y, s) {
     ctx.fill();
 }
 
-function hills(baseY, amp, color, seed) {
+function hills(baseY, amp, color, seed, off = 0) {
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.moveTo(0, H);
     for (let x = 0; x <= W; x += 20) {
-        ctx.lineTo(x, baseY - amp * (0.5 + 0.5 * Math.sin(x * 0.004 + seed) * Math.cos(x * 0.0017 + seed * 2)));
+        const wx = x + off;
+        ctx.lineTo(x, baseY - amp * (0.5 + 0.5 * Math.sin(wx * 0.004 + seed) * Math.cos(wx * 0.0017 + seed * 2)));
     }
     ctx.lineTo(W, H);
     ctx.fill();
@@ -145,66 +146,108 @@ function pagoda(cx, baseY, s) {
     ctx.fillRect(cx - 2 * s, baseY - 4 * 34 * s - 30 * s, 4 * s, 22 * s);
 }
 
-// ---------- Stick fighter poses (facing right, units scaled by s, y up is negative) ----------
-// hip, neck, head, bk/bf = back knee/foot, fk/ff = front knee/foot, e1/h1 + e2/h2 = arms
+// ---------- Stick fighter skeleton ----------
+// Fixed bone lengths keep the body in realistic proportions (about 7.5 heads tall,
+// legs half the height, arms reaching mid-thigh). Poses are joint angles in degrees:
+// torso is measured from straight up, limbs from straight down; positive = toward the
+// direction the fighter faces.
+const BONE = { thigh: 46, shin: 44, torso: 60, neck: 7, head: 11, upper: 31, fore: 29 };
 const POSES = {
-    guard:   { hip:[0,-70],  neck:[4,-132],  head:[8,-150],  bk:[-14,-34], bf:[-26,0],  fk:[18,-36], ff:[30,0],
-               e1:[26,-104], h1:[38,-128], e2:[16,-98],  h2:[28,-116] },
-    crouch:  { hip:[-6,-48], neck:[6,-106],  head:[12,-124], bk:[-26,-22], bf:[-32,0],  fk:[24,-26], ff:[26,0],
-               e1:[22,-80],  h1:[30,-102], e2:[-8,-80],  h2:[-20,-66] },
-    kick:    { hip:[0,-70],  neck:[-16,-126], head:[-24,-143], bk:[-4,-40], bf:[-30,-46], fk:[40,-80], ff:[82,-88],
-               e1:[8,-108],  h1:[22,-120], e2:[-34,-110], h2:[-52,-96] },
-    victory: { hip:[0,-70],  neck:[4,-132],  head:[8,-150],  bk:[-14,-34], bf:[-26,0],  fk:[18,-36], ff:[30,0],
-               e1:[18,-152], h1:[24,-180], e2:[-16,-104], h2:[-6,-80] },
-    hit:     { hip:[-8,-68], neck:[-34,-122], head:[-46,-136], bk:[-18,-32], bf:[-26,0], fk:[12,-36], ff:[24,-4],
-               e1:[-20,-140], h1:[-6,-158], e2:[-50,-128], h2:[-64,-146] },
-    fall:    { hip:[-10,-50], neck:[-56,-86], head:[-72,-98], bk:[8,-44], bf:[30,-56], fk:[22,-72], ff:[44,-92],
-               e1:[-40,-118], h1:[-28,-138], e2:[-70,-104], h2:[-86,-122] },
-    down:    { hip:[0,-9],   neck:[-58,-11], head:[-76,-15], bk:[22,-24], bf:[46,-6],  fk:[28,-8],  ff:[58,-5],
-               e1:[-44,-30], h1:[-32,-6],  e2:[-66,-4],  h2:[-90,-7] }
+    guard:   { torso: 6,   tilt: 4,   fThigh: 30,  fShin: 2,    bThigh: -14, bShin: -38,
+               fUpper: 38, fFore: 162, bUpper: 22, bFore: 148 },
+    crouch:  { torso: 22,  tilt: -6,  fThigh: 70,  fShin: -12,  bThigh: 6,   bShin: -76,
+               fUpper: 30, fFore: 140, bUpper: -36, bFore: 34 },
+    runA:    { torso: 20,  tilt: -8,  fThigh: 50,  fShin: 8,    bThigh: -34, bShin: -92,
+               fUpper: -40, fFore: 50, bUpper: 48, bFore: 128 },
+    runB:    { torso: 20,  tilt: -8,  fThigh: -34, fShin: -92,  bThigh: 50,  bShin: 8,
+               fUpper: 48, fFore: 128, bUpper: -40, bFore: 50 },
+    chamber: { torso: -6,  tilt: 8,   fThigh: 104, fShin: -18,  bThigh: -4,  bShin: -118,
+               fUpper: 54, fFore: 150, bUpper: -60, bFore: -20 },
+    kick:    { torso: -26, tilt: 16,  fThigh: 96,  fShin: 93,   bThigh: -8,  bShin: -112,
+               fUpper: 72, fFore: 108, bUpper: -104, bFore: -82 },
+    flinch:  { torso: -10, tilt: -10, fThigh: 24,  fShin: 4,    bThigh: -18, bShin: -30,
+               fUpper: 70, fFore: 172, bUpper: 52, bFore: 168 },
+    hit:     { torso: -40, tilt: -26, fThigh: 26,  fShin: 14,   bThigh: -10, bShin: -4,
+               fUpper: 132, fFore: 160, bUpper: -150, bFore: -172 },
+    fall:    { torso: -74, tilt: -14, fThigh: 64,  fShin: 36,   bThigh: 34,  bShin: 10,
+               fUpper: -130, fFore: -160, bUpper: -96, bFore: -122 },
+    down:    { torso: -90, tilt: -4,  fThigh: 58,  fShin: 128,  bThigh: 88,  bShin: 92,
+               fUpper: -58, fFore: -98, bUpper: -112, bFore: -94 }
 };
 const lerp = (a, b, k) => a + (b - a) * k;
 const clamp01 = k => Math.max(0, Math.min(1, k));
-const easeOut = k => 1 - (1 - k) * (1 - k);
+const easeOut = k => { k = clamp01(k); return 1 - (1 - k) * (1 - k); };
+const easeInOut = k => (k = clamp01(k)) < 0.5 ? 2 * k * k : 1 - 2 * (1 - k) * (1 - k);
 function blend(a, b, k) {
     k = clamp01(k);
     const out = {};
-    for (const j in a) out[j] = [lerp(a[j][0], b[j][0], k), lerp(a[j][1], b[j][1], k)];
+    for (const j in a) out[j] = lerp(a[j], b[j], k);
     return out;
 }
 
-function drawFighter(x, groundY, s, dir, color, pose, bob, phase) {
-    const P = j => [pose[j][0] * s, pose[j][1] * s + (j === 'bf' || j === 'ff' ? 0 : bob)];
+// Joint positions relative to the hip (unscaled, facing right, y down) plus how far
+// the lowest point hangs below the hip, so grounded poses can stand on the floor
+function solve(pose) {
+    const rad = Math.PI / 180;
+    const down = (o, deg, len) => [o[0] + Math.sin(deg * rad) * len, o[1] + Math.cos(deg * rad) * len];
+    const up = (o, deg, len) => [o[0] + Math.sin(deg * rad) * len, o[1] - Math.cos(deg * rad) * len];
+    const hip = [0, 0];
+    const neck = up(hip, pose.torso, BONE.torso);
+    const sh = up(hip, pose.torso, BONE.torso - 5);
+    const head = up(neck, pose.torso + pose.tilt, BONE.neck + BONE.head);
+    const fk = down(hip, pose.fThigh, BONE.thigh), ff = down(fk, pose.fShin, BONE.shin);
+    const bk = down(hip, pose.bThigh, BONE.thigh), bf = down(bk, pose.bShin, BONE.shin);
+    const e1 = down(sh, pose.fUpper, BONE.upper), h1 = down(e1, pose.fFore, BONE.fore);
+    const e2 = down(sh, pose.bUpper, BONE.upper), h2 = down(e2, pose.bFore, BONE.fore);
+    const J = { hip, neck, sh, head, fk, ff, bk, bf, e1, h1, e2, h2 };
+    let low = head[1] + BONE.head;
+    for (const k in J) low = Math.max(low, J[k][1]);
+    J.low = low;
+    return J;
+}
+const standHeight = (pose, s) => solve(pose).low * s;
+
+// hipY is the hip's screen y
+function drawFighter(x, hipY, s, dir, color, pose, bob, phase, alpha = 1) {
+    const J = solve(pose);
+    const P = j => [J[j][0] * s, J[j][1] * s + (j === 'bf' || j === 'ff' ? 0 : bob)];
     ctx.save();
-    ctx.translate(x, groundY);
+    ctx.globalAlpha = alpha;
+    ctx.translate(x, hipY);
     ctx.scale(dir, 1);
     ctx.strokeStyle = color; ctx.fillStyle = color;
-    ctx.lineWidth = 7 * s; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    const hip = P('hip'), neck = P('neck'), head = P('head');
-    const sh = [lerp(neck[0], hip[0], 0.12), lerp(neck[1], hip[1], 0.12)];
+    ctx.lineWidth = 6 * s; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const neck = P('neck'), head = P('head'), sh = P('sh');
     ctx.beginPath();
-    ctx.moveTo(...P('bf')); ctx.lineTo(...P('bk')); ctx.lineTo(...hip);
+    ctx.moveTo(...P('bf')); ctx.lineTo(...P('bk')); ctx.lineTo(...P('hip'));
     ctx.lineTo(...P('fk')); ctx.lineTo(...P('ff'));
-    ctx.moveTo(...hip); ctx.lineTo(...neck);
+    ctx.moveTo(...P('hip')); ctx.lineTo(...neck); ctx.lineTo(...head);
     ctx.moveTo(...sh); ctx.lineTo(...P('e1')); ctx.lineTo(...P('h1'));
     ctx.moveTo(...sh); ctx.lineTo(...P('e2')); ctx.lineTo(...P('h2'));
     ctx.stroke();
-    ctx.beginPath(); ctx.arc(head[0], head[1], 15 * s, 0, 7); ctx.fill();
-    // headband tails trail away from the way the head leans
-    const ang = Math.atan2(head[1] - neck[1], head[0] - neck[0]) - Math.PI / 2;
-    const flap = Math.sin(t * 0.12 + phase) * 5 * s;
+    ctx.beginPath(); ctx.arc(head[0], head[1], BONE.head * s, 0, 7); ctx.fill();
+    // headband tails trail behind the head
+    const ang = Math.atan2(head[1] - neck[1], head[0] - neck[0]);
+    const flap = Math.sin(t * 0.12 + phase) * 4 * s;
     ctx.translate(head[0], head[1]); ctx.rotate(ang + Math.PI / 2);
-    ctx.lineWidth = 4 * s;
+    ctx.lineWidth = 3 * s;
     ctx.beginPath();
-    ctx.moveTo(-14 * s, -4 * s);
-    ctx.quadraticCurveTo(-30 * s, -8 * s + flap, -44 * s, 2 * s + flap);
+    ctx.moveTo(-10 * s, -3 * s);
+    ctx.quadraticCurveTo(-22 * s, -6 * s + flap, -33 * s, 2 * s + flap);
     ctx.stroke();
     ctx.restore();
 }
 
-// ---------- Intro: left fighter flying-kicks the right fighter down ----------
+// ---------- Intro: left fighter runs in and flying-kicks the right fighter down ----------
+// Attacker: quick dip, accelerating run, leap with the knee chambered, leg snaps out at contact.
+// Victim: spots it late and flinches, then is thrown by simple physics (arc, bounce, slide).
+const DIP = 5, RUN = 20, FLY = 16;
+const TAKEOFF = DIP + RUN, IMPACT = TAKEOFF + FLY;
 let introT = -1, freeze = 0, shake = 0, impactFx = 0, impactPos = null;
-const sparks = [];
+const sparks = [], trail = [];
+let V = null;   // victim physics once hit
+let camX = 0;
+
 function burst(x, y, colors, n, power, grav) {
     for (let i = 0; i < n; i++) {
         const a = Math.random() * Math.PI * 2, v = power * (0.3 + Math.random());
@@ -213,59 +256,114 @@ function burst(x, y, colors, n, power, grav) {
     }
 }
 
-function fightersState(ground, s) {
+function layout(ground, s) {
     const ax0 = W * 0.16, vx0 = W * 0.84;
-    const kickX = vx0 - 86 * s;
-    const knockX = Math.min(vx0 + 120 * s, W - 110 * s);
-    const T = introT;
-    const A = { x: ax0, y: 0, pose: POSES.guard, bob: 1 };
-    const V = { x: vx0, y: 0, pose: POSES.guard, bob: 1 };
-    if (T < 0) return [A, V];
-
-    // attacker
-    if (T < 14) { A.pose = blend(POSES.guard, POSES.crouch, T / 10); A.bob = 0; }
-    else if (T < 42) {
-        const p = (T - 14) / 28;
-        A.x = lerp(ax0, kickX, p);
-        A.y = -(4 * p * (1 - p)) * 90 * s - p * 22 * s;
-        A.pose = blend(POSES.crouch, POSES.kick, p / 0.35); A.bob = 0;
-    } else if (T < 62) {
-        const q = (T - 42) / 20;
-        A.x = kickX + 14 * s * q;
-        A.y = -22 * s * (1 - q * q);
-        A.pose = blend(POSES.kick, POSES.crouch, q); A.bob = 0;
-    } else if (T < 78) { A.x = kickX + 14 * s; A.pose = blend(POSES.crouch, POSES.guard, (T - 62) / 12); A.bob = 0; }
-    else { A.x = kickX + 14 * s; A.pose = blend(POSES.guard, POSES.victory, (T - 78) / 12); A.bob = 0.6; }
-
-    // victim
-    if (T >= 42) {
-        V.bob = 0;
-        if (T < 48) V.pose = blend(POSES.guard, POSES.hit, (T - 42) / 6);
-        else if (T < 84) {
-            const q = (T - 48) / 36;
-            V.x = lerp(vx0, knockX, easeOut(q));
-            V.y = -(4 * q * (1 - q)) * 46 * s;
-            V.pose = q < 0.5 ? blend(POSES.hit, POSES.fall, q * 2) : blend(POSES.fall, POSES.down, (q - 0.5) * 2);
-        } else { V.x = knockX; V.pose = POSES.down; }
-    }
-    return [A, V];
+    const g = solve(POSES.guard), k = solve(POSES.kick);
+    // the kicking foot meets the victim's chest
+    const chest = [lerp(g.hip[0], g.neck[0], 0.7), lerp(g.hip[1], g.neck[1], 0.7)];
+    const target = [vx0 - chest[0] * s, ground - g.low * s + chest[1] * s];
+    const kickX = target[0] - k.ff[0] * s, kickHipY = target[1] - k.ff[1] * s;
+    // run distance chosen so run speed flows straight into flight speed
+    const dRun = (kickX - ax0) / (1 + 2 * FLY / RUN);
+    return { ax0, vx0, target, kickX, kickHipY, takeoffX: ax0 + dRun, vFly: 2 * dRun / RUN };
 }
 
-function stepIntro(ground, s) {
+function attackerState(ground, s, L) {
+    const T = introT;
+    const groundHip = p => ground - standHeight(p, s);
+    if (T < 0) return { x: L.ax0, hipY: groundHip(POSES.guard), pose: POSES.guard, bob: 1 };
+    if (T < DIP) {
+        const pose = blend(POSES.guard, POSES.crouch, easeOut(T / DIP));
+        return { x: L.ax0, hipY: groundHip(pose), pose, bob: 0 };
+    }
+    if (T < TAKEOFF) {
+        const u = (T - DIP) / RUN;
+        const x = L.ax0 + (L.takeoffX - L.ax0) * u * u;
+        const cyc = blend(POSES.runA, POSES.runB, 0.5 - 0.5 * Math.cos((x - L.ax0) / (40 * s)));
+        const pose = blend(POSES.crouch, cyc, (T - DIP) / 4);
+        const hop = Math.abs(Math.sin((x - L.ax0) / (40 * s))) * 5 * s;
+        return { x, hipY: groundHip(pose) - hop, pose, bob: 0 };
+    }
+    if (T <= IMPACT) {
+        const p = (T - TAKEOFF) / FLY;
+        const runEnd = blend(POSES.runA, POSES.runB, 0.5 - 0.5 * Math.cos((L.takeoffX - L.ax0) / (40 * s)));
+        let pose;
+        if (p < 0.3) pose = blend(runEnd, POSES.chamber, p / 0.3);
+        else if (p < 0.72) pose = POSES.chamber;
+        else pose = blend(POSES.chamber, POSES.kick, easeOut((p - 0.72) / 0.28));
+        const y0 = groundHip(runEnd);
+        const hipY = lerp(y0, L.kickHipY, p) - 4 * p * (1 - p) * 60 * s;
+        return { x: L.takeoffX + L.vFly * (T - TAKEOFF), hipY, pose, bob: 0 };
+    }
+    // rebound off the victim, drop and absorb the landing, settle back into guard
+    const n = T - IMPACT;
+    const x = L.kickX - 26 * s * easeOut(Math.min(1, n / 18));
+    if (n < 16) {
+        const q = n / 16;
+        const pose = blend(POSES.kick, POSES.crouch, easeOut(q));
+        const hipY = lerp(L.kickHipY - 12 * s, groundHip(POSES.crouch), q * q) - (1 - q) * q * 30 * s;
+        return { x, hipY, pose, bob: 0 };
+    }
+    const pose = blend(POSES.crouch, POSES.guard, easeInOut((n - 16) / 16));
+    return { x, hipY: groundHip(pose), pose, bob: clamp01((n - 32) / 10) };
+}
+
+function victimState(ground, s, L) {
+    const T = introT;
+    if (!V) {
+        const pose = T > IMPACT - 7 ? blend(POSES.guard, POSES.flinch, (T - (IMPACT - 7)) / 5) : POSES.guard;
+        return { x: L.vx0, hipY: ground - standHeight(pose, s), pose, bob: T > IMPACT - 7 ? 0 : 1 };
+    }
+    return { x: V.x, hipY: ground - V.h, pose: V.pose, bob: 0 };
+}
+
+function stepVictim(ground, s, L) {
+    const maxX = W + L.camMax - 105 * s;
+    const n = introT - IMPACT;
+    if (!V.landed) {
+        V.pose = n < 5 ? blend(POSES.flinch, POSES.hit, easeOut(n / 5)) : blend(POSES.hit, POSES.fall, (n - 5) / 16);
+        // limbs fold flat as the body comes down so nothing sinks into the floor
+        if (V.vy < 0) V.pose = blend(V.pose, POSES.down, 1 - (V.h - standHeight(POSES.down, s)) / (70 * s));
+    } else {
+        V.landT++;
+        V.pose = blend(V.landFrom, POSES.down, easeOut(V.landT / 7));
+    }
+    V.vy -= 0.5 * s;            // V.h is height above the floor, so gravity pulls it down
+    V.h += V.vy;
+    V.x += V.vx;
+    if (V.x > maxX) { V.x = maxX; V.vx = 0; }
+    // lands on its back: the floor is where the lying body rests
+    const floorH = standHeight(POSES.down, s);
+    if (V.h <= floorH) {
+        V.h = floorH;
+        if (!V.landed) {
+            V.landed = true; V.landT = 0; V.landFrom = V.pose;
+            V.vy = 2.6 * s; V.vx *= 0.55;
+            burst(V.x + 30 * s, ground - 4, ['#d6b07c', '#e8c99a', '#c49a64'], 22, 3.4 * s, 0.12);
+            shake = 10;
+        } else if (V.vy < -1 * s && !V.bounced) {
+            V.bounced = true; V.vy = 0; V.vx *= 0.7;
+            burst(V.x + 30 * s, ground - 4, ['#d6b07c', '#e8c99a'], 8, 2 * s, 0.12);
+            shake = 4;
+        } else { V.vy = 0; V.vx *= 0.84; }
+    }
+}
+
+function stepIntro(ground, s, L) {
     if (introT < 0) return;
     if (freeze > 0) { freeze--; return; }
     introT++;
-    if (introT === 42) {
-        const fx = W * 0.84 - 4 * s, fy = ground - 108 * s;
+    if (introT === IMPACT) {
+        const [fx, fy] = L.target;
         impactPos = [fx, fy]; impactFx = 16;
-        burst(fx, fy, ['#ffd54f', '#ffffff', '#ff7043'], 26, 7 * s, 0.18);
-        freeze = 8; shake = 16;
+        burst(fx, fy, ['#ffd54f', '#ffffff', '#ff7043'], 28, 7 * s, 0.18);
+        freeze = 7; shake = 16;
+        const roomX = W + L.camMax - 105 * s - L.vx0;
+        V = { x: L.vx0, h: standHeight(POSES.flinch, s), vx: Math.min(7 * s, roomX / 46), vy: 6.5 * s,
+              pose: POSES.flinch, landed: false, bounced: false };
     }
-    if (introT === 84) {
-        const x = Math.min(W * 0.84 + 120 * s, W - 110 * s);
-        burst(x - 20 * s, ground - 4, ['#d6b07c', '#e8c99a', '#c49a64'], 22, 3.2 * s, 0.12);
-        shake = 9;
-    }
+    if (introT === IMPACT + 16) burst(L.kickX - 26 * s, ground - 4, ['#d6b07c', '#e8c99a'], 10, 2 * s, 0.12);
+    if (V && introT > IMPACT) stepVictim(ground, s, L);
     if (introT === 150) showHome();
 }
 
@@ -311,30 +409,44 @@ function draw() {
     }
 
     const ground = H * 0.82;
-    hills(H * 0.62, 120, '#b4d6e6', 1.3);
-    pagoda(W * 0.16, H * 0.6, Math.min(1.2, W / 1200));
-    hills(H * 0.72, 70, '#9cc9a0', 4.1);
+    const s = Math.max(0.9, Math.min(1.8, H / 520));
+    const L = layout(ground, s);
+    L.camMax = W * 0.14;
+    stepIntro(ground, s, L);
+    // camera drifts right to follow the run and leave room for the knockdown
+    camX = introT < 0 ? 0 : L.camMax * easeInOut(clamp01((introT - DIP) / (IMPACT + 24 - DIP)));
+
+    hills(H * 0.62, 120, '#b4d6e6', 1.3, camX * 0.25);
+    pagoda(W * 0.16 - camX * 0.4, H * 0.6, Math.min(1.2, W / 1200));
+    hills(H * 0.72, 70, '#9cc9a0', 4.1, camX * 0.5);
 
     // arena floor
     ctx.fillStyle = '#e8c99a'; ctx.fillRect(-20, ground, W + 40, H - ground + 20);
     ctx.fillStyle = '#d6b07c'; ctx.fillRect(-20, ground, W + 40, 6);
     ctx.strokeStyle = 'rgba(150,110,60,0.25)'; ctx.lineWidth = 2;
-    for (let x = (t * 0.2) % 80 - 80; x < W + 80; x += 80) {
+    for (let x = -((camX % 80) + 80); x < W + 80; x += 80) {
         ctx.beginPath(); ctx.moveTo(x, ground + 6); ctx.lineTo(x - 60, H); ctx.stroke();
     }
 
-    const s = Math.max(0.9, Math.min(1.8, H / 520));
-    stepIntro(ground, s);
-    const [A, V] = fightersState(ground, s);
-    const bobA = Math.sin(t * 0.06) * 3 * s * A.bob, bobV = Math.sin(t * 0.06 + 1.7) * 3 * s * V.bob;
-    // shadows
+    ctx.save();
+    ctx.translate(-camX, 0);
+    const A = attackerState(ground, s, L), B = victimState(ground, s, L);
+    const bobA = Math.sin(t * 0.06) * 3 * s * A.bob, bobB = Math.sin(t * 0.06 + 1.7) * 3 * s * B.bob;
+    // shadows shrink as a fighter leaves the floor
     ctx.fillStyle = 'rgba(120,85,40,0.22)';
-    for (const F of [A, V]) {
-        const sw = Math.max(0.35, 1 + F.y / (160 * s));
+    for (const [F, pose] of [[A, A.pose], [B, B.pose]]) {
+        const lift = ground - standHeight(pose, s) - F.hipY;
+        const sw = Math.max(0.35, 1 - lift / (180 * s));
         ctx.beginPath(); ctx.ellipse(F.x, ground + 2, 40 * s * sw, 7 * s * sw, 0, 0, 7); ctx.fill();
     }
-    drawFighter(V.x, ground + V.y, s, -1, '#d84315', V.pose, bobV, 1.7);
-    drawFighter(A.x, ground + A.y, s, 1, '#1565c0', A.pose, bobA, 0);
+    // motion trail behind the attacker while running and flying
+    if (freeze === 0) {
+        if (introT >= DIP + 8 && introT <= IMPACT) trail.push(A);
+        if (trail.length > 4 || (introT > IMPACT && trail.length)) trail.shift();
+    }
+    trail.forEach((F, i) => drawFighter(F.x, F.hipY, s, 1, '#1565c0', F.pose, 0, 0, 0.08 + i * 0.05));
+    drawFighter(B.x, B.hipY, s, -1, '#d84315', B.pose, bobB, 1.7);
+    drawFighter(A.x, A.hipY, s, 1, '#1565c0', A.pose, bobA, 0);
 
     for (let i = sparks.length - 1; i >= 0; i--) {
         const p = sparks[i];
@@ -345,6 +457,7 @@ function draw() {
     }
     ctx.globalAlpha = 1;
     drawImpact(s);
+    ctx.restore();
     ctx.restore();
 
     // cherry petals
