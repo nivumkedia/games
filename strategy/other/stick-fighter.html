@@ -172,6 +172,27 @@
     #resultScreen .big:hover { filter:brightness(1.08); }
     #resultScreen .link { margin-top:12px; background:none; border:none; color:#4d6d84; font:600 14px 'Segoe UI', sans-serif; cursor:pointer; text-decoration:underline; }
 
+    /* Jade currency */
+    #wallet {
+        position:fixed; top:18px; left:18px; z-index:5;
+        display:flex; gap:12px; transition:opacity .3s; user-select:none;
+    }
+    #wallet.hidden { opacity:0; pointer-events:none; }
+    .cur {
+        display:flex; align-items:center; gap:8px;
+        background:rgba(255,255,255,0.92); border:3px solid var(--c); border-radius:999px;
+        padding:6px 18px 6px 8px; font:900 22px/1 'Segoe UI', sans-serif; color:var(--d);
+        box-shadow:0 5px 0 var(--d), 0 10px 22px rgba(20,40,60,.18);
+    }
+    .cur.bump { animation:bump .5s ease; }
+    .gem { width:30px; height:30px; display:inline-block; vertical-align:middle; filter:drop-shadow(0 2px 2px rgba(0,60,30,.3)); }
+    #resultScreen .reward { margin-top:12px; font-size:22px; font-weight:900; color:#0b6b40; }
+    #resultScreen .reward .gem { width:26px; height:26px; margin-left:4px; }
+    .flygem { position:fixed; left:0; top:0; z-index:20; pointer-events:none; }
+    .flygem .gem { width:36px; height:36px; }
+
+    @keyframes bump { 30% { transform:scale(1.18); } 100% { transform:scale(1); } }
+
     @keyframes drop { from { opacity:0; transform:translateY(-80px) rotate(-3deg) scale(1.2); } to { opacity:1; transform:rotate(-3deg); } }
     @keyframes fade { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:none; } }
     @keyframes pulse { 0%,100% { transform:scale(1); } 50% { transform:scale(1.05); } }
@@ -219,6 +240,11 @@
 </div>
 
 <div id="resultScreen" class="screen hidden"></div>
+<div id="wallet" class="hidden">
+    <div class="cur" id="cur-jade" title="Jade (common)" style="--c:#1faa6b;--d:#0b6b40"><svg class="gem" viewBox="0 0 32 32"><polygon points="16,2 28,10 28,22 16,30 4,22 4,10" fill="#1faa6b" stroke="#0b6b40" stroke-width="2"/><polygon points="16,7 23,11.5 23,20.5 16,25 9,20.5 9,11.5" fill="#4fd59a"/><polygon points="16,7 23,11.5 16,14 9,11.5" fill="#b8f5d8"/><circle cx="12" cy="11" r="1.6" fill="#fff"/></svg><span>0</span></div>
+    <div class="cur" id="cur-sapphire" title="Sapphire (rare)" style="--c:#1e63d6;--d:#0d3a8a"><svg class="gem" viewBox="0 0 32 32"><polygon points="16,2 28,10 28,22 16,30 4,22 4,10" fill="#1e63d6" stroke="#0d3a8a" stroke-width="2"/><polygon points="16,7 23,11.5 23,20.5 16,25 9,20.5 9,11.5" fill="#4f8ff0"/><polygon points="16,7 23,11.5 16,14 9,11.5" fill="#c2dbff"/><circle cx="12" cy="11" r="1.6" fill="#fff"/></svg><span>0</span></div>
+    <div class="cur" id="cur-ruby" title="Ruby (rarest)" style="--c:#d61e3c;--d:#7d0c1f"><svg class="gem" viewBox="0 0 32 32"><polygon points="16,2 28,10 28,22 16,30 4,22 4,10" fill="#d61e3c" stroke="#7d0c1f" stroke-width="2"/><polygon points="16,7 23,11.5 23,20.5 16,25 9,20.5 9,11.5" fill="#f0506b"/><polygon points="16,7 23,11.5 16,14 9,11.5" fill="#ffc7d1"/><circle cx="12" cy="11" r="1.6" fill="#fff"/></svg><span>0</span></div>
+</div>
 <div id="help" class="hidden"><b>← →</b> move &nbsp;·&nbsp; <b>↑</b> jump &nbsp;·&nbsp; <b>↓</b> block &nbsp;·&nbsp; <b>Q</b> high punch &nbsp;·&nbsp; <b>W</b> high kick &nbsp;·&nbsp; <b>A</b> low punch &nbsp;·&nbsp; <b>S</b> low kick &nbsp;·&nbsp; <b>Esc</b> quit</div>
 
 <script>
@@ -563,6 +589,7 @@ function draw() {
         ctx.beginPath(); ctx.moveTo(x, ground + 6); ctx.lineTo(x - 60, H); ctx.stroke();
     }
 
+    walletEl.classList.toggle('hidden', homeT < 50 || (!!match && match.phase !== 'result'));
     if (match) drawMatch(ground, s);
     else if (homeT >= 0) drawHome(ground, s);
     else drawIntroFighters(ground, s, L);
@@ -743,6 +770,63 @@ addEventListener('keyup', e => { held[e.code] = false; });
 addEventListener('blur', () => { for (const k in held) held[k] = false; });
 
 let match = null;
+
+// Currencies, from most common to rarest. 10 Jade = 1 Sapphire, 10 Sapphire = 1 Ruby.
+// The wallet is stored as one Jade total and shown broken down, carrying up like coins.
+const GEM = '<svg class="gem" viewBox="0 0 32 32"><polygon points="16,2 28,10 28,22 16,30 4,22 4,10" fill="#1faa6b" stroke="#0b6b40" stroke-width="2"/><polygon points="16,7 23,11.5 23,20.5 16,25 9,20.5 9,11.5" fill="#4fd59a"/><polygon points="16,7 23,11.5 16,14 9,11.5" fill="#b8f5d8"/><circle cx="12" cy="11" r="1.6" fill="#fff"/></svg>';
+const GEM_VALUE = { jade: 1, sapphire: 10, ruby: 100 };
+const walletEl = document.getElementById('wallet');
+for (const k of ['stickFighterJade', 'stickFighter_jade', 'stickFighter_sapphire', 'stickFighter_ruby']) localStorage.removeItem(k);
+let gemTotal = +(localStorage.getItem('stickFighterGems') || 0);
+const breakdown = v => ({ ruby: Math.floor(v / 100), sapphire: Math.floor(v / 10) % 10, jade: v % 10 });
+function showWallet() {
+    const b = breakdown(gemTotal);
+    for (const c in b) document.querySelector(`#cur-${c} span`).textContent = b[c];
+}
+function bump(el) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+
+// Earned gems pop up at `fromEl`, then zoom one by one to their counters; each landing adds its value.
+function awardGems(amount, fromEl) {
+    gemTotal += amount;
+    localStorage.setItem('stickFighterGems', gemTotal);    // saved right away, the animation just shows it
+    let shown = gemTotal - amount;
+    const tokens = [];
+    const parts = breakdown(amount);
+    for (const c of ['ruby', 'sapphire', 'jade']) {
+        const n = parts[c], icons = Math.min(n, 12);
+        for (let i = 0; i < icons; i++) {
+            const count = Math.floor(n / icons) + (i < n % icons ? 1 : 0);
+            tokens.push({ c, value: count * GEM_VALUE[c] });
+        }
+    }
+    const src = fromEl.getBoundingClientRect();
+    tokens.forEach((tk, i) => setTimeout(() => {
+        const target = document.getElementById('cur-' + tk.c).querySelector('.gem').getBoundingClientRect();
+        const el = document.createElement('div');
+        el.className = 'flygem';
+        el.innerHTML = document.querySelector(`#cur-${tk.c} .gem`).outerHTML;
+        const x0 = src.left + src.width / 2 + (Math.random() - 0.5) * 60, y0 = src.top + src.height / 2;
+        const x1 = target.left + target.width / 2, y1 = target.top + target.height / 2;
+        document.body.appendChild(el);
+        const start = performance.now(), dur = 650;
+        (function fly(now) {
+            const k = Math.min(1, (now - start) / dur);
+            const pop = k < 0.2 ? easeOut(k / 0.2) : 1;            // appear, then zoom
+            const z = easeInOut(clamp01((k - 0.2) / 0.8));
+            const x = lerp(x0, x1, z), y = lerp(y0, y1, z) - Math.sin(z * Math.PI) * 90;
+            el.style.transform = `translate(${x - 18}px, ${y - 18}px) scale(${pop * (1.4 - 0.5 * z)})`;
+            if (k < 1) return requestAnimationFrame(fly);
+            el.remove();
+            const before = breakdown(shown);
+            shown += tk.value;
+            const after = breakdown(shown);
+            for (const c in after) {
+                document.querySelector(`#cur-${c} span`).textContent = after[c];
+                if (after[c] !== before[c]) bump(document.getElementById('cur-' + c));
+            }
+        })(start);
+    }, 500 + i * 90));
+}
 
 function makeFighter(x, facing, color, name, isBot) {
     return { x, h: 0, vy: 0, vx: 0, facing, color, name, isBot, hp: 100,
@@ -1012,14 +1096,17 @@ function showImpossibleResult() {
     const prev = +(localStorage.getItem('stickFighterImpossibleBest') || 0);
     const isBest = dmg > prev;
     if (isBest) localStorage.setItem('stickFighterImpossibleBest', dmg);
+    const earned = isBest ? dmg : 0;                      // 1 Jade per point of damage, only for a new record
     resultScreen.innerHTML = `<div class="card">
         <div class="small">The Impossible Bot wins. It always does.</div>
         <h2>${dmg} DAMAGE</h2>
         <p>${isBest ? '<span class="up">★ New personal best!</span>' : `Personal best: <b>${prev}</b>`}</p>
+        ${earned ? `<div class="reward" id="reward">+${earned} Jade${GEM}</div>` : '<p>Beat your record to earn Jade.</p>'}
         <button class="big" id="againBtn">TRY AGAIN</button>
         <button class="link" id="quitBtn">Back to home</button></div>`;
     resultScreen.classList.remove('hidden');
     document.getElementById('againBtn').onclick = () => startMatch('impossible');
+    if (earned > 0) awardGems(earned, document.getElementById('reward'));
     document.getElementById('quitBtn').onclick = quitMatch;
 }
 
@@ -1114,6 +1201,7 @@ function drawMatchHUD(s) {
 draw();
 
 const startScreen = document.getElementById('startScreen');
+showWallet();
 const homeScreen = document.getElementById('homeScreen');
 function play() {
     if (introT >= 0) return;
