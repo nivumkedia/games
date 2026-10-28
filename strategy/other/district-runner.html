@@ -83,7 +83,7 @@
     </div>
     <div id="transitionFlash"></div>
   </div>
-  <div class="controls-hint">You run forward automatically · ← → / A D to steer side-to-side · Space/↑ to Jump · press 2 (or ↓ + Jump) for a High Jump · press 1 (or Shift + Jump) for a Forward Leap, timed right to clear the green block · Shift alone mid-air to dash · run onto a glowing ramp beside a building to launch up</div>
+  <div class="controls-hint">You run forward automatically · ← → / A D to steer side-to-side · Space/↑ to Jump · press 2 (or ↓ + Jump) for a High Jump · press 1 (or Shift + Jump) for a Forward Leap, timed right to clear the green block · Shift alone mid-air to dash · from District 38, press 4 (or ↓ + Shift) to Dive · run onto a glowing ramp beside a building to launch up</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -265,13 +265,15 @@ function generateLevel(district) {
   const groundY = 420;
   const totalObstacles = obstacleCountFor(district.id);
   const types = ['leap', 'gap', 'highblock', 'ramp'];
+  if (district.id <= DIVE_UNLOCK) types.push('dive');
   const EXPLICIT_ORDERS = {
     51: ['leap', 'gap'],
     50: ['gap', 'highblock', 'leap', 'ramp'],
   };
   let picks = EXPLICIT_ORDERS[district.id];
   if (!picks) {
-    picks = [];
+    // The district that introduces the Dive opens with one, so the new move gets taught first.
+    picks = district.id === DIVE_UNLOCK ? ['dive'] : [];
     while (picks.length < totalObstacles) {
       const pool = [...types];
       while (pool.length && picks.length < totalObstacles) {
@@ -319,6 +321,13 @@ function generateLevel(district) {
       // clear path lines up with the ramp's own trigger zone.
       const gapCenter = side * strafeLimitWorld() * 0.4;
       hazards.push({ kind: 'gapwall', x: ox, w: footprint, h: 185, gapCenter, gapWidth: 2.3, lava: true });
+    } else if (kind === 'dive') {
+      // A lava channel across the whole street, too long for any jump or leap, with a concrete
+      // overpass hanging over its middle that leaves only a low slot above the lava. The only
+      // way through is the Dive: long and flat enough to cross, low enough to fit the slot.
+      footprint = DIVE_CHANNEL;
+      const wallW = 140; // wide enough that no Leap or jump arc stays under the slot all the way across
+      hazards.push({ kind: 'dive', x: ox, w: footprint, h: 0, wallX: ox + (footprint - wallW) / 2, wallW, slotH: DIVE_SLOT_H });
     }
     cursor = ox + footprint + MIN_GAP + rand() * 180;
   }
@@ -347,6 +356,7 @@ function generateLevel(district) {
 function respawnPlayer(p, lvl) {
   p.x = lvl.startX; p.y = lvl.startY; p.z = 0; p.vx = 0; p.vy = 0; p.jumps = 0;
   p.rolling = false; p.rollT = 0; p.airDashUsed = false; p.wallRunning = false; p.lockT = 0;
+  p.diving = false; p.diveWind = 0;
 }
 
 /* ---------------- GAME STATE ---------------- */
@@ -356,7 +366,7 @@ const G = {
   level: null,
   player: {
     x: 50, y: 360, z: 0, w: 28, h: 38, vx: 0, vy: 0, jumps: 0, onGround: false, facing: 1, animT: 0,
-    rolling: false, rollT: 0, rollCooldown: 0, airDashUsed: false, wallRunning: false, lockT: 0, lockVx: 0,
+    rolling: false, rollT: 0, rollCooldown: 0, diving: false, diveWind: 0, airDashUsed: false, wallRunning: false, lockT: 0, lockVx: 0,
   },
   frame: 0,
   introX: 90,
@@ -376,6 +386,7 @@ function loadDistrict(idx) {
   G.player.y = G.level.startY;
   G.player.z = 0;
   G.player.vx = 0; G.player.vy = 0; G.player.jumps = 0; G.player.onGround = false;
+  G.player.diving = false; G.player.diveWind = 0; G.player.lockT = 0;
   G.camX = 0;
   document.getElementById('districtCount').textContent = idx;
   showBanner(G.district);
@@ -386,10 +397,12 @@ function showBanner(d) {
   const b = document.getElementById('banner');
   const lm = LANDMARKS[d.id - 1];
   document.getElementById('bannerName').textContent = `District ${d.id}: ${d.name}`;
-  document.getElementById('bannerMeta').textContent = `Tier ${d.tier} · Level ${d.level} · ${d.cls} — passing ${lm.name}`;
+  document.getElementById('bannerMeta').textContent = d.id === DIVE_UNLOCK
+    ? 'New move — Dive! Press 4 (or ↓ + Shift) to dive under the overpass and across the lava'
+    : `Tier ${d.tier} · Level ${d.level} · ${d.cls} — passing ${lm.name}`;
   b.classList.add('show');
   clearTimeout(b._t);
-  b._t = setTimeout(() => b.classList.remove('show'), 2200);
+  b._t = setTimeout(() => b.classList.remove('show'), d.id === DIVE_UNLOCK ? 5000 : 2200);
 }
 
 function startGame() {
@@ -407,7 +420,9 @@ function startGame() {
       overlay.style.display = 'none';
       document.getElementById('stage').classList.remove('zooming');
       G.phase = 'playing';
-      loadDistrict(51);
+      // ?district=N in the URL starts there instead (for testing later districts)
+      const startAt = parseInt(new URLSearchParams(location.search).get('district'), 10);
+      loadDistrict(startAt >= 1 && startAt <= 51 ? startAt : 51);
       setTimeout(() => { flash.style.opacity = 0; }, 60);
     }, 320);
   }, 1150);
@@ -467,6 +482,13 @@ const DASH_SPEED = 9.5, DASH_FRAMES = 11;
 const HIGH_JUMP_V = -16;
 const LEAP_V = -10, LEAP_FRAMES = 34, LEAP_SPEED = 8.5;
 const RAMP_LAUNCH_V = -11, RAMP_FORWARD_FRAMES = 16, RAMP_FORWARD_SPEED = 9;
+// Dive: arms thrown forward, a short wind-up, then a long, flat, low launch. Reduced gravity
+// while diving gives ~580px of carry with the body only ~80px off the ground at the peak.
+const DIVE_UNLOCK = 38;
+const DIVE_WINDUP = 7, DIVE_V = -4.2, DIVE_GRAVITY = 0.25, DIVE_SPEED = 9.5;
+const DIVE_BODY_H = 14;      // hitbox height while stretched out flat
+const DIVE_CHANNEL = 420;    // lava channel length; Forward Leap tops out around 300
+const DIVE_SLOT_H = 100;     // gap under the overpass; a standing body is 38 tall, so no jump fits
 
 function updateMovingPlatforms() {
   for (const plat of G.level.platforms) {
@@ -514,13 +536,29 @@ function update() {
     p.vy = Math.min(p.vy, -1.5);
   }
 
+  // Dive (unlocked at District 38): 4, or ↓ + Shift, from the ground.
+  const diveKey = keyPressed('4') || ((keyDown('ArrowDown') || keyDown('s') || keyDown('S')) && keyPressed('Shift'));
+  if (diveKey && p.onGround && !p.diving && !p.diveWind && G.districtIdx <= DIVE_UNLOCK) p.diveWind = DIVE_WINDUP;
+  if (p.diveWind > 0) {
+    p.diveWind -= 1;
+    if (p.diveWind === 0 && p.onGround) {
+      p.diving = true;
+      p.vy = DIVE_V; p.lockT = 999; p.lockVx = DIVE_SPEED;
+      p.onGround = false;
+      p.jumps = 2; p.airDashUsed = true; // committed — no double jump or dash out of a dive
+    }
+  }
+  if (p.rollT > 0 && --p.rollT === 0) p.rolling = false;
+
   if (p.lockT > 0) { p.vx = p.lockVx; p.lockT -= 1; } else { p.vx = vx; }
 
   const jumpKey = keyPressed(' ') || keyPressed('ArrowUp') || keyPressed('w') || keyPressed('W');
   const downHeld = keyDown('ArrowDown') || keyDown('s') || keyDown('S');
   const shiftHeld = keyDown('Shift');
 
-  if (jumpKey && p.jumps < 2) {
+  if (p.diveWind > 0) {
+    // winding up for a dive — ignore the other ground moves
+  } else if (jumpKey && p.jumps < 2) {
     if (p.onGround && downHeld) {
       p.vy = HIGH_JUMP_V; // High Jump — more height, to reach an elevated ledge
     } else if (p.onGround && shiftHeld) {
@@ -557,7 +595,7 @@ function update() {
     }
   }
 
-  p.vy += GRAVITY;
+  p.vy += p.diving ? GRAVITY * DIVE_GRAVITY : GRAVITY;
   p.x += p.vx;
   p.y += p.vy;
   if (p.x < 0) p.x = 0;
@@ -573,6 +611,11 @@ function update() {
       p.onGround = true;
       p.jumps = 0;
       p.airDashUsed = false;
+      if (p.diving) {
+        // touch down and tuck into a quick roll
+        p.diving = false; p.lockT = 0;
+        p.rolling = true; p.rollT = 14;
+      }
     }
   }
 
@@ -594,7 +637,12 @@ function update() {
     if (!withinX) continue;
     const feetY = p.y + p.h;
     const belowTop = feetY > lvl.groundY - hz.h;
-    if (hz.kind === 'block') {
+    if (hz.kind === 'dive') {
+      if (feetY > lvl.groundY - 4) { respawnPlayer(p, lvl); continue; } // in the lava
+      const underWall = p.x + p.w > hz.wallX && p.x < hz.wallX + hz.wallW;
+      const topY = feetY - (p.diving ? DIVE_BODY_H : p.h);
+      if (underWall && topY < lvl.groundY - hz.slotH) respawnPlayer(p, lvl);
+    } else if (hz.kind === 'block') {
       const inCenterLane = Math.abs(p.z) < hz.centerGap / 2;
       if (inCenterLane) { if (belowTop) respawnPlayer(p, lvl); }
       else { respawnPlayer(p, lvl); } // flanking spikes — no going around
@@ -1197,6 +1245,32 @@ function buildHazardMesh(hz) {
       const flankW = half - flankFrom;
       buildLavaPool(cx, side * (flankFrom + flankW / 2), hz.w * WORLD_SCALE, flankW);
     }
+  } else if (hz.kind === 'dive') {
+    // Lava channel across the full street, with a concrete overpass over its middle.
+    const cx = x3(hz.x + hz.w / 2);
+    buildLavaPool(cx, 0, hz.w * WORLD_SCALE, PLATFORM_DEPTH);
+    const slotTop = hz.slotH * WORLD_SCALE;
+    const wallTop = 16;
+    const wx = x3(hz.wallX + hz.wallW / 2), ww = hz.wallW * WORLD_SCALE, wd = PLATFORM_DEPTH + 1.2;
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(ww, wallTop - slotTop, wd),
+      new THREE.MeshStandardMaterial({ color: 0x4a4f5a, roughness: 0.85, metalness: 0.1 }));
+    wall.position.set(wx, (slotTop + wallTop) / 2, 0);
+    levelGroup.add(wall);
+    // hazard-striped lower edge, lit cyan underneath so the slot reads as "go under here"
+    const stripeCv = document.createElement('canvas');
+    stripeCv.width = 64; stripeCv.height = 16;
+    const sc = stripeCv.getContext('2d');
+    sc.fillStyle = '#ffcc1a'; sc.fillRect(0, 0, 64, 16);
+    sc.fillStyle = '#111';
+    for (let i = -16; i < 64; i += 16) { sc.beginPath(); sc.moveTo(i, 16); sc.lineTo(i + 8, 16); sc.lineTo(i + 16, 0); sc.lineTo(i + 8, 0); sc.fill(); }
+    const stripeTex = new THREE.CanvasTexture(stripeCv);
+    stripeTex.wrapS = THREE.RepeatWrapping; stripeTex.repeat.set(wd / 1.2, 1);
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(ww + 0.04, 0.5, wd + 0.04), new THREE.MeshStandardMaterial({ map: stripeTex, roughness: 0.6 }));
+    stripe.position.set(wx, slotTop + 0.25, 0);
+    levelGroup.add(stripe);
+    const under = new THREE.Mesh(new THREE.BoxGeometry(ww, 0.05, wd), glowMat('#5df5ff', 1.4));
+    under.position.set(wx, slotTop - 0.02, 0);
+    levelGroup.add(under);
   } else { // gapwall — one solid, continuous lavafall curtain on each side of the gap
     const cx = x3(hz.x + hz.w / 2);
     const half = strafeLimitWorld();
@@ -1583,12 +1657,16 @@ function buildPlayerModel() {
   const legL = leg(-0.22), legR = leg(0.22);
 
   function arm(zOff) {
+    // pivots at the shoulder so the arms can swing and reach out in front for the Dive
+    const pivot = new THREE.Group();
+    pivot.position.set(0, 1.72, zOff);
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.75, 0.26), darkMat);
-    mesh.position.set(0, 1.35, zOff);
-    group.add(mesh);
-    return mesh;
+    mesh.position.y = -0.37;
+    pivot.add(mesh);
+    group.add(pivot);
+    return pivot;
   }
-  arm(-0.58); arm(0.58);
+  const armL = arm(-0.58), armR = arm(0.58);
 
   const hoodMat = new THREE.MeshStandardMaterial({ color: 0x06070a, roughness: 0.7 });
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 14, 12), hoodMat);
@@ -1615,7 +1693,8 @@ function buildPlayerModel() {
   group.add(grip);
 
   scene.add(group);
-  return { group, legL, legR, torso, head };
+  group.rotation.order = 'YXZ'; // yaw to face +X first, then pitch forward for the Dive
+  return { group, legL, legR, armL, armR, torso, head };
 }
 const playerModel = buildPlayerModel();
 
@@ -1623,8 +1702,28 @@ function syncPlayerModel(p) {
   const feetY2d = p.y + p.h;
   const baseY = h3(feetY2d);
   const crouch = p.rolling;
-  playerModel.group.position.set(x3(p.x + p.w / 2), baseY, p.z);
+  // Dive pose: lean in during the wind-up, then stretch out flat (nose following the arc).
+  // Local +Z is forward after the yaw, so a negative X rotation lifts the arms out in front.
+  let pitch = 0, armX = null;
+  if (p.diveWind > 0) {
+    const k = 1 - p.diveWind / DIVE_WINDUP;
+    pitch = 0.5 * k; armX = -1.2 - 1.0 * k;
+  } else if (p.diving) {
+    pitch = Math.max(1.1, Math.min(1.75, 1.45 + p.vy * 0.08)); armX = -2.75;
+  }
+  playerModel.group.rotation.x = pitch;
+  // pitching pivots about the feet, so shift the model back/up to keep the body over the hitbox
+  const s = Math.sin(pitch);
+  playerModel.group.position.set(x3(p.x + p.w / 2) - 1.0 * s, baseY + 0.45 * s, p.z);
   playerModel.group.scale.y = crouch ? 0.6 : 1;
+  if (armX !== null) {
+    playerModel.armL.rotation.x = armX; playerModel.armR.rotation.x = armX;
+  } else if (p.onGround && Math.abs(p.vx) > 0.5) {
+    const a = Math.sin(p.animT) * 0.6;
+    playerModel.armL.rotation.x = -a; playerModel.armR.rotation.x = a;
+  } else {
+    playerModel.armL.rotation.x = -0.6; playerModel.armR.rotation.x = -0.3;
+  }
   playerModel.group.rotation.y = Math.PI / 2; // always faces +X (the chase camera looks the same way, so this shows the character's back/blade)
   playerModel.group.rotation.z = p.wallRunning ? -p.facing * 0.3 : 0;
 
@@ -1635,6 +1734,9 @@ function syncPlayerModel(p) {
     const swing = Math.sin(p.animT) * 0.7;
     playerModel.legL.rotation.x = swing;
     playerModel.legR.rotation.x = -swing;
+  } else if (p.diving) {
+    playerModel.legL.rotation.x = 0.1; // legs trail straight out behind
+    playerModel.legR.rotation.x = -0.1;
   } else if (!p.onGround) {
     playerModel.legL.rotation.x = 0.35;
     playerModel.legR.rotation.x = -0.15;
@@ -1651,7 +1753,7 @@ function updateCamera(p) {
   const px = x3(p.x + p.w / 2), py = h3(p.y + p.h), pz = p.z;
   // Subway-Surfers-style chase cam: close behind, a bit above, tilted up so the towers loom overhead
   // and there's more visibility of what's coming up ahead on the street.
-  camTarget.set(px - 4.5, py + 4, pz);
+  camTarget.set(px - 4.5, py + (p.diving ? 1.6 : 4), pz);
   camera.position.lerp(camTarget, 0.14);
   camLook.set(px + 6, py + 0.5, pz);
   camera.lookAt(camLook);

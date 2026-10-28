@@ -658,6 +658,106 @@
         });
     }
 
+    // 14. shapeshifter — the shifter again, but with 3-letter blocks, so
+    // every combo is 4 keys long. Gets a slightly longer interval to fit
+    // the extra key in.
+    {
+        const b = buildings[14];
+        const shiftCycle = ['zxa', 'asz', 'xzs'];
+        enemies.push({
+            type: 'shapeshifter',
+            x: b.x + b.width * 0.5 - 18,
+            y: b.y - 66,
+            w: 36, h: 66,
+            alive: true,
+            comboStep: 0,
+            blocks: [shiftCycle[0]],
+            shiftCycle,
+            shiftIndex: 0,
+            shiftInterval: 4.5,
+            shiftTimer: 4.5,
+            shiftFlash: 0,
+            hitFlash: 0,
+            deathTimer: 0
+        });
+    }
+
+    // 15. clocker — a normal block-combo enemy on a fuse: after every
+    // correct key you get 0.7s to land the next one, or it strikes you
+    // down. Blocks AZS, so the kill is 4 quick keys.
+    {
+        const b = buildings[15];
+        enemies.push({
+            type: 'clocker',
+            x: b.x + b.width * 0.5 - 18,
+            y: b.y - 66,
+            w: 36, h: 66,
+            alive: true,
+            comboStep: 0,
+            blocks: ['azs'],
+            keyGap: 0.7,
+            hitFlash: 0,
+            deathTimer: 0
+        });
+    }
+
+    // 16. twin blades — two enemies sharing one rooftop. Every key you
+    // press lands on both, so a single combo has to get past BOTH block
+    // lists (forward and backward), and the longer block sets the kill
+    // length. They go down together.
+    {
+        const b = buildings[16];
+        const left = {
+            type: 'twinBlade',
+            x: b.x + b.width * 0.28 - 18,
+            y: b.y - 66,
+            w: 36, h: 66,
+            alive: true,
+            comboStep: 0,
+            blocks: ['zxa'],
+            hitFlash: 0,
+            deathTimer: 0
+        };
+        const right = Object.assign({}, left, {
+            x: b.x + b.width * 0.72 - 18,
+            blocks: ['sxz']
+        });
+        left.twin = right;
+        right.twin = left;
+        enemies.push(left, right);
+    }
+
+    // 17. overseer (boss) — three phases on one rooftop, using everything
+    // before it. Phase 1: a Q headswing, then 0.5s to flip behind it with C.
+    // Phase 2: a 5-key combo against ZXAS that resists A as the final blow.
+    // Phase 3: a clocker combo against XZS with 0.7s between keys.
+    // Die anywhere in the fight and it resets to phase 1.
+    {
+        const b = buildings[17];
+        enemies.push({
+            type: 'overseer',
+            x: b.x + b.width * 0.5 - 18,
+            y: b.y - 66,
+            w: 36, h: 66,
+            alive: true,
+            comboStep: 0,
+            hitFlash: 0,
+            deathTimer: 0,
+            swingState: 'idle',
+            swingTimer: randRange(1, 3),
+            swingStateTimer: 0,
+            postDuckKey: 'c',
+            openWindowDuration: 0.5,
+            openWindowKills: true,
+            bossPhase: 0,
+            bossPhases: [
+                null, // phase 1 is the headswing, handled by the swing system
+                { blocks: ['zxas'], resist: 'a' },
+                { blocks: ['xzs'], keyGap: 0.7 }
+            ]
+        });
+    }
+
     // ---------- player: humanoid robot ----------
     const player = {
         x: buildings[12].x + 10,
@@ -713,10 +813,18 @@
             title: 'Tricky Enemies',
             body: `<ul>
                     <li><b>Head swingers</b> wind up a big swing when you get close. Duck it within about a second or it hits you. Backing away mid-windup also dodges it. What you do after the duck, and how fast, depends on the enemy.</li>
-                    <li><b>Shifters</b> change their block every few seconds, and a change wipes any combo you've started. Be quick, or be patient.</li>
                     <li><b>Openers:</b> some enemies only accept one specific first move.</li>
                     <li><span class="tut-tag">RESISTS W</span> means that key can't be the final blow. It still lands, so finish with something else. Some enemies won't go down until a certain move has landed somewhere in the combo.</li>
                     <li><b>Movers</b> keep walking or charge at you. Stay in range while you fight.</li>
+                </ul>`
+        },
+        {
+            title: 'Tougher Enemies',
+            body: `<ul>
+                    <li><b>Shifters</b> change their block every few seconds, and a change wipes any combo you've started. Be quick, or be patient.</li>
+                    <li><b>Clockers</b> show a time on their tag. That's all you get between keys. Hesitate and they strike.</li>
+                    <li><b>Pairs:</b> when two enemies share a roof, every key hits both. Your combo has to get past both tags at once.</li>
+                    <li><b>The boss</b> fights in phases, using everything above. Die at any point and it starts over.</li>
                 </ul>`
         },
         {
@@ -813,6 +921,7 @@
                 e.swingState = 'idle';
                 e.swingTimer = randRange(1, 3);
             }
+            if (e.bossPhases && e.alive) setBossPhase(e, 0);
         }
         deathSequence = null;
         deathFlash = 0.3;
@@ -841,6 +950,25 @@
         player.facing = wasLeft ? -1 : 1;
         player.combatPose = 'flip';
         player.combatTimer = 0.6;
+    }
+
+    // boss phases: move the overseer on to its next phase (or all the way
+    // back to the headswing opener, when you die)
+    function setBossPhase(e, idx){
+        e.bossPhase = idx;
+        const phase = e.bossPhases[idx];
+        e.blocks = phase ? phase.blocks : null;
+        e.resist = phase ? phase.resist : null;
+        e.keyGap = phase ? phase.keyGap : null;
+        e.pressedKeys = [];
+        e.comboStep = 0;
+        e.comboWindowTimer = 0;
+        if (phase){
+            e.swingState = null; // hand off to the block-combo system
+        } else {
+            e.swingState = 'idle';
+            e.swingTimer = randRange(1, 3);
+        }
     }
 
     // shared finishing-blow logic for any "duckable" (swingState) enemy
@@ -994,6 +1122,22 @@
         effects.push({ x, y, color, start: gameTime, duration: duration || 0.35 });
     }
 
+    function killComboEnemy(e){
+        e.alive = false;
+        e.comboWindowTimer = 0;
+        e.deathTimer = 0.5;
+        e.deathParticles = [];
+        for (let i = 0; i < 7; i++){
+            const a = (i / 7) * Math.PI * 2 + rand() * 0.6;
+            e.deathParticles.push({
+                vx: Math.cos(a), vy: Math.sin(a) - 0.4,
+                color: i % 2 === 0 ? '#c9ccd0' : '#ff5a3d',
+                size: 3 + rand() * 3
+            });
+        }
+        spawnEffect(e.x + e.w / 2, e.y + e.h * 0.45, '#ffffff', 0.3);
+    }
+
     function handleCombatKey(k){
         if (deathSequence && deathSequence.phase) return; // mid punish sequence — no interrupting it
         if (k === 's' && !sUnlocked) return; // S doesn't exist yet
@@ -1042,6 +1186,15 @@
                 }
 
                 if (k === postDuckKey && e.swingState === 'open'){
+                    if (e.bossPhases){
+                        // the boss doesn't die to its opener — the flip just
+                        // gets you behind it and starts phase 2
+                        flipBehind(e);
+                        setBossPhase(e, 1);
+                        e.hitFlash = 0.25;
+                        spawnEffect(e.x + e.w / 2, e.y + e.h * 0.3, '#b060ff', 0.35);
+                        return;
+                    }
                     if (e.finalKey){
                         // one more key needed — not the kill yet
                         e.swingState = 'exposed';
@@ -1089,8 +1242,11 @@
         // presses-so-far never spell out one of the enemy's blocks — forward
         // OR backward. Any other combination of that length works.
         target.pressedKeys = target.pressedKeys || [];
-        const blocks = target.blocks || ['z']; // fallback shouldn't normally be hit
-        const killLength = blocks[0].length + 1;
+        // twin blades: every key lands on both, so the combo has to get past
+        // both enemies' blocks, and the longer block sets the kill length
+        const twin = target.twin && target.twin.alive ? target.twin : null;
+        const blocks = (target.blocks || ['z']).concat(twin ? twin.blocks : []); // 'z' fallback shouldn't normally be hit
+        const killLength = Math.max(...blocks.map(b => b.length)) + 1;
 
         const lastKey = target.pressedKeys[target.pressedKeys.length - 1];
         const repeatFail = lastKey === k;
@@ -1111,6 +1267,11 @@
         if (correct){
             target.comboStep = target.pressedKeys.length;
             target.hitFlash = 0.25;
+            if (twin){
+                twin.pressedKeys = target.pressedKeys.slice();
+                twin.comboStep = target.comboStep;
+                twin.hitFlash = 0.25;
+            }
             // resistance: some enemies shrug off one specific key as a
             // finishing blow — everything about the press still lands
             // (animation, hit flash, it's added to the sequence) but it
@@ -1148,19 +1309,16 @@
                 spawnEffect(target.x + target.w / 2, target.y + target.h * 0.45, '#ffffff', 0.3);
             }
 
-            if (isFinalBlow){
-                target.alive = false;
-                target.deathTimer = 0.5;
-                target.deathParticles = [];
-                for (let i = 0; i < 7; i++){
-                    const a = (i / 7) * Math.PI * 2 + rand() * 0.6;
-                    target.deathParticles.push({
-                        vx: Math.cos(a), vy: Math.sin(a) - 0.4,
-                        color: i % 2 === 0 ? '#c9ccd0' : '#ff5a3d',
-                        size: 3 + rand() * 3
-                    });
-                }
-                spawnEffect(target.x + target.w / 2, target.y + target.h * 0.45, '#ffffff', 0.3);
+            if (isFinalBlow && target.bossPhases && target.bossPhase < target.bossPhases.length - 1){
+                // the overseer shrugs it off and moves to its next phase
+                setBossPhase(target, target.bossPhase + 1);
+                spawnEffect(target.x + target.w / 2, target.y + target.h * 0.3, '#ffcf3d', 0.45);
+            } else if (isFinalBlow){
+                killComboEnemy(target);
+                if (twin) killComboEnemy(twin);
+            } else if (target.keyGap && k !== 'c'){
+                // clocker fuse: the next key has to land before this runs out
+                target.comboWindowTimer = target.keyGap;
             }
         } else {
             startPunishSequence(target);
@@ -1905,6 +2063,24 @@
         ctx.save();
         ctx.globalAlpha = alpha;
         ctx.translate(sx + e.w / 2 + lungeX, sy + e.h / 2);
+        if (e.bossPhases){
+            // the overseer stands a head taller (scaled up from its feet)
+            // and wears a gold crest
+            ctx.translate(0, e.h / 2);
+            ctx.scale(1.35, 1.35);
+            ctx.translate(0, -e.h / 2);
+            ctx.fillStyle = '#ffcf3d';
+            ctx.beginPath();
+            ctx.moveTo(-9, -e.h * 0.5 + 2);
+            ctx.lineTo(-9, -e.h * 0.5 - 7);
+            ctx.lineTo(-4.5, -e.h * 0.5 - 2);
+            ctx.lineTo(0, -e.h * 0.5 - 10);
+            ctx.lineTo(4.5, -e.h * 0.5 - 2);
+            ctx.lineTo(9, -e.h * 0.5 - 7);
+            ctx.lineTo(9, -e.h * 0.5 + 2);
+            ctx.closePath();
+            ctx.fill();
+        }
         if (isPatroller || isCharger) ctx.scale(facingDir, 1);
         if (dying) ctx.rotate(deathT * 1.7);
         if (dying) ctx.scale(1 + deathT * 0.15, 1 - deathT * 0.3);
@@ -2078,10 +2254,12 @@
 
     // what this enemy blocks, as a small readable tag above its head
     function enemyBlockLabel(e){
-        if (!e.blocks) return '';
+        const phase = e.bossPhases ? 'PHASE ' + (e.bossPhase + 1) + '/' + e.bossPhases.length : '';
+        if (!e.blocks) return phase;
         let text = 'BLOCKS ' + e.blocks.map(b => b.toUpperCase()).join(', ');
         if (e.resist) text += ' · RESISTS ' + e.resist.toUpperCase();
-        return text;
+        if (e.keyGap) text += ' · ' + e.keyGap + 's';
+        return phase ? phase + ' · ' + text : text;
     }
 
     function drawBlockLabel(e, sx, sy){
@@ -2106,6 +2284,14 @@
         ctx.fillStyle = shifted ? '#cfe6ff' : '#ffb3a0';
         ctx.fillText(text, cx2, topY - boxH / 2 + 4);
         // ...and drains a little bar until the next change
+        // a clocker's fuse burns down between keys
+        if (e.keyGap && e.comboWindowTimer > 0){
+            const frac = e.comboWindowTimer / e.keyGap;
+            ctx.fillStyle = 'rgba(20,10,10,0.35)';
+            ctx.fillRect(cx2 - boxW / 2 + 4, topY + 3, boxW - 8, 3);
+            ctx.fillStyle = '#ffcf3d';
+            ctx.fillRect(cx2 - boxW / 2 + 4, topY + 3, (boxW - 8) * frac, 3);
+        }
         if (e.shiftCycle){
             const frac = Math.max(0, e.shiftTimer) / e.shiftInterval;
             ctx.fillStyle = 'rgba(20,10,10,0.35)';
