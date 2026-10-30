@@ -675,7 +675,7 @@ function moveCircles(ground, s) {
     return MOVES.map((m, i) => ({
         ...m, i, r,
         x: W / 2 + m.side * Math.min(W * 0.3, 250 * s),
-        y: ground - (m.row === 0 ? 205 : 80) * s
+        y: ground - (m.row === 0 ? 240 : 80) * s
     }));
 }
 
@@ -718,6 +718,26 @@ function drawMoveIcon(c, pop, hover) {
     ctx.restore();
 }
 
+// "CHANGE" pill under each move (no action yet)
+function changeRect(c) {
+    const u = c.r / 46;
+    return { x: c.x - 38 * u, y: c.y + c.r + 30 * u, w: 76 * u, h: 22 * u };
+}
+function drawChangeBtn(c, pop, hover) {
+    const b = changeRect(c), u = c.r / 46;
+    ctx.save();
+    ctx.globalAlpha = pop;
+    ctx.fillStyle = hover ? '#2a2a2a' : '#111';
+    ctx.beginPath(); ctx.roundRect(b.x, b.y, b.w, b.h, b.h / 2); ctx.fill();
+    ctx.lineWidth = 2 * u; ctx.strokeStyle = hover ? '#ffe58a' : '#d4a017'; ctx.stroke();
+    ctx.font = `800 ${Math.round(11 * u)}px Segoe UI, sans-serif`;
+    ctx.letterSpacing = '1.5px';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#f5c542';
+    ctx.fillText('CHANGE', c.x, b.y + b.h / 2 + 0.5);
+    ctx.restore();
+}
+
 function drawHome(ground, s) {
     const hs = s * 1.45, x = W / 2;
     // round training mat under the fighter
@@ -751,6 +771,8 @@ function drawHome(ground, s) {
         const hover = Math.hypot(mouse.x - c.x, mouse.y - c.y) < c.r;
         if (hover && pop >= 1) hoverMove = c.id;
         drawMoveIcon(c, pop, hover);
+        const b = changeRect(c);
+        drawChangeBtn(c, pop, pop >= 1 && mouse.x > b.x && mouse.x < b.x + b.w && mouse.y > b.y && mouse.y < b.y + b.h);
     }
     const cur = hoverMove ? 'pointer' : 'default';
     if (cv.style.cursor !== cur) cv.style.cursor = cur;
@@ -798,8 +820,8 @@ const ROUNDS = 10, ROUND_TIME = 45 * 60, IMPOSSIBLE_LEVEL = 14;
 // Adaptive Matchup pay: each win is worth the bot's level x 5 Jade, plus 10 for a KO in under 15 seconds.
 // The run's total is only paid out if it beats your best run ever.
 const WIN_JADE_PER_LEVEL = 5, QUICK_KO_SECS = 15, QUICK_KO_JADE = 10;
-// 1v1 pays every win: bot level x 5, +10 for a Quick KO, +25 for a Flawless (never hit).
-const FLAWLESS_JADE = 25;
+// 1v1 pays every win: bot level x 5, +10 for a Quick KO, +2 Jade for every 10% health you have left.
+const HP_STEP = 10, JADE_PER_STEP = 2;
 const pick = a => a[Math.floor(Math.random() * a.length)];
 // Your level (1-10) goes up with every 1v1 win and down with every loss.
 // 1v1 picks a random rival within one level of you.
@@ -1144,12 +1166,12 @@ function show1v1Result(res) {
     const title = { win: 'YOU WIN!', loss: 'YOU LOSE', draw: 'DRAW' }[res];
     const win = res === 'win', base = win ? m.level * WIN_JADE_PER_LEVEL : 0;
     const quick = win && m.b.hp <= 0 && ROUND_TIME - m.timer < QUICK_KO_SECS * 60;
-    const flawless = win && m.p.hp >= 100;
-    const earned = base + (quick ? QUICK_KO_JADE : 0) + (flawless ? FLAWLESS_JADE : 0);
+    const hpLeft = win ? Math.max(0, Math.round(m.p.hp)) : 0, hpJade = Math.floor(hpLeft / HP_STEP) * JADE_PER_STEP;
+    const earned = base + (quick ? QUICK_KO_JADE : 0) + hpJade;
     const lines = !win ? '' : `<div class="tally">
             Win vs Level ${m.level}: <b>+${gemsHTML(base)}</b>
             ${quick ? `<br><span class="up">⚡ Quick KO</span> <b>+${gemsHTML(QUICK_KO_JADE)}</b>` : ''}
-            ${flawless ? `<br><span class="up">★ Flawless</span> <b>+${gemsHTML(FLAWLESS_JADE)}</b>` : ''}
+            ${hpJade ? `<br><span class="up">♥ Health left (${hpLeft}%)</span> <b>+${gemsHTML(hpJade)}</b>` : ''}
         </div><div class="reward" id="reward">+${gemsHTML(earned)}</div>`;
     const change = playerLevel > old ? `<span class="up">▲ Level up! You're now Level ${playerLevel}</span>`
                  : playerLevel < old ? `<span class="down">▼ Down to Level ${playerLevel}</span>`
