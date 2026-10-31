@@ -420,7 +420,7 @@
     <div class="cur" id="cur-sapphire" title="Sapphire (rare)" style="--c:#1e63d6;--d:#0d3a8a"><svg class="gem" viewBox="0 0 32 32"><polygon points="16,2 28,10 28,22 16,30 4,22 4,10" fill="#1e63d6" stroke="#0d3a8a" stroke-width="2"/><polygon points="16,7 23,11.5 23,20.5 16,25 9,20.5 9,11.5" fill="#4f8ff0"/><polygon points="16,7 23,11.5 16,14 9,11.5" fill="#c2dbff"/><circle cx="12" cy="11" r="1.6" fill="#fff"/></svg><span>0</span></div>
     <div class="cur" id="cur-ruby" title="Ruby (rarest)" style="--c:#d61e3c;--d:#7d0c1f"><svg class="gem" viewBox="0 0 32 32"><polygon points="16,2 28,10 28,22 16,30 4,22 4,10" fill="#d61e3c" stroke="#7d0c1f" stroke-width="2"/><polygon points="16,7 23,11.5 23,20.5 16,25 9,20.5 9,11.5" fill="#f0506b"/><polygon points="16,7 23,11.5 16,14 9,11.5" fill="#ffc7d1"/><circle cx="12" cy="11" r="1.6" fill="#fff"/></svg><span>0</span></div>
 </div>
-<div id="help" class="hidden"><b>← →</b> move &nbsp;·&nbsp; <b>↑</b> jump &nbsp;·&nbsp; <b>↓</b> block &nbsp;·&nbsp; <span id="helpKeys"></span><b>Esc</b> quit</div>
+<div id="help" class="hidden"><b>← →</b> move &nbsp;·&nbsp; <b>Space</b> jump &nbsp;·&nbsp; <b>↓</b> block &nbsp;·&nbsp; <span id="helpKeys"></span><b>Esc</b> quit</div>
 
 <script>
 const cv = document.getElementById('bg');
@@ -863,10 +863,13 @@ function announceCombos() {
 // combo comes out from one key press). Slots are named after the key's starting move.
 const DEFAULT_LOADOUT = { highPunch: 'highPunch', lowPunch: 'lowPunch', highKick: 'highKick', lowKick: 'lowKick' };
 // Move slots: you start with 4 and can buy up to 10. Each new one costs more (in Jade).
-const SLOT_KEYS = { highPunch: 'Q', lowPunch: 'A', highKick: 'W', lowKick: 'S',
-                    slot5: 'E', slot6: 'D', slot7: 'R', slot8: 'F', slot9: 'T', slot10: 'G' };
+// Every slot is on the home row, filling in from both ends toward the middle as you buy more:
+// A S D ; to start, then L K, then F J, then G H.
+const SLOT_KEYS = { highPunch: 'A', lowPunch: 'S', highKick: 'D', lowKick: ';',
+                    slot5: 'L', slot6: 'K', slot7: 'F', slot8: 'J', slot9: 'G', slot10: 'H' };
+const keyCode = k => k === ';' ? 'Semicolon' : 'Key' + k;
 const SLOT_ORDER = Object.keys(SLOT_KEYS), MAX_SLOTS = 10;
-const SLOT_PRICES = [30, 60, 100, 150, 220, 300];             // slots 5 to 10
+const SLOT_PRICES = [100, 200, 350, 500, 750, 1000];          // slots 5 to 10
 let slotCount = Math.max(4, Math.min(MAX_SLOTS, +(localStorage.getItem('stickFighterSlots') || 4)));
 const ownedSlots = () => SLOT_ORDER.slice(0, slotCount);
 const nextSlotPrice = () => SLOT_PRICES[slotCount - 4];
@@ -878,10 +881,10 @@ const equipped = () => ownedSlots().map(sl => loadout[sl]);
 const slotOf = id => ownedSlots().find(sl => loadout[sl] === id);    // which key a move or combo is on
 const keyFor = id => slotOf(id) ? SLOT_KEYS[slotOf(id)] : '–';
 const MOVE_INFO = {
-    highPunch: { key: 'Q', desc: 'A quick jab to the head. Fast to throw and fast to recover.' },
-    lowPunch:  { key: 'A', desc: 'A crouching strike to the body. The fastest move you have, but it hits the lightest.' },
-    highKick:  { key: 'W', desc: 'A big roundhouse to the head. Hits the hardest and knocks them back, but it is slow.' },
-    lowKick:   { key: 'S', desc: 'A long sweeping kick to the legs. The longest reach of any move.' }
+    highPunch: { key: 'A', desc: 'A quick jab to the head. Fast to throw and fast to recover.' },
+    lowPunch:  { key: 'S', desc: 'A crouching strike to the body. The fastest move you have, but it hits the lightest.' },
+    highKick:  { key: 'D', desc: 'A big roundhouse to the head. Hits the hardest and knocks them back, but it is slow.' },
+    lowKick:   { key: ';', desc: 'A long sweeping kick to the legs. The longest reach of any move.' }
 };
 let mouse = { x: -1, y: -1 }, hoverMove = null, hoverChange = null, hoverBuy = false, homeMove = null, homeMoveT = 0;
 
@@ -1234,6 +1237,7 @@ function startMatch(mode) {
     fightScreen.classList.add('hidden');
     resultScreen.classList.add('hidden');
     help.classList.remove('hidden');
+    document.activeElement?.blur();                 // so Space jumps instead of pressing the last clicked button
     document.getElementById('helpKeys').innerHTML = ownedSlots().filter(sl => loadout[sl])
         .map(sl => `<b>${SLOT_KEYS[sl]}</b> ${itemName(loadout[sl]).toLowerCase()} &nbsp;·&nbsp; `).join('');
     cv.style.cursor = 'default';
@@ -1331,8 +1335,8 @@ function botInput(f, o, level, s) {
 
 function playerInput() {
     const inp = { left: held.ArrowLeft, right: held.ArrowRight, block: held.ArrowDown,
-                  jump: tapped.ArrowUp, attack: null };
-    for (const sl of ownedSlots()) if (tapped['Key' + SLOT_KEYS[sl]] && slotSeq(sl).length) inp.attack = sl;
+                  jump: tapped.Space || tapped.ArrowUp, attack: null };
+    for (const sl of ownedSlots()) if (tapped[keyCode(SLOT_KEYS[sl])] && slotSeq(sl).length) inp.attack = sl;
     for (const k in tapped) tapped[k] = false;
     return inp;
 }
