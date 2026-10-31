@@ -1296,7 +1296,7 @@ function strikePoint(f, s, ground) {
 
 function botInput(f, o, level, s) {
     const ai = f.ai, inp = ai.input;
-    inp.attack = null;
+    inp.attack = null; inp.combo = null;
     if (--ai.cool > 0) return inp;
     // The Impossible Bot can't lose (endless health), so it fights like a level 9 bot
     // and dodges like a level 5 one.
@@ -1316,6 +1316,12 @@ function botInput(f, o, level, s) {
         if (o.h > 25 * s) k = inRange.includes('highKick') ? 'highKick' : 'highPunch';
         if (punish && inRange.includes('lowPunch') && level > 5) k = 'lowPunch';
         inp.attack = k;
+        // top bots (level 8-10) now and then throw a whole combo; the Impossible Bot never does
+        const comboChance = imp ? 0 : { 8: 0.04, 9: 0.07, 10: 0.1 }[level] || 0;
+        if (Math.random() < comboChance) {
+            const c = pick(COMBOS.filter(c => inRange.includes(c.seq[0])));
+            if (c) { inp.combo = c.seq; inp.attack = c.seq[0]; }
+        }
     } else if (!inRange.length && Math.random() < 0.08 * (11 - Math.min(10, level))) {
         inp.attack = pick(Object.keys(ATK));                                   // sloppy whiff from weak bots
     } else if (dist > 85) {
@@ -1364,7 +1370,7 @@ function updateFighter(f, o, inp, s, live) {
     } else if (live) {
         f.state = 'idle';
         if (inp.attack) {
-            const seq = f.isBot ? [inp.attack] : slotSeq(inp.attack);
+            const seq = f.isBot ? inp.combo || [inp.attack] : slotSeq(inp.attack);
             startAttack(f, seq[0]); f.queue = seq.slice(1); f.fast = seq.length > 1;
         }
         else {
