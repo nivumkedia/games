@@ -758,6 +758,23 @@
         });
     }
 
+    // ---------- enemy looks: the deeper into the city, the cooler the bot ----------
+    // urban runs 0 (first suburban grunt) -> 1 (the boss) by fight order.
+    // Low end: plain grey scrap-metal bots. Then street gear (a scarf, a
+    // colored shoulder stripe), then city enforcers (glowing LED visor,
+    // chest core, knee lights), then black-chrome neon elites (helmet fin,
+    // glowing trim).
+    function urbanAccent(u){
+        if (u < 0.3) return '#ff8a1f';  // street: hazard orange
+        if (u < 0.55) return '#21d4c4'; // city: teal
+        if (u < 0.8) return '#3df2ff';  // downtown: cyan
+        return '#ff3fd2';               // neon: magenta
+    }
+    enemies.forEach((e, i) => {
+        e.urban = i / (enemies.length - 1);
+        e.accent = e.bossPhases ? '#ffcf3d' : urbanAccent(e.urban);
+    });
+
     // ---------- player: humanoid robot ----------
     const player = {
         x: buildings[12].x + 10,
@@ -1430,6 +1447,10 @@
 
     // ---------- palette: suburban -> urban -> metropolis -> cyberpunk ----------
     function lerp(a, b, t){ return a + (b - a) * t; }
+    function hexToRgb(h){
+        const n = parseInt(h.slice(1), 16);
+        return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    }
     function lerpColor(c1, c2, t){
         return [
             Math.round(lerp(c1[0], c2[0], t)),
@@ -2083,13 +2104,21 @@
         }
         if (isPatroller || isCharger) ctx.scale(facingDir, 1);
         if (dying) ctx.rotate(deathT * 1.7);
+
+        // urban look: metal darkens from scrap grey toward black chrome, and
+        // street/LED/neon details switch on as urban climbs
+        const u = e.urban || 0;
+        const accent = e.accent || '#ff8a1f';
+        const metal = (light, dark) => rgb(lerpColor(hexToRgb(light), hexToRgb(dark), u * 0.9));
+        const glow = (color, blur) => { ctx.shadowColor = color; ctx.shadowBlur = blur; };
+        const pulse = 0.65 + 0.35 * Math.sin(gameTime * 4 + e.x * 0.02);
         if (dying) ctx.scale(1 + deathT * 0.15, 1 - deathT * 0.3);
 
         // legs, with a knee-joint highlight for some real shape — patrollers
         // keep walking through the whole fight, blocking only stops the sword
         const legGrad = ctx.createLinearGradient(0, -e.h * 0.1, 0, e.h * 0.42);
-        legGrad.addColorStop(0, '#8b9198');
-        legGrad.addColorStop(1, '#5e6469');
+        legGrad.addColorStop(0, metal('#8b9198', '#3a3f4a'));
+        legGrad.addColorStop(1, metal('#5e6469', '#1f232b'));
         const legSwing = walking ? Math.sin(e.walkPhase) * 0.5 : 0;
         ctx.save();
         ctx.translate(-5.5, e.h * 0.08);
@@ -2097,10 +2126,24 @@
         ctx.fillStyle = legGrad;
         roundRect(-3.5, 0, 7, e.h * 0.34, 2);
         ctx.fill();
-        ctx.fillStyle = '#454a4f';
+        ctx.fillStyle = metal('#454a4f', '#14171c');
         ctx.fillRect(-3.5, e.h * 0.16, 7, 3);
-        ctx.fillStyle = '#3a3f44';
+        if (u >= 0.4){
+            // knee light
+            ctx.save();
+            glow(accent, 6);
+            ctx.fillStyle = accent;
+            ctx.globalAlpha *= pulse;
+            ctx.fillRect(-1.5, e.h * 0.165, 3, 2);
+            ctx.restore();
+        }
+        ctx.fillStyle = metal('#3a3f44', '#101318');
         ctx.fillRect(-4.5, e.h * 0.34, 9, 5);
+        if (u >= 0.2){
+            // sneaker sole stripe
+            ctx.fillStyle = accent;
+            ctx.fillRect(-4.5, e.h * 0.34 + 4, 9, 1.5);
+        }
         ctx.restore();
         ctx.save();
         ctx.translate(5.5, e.h * 0.08);
@@ -2108,31 +2151,88 @@
         ctx.fillStyle = legGrad;
         roundRect(-3.5, 0, 7, e.h * 0.34, 2);
         ctx.fill();
-        ctx.fillStyle = '#454a4f';
+        ctx.fillStyle = metal('#454a4f', '#14171c');
         ctx.fillRect(-3.5, e.h * 0.16, 7, 3);
-        ctx.fillStyle = '#3a3f44';
+        if (u >= 0.4){
+            // knee light
+            ctx.save();
+            glow(accent, 6);
+            ctx.fillStyle = accent;
+            ctx.globalAlpha *= pulse;
+            ctx.fillRect(-1.5, e.h * 0.165, 3, 2);
+            ctx.restore();
+        }
+        ctx.fillStyle = metal('#3a3f44', '#101318');
         ctx.fillRect(-4.5, e.h * 0.34, 9, 5);
+        if (u >= 0.2){
+            // sneaker sole stripe
+            ctx.fillStyle = accent;
+            ctx.fillRect(-4.5, e.h * 0.34 + 4, 9, 1.5);
+        }
         ctx.restore();
+
+        // street gear: a scarf tail flapping out behind
+        if (u >= 0.2 && !e.bossPhases){
+            const flap = Math.sin(gameTime * 9 + e.x * 0.05);
+            ctx.fillStyle = accent;
+            ctx.beginPath();
+            ctx.moveTo(-6, -e.h * 0.27);
+            ctx.quadraticCurveTo(-16, -e.h * 0.26 + flap * 2, -24, -e.h * 0.2 + flap * 4);
+            ctx.lineTo(-22, -e.h * 0.15 + flap * 4);
+            ctx.quadraticCurveTo(-14, -e.h * 0.2 + flap * 2, -6, -e.h * 0.21);
+            ctx.closePath();
+            ctx.fill();
+        }
 
         // torso — flat-ish grey with just a hint of shading (this is a basic
         // suburban-tier grunt, not a fancy machine — but "basic" still needs
         // real form, not a solid rectangle)
         const torsoGrad = ctx.createLinearGradient(-10, -e.h * 0.22, 10, e.h * 0.12);
-        torsoGrad.addColorStop(0, '#a8aeb4');
-        torsoGrad.addColorStop(0.5, '#8e949a');
-        torsoGrad.addColorStop(1, '#666c71');
+        torsoGrad.addColorStop(0, metal('#a8aeb4', '#4a5160'));
+        torsoGrad.addColorStop(0.5, metal('#8e949a', '#2f3540'));
+        torsoGrad.addColorStop(1, metal('#666c71', '#1b1f27'));
         ctx.fillStyle = torsoGrad;
         roundRect(-10, -e.h * 0.22, 20, e.h * 0.36, 4);
         ctx.fill();
         ctx.strokeStyle = 'rgba(20,22,25,0.5)';
         ctx.lineWidth = 1.5;
         ctx.stroke();
+        if (u >= 0.75){
+            // neon trim around the chassis
+            ctx.save();
+            glow(accent, 8);
+            ctx.strokeStyle = accent;
+            ctx.globalAlpha *= 0.6 + 0.4 * pulse;
+            ctx.lineWidth = 1.2;
+            roundRect(-10, -e.h * 0.22, 20, e.h * 0.36, 4);
+            ctx.stroke();
+            ctx.restore();
+        }
         ctx.fillStyle = 'rgba(0,0,0,0.15)';
         roundRect(-10, e.h * 0.08, 20, 4, 2);
         ctx.fill();
+        if (u >= 0.45){
+            // glowing chest core
+            ctx.save();
+            glow(accent, 10);
+            ctx.fillStyle = accent;
+            ctx.globalAlpha *= pulse;
+            ctx.beginPath();
+            ctx.arc(-2, -e.h * 0.08, 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+        if (u >= 0.2 && !e.bossPhases){
+            // scarf wrapped round the neck
+            ctx.fillStyle = accent;
+            roundRect(-9, -e.h * 0.28, 18, 5, 2);
+            ctx.fill();
+            ctx.fillStyle = 'rgba(0,0,0,0.18)';
+            ctx.fillRect(-9, -e.h * 0.28 + 3.5, 18, 1.5);
+        }
 
         // pauldron (shoulder plate) on the sword side — gives it silhouette
-        ctx.fillStyle = '#767c82';
+        ctx.fillStyle = metal('#767c82', '#2a2f38');
         ctx.beginPath();
         ctx.moveTo(6, -e.h * 0.2);
         ctx.lineTo(17, -e.h * 0.16);
@@ -2143,20 +2243,49 @@
         ctx.strokeStyle = e.hitFlash > 0 ? '#ff5050' : 'rgba(0,0,0,0.25)';
         ctx.lineWidth = 1;
         ctx.stroke();
+        if (u >= 0.3){
+            // colored stripe across the shoulder plate
+            ctx.save();
+            if (u >= 0.55) glow(accent, 5);
+            ctx.strokeStyle = accent;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(7, -e.h * 0.13);
+            ctx.lineTo(16, -e.h * 0.1);
+            ctx.stroke();
+            ctx.restore();
+        }
 
         // off-arm
-        ctx.fillStyle = '#7d8389';
+        ctx.fillStyle = metal('#7d8389', '#363c47');
         roundRect(-15, -e.h * 0.14, 6, e.h * 0.22, 2);
         ctx.fill();
 
         // head — angular, slanted visor so it actually reads as "hostile"
-        ctx.fillStyle = '#9aa0a6';
+        if (u >= 0.6 && !e.bossPhases){
+            // swept-back helmet fin
+            ctx.save();
+            glow(accent, u >= 0.75 ? 8 : 0);
+            ctx.fillStyle = accent;
+            ctx.beginPath();
+            ctx.moveTo(-2, -e.h * 0.46);
+            ctx.lineTo(-11, -e.h * 0.46 - 9);
+            ctx.lineTo(4, -e.h * 0.46);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
+        ctx.fillStyle = metal('#9aa0a6', '#3d4452');
         roundRect(-8, -e.h * 0.46, 16, 16, 3);
         ctx.fill();
         ctx.strokeStyle = 'rgba(20,22,25,0.5)';
         ctx.lineWidth = 1.5;
         ctx.stroke();
-        ctx.fillStyle = e.hitFlash > 0 ? '#ff4444' : '#22272c';
+        // city bots and up get a lit LED visor instead of a dark slit
+        const ledVisor = u >= 0.35 && e.hitFlash <= 0;
+        ctx.save();
+        if (ledVisor) glow(accent, 8);
+        ctx.fillStyle = e.hitFlash > 0 ? '#ff4444' : (ledVisor ? accent : '#22272c');
         ctx.beginPath();
         ctx.moveTo(-6, -e.h * 0.40);
         ctx.lineTo(6, -e.h * 0.42);
@@ -2164,6 +2293,7 @@
         ctx.lineTo(-6, -e.h * 0.35);
         ctx.closePath();
         ctx.fill();
+        ctx.restore();
         if (e.hitFlash > 0){
             ctx.save();
             ctx.shadowColor = '#ff4444';
@@ -2173,7 +2303,7 @@
             ctx.restore();
         }
         // small side vents on the helmet
-        ctx.fillStyle = '#5e6469';
+        ctx.fillStyle = metal('#5e6469', '#1f232b');
         ctx.fillRect(-9, -e.h * 0.42, 2, 6);
         ctx.fillRect(7, -e.h * 0.42, 2, 6);
 
@@ -2240,7 +2370,7 @@
         ctx.save();
         ctx.translate(12, -e.h * 0.1);
         ctx.rotate(swingAngle);
-        ctx.fillStyle = '#7d8389';
+        ctx.fillStyle = metal('#7d8389', '#363c47');
         roundRect(-3, 0, 6, e.h * 0.18, 2);
         ctx.fill();
         ctx.translate(0, e.h * 0.16);

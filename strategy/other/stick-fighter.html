@@ -420,7 +420,7 @@
     <div class="cur" id="cur-sapphire" title="Sapphire (rare)" style="--c:#1e63d6;--d:#0d3a8a"><svg class="gem" viewBox="0 0 32 32"><polygon points="16,2 28,10 28,22 16,30 4,22 4,10" fill="#1e63d6" stroke="#0d3a8a" stroke-width="2"/><polygon points="16,7 23,11.5 23,20.5 16,25 9,20.5 9,11.5" fill="#4f8ff0"/><polygon points="16,7 23,11.5 16,14 9,11.5" fill="#c2dbff"/><circle cx="12" cy="11" r="1.6" fill="#fff"/></svg><span>0</span></div>
     <div class="cur" id="cur-ruby" title="Ruby (rarest)" style="--c:#d61e3c;--d:#7d0c1f"><svg class="gem" viewBox="0 0 32 32"><polygon points="16,2 28,10 28,22 16,30 4,22 4,10" fill="#d61e3c" stroke="#7d0c1f" stroke-width="2"/><polygon points="16,7 23,11.5 23,20.5 16,25 9,20.5 9,11.5" fill="#f0506b"/><polygon points="16,7 23,11.5 16,14 9,11.5" fill="#ffc7d1"/><circle cx="12" cy="11" r="1.6" fill="#fff"/></svg><span>0</span></div>
 </div>
-<div id="help" class="hidden"><b>← →</b> move &nbsp;·&nbsp; <b>Space</b> jump &nbsp;·&nbsp; <b>↓</b> block &nbsp;·&nbsp; <span id="helpKeys"></span><b>Esc</b> quit</div>
+<div id="help" class="hidden"><b>← →</b> move &nbsp;·&nbsp; <b>Space</b> jump &nbsp;·&nbsp; <span id="helpKeys"></span><b>Esc</b> quit</div>
 
 <script>
 const cv = document.getElementById('bg');
@@ -1131,8 +1131,6 @@ const ATK = {
     highKick:  { start: 10, active: 5, rec: 14, dmg: 13, reach: 96,  high: true,  kb: 7, stun: 20 },
     lowKick:   { start: 8,  active: 5, rec: 12, dmg: 10, reach: 100, high: false, kb: 5, stun: 16 }
 };
-POSES.block = { torso: -6, tilt: -10, fThigh: 26, fShin: 2, bThigh: -18, bShin: -34,
-                fUpper: 118, fFore: 176, bUpper: 96, bFore: 172 };
 const BOT_NAMES = ['KAITO', 'RIKU', 'MIRA', 'JUNO', 'DRAKE', 'SORA', 'VEX', 'NOVA', 'BRUNO', 'ZARA', 'TAO', 'KIRA'];
 const BOT_COLORS = ['#d84315', '#8e24aa', '#2e7d32', '#00838f', '#6d4c41', '#c2185b', '#37474f', '#ef6c00'];
 const ROUNDS = 10, ROUND_TIME = 45 * 60, IMPOSSIBLE_LEVEL = 14;
@@ -1140,6 +1138,7 @@ const ROUNDS = 10, ROUND_TIME = 45 * 60, IMPOSSIBLE_LEVEL = 14;
 // The run's total is only paid out if it beats your best run ever.
 const WIN_JADE_PER_LEVEL = 5, QUICK_KO_SECS = 15, QUICK_KO_JADE = 10;
 // 1v1 pays every win: bot level x 5, +10 for a Quick KO, +2 Jade for every 10% health you have left.
+const IMPOSSIBLE_JADE_PER_DMG = 5;
 const HP_STEP = 10, JADE_PER_STEP = 2;
 const pick = a => a[Math.floor(Math.random() * a.length)];
 // Your level (1-10) goes up with every 1v1 win and down with every loss.
@@ -1226,7 +1225,7 @@ function awardGems(amount, fromEl) {
 function makeFighter(x, facing, color, name, isBot) {
     return { x, h: 0, vy: 0, vx: 0, facing, color, name, isBot, hp: 100,
              state: 'idle', st: 0, atk: null, hasHit: false, stun: 0, walk: 0, flash: 0,
-             ai: { cool: 20, input: {}, blockT: 0 }, ko: null };
+             ai: { cool: 20, input: {} }, ko: null };
 }
 
 function startMatch(mode) {
@@ -1283,7 +1282,6 @@ function poseOf(f) {
         return blend(strike, POSES.guard, easeInOut((n - a.start - a.active) / a.rec));
     }
     if (f.state === 'hurt') return blend(POSES.guard, POSES.hit, 0.55 * Math.min(1, f.stun / 8));
-    if (f.state === 'block') return POSES.block;
     if (f.h > 0) return blend(POSES.guard, POSES.chamber, 0.6);
     if (f.state === 'walk') return blend(POSES.guard, blend(POSES.runA, POSES.runB, 0.5 - 0.5 * Math.cos(f.walk)), 0.45);
     return POSES.guard;
@@ -1299,26 +1297,21 @@ function strikePoint(f, s, ground) {
 function botInput(f, o, level, s) {
     const ai = f.ai, inp = ai.input;
     inp.attack = null;
-    if (ai.blockT > 0) { ai.blockT--; inp.block = ai.blockT > 0; if (ai.blockT > 0) return inp; }
     if (--ai.cool > 0) return inp;
-    // The Impossible Bot can't lose (endless health) and hits hard, so it doesn't also need
-    // perfect defence: it fights like a level 9 bot and blocks like a level 5 one.
+    // The Impossible Bot can't lose (endless health), so it fights like a level 9 bot
+    // and dodges like a level 5 one.
     const imp = match.mode === 'impossible', react = imp ? 9 : level, guard = imp ? 5 : level;
     ai.cool = Math.max(3, Math.round(26 - 2.3 * react + Math.random() * Math.max(0, 8 - react)));
-    inp.left = inp.right = inp.block = inp.jump = false;
+    inp.left = inp.right = inp.jump = false;
     const dist = Math.abs(o.x - f.x) / s, toward = Math.sign(o.x - f.x);
     // reading an incoming attack
     if (o.state === 'attack' && o.st < ATK[o.atk].start + 2 && dist < ATK[o.atk].reach + 25) {
         const a = ATK[o.atk];
-        if (!a.high && Math.random() < 0.03 * guard) { inp.jump = true; return inp; }
-        if (Math.random() < Math.min(0.97, 0.04 + 0.085 * guard)) {
-            ai.blockT = a.start - o.st + a.active + 4; inp.block = true; return inp;
-        }
+        if (!a.high && Math.random() < 0.03 * guard) { inp.jump = true; return inp; }   // hops over low attacks
     }
     const punish = o.state === 'attack' && o.st >= ATK[o.atk].start + ATK[o.atk].active;
     const inRange = Object.keys(ATK).filter(k => ATK[k].reach - 6 >= dist);
     if (inRange.length && (punish || Math.random() < 0.3 + 0.06 * react)) {
-        if (o.state === 'block' && Math.random() < 0.05 * guard) return inp;    // waits out a blocker
         let k = pick(inRange);
         if (o.h > 25 * s) k = inRange.includes('highKick') ? 'highKick' : 'highPunch';
         if (punish && inRange.includes('lowPunch') && level > 5) k = 'lowPunch';
@@ -1334,7 +1327,7 @@ function botInput(f, o, level, s) {
 }
 
 function playerInput() {
-    const inp = { left: held.ArrowLeft, right: held.ArrowRight, block: held.ArrowDown,
+    const inp = { left: held.ArrowLeft, right: held.ArrowRight,
                   jump: tapped.Space || tapped.ArrowUp, attack: null };
     for (const sl of ownedSlots()) if (tapped[keyCode(SLOT_KEYS[sl])] && slotSeq(sl).length) inp.attack = sl;
     for (const k in tapped) tapped[k] = false;
@@ -1374,7 +1367,6 @@ function updateFighter(f, o, inp, s, live) {
             const seq = f.isBot ? [inp.attack] : slotSeq(inp.attack);
             startAttack(f, seq[0]); f.queue = seq.slice(1); f.fast = seq.length > 1;
         }
-        else if (inp.block && grounded) f.state = 'block';
         else {
             if (inp.jump && grounded) f.vy = 11 * s;
             const dir = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
@@ -1399,22 +1391,16 @@ function tryHit(f, o, s, ground) {
     if (!a.high && o.h > 25 * s) return;                // low attacks pass under a jump
     f.hasHit = true;
     const m = match, [hx, hy] = strikePoint(f, s, ground);
-    const blocked = o.state === 'block' && o.facing === -f.facing;
-    let dmg = a.dmg * (f.isBot ? 0.75 + 0.04 * Math.min(m.level, 10) : 1) * (blocked ? 0.15 : 1);
+    let dmg = a.dmg * (f.isBot ? 0.75 + 0.04 * Math.min(m.level, 10) : 1);
     if (m.mode === 'impossible' && o.isBot) m.damage += dmg;
     else o.hp = Math.max(0, o.hp - dmg);
     // mid-combo hits push less, so the rest of the combo usually reaches; the last hit knocks back as normal
     const midCombo = f.fast && f.queue && f.queue.length;
-    o.vx = f.facing * a.kb * s * (blocked ? 0.5 : 0.8) * (midCombo ? MID_COMBO_PUSH : 1);
-    if (blocked) {
-        burst(hx, hy, ['#b0bec5', '#ffffff'], 6, 2 * s, 0.12);
-        m.freeze = 2;
-    } else {
-        o.stun = a.stun; o.state = 'hurt'; o.atk = null; o.flash = 8;
-        burst(hx, hy, ['#ffd54f', '#ffffff', '#ff7043'], a.dmg > 9 ? 16 : 10, (a.dmg > 9 ? 5 : 3.6) * s, 0.16);
-        m.freeze = a.dmg > 9 ? 6 : 4; shake = a.dmg > 9 ? 9 : 5;
-        if (o.hp <= 0) knockOut(o, f, s);
-    }
+    o.vx = f.facing * a.kb * s * 0.8 * (midCombo ? MID_COMBO_PUSH : 1);
+    o.stun = a.stun; o.state = 'hurt'; o.atk = null; o.flash = 8;
+    burst(hx, hy, ['#ffd54f', '#ffffff', '#ff7043'], a.dmg > 9 ? 16 : 10, (a.dmg > 9 ? 5 : 3.6) * s, 0.16);
+    m.freeze = a.dmg > 9 ? 6 : 4; shake = a.dmg > 9 ? 9 : 5;
+    if (o.hp <= 0) knockOut(o, f, s);
 }
 
 function knockOut(f, by, s) {
@@ -1576,7 +1562,7 @@ function showImpossibleResult() {
     const prev = +(localStorage.getItem('stickFighterImpossibleBest') || 0);
     const isBest = dmg > prev;
     if (isBest) localStorage.setItem('stickFighterImpossibleBest', dmg);
-    const earned = isBest ? dmg : 0;                      // 1 Jade per point of damage, only for a new record
+    const earned = isBest ? dmg * IMPOSSIBLE_JADE_PER_DMG : 0;   // 5 Jade per point of damage, only for a new record
     resultScreen.innerHTML = `<div class="card">
         <div class="small">The Impossible Bot wins. It always does.</div>
         <h2>${dmg} DAMAGE</h2>
