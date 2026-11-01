@@ -916,18 +916,16 @@
         if (e.type === 'kingpin') setBossPhase(e, 0);
         const b = buildingAt(e.x + e.w / 2);
         const base = b ? (SHINY_STYLE_BASE[b.style] || (b.neon ? 0.55 : 0)) : 0;
-        e.urban = base ? Math.min(1, base + 0.3 * b.density + b.cyber) : 0;
-    }
-    // downtown street bots always out-class everything before them,
-    // whatever roof they're on — and keep getting flashier toward the kingpin
-    {
-        const street = enemies.filter(e => e.street);
-        street.forEach((e, i) => {
-            e.urban = Math.max(e.urban, 0.62 + 0.38 * (i / Math.max(1, street.length - 1)));
-        });
+        // every bot on a brown brick tower gets the exact same look as the
+        // twin blades; the silver towers climb from there
+        e.urban = !base ? 0 : b.style === 'brickTower' ? 0.35 : Math.min(1, base + 0.3 * b.density + b.cyber);
     }
     for (const e of enemies){
         e.accent = e.bossPhases ? '#ffcf3d' : urbanAccent(e.urban);
+        // bots on the silver glass / stepped / spire towers are elites: a
+        // whole different, much flashier chassis (see drawEnemy)
+        const b = buildingAt(e.x + e.w / 2);
+        e.elite = !!b && ['glassTower', 'steppedTower', 'spireTower'].includes(b.style);
     }
 
     // ---------- player: humanoid robot ----------
@@ -2458,6 +2456,37 @@
             ctx.closePath();
             ctx.fill();
         }
+        const elite = e.elite && !dying;
+        if (e.elite && !e.bossPhases){
+            ctx.translate(0, e.h / 2);
+            ctx.scale(1.15, 1.15);
+            ctx.translate(0, -e.h / 2);
+        }
+        if (elite){
+            // neon pool of light under its feet
+            ctx.save();
+            ctx.globalAlpha *= 0.45;
+            ctx.fillStyle = e.accent;
+            ctx.shadowColor = e.accent;
+            ctx.shadowBlur = 18;
+            ctx.beginPath();
+            ctx.ellipse(0, e.h * 0.5, 22, 4, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+            // energy sparks drifting up off the chassis
+            ctx.save();
+            ctx.fillStyle = e.accent;
+            ctx.shadowColor = e.accent;
+            ctx.shadowBlur = 6;
+            for (let i = 0; i < 6; i++){
+                const t = (gameTime * 0.7 + i / 6 + e.x * 0.001) % 1;
+                const px = Math.sin(i * 2.7 + gameTime * 1.3) * 16;
+                const py = e.h * 0.45 - t * e.h * 1.1;
+                ctx.globalAlpha = (1 - t) * 0.8;
+                ctx.fillRect(px - 1, py - 1, 2, 2);
+            }
+            ctx.restore();
+        }
         if (isPatroller || isCharger || isCourier) ctx.scale(facingDir, 1);
         // magician's fakes flicker for a split second now and then
         if (e.decoy && e.flicker > 0) ctx.globalAlpha *= 0.35;
@@ -2556,8 +2585,33 @@
         }
         ctx.restore();
 
+        if (elite){
+            // long armored trench coat, flaring out behind with a neon hem
+            const flap = Math.sin(gameTime * 5 + e.x * 0.03);
+            ctx.save();
+            ctx.fillStyle = '#12151b';
+            ctx.beginPath();
+            ctx.moveTo(-10, -e.h * 0.24);
+            ctx.lineTo(10, -e.h * 0.24);
+            ctx.lineTo(8, e.h * 0.12);
+            ctx.lineTo(-2, e.h * 0.38);
+            ctx.lineTo(-20 - flap * 4, e.h * 0.44);
+            ctx.lineTo(-14 - flap * 2, e.h * 0.1);
+            ctx.closePath();
+            ctx.fill();
+            glow(accent, 10);
+            ctx.strokeStyle = accent;
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            ctx.moveTo(-2, e.h * 0.38);
+            ctx.lineTo(-20 - flap * 4, e.h * 0.44);
+            ctx.lineTo(-14 - flap * 2, e.h * 0.1);
+            ctx.stroke();
+            ctx.restore();
+        }
+
         // street gear: a scarf tail flapping out behind
-        if (u >= 0.2 && !e.bossPhases){
+        if (u >= 0.2 && !e.bossPhases && !elite){
             const flap = Math.sin(gameTime * 9 + e.x * 0.05);
             ctx.fillStyle = accent;
             ctx.beginPath();
@@ -2607,7 +2661,7 @@
             ctx.fill();
             ctx.restore();
         }
-        if (u >= 0.2 && !e.bossPhases){
+        if (u >= 0.2 && !e.bossPhases && !elite){
             // scarf wrapped round the neck
             ctx.fillStyle = accent;
             roundRect(-9, -e.h * 0.28, 18, 5, 2);
@@ -2645,9 +2699,50 @@
         ctx.fillStyle = metal('#7d8389', '#363c47');
         roundRect(-15, -e.h * 0.14, 6, e.h * 0.22, 2);
         ctx.fill();
+        if (elite){
+            // oversized angular shoulder armor, both sides, neon-edged
+            ctx.save();
+            for (const side of [-1, 1]){
+                ctx.fillStyle = '#1b1f27';
+                ctx.beginPath();
+                ctx.moveTo(side * 6, -e.h * 0.25);
+                ctx.lineTo(side * 21, -e.h * 0.22);
+                ctx.lineTo(side * 19, -e.h * 0.06);
+                ctx.lineTo(side * 8, -e.h * 0.1);
+                ctx.closePath();
+                ctx.fill();
+                glow(accent, 8);
+                ctx.strokeStyle = accent;
+                ctx.lineWidth = 1.4;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+            // glowing spine of lights down the chest
+            glow(accent, 8);
+            ctx.fillStyle = accent;
+            for (let i = 0; i < 3; i++){
+                ctx.globalAlpha = 0.5 + 0.5 * Math.sin(gameTime * 6 - i * 0.9);
+                ctx.fillRect(-1, -e.h * 0.02 + i * 5, 2, 3);
+            }
+            ctx.restore();
+        }
 
         // head — angular, slanted visor so it actually reads as "hostile"
-        if (u >= 0.6 && !e.bossPhases){
+        if (elite && !e.bossPhases){
+            // twin swept horns
+            ctx.save();
+            glow(accent, 10);
+            ctx.fillStyle = accent;
+            for (const side of [-1, 1]){
+                ctx.beginPath();
+                ctx.moveTo(side * 4, -e.h * 0.46);
+                ctx.lineTo(side * 13, -e.h * 0.46 - 12);
+                ctx.lineTo(side * 8, -e.h * 0.46);
+                ctx.closePath();
+                ctx.fill();
+            }
+            ctx.restore();
+        } else if (u >= 0.6 && !e.bossPhases){
             // swept-back helmet fin
             ctx.save();
             glow(accent, u >= 0.75 ? 8 : 0);
@@ -2680,6 +2775,14 @@
         ctx.lineTo(-6, -e.h * 0.35);
         ctx.closePath();
         ctx.fill();
+        if (elite && e.hitFlash <= 0){
+            // wraparound visor: a bright band right across the face
+            glow(visorColor, 16);
+            ctx.fillStyle = visorColor;
+            ctx.fillRect(-9, -e.h * 0.415, 18, 4);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(-7, -e.h * 0.405, 14, 1.2);
+        }
         ctx.restore();
         if (e.hitFlash > 0){
             ctx.save();
@@ -2795,7 +2898,23 @@
         roundRect(-3, 0, 6, e.h * 0.18, 2);
         ctx.fill();
         ctx.translate(0, e.h * 0.16);
-        drawBlade(bladeLen, 8, glowOverride || (e.comboStep >= 1 ? '#ff5a3d' : (u >= 0.6 ? accent : null)), 0.9);
+        if (elite){
+            // full energy blade: white-hot core, glow in its colour (turns
+            // to the hit/state colour when you land a key)
+            const bc = glowOverride || (e.comboStep >= 1 ? '#ff5a3d' : accent);
+            ctx.fillStyle = '#2a2e33';
+            ctx.fillRect(-7, -2, 14, 4);
+            glow(bc, 16);
+            ctx.fillStyle = bc;
+            roundRect(-3.5, 2, 7, bladeLen * 1.15, 3.5);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = 'rgba(255,255,255,0.9)';
+            roundRect(-1.3, 4, 2.6, bladeLen * 1.15 - 4, 1.3);
+            ctx.fill();
+        } else {
+            drawBlade(bladeLen, 8, glowOverride || (e.comboStep >= 1 ? '#ff5a3d' : (u >= 0.6 ? accent : null)), 0.9);
+        }
         ctx.restore();
 
         ctx.restore();
