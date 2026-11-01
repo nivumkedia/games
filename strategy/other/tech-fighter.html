@@ -758,22 +758,177 @@
         });
     }
 
-    // ---------- enemy looks: the deeper into the city, the cooler the bot ----------
-    // urban runs 0 (first suburban grunt) -> 1 (the boss) by fight order.
-    // Low end: plain grey scrap-metal bots. Then street gear (a scarf, a
-    // colored shoulder stripe), then city enforcers (glowing LED visor,
-    // chest core, knee lights), then black-chrome neon elites (helmet fin,
-    // glowing trim).
+    // ================= downtown: street enemies =================
+    // shared shape for a plain standing block-combo bot on a rooftop
+    function streetBot(type, b, frac, extra){
+        return Object.assign({
+            type,
+            x: b.x + b.width * frac - 18,
+            y: b.y - 66,
+            w: 36, h: 66,
+            alive: true,
+            comboStep: 0,
+            hitFlash: 0,
+            deathTimer: 0,
+            street: true
+        }, extra);
+    }
+
+    // 18. tagger — sprays graffiti over one letter of its own BLOCKS tag
+    // every few seconds. The block never changes, so read it while you can.
+    enemies.push(streetBot('tagger', buildings[18], 0.5, {
+        blocks: ['xsa'], tagHide: true
+    }));
+
+    // 19. courier — rides an e-scooter back and forth across its roof. Too
+    // fast to hit at speed: a key while it's cruising gets you run down.
+    // It brakes (brake light on) coming into each turn — that's the window.
+    {
+        const b = buildings[19];
+        const margin = Math.min(14, b.width * 0.1);
+        const patrolMinX = b.x + margin;
+        const patrolMaxX = Math.max(patrolMinX, b.x + b.width - margin - 36);
+        enemies.push(streetBot('courier', b, 0.5, {
+            blocks: ['zs'],
+            patrolMinX, patrolMaxX,
+            patrolDir: 1,
+            courierSpeed: 0,
+            facing: 1
+        }));
+    }
+
+    // 20. billboard — no tag over its head. Its blocks are up on a big
+    // billboard on the NEXT rooftop, so you have to look ahead.
+    enemies.push(streetBot('billboard', buildings[20], 0.5, {
+        blocks: ['sxa'], billboardOn: 21
+    }));
+
+    // 21. bouncer — NO ENTRY: Z. Z can't appear anywhere in the combo,
+    // on top of its normal blocks.
+    enemies.push(streetBot('bouncer', buildings[21], 0.35, {
+        blocks: ['sx', 'ax'], banned: 'z'
+    }));
+
+    // 22. street magician — three identical bots, one real. Swing at a fake
+    // and it strikes. The fakes give themselves away by flickering now and
+    // then. One shared tag floats over the middle bot.
+    {
+        const b = buildings[22];
+        const fracs = [0.2, 0.5, 0.8];
+        const realIdx = Math.floor(rand() * 3);
+        const crew = fracs.map((f, i) => streetBot('magician', b, f, {
+            decoy: i !== realIdx,
+            flickerTimer: randRange(0.8, 2.2),
+            flicker: 0
+        }));
+        const real = crew[realIdx];
+        real.blocks = ['ax'];
+        for (const m of crew){
+            m.magicGroup = crew;
+            if (m !== crew[1]) m.noLabel = true; // only the middle one carries the tag
+            else m.labelFrom = real;
+        }
+        enemies.push(...crew);
+    }
+
+    // 23. DJ — every key has to land on the beat. The bot and its tag pulse
+    // with it; a key off the beat gets you struck.
+    enemies.push(streetBot('dj', buildings[23], 0.5, {
+        blocks: ['zas'], beat: 0.7, beatWindow: 0.13, beatClock: 0
+    }));
+
+    // 24. drone handler — a drone circles it. Swat the drone with A while
+    // it's passing in front, then fight the bot. Any other key while the
+    // drone is up (or A while it's behind) gets you struck.
+    enemies.push(streetBot('droneHandler', buildings[24], 0.5, {
+        blocks: ['xs', 'za'], droneAlive: true, droneAngle: 0
+    }));
+
+    // 25. hacker — swaps two of your keys while it's alive: with SWAP A↔X,
+    // pressing A counts as X and X counts as A.
+    enemies.push(streetBot('hacker', buildings[25], 0.5, {
+        blocks: ['xz'], swap: { a: 'x', x: 'a' }
+    }));
+
+    // 26. traffic cop — its visor cycles red, yellow, green. Keys only count
+    // on green; a key on red gets you struck; yellow just ignores you.
+    enemies.push(streetBot('trafficCop', buildings[26], 0.5, {
+        blocks: ['asz'], traffic: true
+    }));
+
+    // 27. subway rider — after every key that lands, it leaps across to the
+    // other rooftop (27 <-> 28). Your combo carries over; jump after it.
+    {
+        const a = buildings[27], b2 = buildings[28];
+        const stops = [
+            { x: a.x + a.width * 0.6 - 18, y: a.y - 66 },
+            { x: b2.x + b2.width * 0.4 - 18, y: b2.y - 66 }
+        ];
+        enemies.push(streetBot('subwayRider', a, 0.6, {
+            blocks: ['xa'], hopStops: stops, hopAt: 0, hopT: 0, hopping: false
+        }));
+    }
+
+    // 29. crew — three bots in a row. Each finishing key is also the first
+    // key of the next bot's combo, so it's one long chained combo.
+    {
+        const b = buildings[29];
+        const crew = [
+            streetBot('crew', b, 0.2, { blocks: ['zx'] }),
+            streetBot('crew', b, 0.5, { blocks: ['as'], labelLift: 24 }),
+            streetBot('crew', b, 0.8, { blocks: ['xs'], labelLift: 48 })
+        ];
+        crew.forEach((c, i) => { c.crewNext = crew[i + 1] || null; c.crewIndex = i; });
+        enemies.push(...crew);
+    }
+
+    // 30. kingpin (boss) — runs the street crews, and fights like them.
+    // Phase 1: tagger (graffiti over its tag). Phase 2: hacker (S and Z
+    // swapped). Phase 3: traffic light. Phase 4: a 5-key combo on a 0.8s
+    // fuse while the whole penthouse roof lights up. Die and it resets.
+    enemies.push(streetBot('kingpin', buildings[30], 0.5, {
+        bossPhase: 0,
+        bossPhases: [
+            { blocks: ['zsx'], tagHide: true },
+            { blocks: ['sa'], swap: { s: 'z', z: 's' } },
+            { blocks: ['xaz'], traffic: true },
+            { blocks: ['azsx'], keyGap: 0.8, roofGlow: true }
+        ]
+    }));
+
+    // ---------- enemy looks: shiny towers get cooler bots ----------
+    // Bots standing on suburban houses stay plain grey scrap metal
+    // (urban 0). Bots on any tower get the upgraded look, and it climbs
+    // with how shiny the tower is (brick < glass < stepped < spire) and how
+    // built-up and neon that stretch of city is: street gear (scarf, shoulder stripe), then a lit
+    // LED visor, chest core and knee lights, then a helmet fin, then
+    // black chrome with glowing neon trim.
+    // how fancy a bot each tower style gets, before the city's density and
+    // neon push it further
+    const SHINY_STYLE_BASE = { brickTower: 0.3, glassTower: 0.55, steppedTower: 0.75, spireTower: 0.9 };
     function urbanAccent(u){
         if (u < 0.3) return '#ff8a1f';  // street: hazard orange
         if (u < 0.55) return '#21d4c4'; // city: teal
         if (u < 0.8) return '#3df2ff';  // downtown: cyan
         return '#ff3fd2';               // neon: magenta
     }
-    enemies.forEach((e, i) => {
-        e.urban = i / (enemies.length - 1);
+    for (const e of enemies){
+        if (e.type === 'kingpin') setBossPhase(e, 0);
+        const b = buildingAt(e.x + e.w / 2);
+        const base = b ? (SHINY_STYLE_BASE[b.style] || (b.neon ? 0.55 : 0)) : 0;
+        e.urban = base ? Math.min(1, base + 0.3 * b.density + b.cyber) : 0;
+    }
+    // downtown street bots always out-class everything before them,
+    // whatever roof they're on — and keep getting flashier toward the kingpin
+    {
+        const street = enemies.filter(e => e.street);
+        street.forEach((e, i) => {
+            e.urban = Math.max(e.urban, 0.62 + 0.38 * (i / Math.max(1, street.length - 1)));
+        });
+    }
+    for (const e of enemies){
         e.accent = e.bossPhases ? '#ffcf3d' : urbanAccent(e.urban);
-    });
+    }
 
     // ---------- player: humanoid robot ----------
     const player = {
@@ -842,6 +997,19 @@
                     <li><b>Clockers</b> show a time on their tag. That's all you get between keys. Hesitate and they strike.</li>
                     <li><b>Pairs:</b> when two enemies share a roof, every key hits both. Your combo has to get past both tags at once.</li>
                     <li><b>The boss</b> fights in phases, using everything above. Die at any point and it starts over.</li>
+                </ul>`
+        },
+        {
+            title: 'Downtown',
+            body: `<p>The city's street bots bend the rules. Their tag usually tells you how.</p>
+                <ul>
+                    <li><b>Graffiti</b> can hide part of a tag. Read it while it's clean.</li>
+                    <li><b>Moving bots</b> can't always be hit. Watch for when they slow down.</li>
+                    <li><b>No tag?</b> The answer might be written somewhere else in the city.</li>
+                    <li><b>NO ENTRY</b> keys can't be used anywhere in the combo.</li>
+                    <li><b>Lookalikes:</b> only one is real. Fakes give themselves away if you watch.</li>
+                    <li><b>Rhythm, lights, drones and swaps</b> change <i>when</i> or <i>how</i> your keys count. Don't rush in.</li>
+                    <li><b>Crews</b> chain together: the key that finishes one bot starts the next.</li>
                 </ul>`
         },
         {
@@ -939,6 +1107,13 @@
                 e.swingTimer = randRange(1, 3);
             }
             if (e.bossPhases && e.alive) setBossPhase(e, 0);
+            if (e.alive && e.droneAlive === false) e.droneAlive = true; // the drone comes back up
+            if (e.alive && e.hopStops){
+                e.hopping = false;
+                e.hopAt = 0;
+                e.x = e.hopStops[0].x;
+                e.y = e.hopStops[0].y;
+            }
         }
         deathSequence = null;
         deathFlash = 0.3;
@@ -974,9 +1149,9 @@
     function setBossPhase(e, idx){
         e.bossPhase = idx;
         const phase = e.bossPhases[idx];
-        e.blocks = phase.blocks || null;
-        e.resist = phase.resist || null;
-        e.keyGap = phase.keyGap || null;
+        for (const f of ['blocks', 'resist', 'keyGap', 'tagHide', 'swap', 'traffic', 'roofGlow']){
+            e[f] = phase[f] || null;
+        }
         e.pressedKeys = [];
         e.comboStep = 0;
         e.comboWindowTimer = 0;
@@ -1036,6 +1211,70 @@
                     e.comboWindowTimer = 0;
                     if (!(deathSequence && deathSequence.phase)) startPunishSequence(e);
                 }
+            }
+
+            // tagger: graffiti covers one letter of its tag for a while,
+            // then it wipes clean, then it tags again
+            if (e.tagHide && e.alive){
+                e.tagTimer = (e.tagTimer == null ? 2 : e.tagTimer) - dt;
+                if (e.tagTimer <= 0){
+                    if (e.hiddenIdx == null){
+                        const total = e.blocks.join('').length;
+                        e.hiddenIdx = Math.floor(rand() * total);
+                        e.tagTimer = 2.6;
+                    } else {
+                        e.hiddenIdx = null;
+                        e.tagTimer = 1.6;
+                    }
+                }
+            } else if (!e.tagHide) e.hiddenIdx = null;
+
+            // courier: scooters back and forth, braking hard into each turn
+            if (e.type === 'courier' && e.alive){
+                const MAX = 160;
+                const toEdge = e.patrolDir > 0 ? e.patrolMaxX - e.x : e.x - e.patrolMinX;
+                e.courierSpeed = MAX * Math.max(0.12, Math.min(1, toEdge / 50));
+                e.x += e.patrolDir * e.courierSpeed * dt;
+                if (e.x >= e.patrolMaxX){ e.x = e.patrolMaxX; e.patrolDir = -1; }
+                if (e.x <= e.patrolMinX){ e.x = e.patrolMinX; e.patrolDir = 1; }
+                e.facing = e.patrolDir;
+                e.braking = e.courierSpeed < MAX * 0.5;
+            }
+
+            // magician's fakes flicker every so often — the only tell
+            if (e.decoy && e.alive){
+                if (e.flicker > 0) e.flicker = Math.max(0, e.flicker - dt);
+                e.flickerTimer -= dt;
+                if (e.flickerTimer <= 0){
+                    e.flicker = 0.18;
+                    e.flickerTimer = randRange(1.0, 2.4);
+                }
+            }
+
+            // DJ: keeps the beat
+            if (e.beat && e.alive) e.beatClock = (e.beatClock + dt) % e.beat;
+
+            // drone handler: the drone orbits it
+            if (e.droneAlive && e.alive) e.droneAngle += dt * 2.3;
+
+            // traffic cop: red -> yellow -> green -> red...
+            if (e.traffic && e.alive){
+                if (!e.light){ e.light = 'red'; e.lightTimer = 1.3; }
+                e.lightTimer -= dt;
+                if (e.lightTimer <= 0){
+                    if (e.light === 'red'){ e.light = 'yellow'; e.lightTimer = 0.6; }
+                    else if (e.light === 'yellow'){ e.light = 'green'; e.lightTimer = 1.7; }
+                    else { e.light = 'red'; e.lightTimer = 1.3; }
+                }
+            } else if (!e.traffic) e.light = null;
+
+            // subway rider: mid-leap between its two rooftops
+            if (e.hopping && e.alive){
+                e.hopT = Math.min(1, e.hopT + dt / 0.55);
+                const from = e.hopStops[1 - e.hopAt], to = e.hopStops[e.hopAt];
+                e.x = lerp(from.x, to.x, e.hopT);
+                e.y = lerp(from.y, to.y, e.hopT) - Math.sin(Math.PI * e.hopT) * 90;
+                if (e.hopT >= 1){ e.hopping = false; e.x = to.x; e.y = to.y; }
             }
 
             // shifter: swaps to the next block in its cycle on a timer, and
@@ -1239,6 +1478,7 @@
         let target = null, bestDist = Infinity;
         for (const e of enemies){
             if (!e.alive || e.swingState) continue; // handled above, not the block-combo system
+            if (e.hopping) continue; // mid-leap — can't reach it
             const dx = (e.x + e.w / 2) - (player.x + player.w / 2);
             const dy = (e.y + e.h / 2) - (player.y + player.h / 2);
             const dist = Math.hypot(dx, dy);
@@ -1250,6 +1490,30 @@
             if (dist <= reach && dist < bestDist){ bestDist = dist; target = e; }
         }
         if (!target) return; // nothing in reach — key does nothing
+
+        // ---- street enemy rules that decide whether this key even counts ----
+        if (target.decoy){ startPunishSequence(target); return; } // swung at a fake
+        if (target.type === 'courier' && !target.braking){ startPunishSequence(target); return; } // run down at speed
+        if (target.light === 'yellow') return; // waiting on the light — ignored
+        if (target.light === 'red'){ startPunishSequence(target); return; }
+        if (target.beat){
+            const ph = target.beatClock;
+            const onBeat = ph < target.beatWindow || ph > target.beat - target.beatWindow;
+            if (!onBeat){ startPunishSequence(target); return; }
+        }
+        if (target.droneAlive){
+            const droneFront = Math.sin(target.droneAngle) > 0.35;
+            if (k === 'a' && droneFront){
+                target.droneAlive = false;
+                player.combatPose = 'kill';
+                player.combatTimer = 0.35;
+                spawnEffect(target.x + target.w / 2 + Math.cos(target.droneAngle) * 30, target.y + target.h * 0.2, '#ffcf3d', 0.4);
+            } else {
+                startPunishSequence(target);
+            }
+            return;
+        }
+        if (target.swap && target.swap[k]) k = target.swap[k]; // hacked controls
 
         const midX = (player.x + player.w / 2 + target.x + target.w / 2) / 2;
         const midY = (player.y + target.y) / 2;
@@ -1278,7 +1542,10 @@
         // opened with C — the flip in) before anything else counts
         const firstKeyFail = target.requiredFirst && target.pressedKeys.length === 0 && k !== target.requiredFirst;
 
-        const correct = !repeatFail && !blockFail && !firstKeyFail;
+        // bouncer: one key isn't allowed in at all
+        const bannedFail = target.banned && k === target.banned;
+
+        const correct = !repeatFail && !blockFail && !firstKeyFail && !bannedFail;
         if (correct) target.pressedKeys.push(k);
 
         if (correct){
@@ -1333,9 +1600,26 @@
             } else if (isFinalBlow){
                 killComboEnemy(target);
                 if (twin) killComboEnemy(twin);
-            } else if (target.keyGap && k !== 'c'){
-                // clocker fuse: the next key has to land before this runs out
-                target.comboWindowTimer = target.keyGap;
+                // magician: the real one goes down and the fakes vanish with it
+                if (target.magicGroup) for (const m of target.magicGroup) if (m.alive) killComboEnemy(m);
+                // crew: that finishing key opens the next bot's combo
+                const next = target.crewNext;
+                if (next && next.alive){
+                    next.pressedKeys = [k];
+                    next.comboStep = 1;
+                    next.hitFlash = 0.25;
+                }
+            } else {
+                if (target.keyGap && k !== 'c'){
+                    // clocker fuse: the next key has to land before this runs out
+                    target.comboWindowTimer = target.keyGap;
+                }
+                if (target.hopStops){
+                    // subway rider: leaps to the other roof
+                    target.hopAt = 1 - target.hopAt;
+                    target.hopT = 0;
+                    target.hopping = true;
+                }
             }
         } else {
             startPunishSequence(target);
@@ -2044,10 +2328,81 @@
     }
 
     // ---------- enemies ----------
+    // the billboard enemy's blocks, up on a sign on the next rooftop
+    function drawBillboard(e){
+        const b = buildings[e.billboardOn];
+        const bx = b.x + b.width * 0.78 - camera.x;
+        const roofY = b.y - camera.y;
+        if (bx < -150 || bx > W + 150) return;
+        ctx.save();
+        ctx.fillStyle = '#3a3f4a';
+        ctx.fillRect(bx - 30, roofY - 152, 4, 152);
+        ctx.fillRect(bx + 26, roofY - 152, 4, 152);
+        roundRect(bx - 52, roofY - 200, 104, 50, 5);
+        ctx.fillStyle = '#14171c';
+        ctx.fill();
+        ctx.strokeStyle = '#3df2ff';
+        ctx.shadowColor = '#3df2ff';
+        ctx.shadowBlur = e.alive ? 10 : 0;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#9fefff';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.fillText(e.alive ? 'TONIGHT ONLY' : 'SOLD OUT', bx, roofY - 185);
+        ctx.font = 'bold 15px sans-serif';
+        ctx.fillStyle = e.alive ? '#ffffff' : '#5e6b78';
+        ctx.fillText('BLOCKS ' + e.blocks.map(x => x.toUpperCase()).join(', '), bx, roofY - 164);
+        ctx.restore();
+    }
+
+    function drawDrone(e, sx, sy){
+        const dx = sx + e.w / 2 + Math.cos(e.droneAngle) * 30;
+        const dy = sy + e.h * 0.2 + Math.sin(e.droneAngle) * 6;
+        const front = Math.sin(e.droneAngle) > 0.35;
+        const sc = 0.8 + 0.25 * Math.sin(e.droneAngle);
+        ctx.save();
+        ctx.translate(dx, dy);
+        ctx.scale(sc, sc);
+        ctx.fillStyle = '#2a2f38';
+        ctx.fillRect(-11, -1.5, 22, 3);
+        ctx.fillStyle = 'rgba(200,220,235,0.7)';
+        const spin = gameTime * 40;
+        for (const px of [-11, 11]){
+            ctx.fillRect(px - 6 * Math.abs(Math.cos(spin)), -3.5, 12 * Math.abs(Math.cos(spin)), 1.5);
+        }
+        ctx.fillStyle = '#3d4452';
+        roundRect(-5, -3, 10, 7, 2);
+        ctx.fill();
+        ctx.fillStyle = front ? '#ffcf3d' : '#ff3b3b';
+        ctx.shadowColor = ctx.fillStyle;
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(0, 1, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
     function drawEnemy(e){
+        if (e.billboardOn != null) drawBillboard(e);
         const sx = e.x - camera.x;
         const sy = e.y - camera.y;
         if (sx < -100 || sx > W + 100) return;
+        if (e.roofGlow && e.alive){
+            // kingpin finale: the whole penthouse roof lights up
+            const rb = buildingAt(e.x + e.w / 2);
+            if (rb){
+                ctx.save();
+                ctx.strokeStyle = '#ff3fd2';
+                ctx.shadowColor = '#ff3fd2';
+                ctx.shadowBlur = 14 + 6 * Math.sin(gameTime * 6);
+                ctx.lineWidth = 3;
+                ctx.strokeRect(rb.x - camera.x, rb.y - camera.y, rb.width, 4);
+                ctx.restore();
+            }
+        }
+        if (e.droneAlive && e.alive && Math.sin(e.droneAngle) <= 0.35) drawDrone(e, sx, sy); // behind the bot
         const dying = !e.alive;
         const deathT = dying ? 1 - Math.max(0, e.deathTimer) / 0.5 : 0; // 0..1
         const alpha = dying ? Math.max(0, 1 - deathT * 1.3) : 1;
@@ -2078,8 +2433,9 @@
 
         const isPatroller = e.type === 'swordPatroller';
         const isCharger = e.type === 'chargerSlasher';
+        const isCourier = e.type === 'courier';
         const walking = (isPatroller || isCharger) && e.alive;
-        const facingDir = isPatroller ? e.patrolDir : (isCharger ? e.facing : 1);
+        const facingDir = isPatroller ? e.patrolDir : (isCharger || isCourier ? e.facing : 1);
 
         ctx.save();
         ctx.globalAlpha = alpha;
@@ -2102,7 +2458,36 @@
             ctx.closePath();
             ctx.fill();
         }
-        if (isPatroller || isCharger) ctx.scale(facingDir, 1);
+        if (isPatroller || isCharger || isCourier) ctx.scale(facingDir, 1);
+        // magician's fakes flicker for a split second now and then
+        if (e.decoy && e.flicker > 0) ctx.globalAlpha *= 0.35;
+        // DJ bobs on the beat
+        if (e.beat && e.alive){
+            const bob = Math.max(0, 1 - e.beatClock / 0.18);
+            ctx.translate(0, bob * 3);
+        }
+        if (isCourier){
+            // e-scooter under its feet, with a brake light while it slows
+            ctx.save();
+            ctx.fillStyle = '#2a2f38';
+            roundRect(-16, e.h * 0.42, 32, 4, 2);
+            ctx.fill();
+            ctx.fillRect(12, e.h * 0.02, 3, e.h * 0.42);
+            ctx.fillRect(8, e.h * 0.02, 10, 2.5);
+            ctx.fillStyle = '#14171c';
+            for (const wx of [-12, 13]){
+                ctx.beginPath();
+                ctx.arc(wx, e.h * 0.5, 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            if (e.braking){
+                ctx.fillStyle = '#ff3b3b';
+                ctx.shadowColor = '#ff3b3b';
+                ctx.shadowBlur = 8;
+                ctx.fillRect(-18, e.h * 0.41, 3, 4);
+            }
+            ctx.restore();
+        }
         if (dying) ctx.rotate(deathT * 1.7);
 
         // urban look: metal darkens from scrap grey toward black chrome, and
@@ -2197,7 +2582,7 @@
         ctx.strokeStyle = 'rgba(20,22,25,0.5)';
         ctx.lineWidth = 1.5;
         ctx.stroke();
-        if (u >= 0.75){
+        if (u >= 0.6){
             // neon trim around the chassis
             ctx.save();
             glow(accent, 8);
@@ -2282,10 +2667,12 @@
         ctx.lineWidth = 1.5;
         ctx.stroke();
         // city bots and up get a lit LED visor instead of a dark slit
-        const ledVisor = u >= 0.35 && e.hitFlash <= 0;
+        const lightColor = e.light === 'red' ? '#ff3b3b' : e.light === 'yellow' ? '#ffcf3d' : e.light === 'green' ? '#3dff7a' : null;
+        const visorColor = lightColor || accent;
+        const ledVisor = (u >= 0.35 || lightColor) && e.hitFlash <= 0;
         ctx.save();
-        if (ledVisor) glow(accent, 8);
-        ctx.fillStyle = e.hitFlash > 0 ? '#ff4444' : (ledVisor ? accent : '#22272c');
+        if (ledVisor) glow(visorColor, lightColor ? 12 : 8);
+        ctx.fillStyle = e.hitFlash > 0 ? '#ff4444' : (ledVisor ? visorColor : '#22272c');
         ctx.beginPath();
         ctx.moveTo(-6, -e.h * 0.40);
         ctx.lineTo(6, -e.h * 0.42);
@@ -2306,6 +2693,40 @@
         ctx.fillStyle = metal('#5e6469', '#1f232b');
         ctx.fillRect(-9, -e.h * 0.42, 2, 6);
         ctx.fillRect(7, -e.h * 0.42, 2, 6);
+        if (e.type === 'magician'){
+            // top hat
+            ctx.fillStyle = '#14171c';
+            ctx.fillRect(-11, -e.h * 0.46 - 2, 22, 3);
+            ctx.fillRect(-7, -e.h * 0.46 - 15, 14, 14);
+            ctx.fillStyle = accent;
+            ctx.fillRect(-7, -e.h * 0.46 - 5, 14, 2.5);
+        }
+        if (e.beat){
+            // headphones
+            ctx.strokeStyle = '#14171c';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.arc(0, -e.h * 0.4, 10, Math.PI * 1.05, Math.PI * 1.95);
+            ctx.stroke();
+            ctx.fillStyle = accent;
+            roundRect(-12, -e.h * 0.43, 5, 8, 2);
+            ctx.fill();
+            roundRect(7, -e.h * 0.43, 5, 8, 2);
+            ctx.fill();
+        }
+        if (e.swap){
+            // hacker: a little floating stream of code
+            ctx.save();
+            ctx.fillStyle = '#3dff7a';
+            ctx.globalAlpha *= 0.8;
+            ctx.font = 'bold 7px monospace';
+            ctx.textAlign = 'center';
+            const line = Math.floor(gameTime * 6);
+            for (let r = 0; r < 3; r++){
+                ctx.fillText(((line + r) % 2 ? '10' : '01') + ((line * 7 + r) % 3), -18, -e.h * 0.3 + r * 8);
+            }
+            ctx.restore();
+        }
 
         // sword arm: fast up/down swing while idle, held poses once engaged,
         // with a motion trail while it's actually whipping back and forth
@@ -2374,24 +2795,53 @@
         roundRect(-3, 0, 6, e.h * 0.18, 2);
         ctx.fill();
         ctx.translate(0, e.h * 0.16);
-        drawBlade(bladeLen, 8, glowOverride || (e.comboStep >= 1 ? '#ff5a3d' : null), 0.9);
+        drawBlade(bladeLen, 8, glowOverride || (e.comboStep >= 1 ? '#ff5a3d' : (u >= 0.6 ? accent : null)), 0.9);
         ctx.restore();
 
         ctx.restore();
+
+        if (e.droneAlive && e.alive && Math.sin(e.droneAngle) > 0.35) drawDrone(e, sx, sy); // in front — swat it now
+        if (e.beat && e.alive){
+            // the beat, as a ring that pops out from the DJ
+            const t = e.beatClock / e.beat;
+            ctx.save();
+            ctx.strokeStyle = '#ff3fd2';
+            ctx.globalAlpha = Math.max(0, 0.6 - t);
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(sx + e.w / 2, sy + e.h / 2, 20 + t * 40, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
 
         if (e.alive) drawBlockLabel(e, sx, sy);
     }
 
     // what this enemy blocks, as a small readable tag above its head
+    // the BLOCKS text, with the tagger's graffiti over one letter
+    function blocksText(e){
+        let idx = 0;
+        return e.blocks.map(b => b.toUpperCase().split('').map(ch => (idx++ === e.hiddenIdx ? '▓' : ch)).join('')).join(', ');
+    }
+
     function enemyBlockLabel(e){
+        if (e.noLabel) return '';
+        if (e.labelFrom) e = e.labelFrom;
+        if (e.billboardOn != null) return 'CHECK THE BILLBOARD →';
         const phase = e.bossPhases ? 'PHASE ' + (e.bossPhase + 1) + '/' + e.bossPhases.length : '';
         if (!e.blocks){
             const hint = e.bossPhases && e.bossPhases[e.bossPhase].hint;
             return hint ? phase + ' · ' + hint : phase;
         }
-        let text = 'BLOCKS ' + e.blocks.map(b => b.toUpperCase()).join(', ');
+        let text = 'BLOCKS ' + blocksText(e);
+        if (e.banned) text = 'NO ENTRY: ' + e.banned.toUpperCase() + ' · ' + text;
+        if (e.swap) text = 'SWAP ' + Object.keys(e.swap)[0].toUpperCase() + '↔' + Object.values(e.swap)[0].toUpperCase() + ' · ' + text;
+        if (e.droneAlive) text = 'SWAT DRONE (A) · ' + text;
+        if (e.crewNext !== undefined) text = 'CREW ' + (e.crewIndex + 1) + '/3 · ' + text;
         if (e.resist) text += ' · RESISTS ' + e.resist.toUpperCase();
         if (e.keyGap) text += ' · ' + e.keyGap + 's';
+        if (e.beat) text += ' · ON THE BEAT';
+        if (e.traffic) text += ' · GO ON GREEN';
         return phase ? phase + ' · ' + text : text;
     }
 
@@ -2399,7 +2849,7 @@
         const text = enemyBlockLabel(e);
         if (!text) return;
         const cx2 = sx + e.w / 2;
-        const topY = sy - e.h * 0.5 - 16;
+        const topY = sy - e.h * 0.5 - 16 - (e.labelLift || 0);
         ctx.save();
         ctx.font = 'bold 11px sans-serif';
         ctx.textAlign = 'center';
@@ -2411,8 +2861,10 @@
         ctx.fill();
         // a shifter's tag flashes blue the moment its block changes
         const shifted = e.shiftFlash > 0;
-        ctx.strokeStyle = shifted ? '#4fa3ff' : '#ff5a3d';
-        ctx.lineWidth = shifted ? 2.4 : 1.2;
+        const onBeat = e.beat && (e.beatClock < e.beatWindow || e.beatClock > e.beat - e.beatWindow);
+        const lightColor = e.light === 'red' ? '#ff3b3b' : e.light === 'yellow' ? '#ffcf3d' : e.light === 'green' ? '#3dff7a' : null;
+        ctx.strokeStyle = shifted ? '#4fa3ff' : onBeat ? '#ff3fd2' : lightColor || '#ff5a3d';
+        ctx.lineWidth = shifted || onBeat ? 2.4 : lightColor ? 2 : 1.2;
         ctx.stroke();
         ctx.fillStyle = shifted ? '#cfe6ff' : '#ffb3a0';
         ctx.fillText(text, cx2, topY - boxH / 2 + 4);

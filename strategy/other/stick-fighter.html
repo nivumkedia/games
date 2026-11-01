@@ -143,14 +143,30 @@
     .tnode > .tlbl:not(.d4):hover { filter:brightness(1.06); box-shadow:0 0 0 3px rgba(0,0,0,.06); }
     .tnode.folded > .tkids { display:none; }
     .tnode.folded > .tlbl::after { content:' ▸'; opacity:.7; }
-    #libJump { margin-top:8px; display:flex; gap:10px; }
-    #libJump button { font:800 13px 'Segoe UI', sans-serif; color:#fff; border:none; border-radius:999px; padding:6px 16px; cursor:pointer; }
+    /* top bar: click down the tree; the tree scrolls to that branch */
+    #libNav { position:sticky; top:-20px; z-index:3; margin:10px -18px 0; width:calc(100% + 36px); padding:10px 18px;
+              background:rgba(255,255,255,0.97); box-shadow:0 4px 14px rgba(30,50,70,.12);
+              display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+    #libNav .crumb, #libNav .opt, #libNav .tool { font:800 13px 'Segoe UI', sans-serif; border-radius:999px; padding:5px 13px; cursor:pointer; }
+    #libNav .crumb { color:#fff; background:var(--c, #6a1b9a); border:2px solid var(--c, #6a1b9a); }
+    #libNav .opt { color:var(--c, #6a1b9a); background:#fff; border:2px solid var(--c, #6a1b9a); }
+    #libNav .opt:hover, #libNav .crumb:hover { filter:brightness(1.1); transform:translateY(-1px); }
+    #libNav .sep { color:#93a6b5; font-weight:900; margin:0 2px; }
+    #libNav .ask { font-size:11.5px; font-weight:800; letter-spacing:.1em; color:#93a6b5; text-transform:uppercase; margin:0 4px; }
+    #libNav .tools { margin-left:auto; display:flex; gap:6px; }
+    #libNav .tool { color:#fff; background:#6d4c41; border:none; }
+    .tnode.flash > .tlbl { animation:libFlash 1.2s ease; }
+    @keyframes libFlash { 0%, 60% { box-shadow:0 0 0 5px #ffd54f; } 100% { box-shadow:0 0 0 0 rgba(255,213,79,0); } }
     .tleaf.has > .d4 { background:linear-gradient(#ffe58a, #f5c542); border-color:#a87708; color:#3d2a00; }
     .tmoves { display:flex; flex-wrap:wrap; gap:6px; margin-left:8px; padding:2px 0; }
     .tmoves .empty { font-size:11px; font-weight:700; color:#b8c6d1; white-space:nowrap; }
     .mcard { width:230px; display:flex; gap:7px; padding:6px 9px 7px 6px; border-radius:11px; background:#111; border:2px solid #d4a017;
              box-shadow:0 3px 0 #a87708; color:#f5f0dc; }
     .mcard canvas { width:36px; height:36px; flex:none; }
+    .mcard.locked { background:#eef2f5; border-color:#c3d0da; box-shadow:0 3px 0 #c3d0da; color:#4d6d84; }
+    .mcard.locked canvas { filter:grayscale(1); opacity:.5; }
+    .mcard.locked b { color:#4d6d84; } .mcard.locked .d { color:#5f7a8e; } .mcard.locked .wa { color:#7d93a5; }
+    .mcard.locked .wa .g { color:#2e7d32; } .mcard.locked .wa .r { color:#c62828; } .mcard.locked .off { color:#93a6b5; }
     .mcard b { display:block; font-size:12px; font-weight:900; letter-spacing:.04em; color:#fff; }
     .mcard kbd { font:900 10.5px 'Segoe UI', sans-serif; color:#111; background:#f5c542; border-radius:4px; padding:0 5px; margin-left:4px; }
     .mcard .off { font-size:10px; font-weight:700; color:#8a7a55; margin-left:4px; }
@@ -475,12 +491,7 @@
 <div id="libScreen" class="screen hidden">
     <h2>MOVE LIBRARY</h2>
     <div id="libSub"></div>
-    <div id="libJump">
-        <button style="background:#e53935" data-to="0">👊 Attack</button>
-        <button style="background:#1e88e5" data-to="1">🛡️ Defense</button>
-        <button style="background:#6d4c41" data-fold="1">Fold all</button>
-        <button style="background:#6d4c41" data-fold="0">Unfold all</button>
-    </div>
+    <div id="libNav"></div>
     <div id="libTrees"></div>
     <button id="libBack">← Back</button>
 </div>
@@ -872,7 +883,48 @@ const MOVE_POSES = {
     highKick:  { torso: -32, tilt: 22,  fThigh: 128, fShin: 126, bThigh: -6,  bShin: -4,
                  fUpper: 62, fFore: 144, bUpper: -64, bFore: -30 },
     lowKick:   { torso: -8,  tilt: 6,   fThigh: 72,  fShin: 78,  bThigh: -10, bShin: -10,
-                 fUpper: 40, fFore: 160, bUpper: 22, bFore: 146 }
+                 fUpper: 40, fFore: 160, bUpper: 22, bFore: 146 },
+    // Quick > Short > Punch
+    snapJab:    { torso: 6,  tilt: 0,   fThigh: 30, fShin: 2,   bThigh: -24, bShin: -30, fUpper: 96,  fFore: 94,  bUpper: 28, bFore: 158 },
+    doubleJab:  { torso: 10, tilt: 0,   fThigh: 32, fShin: 4,   bThigh: -26, bShin: -32, fUpper: 100, fFore: 100, bUpper: 70, bFore: 112 },
+    palmStrike: { torso: 16, tilt: 4,   fThigh: 36, fShin: 4,   bThigh: -28, bShin: -36, fUpper: 98,  fFore: 122, bUpper: 26, bFore: 150 },
+    bodyJab:    { torso: 18, tilt: -4,  fThigh: 42, fShin: 2,   bThigh: -28, bShin: -44, fUpper: 82,  fFore: 80,  bUpper: 28, bFore: 154 },
+    liverShot:  { torso: 24, tilt: -6,  fThigh: 46, fShin: 0,   bThigh: -28, bShin: -48, fUpper: 66,  fFore: 98,  bUpper: 30, bFore: 150 },
+    bodyFlurry: { torso: 20, tilt: -4,  fThigh: 44, fShin: 2,   bThigh: -28, bShin: -46, fUpper: 84,  fFore: 84,  bUpper: 72, bFore: 94 },
+    thighJab:   { torso: 26, tilt: -8,  fThigh: 50, fShin: -2,  bThigh: -28, bShin: -52, fUpper: 56,  fFore: 58,  bUpper: 26, bFore: 150 },
+    hammerFist: { torso: 34, tilt: -12, fThigh: 60, fShin: -6,  bThigh: -30, bShin: -66, fUpper: 74,  fFore: 36,  bUpper: 20, bFore: 140 },
+    // Quick > Short > Kick
+    snapKick:   { torso: -22, tilt: 14, fThigh: 112, fShin: 150, bThigh: -6, bShin: -4, fUpper: 50, fFore: 150, bUpper: -40, bFore: -10 },
+    flickKick:  { torso: -14, tilt: 10, fThigh: 100, fShin: 138, bThigh: -6, bShin: -4, fUpper: 44, fFore: 156, bUpper: 26, bFore: 150 },
+    twinFlick:  { torso: -18, tilt: 12, fThigh: 108, fShin: 124, bThigh: -8, bShin: -6, fUpper: 52, fFore: 148, bUpper: -30, bFore: 0 },
+    pushKick:   { torso: -20, tilt: 8,  fThigh: 92,  fShin: 90,  bThigh: -8, bShin: -6, fUpper: 30, fFore: 150, bUpper: -20, bFore: 40 },
+    stomachKick:{ torso: -14, tilt: 6,  fThigh: 86,  fShin: 100, bThigh: -8, bShin: -6, fUpper: 40, fFore: 156, bUpper: 22, bFore: 146 },
+    doubleBodyKick: { torso: -22, tilt: 10, fThigh: 96, fShin: 96, bThigh: -6, bShin: -4, fUpper: 56, fFore: 140, bUpper: -36, bFore: -6 },
+    shinKick:   { torso: -4,  tilt: 4,  fThigh: 52,  fShin: 62,  bThigh: -10, bShin: -12, fUpper: 40, fFore: 158, bUpper: 22, bFore: 148 },
+    calfTap:    { torso: 0,   tilt: 2,  fThigh: 40,  fShin: 52,  bThigh: -12, bShin: -16, fUpper: 36, fFore: 160, bUpper: 24, bFore: 150 },
+    toeSweep:   { torso: 12,  tilt: -2, fThigh: 64,  fShin: 78,  bThigh: -18, bShin: -46, fUpper: 30, fFore: 140, bUpper: 50, bFore: 120 },
+    // Quick > Short > Elbow / Knee (an elbow is the upper arm forward with the forearm folded back)
+    elbowSmash:  { torso: 16, tilt: 4,  fThigh: 36, fShin: 4,   bThigh: -26, bShin: -36, fUpper: 96,  fFore: 206, bUpper: 26, bFore: 150 },
+    risingElbow: { torso: 8,  tilt: 10, fThigh: 30, fShin: 2,   bThigh: -26, bShin: -40, fUpper: 140, fFore: 226, bUpper: 20, bFore: 140 },
+    doubleElbow: { torso: 14, tilt: 2,  fThigh: 34, fShin: 4,   bThigh: -26, bShin: -36, fUpper: 100, fFore: 210, bUpper: 84, bFore: 196 },
+    jumpingKnee: { torso: -6, tilt: 6,  fThigh: 118, fShin: -6, bThigh: -34, bShin: -86, fUpper: 40, fFore: 150, bUpper: -30, bFore: 30 },
+    kneeStrike:  { torso: -4, tilt: 4,  fThigh: 98,  fShin: 4,  bThigh: -10, bShin: -8,  fUpper: 60, fFore: 130, bUpper: 40, bFore: 120 },
+    doubleKnee:  { torso: -8, tilt: 6,  fThigh: 104, fShin: 0,  bThigh: -8,  bShin: -6,  fUpper: 70, fFore: 110, bUpper: 60, bFore: 110 },
+    sideElbow:   { torso: 20, tilt: -4, fThigh: 42,  fShin: 2,  bThigh: -28, bShin: -44, fUpper: 84,  fFore: 196, bUpper: 26, bFore: 150 },
+    lowKnee:     { torso: 0,  tilt: 2,  fThigh: 70,  fShin: 14, bThigh: -12, bShin: -14, fUpper: 40, fFore: 150, bUpper: 24, bFore: 146 },
+    droppingElbow: { torso: 46, tilt: -14, fThigh: 66, fShin: -8, bThigh: -30, bShin: -76, fUpper: 52, fFore: 186, bUpper: 20, bFore: 130 },
+    kneeCheck:   { torso: -2, tilt: 2,  fThigh: 60,  fShin: 30, bThigh: -12, bShin: -16, fUpper: 40, fFore: 156, bUpper: 26, bFore: 150 },
+    // Quick > Short > Grab (both arms reach and hold)
+    backLock:    { torso: -12, tilt: -6, fThigh: 30, fShin: 6,  bThigh: -30, bShin: -30, fUpper: -60, fFore: -40, bUpper: -70, bFore: -50 },
+    headClinch:  { torso: 10, tilt: -4, fThigh: 70,  fShin: 6,  bThigh: -14, bShin: -12, fUpper: 120, fFore: 170, bUpper: 110, bFore: 170 },
+    collarToss:  { torso: -24, tilt: 8, fThigh: 28,  fShin: 4,  bThigh: -34, bShin: -30, fUpper: 150, fFore: 170, bUpper: 140, bFore: 160 },
+    neckPull:    { torso: -10, tilt: 4, fThigh: 26,  fShin: 4,  bThigh: -34, bShin: -34, fUpper: 112, fFore: 150, bUpper: 102, bFore: 146 },
+    waistThrow:  { torso: 30, tilt: -6, fThigh: 50,  fShin: -2, bThigh: -30, bShin: -56, fUpper: 82,  fFore: 98,  bUpper: 76,  bFore: 100 },
+    armDrag:     { torso: -16, tilt: 4, fThigh: 24,  fShin: 4,  bThigh: -36, bShin: -34, fUpper: 70,  fFore: 50,  bUpper: 60,  bFore: 40 },
+    bodyLock:    { torso: 22, tilt: -4, fThigh: 46,  fShin: 0,  bThigh: -28, bShin: -50, fUpper: 90,  fFore: 120, bUpper: 84,  bFore: 118 },
+    anklePick:   { torso: 58, tilt: -16, fThigh: 70, fShin: -6, bThigh: -34, bShin: -88, fUpper: 40,  fFore: 50,  bUpper: 30,  bFore: 44 },
+    legCatch:    { torso: 36, tilt: -10, fThigh: 60, fShin: -4, bThigh: -30, bShin: -70, fUpper: 56,  fFore: 70,  bUpper: 50,  bFore: 66 },
+    kneeTrip:    { torso: 40, tilt: -12, fThigh: 64, fShin: -4, bThigh: -30, bShin: -72, fUpper: 48,  fFore: 60,  bUpper: 30,  bFore: 140 }
 };
 const MOVES = [
     { id: 'highPunch', label: 'HIGH PUNCH', side: -1, row: 0 },
@@ -920,7 +972,7 @@ function recordAttack(id) {
         }
     }
 }
-const seqHTML = seq => seq.map(id => `<span><kbd>${keyFor(id)}</kbd>${MOVES.find(m => m.id === id).label}</span>`)
+const seqHTML = seq => seq.map(id => `<span><kbd>${keyFor(id)}</kbd>${MOVE_INFO[id].label}</span>`)
                           .join('<span class="arr">→</span>');
 // put "New combo unlocked!" on the result card that just opened
 function announceCombos() {
@@ -947,16 +999,60 @@ const nextSlotPrice = () => SLOT_PRICES[slotCount - 4];
 let loadout = { ...DEFAULT_LOADOUT, ...JSON.parse(localStorage.getItem('stickFighterLoadout') || '{}') };
 const comboById = id => COMBOS.find(c => c.id === id);
 const slotSeq = slot => !loadout[slot] ? [] : comboById(loadout[slot])?.seq ?? [loadout[slot]];
-const itemName = v => !v ? 'EMPTY' : comboById(v)?.name.toUpperCase() ?? MOVES.find(m => m.id === v).label;
+const itemName = v => !v ? 'EMPTY' : comboById(v)?.name.toUpperCase() ?? MOVE_INFO[v].label;
 const equipped = () => ownedSlots().map(sl => loadout[sl]);
 const slotOf = id => ownedSlots().find(sl => loadout[sl] === id);    // which key a move or combo is on
 const keyFor = id => slotOf(id) ? SLOT_KEYS[slotOf(id)] : '–';
+// Every move in the game: its name, its place in the Move Library tree, and what it does.
+// You start owning the first four; the rest show in the library until you get them.
+const QSP = ['Attack', 'Quick', 'Short', 'Punch'], QSK = ['Attack', 'Quick', 'Short', 'Kick'],
+      QSE = ['Attack', 'Quick', 'Short', 'Elbow / Knee'], QSG = ['Attack', 'Quick', 'Short', 'Grab'];
 const MOVE_INFO = {
-    highPunch: { key: 'A', desc: 'A quick jab to the head. Fast to throw and fast to recover.' },
-    lowPunch:  { key: 'S', desc: 'A crouching strike to the body. The fastest move you have, but it hits the lightest.' },
-    highKick:  { key: 'D', desc: 'A big roundhouse to the head. Hits the hardest and knocks them back, but it is slow.' },
-    lowKick:   { key: ';', desc: 'A long sweeping kick to the legs. The longest reach of any move.' }
+    highPunch:  { label: 'HIGH PUNCH', path: [...QSP, 'High'], desc: 'A quick jab to the head. Fast to throw and fast to recover.' },
+    lowPunch:   { label: 'LOW PUNCH',  path: [...QSP, 'Low'],  desc: 'A crouching strike to the body. The fastest move you have, but it hits the lightest.' },
+    highKick:   { label: 'HIGH KICK',  path: ['Attack', 'Heavy', 'Long', 'Kick', 'High'], desc: 'A big roundhouse to the head. Hits the hardest and knocks them back, but it is slow.' },
+    lowKick:    { label: 'LOW KICK',   path: ['Attack', 'Heavy', 'Long', 'Kick', 'Low'],  desc: 'A long sweeping kick to the legs. The longest reach of any move.' },
+    snapJab:    { label: 'SNAP JAB',    path: [...QSP, 'High'], desc: 'The fastest punch there is. Barely hurts, but it beats almost anything to the hit.' },
+    doubleJab:  { label: 'DOUBLE JAB',  path: [...QSP, 'High'], desc: 'Two jabs to the face, one right after the other.' },
+    palmStrike: { label: 'PALM STRIKE', path: [...QSP, 'High'], desc: 'An open hand to the chin. Light damage, but it leaves them dazed for longer.' },
+    bodyJab:    { label: 'BODY JAB',    path: [...QSP, 'Mid'],  desc: 'A straight punch to the stomach. Quick and reliable.' },
+    liverShot:  { label: 'LIVER SHOT',  path: [...QSP, 'Mid'],  desc: 'A hooking punch to the side. Slower to land, but they fold up and stay stunned.' },
+    bodyFlurry: { label: 'BODY FLURRY', path: [...QSP, 'Mid'],  desc: 'Three fast punches to the body, both fists.' },
+    thighJab:   { label: 'THIGH JAB',   path: [...QSP, 'Low'],  desc: 'A quick dig at the leg. Fast, short and light.' },
+    hammerFist: { label: 'HAMMER FIST', path: [...QSP, 'Low'],  desc: 'A fist swung down onto the leg. Slower, but it hits hard for a quick move.' },
+    snapKick:   { label: 'SNAP KICK',   path: [...QSK, 'High'], desc: 'A front kick snapped up at the chin.' },
+    flickKick:  { label: 'FLICK KICK',  path: [...QSK, 'High'], desc: 'A light flick of the foot at the head. The fastest kick you can throw.' },
+    twinFlick:  { label: 'TWIN FLICK',  path: [...QSK, 'High'], desc: 'Two flick kicks to the head without putting the foot down.' },
+    pushKick:   { label: 'PUSH KICK',   path: [...QSK, 'Mid'],  desc: 'A shove with the sole of the foot. Little damage, but it sends them flying back.' },
+    stomachKick:{ label: 'STOMACH KICK',path: [...QSK, 'Mid'],  desc: 'A short, sharp kick into the stomach.' },
+    doubleBodyKick: { label: 'DOUBLE BODY KICK', path: [...QSK, 'Mid'], desc: 'Two quick kicks to the body with the same leg.' },
+    shinKick:   { label: 'SHIN KICK',   path: [...QSK, 'Low'],  desc: 'A quick kick to the shin.' },
+    calfTap:    { label: 'CALF TAP',    path: [...QSK, 'Low'],  desc: 'A tiny, very fast tap at the calf. Hard to see coming.' },
+    toeSweep:   { label: 'TOE SWEEP',   path: [...QSK, 'Low'],  desc: 'A low sweep at the toes that trips them up and keeps them stunned.' },
+    elbowSmash:  { label: 'ELBOW SMASH',  path: [...QSE, 'High'], desc: 'A sharp elbow across the face. Very short reach, but it hits hard.' },
+    risingElbow: { label: 'RISING ELBOW', path: [...QSE, 'High'], desc: 'An elbow driven up under the chin. Leaves them dazed.' },
+    doubleElbow: { label: 'DOUBLE ELBOW', path: [...QSE, 'High'], desc: 'One elbow, then the other, both to the head.' },
+    jumpingKnee: { label: 'JUMPING KNEE', path: [...QSE, 'High'], desc: 'Hop in and drive a knee into their face. The hardest-hitting quick move.' },
+    kneeStrike:  { label: 'KNEE STRIKE',  path: [...QSE, 'Mid'],  desc: 'A straight knee into the stomach.' },
+    doubleKnee:  { label: 'DOUBLE KNEE',  path: [...QSE, 'Mid'],  desc: 'Two knees to the body, one after the other.' },
+    sideElbow:   { label: 'SIDE ELBOW',   path: [...QSE, 'Mid'],  desc: 'A swinging elbow into the ribs that shoves them aside.' },
+    lowKnee:     { label: 'LOW KNEE',     path: [...QSE, 'Low'],  desc: 'A short knee into the thigh. Deadens the leg for a moment.' },
+    droppingElbow: { label: 'DROPPING ELBOW', path: [...QSE, 'Low'], desc: 'Drop your weight and drive an elbow down into their leg.' },
+    kneeCheck:   { label: 'KNEE CHECK',   path: [...QSE, 'Low'],  desc: 'A quick knee that jams their leg. Fast and light.' },
+    backLock:    { label: 'BACK-TO-BACK LOCK', path: [...QSG, 'High'], desc: 'Lunge in beside them, spin around, and lock their arms with you back to back. You end up on their other side and they are stuck for a long time.' },
+    headClinch:  { label: 'HEAD CLINCH',  path: [...QSG, 'High'], desc: 'Grab the back of their head and pull them in.' },
+    collarToss:  { label: 'COLLAR TOSS',  path: [...QSG, 'High'], desc: 'Grab their collar and throw them over to your other side.' },
+    neckPull:    { label: 'NECK PULL',    path: [...QSG, 'High'], desc: 'A fast grab that yanks them toward you, off balance.' },
+    waistThrow:  { label: 'WAIST THROW',  path: [...QSG, 'Mid'],  desc: 'Wrap their waist and hurl them past you. The hardest-hitting grab.' },
+    armDrag:     { label: 'ARM DRAG',     path: [...QSG, 'Mid'],  desc: 'Pull their arm and slip around to their back.' },
+    bodyLock:    { label: 'BODY LOCK',    path: [...QSG, 'Mid'],  desc: 'Squeeze them in a bear hug. Little damage, but they can\'t move for ages.' },
+    anklePick:   { label: 'ANKLE PICK',   path: [...QSG, 'Low'],  desc: 'Duck down and snatch their ankle. They fall and stay stunned.' },
+    legCatch:    { label: 'LEG CATCH',    path: [...QSG, 'Low'],  desc: 'Grab a leg and drag them in close.' },
+    kneeTrip:    { label: 'KNEE TRIP',    path: [...QSG, 'Low'],  desc: 'Hook behind their knee and twist them around past you.' }
 };
+const STARTER_MOVES = ['highPunch', 'lowPunch', 'highKick', 'lowKick'];
+let ownedExtra = JSON.parse(localStorage.getItem('stickFighterOwned') || '[]');
+const ownedMoves = () => [...STARTER_MOVES, ...ownedExtra.filter(id => MOVE_INFO[id])];
 let mouse = { x: -1, y: -1 }, hoverMove = null, hoverChange = null, hoverBuy = false, homeMove = null, homeMoveT = 0;
 
 // Home page circles: every slot you own, plus a "+" circle to buy the next one.
@@ -1200,8 +1296,48 @@ const ATK = {
     highPunch: { start: 6,  active: 4, rec: 10, dmg: 8,  reach: 80,  high: true,  kb: 4, stun: 14 },
     lowPunch:  { start: 5,  active: 4, rec: 9,  dmg: 6,  reach: 72,  high: false, kb: 3, stun: 12 },
     highKick:  { start: 10, active: 5, rec: 14, dmg: 13, reach: 96,  high: true,  kb: 7, stun: 20 },
-    lowKick:   { start: 8,  active: 5, rec: 12, dmg: 10, reach: 100, high: false, kb: 5, stun: 16 }
+    lowKick:   { start: 8,  active: 5, rec: 12, dmg: 10, reach: 100, high: false, kb: 5, stun: 16 },
+    // high: false = low (passes under a jump). hits/gap = several hits, gap ticks apart.
+    snapJab:    { start: 4, active: 3,  rec: 8,  dmg: 5, reach: 74, high: true,  kb: 3,  stun: 11 },
+    doubleJab:  { start: 5, active: 8,  rec: 10, dmg: 4, reach: 78, high: true,  kb: 2,  stun: 12, hits: 2, gap: 5 },
+    palmStrike: { start: 7, active: 4,  rec: 11, dmg: 6, reach: 76, high: true,  kb: 3,  stun: 22 },
+    bodyJab:    { start: 5, active: 4,  rec: 9,  dmg: 7, reach: 76, high: true,  kb: 3,  stun: 13 },
+    liverShot:  { start: 8, active: 4,  rec: 12, dmg: 8, reach: 70, high: true,  kb: 2,  stun: 24 },
+    bodyFlurry: { start: 6, active: 12, rec: 12, dmg: 3, reach: 74, high: true,  kb: 2,  stun: 10, hits: 3, gap: 5 },
+    thighJab:   { start: 4, active: 4,  rec: 8,  dmg: 5, reach: 70, high: false, kb: 2,  stun: 11 },
+    hammerFist: { start: 8, active: 4,  rec: 12, dmg: 9, reach: 68, high: false, kb: 4,  stun: 16 },
+    snapKick:   { start: 7, active: 4,  rec: 11, dmg: 9, reach: 84, high: true,  kb: 5,  stun: 15 },
+    flickKick:  { start: 5, active: 3,  rec: 9,  dmg: 6, reach: 80, high: true,  kb: 3,  stun: 12 },
+    twinFlick:  { start: 6, active: 9,  rec: 12, dmg: 5, reach: 82, high: true,  kb: 3,  stun: 12, hits: 2, gap: 6 },
+    pushKick:   { start: 7, active: 4,  rec: 12, dmg: 5, reach: 86, high: true,  kb: 11, stun: 12 },
+    stomachKick:{ start: 7, active: 4,  rec: 11, dmg: 8, reach: 82, high: true,  kb: 5,  stun: 16 },
+    doubleBodyKick: { start: 7, active: 9, rec: 13, dmg: 5, reach: 84, high: true, kb: 4, stun: 13, hits: 2, gap: 6 },
+    shinKick:   { start: 5, active: 4,  rec: 9,  dmg: 6, reach: 78, high: false, kb: 3,  stun: 12 },
+    calfTap:    { start: 4, active: 3,  rec: 8,  dmg: 4, reach: 76, high: false, kb: 2,  stun: 14 },
+    toeSweep:   { start: 7, active: 4,  rec: 12, dmg: 6, reach: 82, high: false, kb: 3,  stun: 22 },
+    elbowSmash:  { start: 6, active: 4, rec: 11, dmg: 9,  reach: 62, high: true,  kb: 4,  stun: 15 },
+    risingElbow: { start: 7, active: 4, rec: 12, dmg: 8,  reach: 58, high: true,  kb: 3,  stun: 20 },
+    doubleElbow: { start: 6, active: 9, rec: 12, dmg: 5,  reach: 62, high: true,  kb: 3,  stun: 13, hits: 2, gap: 6 },
+    jumpingKnee: { start: 8, active: 5, rec: 13, dmg: 11, reach: 66, high: true,  kb: 6,  stun: 16 },
+    kneeStrike:  { start: 5, active: 4, rec: 10, dmg: 8,  reach: 58, high: true,  kb: 4,  stun: 15 },
+    doubleKnee:  { start: 6, active: 9, rec: 12, dmg: 5,  reach: 58, high: true,  kb: 3,  stun: 13, hits: 2, gap: 6 },
+    sideElbow:   { start: 6, active: 4, rec: 10, dmg: 8,  reach: 60, high: true,  kb: 5,  stun: 14 },
+    lowKnee:     { start: 5, active: 4, rec: 9,  dmg: 6,  reach: 56, high: false, kb: 3,  stun: 14 },
+    droppingElbow: { start: 8, active: 4, rec: 13, dmg: 10, reach: 60, high: false, kb: 3, stun: 16 },
+    kneeCheck:   { start: 4, active: 4, rec: 9,  dmg: 5,  reach: 58, high: false, kb: 4,  stun: 12 },
+    // grabs: very short reach, long stun; swap = you end up on their other side, pull = drags them in
+    backLock:    { start: 6, active: 5, rec: 14, dmg: 7,  reach: 64, high: true,  kb: 0,  stun: 34, swap: true },
+    headClinch:  { start: 6, active: 5, rec: 12, dmg: 9,  reach: 54, high: true,  kb: 0,  stun: 22, pull: true },
+    collarToss:  { start: 7, active: 5, rec: 14, dmg: 8,  reach: 54, high: true,  kb: 6,  stun: 24, swap: true },
+    neckPull:    { start: 5, active: 5, rec: 11, dmg: 5,  reach: 60, high: true,  kb: 0,  stun: 18, pull: true },
+    waistThrow:  { start: 7, active: 5, rec: 14, dmg: 10, reach: 54, high: true,  kb: 7,  stun: 24, swap: true },
+    armDrag:     { start: 5, active: 5, rec: 11, dmg: 5,  reach: 58, high: true,  kb: 0,  stun: 18, swap: true },
+    bodyLock:    { start: 6, active: 5, rec: 13, dmg: 6,  reach: 54, high: true,  kb: 0,  stun: 32 },
+    anklePick:   { start: 7, active: 5, rec: 13, dmg: 7,  reach: 62, high: false, kb: 2,  stun: 28 },
+    legCatch:    { start: 6, active: 5, rec: 12, dmg: 5,  reach: 60, high: false, kb: 0,  stun: 20, pull: true },
+    kneeTrip:    { start: 6, active: 5, rec: 12, dmg: 6,  reach: 56, high: false, kb: 3,  stun: 24, swap: true }
 };
+const BOT_MOVES = ['highPunch', 'lowPunch', 'highKick', 'lowKick'];   // bots stick to the four basics
 const BOT_NAMES = ['KAITO', 'RIKU', 'MIRA', 'JUNO', 'DRAKE', 'SORA', 'VEX', 'NOVA', 'BRUNO', 'ZARA', 'TAO', 'KIRA'];
 const BOT_COLORS = ['#d84315', '#8e24aa', '#2e7d32', '#00838f', '#6d4c41', '#c2185b', '#37474f', '#ef6c00'];
 const ROUNDS = 10, ROUND_TIME = 45 * 60, IMPOSSIBLE_LEVEL = 14;
@@ -1295,7 +1431,7 @@ function awardGems(amount, fromEl) {
 
 function makeFighter(x, facing, color, name, isBot) {
     return { x, h: 0, vy: 0, vx: 0, facing, color, name, isBot, hp: 100,
-             state: 'idle', st: 0, atk: null, hasHit: false, stun: 0, walk: 0, flash: 0,
+             state: 'idle', st: 0, atk: null, hitN: 0, stun: 0, walk: 0, flash: 0,
              ai: { cool: 20, input: {} }, ko: null };
 }
 
@@ -1381,7 +1517,7 @@ function botInput(f, o, level, s) {
         if (!a.high && Math.random() < 0.03 * guard) { inp.jump = true; return inp; }   // hops over low attacks
     }
     const punish = o.state === 'attack' && o.st >= ATK[o.atk].start + ATK[o.atk].active;
-    const inRange = Object.keys(ATK).filter(k => ATK[k].reach - 6 >= dist);
+    const inRange = BOT_MOVES.filter(k => ATK[k].reach - 6 >= dist);
     if (inRange.length && (punish || Math.random() < 0.3 + 0.06 * react)) {
         let k = pick(inRange);
         if (o.h > 25 * s) k = inRange.includes('highKick') ? 'highKick' : 'highPunch';
@@ -1394,7 +1530,7 @@ function botInput(f, o, level, s) {
             if (c) { inp.combo = c.seq; inp.attack = c.seq[0]; }
         }
     } else if (!inRange.length && Math.random() < 0.08 * (11 - Math.min(10, level))) {
-        inp.attack = pick(Object.keys(ATK));                                   // sloppy whiff from weak bots
+        inp.attack = pick(BOT_MOVES);                                   // sloppy whiff from weak bots
     } else if (dist > 85) {
         inp[toward > 0 ? 'right' : 'left'] = true;
     } else if (dist < 55 || Math.random() < 0.15) {
@@ -1412,7 +1548,7 @@ function playerInput() {
 }
 
 function startAttack(f, id) {
-    f.state = 'attack'; f.atk = id; f.st = 0; f.hasHit = false;
+    f.state = 'attack'; f.atk = id; f.st = 0; f.hitN = 0;
     if (!f.isBot) recordAttack(id);
 }
 
@@ -1460,20 +1596,27 @@ function updateFighter(f, o, inp, s, live) {
 }
 
 function tryHit(f, o, s, ground) {
-    if (f.state !== 'attack' || f.hasHit || o.ko) return;
+    if (f.state !== 'attack' || o.ko) return;
     const a = ATK[f.atk];
-    if (f.st < a.start || f.st >= a.start + a.active) return;
+    if (f.hitN >= (a.hits || 1)) return;                 // multi-hit moves land again every `gap` ticks
+    if (f.st < a.start + f.hitN * (a.gap || 0) || f.st >= a.start + a.active) return;
     const d = (o.x - f.x) * f.facing;
     if (d < -10 * s || d > a.reach * s) return;
     if (!a.high && o.h > 25 * s) return;                // low attacks pass under a jump
-    f.hasHit = true;
+    f.hitN++;
     const m = match, [hx, hy] = strikePoint(f, s, ground);
     let dmg = a.dmg * (f.isBot ? 0.75 + 0.04 * Math.min(m.level, 10) : 1);
     if (m.mode === 'impossible' && o.isBot) m.damage += dmg;
     else o.hp = Math.max(0, o.hp - dmg);
     // mid-combo hits push less, so the rest of the combo usually reaches; the last hit knocks back as normal
     const midCombo = f.fast && f.queue && f.queue.length;
-    o.vx = f.facing * a.kb * s * 0.8 * (midCombo ? MID_COMBO_PUSH : 1);
+    const midFlurry = f.hitN < (a.hits || 1);           // early hits of a multi-hit move barely push either
+    o.vx = f.facing * a.kb * s * 0.8 * (midCombo ? MID_COMBO_PUSH : 1) * (midFlurry ? 0.15 : 1);
+    if (a.pull) o.vx = -f.facing * 5 * s;               // drags them in toward you
+    if (a.swap) {                                       // you slip past and end up on their other side
+        f.x = Math.max(60 * s, Math.min(W - 60 * s, o.x + f.facing * 48 * s));
+        o.vx = f.facing * a.kb * s * 0.8;
+    }
     o.stun = a.stun; o.state = 'hurt'; o.atk = null; o.flash = 8;
     burst(hx, hy, ['#ffd54f', '#ffffff', '#ff7043'], a.dmg > 9 ? 16 : 10, (a.dmg > 9 ? 5 : 3.6) * s, 0.16);
     m.freeze = a.dmg > 9 ? 6 : 4; shake = a.dmg > 9 ? 9 : 5;
@@ -1785,6 +1928,8 @@ document.getElementById('resetConfirm').addEventListener('click', () => {
     localStorage.removeItem('stickFighterLevel');
     localStorage.removeItem('stickFighterCombos');
     localStorage.removeItem('stickFighterLoadout');
+    localStorage.removeItem('stickFighterOwned');
+    ownedExtra = [];
     loadout = { ...DEFAULT_LOADOUT };
     localStorage.removeItem('stickFighterSlots');
     slotCount = 4;
@@ -1866,7 +2011,7 @@ function openMovePage(slot) {
     // Anything already on another key is grayed out (no doubles).
     const list = document.getElementById('replaceList');
     list.replaceChildren();
-    const options = [...MOVES.map(m => m.id), ...COMBOS.filter(c => unlockedCombos.includes(c.id)).map(c => c.id)];
+    const options = [...ownedMoves(), ...COMBOS.filter(c => unlockedCombos.includes(c.id)).map(c => c.id)];
     for (const other of options.filter(o => o !== id)) {
         const taken = equipped().includes(other);
         const tile = document.createElement('div');
@@ -1957,22 +2102,15 @@ const LIB_TREES = {
             { name: 'Stay', icon: '📍', desc: 'You hold your spot.' },
             { name: 'Move', icon: '↪️', desc: 'Backed off, beside them, or behind them.' }] }] }
 };
-// where each move you own sits in the tree
-const MOVE_PATHS = {
-    highPunch: ['Attack', 'Quick', 'Short', 'Punch', 'High'],
-    lowPunch:  ['Attack', 'Quick', 'Short', 'Punch', 'Low'],
-    highKick:  ['Attack', 'Heavy', 'Long', 'Kick', 'High'],
-    lowKick:   ['Attack', 'Heavy', 'Long', 'Kick', 'Low']
-};
 const libScreen = document.getElementById('libScreen');
 // The whole tree at once, drawn as a branching diagram left to right. The moves you own
 // sit in their category at the end of each branch, with description and matchups.
 function libMoveCard(id) {
-    const sl = slotOf(id), beats = COUNTERS[id], beatenBy = Object.keys(COUNTERS).find(k => COUNTERS[k] === id);
+    const own = ownedMoves().includes(id), sl = slotOf(id), beats = COUNTERS[id], beatenBy = Object.keys(COUNTERS).find(k => COUNTERS[k] === id);
     const el = document.createElement('div');
-    el.className = 'mcard';
+    el.className = 'mcard' + (own ? '' : ' locked');
     el.innerHTML = `<canvas width="72" height="72"></canvas><div>
-        <b>${itemName(id)}${sl ? `<kbd>${SLOT_KEYS[sl]}</kbd>` : '<span class="off">not equipped</span>'}</b>
+        <b>${itemName(id)}${!own ? '<span class="off">not owned</span>' : sl ? `<kbd>${SLOT_KEYS[sl]}</kbd>` : '<span class="off">not equipped</span>'}</b>
         <div class="d">${MOVE_INFO[id].desc}</div>
         <div class="wa"><span class="g">▲ Beats:</span> ${beats ? nameOrSecret(beats) : 'nothing'} &nbsp;
              <span class="r">▼ Loses to:</span> ${beatenBy ? nameOrSecret(beatenBy) : 'nothing'}</div></div>`;
@@ -1985,10 +2123,11 @@ function libMoveCard(id) {
 function renderLib() {
     const wrap = document.getElementById('libTrees');
     wrap.replaceChildren();
-    const owned = {};                                     // path -> move ids you have there
-    for (const [id, path] of Object.entries(MOVE_PATHS)) (owned[path.join(' › ')] = owned[path.join(' › ')] || []).push(id);
+    const inCat = {};                                     // path -> every move in that category
+    for (const [id, m] of Object.entries(MOVE_INFO)) (inCat[m.path.join(' › ')] = inCat[m.path.join(' › ')] || []).push(id);
+    const mineList = ownedMoves();
     document.getElementById('libSub').innerHTML =
-        `You have <b>${Object.keys(MOVE_PATHS).length}</b> moves. <span class="own"></span> marks the categories they're in. Click a branch to fold it.`;
+        `You have <b>${mineList.length}</b> of ${Object.keys(MOVE_INFO).length} moves. <span class="own"></span> marks the categories yours are in. Click a branch to fold it.`;
     for (const t of Object.values(LIB_TREES)) {
         const tree = document.createElement('div');
         tree.className = 'tree';
@@ -1998,15 +2137,17 @@ function renderLib() {
         const branch = (depth, path, icon) => {
             const node = document.createElement('div');
             node.className = 'tnode';
+            node.dataset.path = [t.name, ...path].join(' › ');
             const label = depth === 0 ? `${t.icon} ${t.name.toUpperCase()}` : path[path.length - 1];
             if (depth === t.levels.length) {                // end of a branch: the category and its moves
-                const mine = owned[[t.name, ...path].join(' › ')] || [];
+                const here = inCat[[t.name, ...path].join(' › ')] || [];
+                const mine = here.filter(id => mineList.includes(id));
                 node.classList.add('tleaf');
                 if (mine.length) node.classList.add('has');
                 node.innerHTML = `<div class="tlbl d4">${label}</div>`;
                 const moves = document.createElement('div');
                 moves.className = 'tmoves';
-                if (mine.length) mine.forEach(id => moves.append(libMoveCard(id)));
+                if (here.length) [...mine, ...here.filter(id => !mine.includes(id))].forEach(id => moves.append(libMoveCard(id)));
                 else moves.innerHTML = '<span class="empty">no moves yet</span>';
                 node.append(moves);
                 return node;
@@ -2022,18 +2163,66 @@ function renderLib() {
         tree.append(branch(0, []));
         wrap.append(tree);
     }
+    navPath = [];
+    renderLibNav();
+}
+
+// The top bar: the path so far, then the choices for the next level. Picking one scrolls
+// the tree to that branch (opening it if it was folded) and flashes it.
+let navPath = [];
+function libGoTo(path) {
+    const node = document.querySelector(`#libTrees .tnode[data-path="${path.join(' › ')}"]`);
+    if (!node) return;
+    for (let n = node; n && n.classList.contains('tnode'); n = n.parentElement.closest('.tnode')) n.classList.remove('folded');
+    node.scrollIntoView({ behavior: 'smooth', block: path.length >= 4 ? 'center' : 'start' });
+    node.classList.remove('flash'); void node.offsetWidth; node.classList.add('flash');
+}
+function renderLibNav() {
+    const bar = document.getElementById('libNav');
+    bar.replaceChildren();
+    const btn = (cls, text, color, onClick) => {
+        const b = document.createElement('button');
+        b.className = cls; b.textContent = text;
+        if (color) b.style.setProperty('--c', color);
+        b.onclick = onClick;
+        bar.append(b);
+    };
+    const t = navPath.length ? Object.values(LIB_TREES).find(t => t.name === navPath[0]) : null;
+    if (!t) {
+        bar.insertAdjacentHTML('beforeend', '<span class="ask">Go to</span>');
+        for (const tr of Object.values(LIB_TREES))
+            btn('opt', `${tr.icon} ${tr.name}`, tr.accent, () => { navPath = [tr.name]; renderLibNav(); libGoTo(navPath); });
+    } else {
+        navPath.forEach((name, i) => {
+            if (i) bar.insertAdjacentHTML('beforeend', '<span class="sep">›</span>');
+            btn('crumb', i ? name : `${t.icon} ${name}`, t.accent, () => {
+                navPath = navPath.slice(0, i + 1); renderLibNav(); libGoTo(navPath);
+            });
+        });
+        const lvl = t.levels[navPath.length - 1];
+        if (lvl) {
+            bar.insertAdjacentHTML('beforeend', `<span class="sep">›</span><span class="ask">${lvl.ask}</span>`);
+            for (const o of lvl.opts)
+                btn('opt', `${o.icon} ${o.name}`, t.accent, () => { navPath = [...navPath, o.name]; renderLibNav(); libGoTo(navPath); });
+        }
+        bar.insertAdjacentHTML('beforeend', '<span class="sep"></span>');
+        btn('opt', '✕ Clear', '#7d93a5', () => { navPath = []; renderLibNav(); libScreen.scrollTo({ top: 0, behavior: 'smooth' }); });
+    }
+    const tools = document.createElement('div');
+    tools.className = 'tools';
+    bar.append(tools);
+    for (const [label, fold] of [['Fold all', true], ['Unfold all', false]]) {
+        const b = document.createElement('button');
+        b.className = 'tool'; b.textContent = label;
+        b.onclick = () => document.querySelectorAll('#libTrees .tkids > .tnode:not(.tleaf)').forEach(n => n.classList.toggle('folded', fold));
+        tools.append(b);
+    }
 }
 document.getElementById('libraryBtn').addEventListener('click', () => {
     renderLib();
     homeScreen.classList.add('hidden');
     libScreen.scrollTop = 0;
     libScreen.classList.remove('hidden');
-});
-document.querySelectorAll('#libJump button').forEach(b => b.onclick = () => {
-    const trees = document.querySelectorAll('#libTrees .tree');
-    if (b.dataset.to) trees[+b.dataset.to].scrollIntoView({ behavior: 'smooth', block: 'start' });
-    else document.querySelectorAll('#libTrees .tnode:not(.tleaf)').forEach((n, i, all) =>
-        n.classList.toggle('folded', b.dataset.fold === '1' && n.parentElement.classList.contains('tkids')));
 });
 document.getElementById('libBack').addEventListener('click', () => {
     libScreen.classList.add('hidden');
@@ -2085,7 +2274,7 @@ function openCollection() {
     fillGrid(document.getElementById('collEquipped'), ownedSlots().map(sl => collCard(loadout[sl], sl)));
     document.getElementById('collEqHead').innerHTML =
         `EQUIPPED <small>${slotCount} of ${MAX_SLOTS} slots. Click one to change it.</small>`;
-    fillGrid(document.getElementById('collMoves'), MOVES.map(m => collCard(m.id)));
+    fillGrid(document.getElementById('collMoves'), ownedMoves().map(id => collCard(id)));
     fillGrid(document.getElementById('collCombos'), COMBOS.map(c => collCard(c.id)));
     document.getElementById('collComboHead').innerHTML =
         `COMBOS <small>${unlockedCombos.length} of ${COMBOS.length} found. Pull one off in a fight to unlock it.</small>`;
