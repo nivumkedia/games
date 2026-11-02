@@ -172,6 +172,10 @@
     .mcard .buybtn { font:900 12px 'Segoe UI', sans-serif; letter-spacing:.06em; color:#f5c542; background:#111; border:2px solid #d4a017;
                      border-radius:999px; padding:2px 12px; cursor:pointer; }
     .mcard .buybtn:hover { color:#ffe58a; }
+    .mcard .sellbtn { font:900 12px 'Segoe UI', sans-serif; letter-spacing:.06em; color:#fff; background:#2e7d32; border:2px solid #7ddc8a;
+                      border-radius:999px; padding:2px 12px; cursor:pointer; }
+    .mcard .sellbtn:hover { filter:brightness(1.12); }
+    .mcard:not(.locked) .price { color:#7ddc8a; }
     .mcard .buybtn:disabled { opacity:.35; cursor:not-allowed; }
     .tnode.nomatch { display:none; }
     #libPrice { width:100%; display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:4px; }
@@ -180,6 +184,11 @@
     #libPrice .pf.on { background:#6a1b9a; color:#fff; border-color:#6a1b9a; }
     #libPrice .have { margin-left:auto; font-size:12.5px; font-weight:800; color:#1f2a36; }
     #libPrice .have .gem { width:15px; height:15px; }
+    .mcard .qmark { width:36px; height:36px; flex:none; border-radius:50%; background:#dbe4ea; border:2px solid #c3d0da;
+                    display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:900; color:#93a6b5; }
+    .mcard.combo-card .seq { justify-content:flex-start; margin-top:4px; font-size:10px; color:#f5f0dc; }
+    .mcard.combo-card .seq kbd { font-size:9.5px; min-width:16px; padding:0 4px; }
+    .tleaf > .d4 { white-space:nowrap; }
     .mcard.locked { background:#eef2f5; border-color:#c3d0da; box-shadow:0 3px 0 #c3d0da; color:#4d6d84; }
     .mcard.locked canvas { filter:grayscale(1); opacity:.5; }
     .mcard.locked b { color:#4d6d84; } .mcard.locked .d { color:#5f7a8e; } .mcard.locked .wa { color:#7d93a5; }
@@ -318,6 +327,7 @@
     .rep span { text-align:center; font-size:12px; font-weight:800; letter-spacing:.06em; color:#1f2a36; }
     .rep em { font-size:11px; font-style:normal; font-weight:700; color:#4d6d84; }
     #moveCombos { position:absolute; top:24px; right:28px; width:min(400px, 36vw); }
+    #comboList { max-height:calc(100vh - 340px); overflow-y:auto; padding-right:4px; }
     #moveCombos h3 { font-size:15px; font-weight:900; letter-spacing:.14em; color:#1f2a36; }
     #moveCombos .hint { margin-top:3px; font-size:12.5px; color:#7d93a5; }
     .combo { margin-top:8px; padding:8px 12px; border-radius:12px; background:#111; border:2px solid #d4a017; color:#fff; }
@@ -483,7 +493,7 @@
     </div>
     <div id="moveCombos">
         <h3>COMBOS</h3>
-        <div class="hint">Pull one off in a fight to unlock it.</div>
+        <div class="hint">Pull one off in a fight to unlock it, or buy it in the Move Library.</div>
         <div id="comboList"></div>
     </div>
     <div id="replace">
@@ -1070,20 +1080,530 @@ const COMBOS = [
     { id: 'thunderStep',   name: 'Thunder Step',   seq: ['lowPunch', 'highKick', 'highPunch', 'lowKick'] },
     { id: 'ironLotus',     name: 'Iron Lotus',     seq: ['lowPunch', 'lowKick', 'highPunch', 'highKick'] }
 ];
+const BOT_COMBOS = COMBOS.slice();                   // bots only ever throw the seven originals
+// 500 more combos across every move in the library (id | name | style | moves)
+const MORE_COMBOS = [
+    'stoneWing|Stone Wing|Counter|snapBob,elbowSmash',
+    'spiralWave|Spiral Wave|Counter|duckUnder,hammerFist',
+    'thunderTalon|Thunder Talon|Counter|duckDart,lungeElbow',
+    'goldenFury|Golden Fury|Counter|legLift,palmStrike',
+    'jadeHammer|Jade Hammer|Counter|hollowGut,thighJab',
+    'thunderWheel|Thunder Wheel|Counter|pounceIn,longBodyJab',
+    'lunarSting|Lunar Sting|Counter|backStep,kneeCheck',
+    'crescentGambit|Crescent Gambit|Counter|duckUnder,runningKnee',
+    'silentLadder|Silent Ladder|Counter|checkStep,kneeCheck',
+    'blazingCascade|Blazing Cascade|Counter|sway,legCatch',
+    'finalMonsoon|Final Monsoon|Counter|springAway,doubleBodyKick',
+    'fallingWave|Falling Wave|Counter|pounceIn,ankleHook',
+    'ragingLadder|Raging Ladder|Counter|hop,spinSweep',
+    'thunderClaw|Thunder Claw|Counter|slipOut,jumpDoubleKnee',
+    'mountainMirror|Mountain Mirror|Counter|legLift,sideKick',
+    'savageLantern|Savage Lantern|Counter|matadorStep,jumpingJab',
+    'dragonRampage|Dragon Rampage|Counter|shadowStep,slideTackle',
+    'emeraldRampage|Emerald Rampage|Counter|spinAway,cartwheelKick',
+    'dragonSpear|Dragon Spear|Counter|kipUp,runningKnee',
+    'northernRush|Northern Rush|Counter|gritTeeth,dashPunch',
+    'shadowComet|Shadow Comet|Parry Punish|perfectParry,spearTackle',
+    'hiddenChain|Hidden Chain|Parry Punish|stampBlock,corkscrewPunch',
+    'eternalDance|Eternal Dance|Parry Punish|reversalTurn,heelStomp',
+    'shadowChain|Shadow Chain|Parry Punish|braceUp,flyingCartwheel',
+    'copperInferno|Copper Inferno|Parry Punish|rebound,lungingThighKnee',
+    'phoenixThorn|Phoenix Thorn|Parry Punish|reversalTurn,rocketSideKick',
+    'savageLotus|Savage Lotus|Parry Punish|groundSwat,flyingHeadlock',
+    'luckyDrift|Lucky Drift|Parry Punish|slipParry,hipToss',
+    'northernDrift|Northern Drift|Parry Punish|parryStep,gutBuster',
+    'finalBloom|Final Bloom|Parry Punish|mirrorDeflect,slidingLegLock',
+    'desertRiposte|Desert Riposte|Parry Punish|recoilParry,legSweepThrow',
+    'savageLandslide|Savage Landslide|Parry Punish|parryPop,haymaker',
+    'frozenHurricane|Frozen Hurricane|Parry Punish|springForward,whipThrow',
+    'emeraldWaltz|Emerald Waltz|Parry Punish|deflectTurn,thighCrusher',
+    'stoneGambit|Stone Gambit|Parry Punish|swatDown,headlockSlam',
+    'hiddenRush|Hidden Rush|Parry Punish|rollThrough,heavyLowHook',
+    'rubyEcho|Ruby Echo|Parry Punish|hookCatch,flyingDoubleKnee',
+    'rubyTide|Ruby Tide|Parry Punish|kickOffFree,flyingDoubleKnee',
+    'mountainRiposte|Mountain Riposte|Shell & Strike|lockedElbows,flyBackfist',
+    'goldenGauntlet|Golden Gauntlet|Shell & Strike|lowBlock,kneeTrip',
+    'wanderingEclipse|Wandering Eclipse|Shell & Strike|guardSlide,stretchKick',
+    'crescentGauntlet|Crescent Gauntlet|Shell & Strike|highGuard,elbowSpike',
+    'crimsonCascade|Crimson Cascade|Shell & Strike|liftRetreat,jumpDoubleKnee',
+    'ghostClaw|Ghost Claw|Shell & Strike|lockedElbows,ankleLock',
+    'riverTalon|River Talon|Shell & Strike|braceHead,neckPull',
+    'emeraldBloom|Emerald Bloom|Shell & Strike|guardStepIn,stompKick',
+    'stoneWave|Stone Wave|Shell & Strike|turnabout,lowKick',
+    'stoneAvalanche|Stone Avalanche|Shell & Strike|oakShin,treeFeller',
+    'brokenRush|Broken Rush|Shell & Strike|shinCheck,calfTap',
+    'serpentThorn|Serpent Thorn|Shell & Strike|pushGuard,kneeCheck',
+    'crimsonWheel|Crimson Wheel|Break Free|duckOut,shoulderCharge',
+    'ragingBarrage|Raging Barrage|Break Free|slipHold,rocketSideKick',
+    'brokenClaw|Broken Claw|Break Free|chinTuck,dashPunch',
+    'lunarRequiem|Lunar Requiem|Break Free|suddenTwist,rollStrike',
+    'luckyComet|Lucky Comet|Break Free|snapFree,cyclone',
+    'savageBreaker|Savage Breaker|Break Free|elbowFree,flyingCartwheel',
+    'goldenCascade|Golden Cascade|Break Free|reverseOut,tumbleKick',
+    'blackRequiem|Black Requiem|Break Free|hipTwist,tornadoElbow',
+    'suddenStorm|Sudden Storm|Break Free|snapLegFree,cartwheelKick',
+    'ghostCascade|Ghost Cascade|Break Free|spinOut,hurricaneSpin',
+    'whiteSpear|White Spear|Break Free|spinKickFree,jumpingJab',
+    'riverRequiem|River Requiem|Break Free|headSlipOut,spinThrough',
+    'hiddenLandslide|Hidden Landslide|Comeback|flyingKipUp,spinSideKick',
+    'spiralTalon|Spiral Talon|Comeback|legReset,slidingSweep',
+    'twinClaw|Twin Claw|Comeback|comebackStep,spearTackle',
+    'stoneSpark|Stone Spark|Comeback|plantFeet,divingElbow',
+    'suddenHurricane|Sudden Hurricane|Comeback|headClear,jumpDoubleKnee',
+    'ironStorm|Iron Storm|Comeback|ironChin,avalancheSlide',
+    'sapphireTempest|Sapphire Tempest|Comeback|sideRoll,sweepingHook',
+    'northernLandslide|Northern Landslide|Comeback|smartFall,corkscrewPunch',
+    'twinWave|Twin Wave|Comeback|turnAround,longLowJab',
+    'risingRapids|Rising Rapids|Comeback|stampFree,sweepingHook',
+    'obsidianClaw|Obsidian Claw|Comeback|steadyStance,hurricaneKick',
+    'solarLandslide|Solar Landslide|Comeback|shakeItOff,hurricaneKick',
+    'frozenRiposte|Frozen Riposte|Chain|reachYank,snapKick,tornadoKick',
+    'luckyGauntlet|Lucky Gauntlet|Chain|flyBackfist,longSlide,elbowSpike',
+    'goldenQuake|Golden Quake|Chain|spearFist,leapHeadlock,cyclone',
+    'blackHammer|Black Hammer|Chain|lungePunch,stretchKick,piledriverPunch',
+    'burningStorm|Burning Storm|Chain|cometDive,risingElbow,elbowCrush',
+    'solarCascade|Solar Cascade|Chain|elbowSmash,crossStepKnee,skyAxe',
+    'wanderingLandslide|Wandering Landslide|Chain|lowLungeKnee,slidingKnee,muleKick',
+    'crimsonQuake|Crimson Quake|Chain|elbowSmash,leapingElbow,flyingDoubleKnee',
+    'blackEcho|Black Echo|Chain|tackle,pushKick,runningKneeSmash',
+    'ironRequiem|Iron Requiem|Chain|spearFist,doubleKnee,thighCrusher',
+    'jadeChain|Jade Chain|Chain|droppingElbow,legCatch,slidingSweep',
+    'spiralDance|Spiral Dance|Chain|crossStepKnee,dashPalm,bearHugCrush',
+    'savageRoar|Savage Roar|Chain|shinKick,bodyFlurry,earthquakeStomp',
+    'hollowEcho|Hollow Echo|Chain|lungeElbow,longShinKick,corkscrewPunch',
+    'hollowStorm|Hollow Storm|Chain|reachingSweep,elbowSmash,runningKneeSmash',
+    'fallingCascade|Falling Cascade|Chain|divingLow,kneeStrike,spearTackle',
+    'thousandAvalanche|Thousand Avalanche|Chain|hopFrontKick,lassoGrab,heavyFrontKick',
+    'suddenLadder|Sudden Ladder|Chain|dashPalm,ankleHook,meteorElbow',
+    'thunderRampage|Thunder Rampage|Chain|axeFlick,pushKick,kneeSlideCrash',
+    'emeraldWave|Emerald Wave|Chain|doubleKnee,bodyLock,doubleHook',
+    'ironChain|Iron Chain|Chain|skipSideKick,longLowJab,kneeSlideCrash',
+    'obsidianTalon|Obsidian Talon|Chain|thighJab,divingLow,backflipKick',
+    'riverAmbush|River Ambush|Rising|dropElbowSlam,heavyFlurry,hopFrontKick',
+    'luckyTalon|Lucky Talon|Rising|longSlide,heavyFlurry,meteorStrike',
+    'sapphireLadder|Sapphire Ladder|Rising|rollStrike,cannonball,lassoSlam',
+    'burningDance|Burning Dance|Rising|avalancheSlide,dashPunch,leapingHaymaker',
+    'tigerLotus|Tiger Lotus|Rising|lowKnee,waistSnatch,cannonPunch',
+    'shadowVortex|Shadow Vortex|Rising|doubleLegTakedown,lungeBody,tornadoElbow',
+    'emeraldCascade|Emerald Cascade|Rising|doubleLegTakedown,skipSideKick,neckPull',
+    'wildRequiem|Wild Requiem|Rising|spinningLegSlam,bodySlam,crescentKick',
+    'twinSpark|Twin Spark|Rising|slidingLegLock,sideElbow,hurricaneKick',
+    'hiddenRoar|Hidden Roar|Rising|toeSweep,waistSnatch,supermanKnee',
+    'desertFury|Desert Fury|Rising|lungingThighKnee,shoulderCharge,longJab',
+    'blazingTempest|Blazing Tempest|Rising|heavyLowHook,waistSnatch,doubleHook',
+    'northernBarrage|Northern Barrage|Rising|slidingKnee,spearKick,jumpingKnee',
+    'savageRush|Savage Rush|Rising|lowKick,runningKnee,flyingCartwheel',
+    'serpentSpear|Serpent Spear|Rising|spinningLegSlam,liverShot,faceKnee',
+    'copperEclipse|Copper Eclipse|Rising|kneeStomp,sideKick,flyingHeadlock',
+    'rubyCyclone|Ruby Cyclone|Falling|headClinch,doubleBodyKick,divingLow',
+    'burningFury|Burning Fury|Falling|supermanPunch,spearFist,sweepingHook',
+    'finalHurricane|Final Hurricane|Falling|dashClinch,waistSnatch,kneeCheck',
+    'thunderDrift|Thunder Drift|Falling|uppercut,doubleBodyKick,longLowJab',
+    'shadowAmbush|Shadow Ambush|Falling|supermanPunch,spinSideKick,avalancheSlide',
+    'sapphireHammer|Sapphire Hammer|Falling|snapJab,hipToss,calfTap',
+    'frozenCrash|Frozen Crash|Falling|flyingKnee,stomachKick,divingLow',
+    'blazingAmbush|Blazing Ambush|Falling|highKick,runningKnee,heelStomp',
+    'desertRampage|Desert Rampage|Falling|spinBackfist,bodyFlurry,kneeBreaker',
+    'thunderGauntlet|Thunder Gauntlet|Falling|collarToss,armDrag,divingLow',
+    'lunarMonsoon|Lunar Monsoon|Falling|hopFrontKick,rocketSideKick,longShinKick',
+    'midnightRush|Midnight Rush|Falling|runningSuplex,muleKick,slideTackle',
+    'rubyLandslide|Ruby Landslide|Falling|runningKneeSmash,spinningBodyBlow,legCatch',
+    'crimsonStorm|Crimson Storm|Falling|snapJab,longBodyJab,thighJab',
+    'risingTalon|Rising Talon|Throw Finish|spinSideKick,batteringRam,divingTakedown',
+    'ragingRoar|Raging Roar|Throw Finish|hopFrontKick,stretchKick,doubleLegTakedown',
+    'spiralGambit|Spiral Gambit|Throw Finish|tackle,turningBodyKick,runningSuplex',
+    'twinRapids|Twin Rapids|Throw Finish|skipSideKick,slidingLowKick,reachYank',
+    'phoenixAvalanche|Phoenix Avalanche|Throw Finish|sideElbow,doubleBodyKick,bodySlam',
+    'lunarSpark|Lunar Spark|Throw Finish|shinKick,lowPunch,waistThrow',
+    'thunderHammer|Thunder Hammer|Throw Finish|neckPull,turningBodyKick,lassoGrab',
+    'wanderingWaltz|Wandering Waltz|Throw Finish|armWhip,groundPound,spearTackle',
+    'silentCrash|Silent Crash|Throw Finish|slidingKnee,stretchKick,ankleHook',
+    'velvetFang|Velvet Fang|Throw Finish|kneeStrike,toeSweep,divingLegGrab',
+    'thousandInferno|Thousand Inferno|Throw Finish|waistThrow,gutBuster,headlockSlam',
+    'brokenLandslide|Broken Landslide|Throw Finish|collarToss,snapJab,shootTrip',
+    'steelHammer|Steel Hammer|Throw Finish|kneeStrike,highPunch,headlockSlam',
+    'solarTempest|Solar Tempest|Throw Finish|hopFrontKick,sideKick,spearTackle',
+    'goldenRequiem|Golden Requiem|Throw Finish|collarToss,batteringRam,backLock',
+    'crescentCyclone|Crescent Cyclone|Throw Finish|flickKick,shinKick,bodySlam',
+    'dragonSting|Dragon Sting|Mix-Up|suplex,lowKick,flyBackfist',
+    'whiteCascade|White Cascade|Mix-Up|leapingElbow,calfTap,runningSuplex',
+    'northernHurricane|Northern Hurricane|Mix-Up|faceKnee,sweepingHook,uppercut',
+    'silentTide|Silent Tide|Mix-Up|spinElbow,reachingHammer,dashPalm',
+    'suddenChain|Sudden Chain|Mix-Up|flyingHeadlock,legSweepThrow,tornadoElbow',
+    'mountainLantern|Mountain Lantern|Mix-Up|runningKneeSmash,chopKick,snapJab',
+    'silentEcho|Silent Echo|Mix-Up|leapingElbow,calfTap,doubleJab',
+    'velvetLadder|Velvet Ladder|Mix-Up|crescentKick,toeSweep,hammerElbow',
+    'lunarMirror|Lunar Mirror|Mix-Up|flickKick,legSweepThrow,snapJab',
+    'crimsonCrash|Crimson Crash|Mix-Up|jumpDoubleKnee,groundPound,dashClinch',
+    'spiralHammer|Spiral Hammer|Mix-Up|elbowSmash,longGroundPound,runningKneeSmash',
+    'sapphireLotus|Sapphire Lotus|Mix-Up|runningSuplex,shinKick,jumpingRoundhouse',
+    'solarCrash|Solar Crash|Mix-Up|dashClinch,rollStrike,axeFlick',
+    'shadowBreaker|Shadow Breaker|Mix-Up|meteorElbow,divingTakedown,hammerElbow',
+    'obsidianSting|Obsidian Sting|Close In|meteorStrike,anklePick,bodyJab',
+    'scarletCascade|Scarlet Cascade|Close In|whipThrow,sideElbow,hammerFist',
+    'blackDrift|Black Drift|Close In|cartwheelKick,neckPull,legSweepThrow',
+    'burningFang|Burning Fang|Close In|armWhip,chokeHold,elbowSpike',
+    'rubyBloom|Ruby Bloom|Close In|hurricaneKick,bodyFlurry,heavyFrontKick',
+    'mountainHurricane|Mountain Hurricane|Close In|stretchKick,backflipKick,droppingElbow',
+    'midnightCrash|Midnight Crash|Close In|waistSnatch,spinningBodyBlow,heelStomp',
+    'thousandTempest|Thousand Tempest|Close In|longGroundPound,crushingRoundhouse,doubleBodyKick',
+    'ironWaltz|Iron Waltz|Close In|divingLegGrab,snapKick,axeKick',
+    'velvetAmbush|Velvet Ambush|Close In|meteorFist,hammerFist,stompKick',
+    'wildSpark|Wild Spark|Close In|divingLow,thighCrusher,flickKick',
+    'burningThorn|Burning Thorn|Close In|treeFeller,waistThrow,slideTackle',
+    'frozenTide|Frozen Tide|Close In|runningSuplex,legBreaker,bodyLock',
+    'eternalGambit|Eternal Gambit|Close In|spinSideKick,backLock,turningBodyKick',
+    'eternalBloom|Eternal Bloom|Iron Defense|forearmShield,parryShove,highKick',
+    'northernCascade|Northern Cascade|Iron Defense|shieldTurn,spiralParry,doubleLegTakedown',
+    'tigerComet|Tiger Comet|Iron Defense|lockedElbows,parryPop,cannonPunch',
+    'whiteRapids|White Rapids|Iron Defense|ironAdvance,slapParry,backflipKick',
+    'desertFang|Desert Fang|Iron Defense|stoneTorso,elbowDeflect,elbowSpike',
+    'shadowGambit|Shadow Gambit|Iron Defense|ironWall,kickDeflectTurn,spinningLegSlam',
+    'howlingChain|Howling Chain|Iron Defense|ironGut,parryStep,breakdanceSweep',
+    'ragingAvalanche|Raging Avalanche|Iron Defense|shinStepIn,deflectTurn,bodySlam',
+    'rubyFury|Ruby Fury|Iron Defense|wallSlide,redirect,headlockSlam',
+    'emeraldBarrage|Emerald Barrage|Iron Defense|standTall,snapCatch,brutalKnee',
+    'stoneLadder|Stone Ladder|Iron Defense|absorbSlide,wristDeflect,divingTakedown',
+    'thunderQuake|Thunder Quake|Iron Defense|shinShieldTurn,shinDeflect,heavyLowHook',
+    'solarWaltz|Solar Waltz|Flurry|supermanPunch,longLowJab,lowLungeKnee,stompKick',
+    'hiddenBreaker|Hidden Breaker|Flurry|highSideKick,liverShot,leapingElbow,turningBodyKick',
+    'sapphireSpark|Sapphire Spark|Flurry|lungeBody,dashPunch,anklePick,doubleLegTakedown',
+    'solarRampage|Solar Rampage|Flurry|dashThrough,tackle,waistThrow,piledriverPunch',
+    'stoneComet|Stone Comet|Flurry|kneeTrip,axeFlick,skipKnee,flyingCartwheel',
+    'brokenTalon|Broken Talon|Flurry|doubleElbow,reachYank,risingElbow,groundPound',
+    'serpentChain|Serpent Chain|Flurry|sideKick,leapingElbow,kneeCheck,hurricaneKick',
+    'risingRampage|Rising Rampage|Flurry|longLowJab,longBodyJab,calfTap,flyingDoubleKnee',
+    'goldenInferno|Golden Inferno|Flurry|flickKick,jumpingKnee,dashPunch,kneeSlideCrash',
+    'risingStorm|Rising Storm|Flurry|headClinch,spinSweep,waistThrow,cometElbow',
+    'blackSpear|Black Spear|Flurry|whirlwind,supermanPunch,longJab,batteringRam',
+    'whiteAvalanche|White Avalanche|Flurry|lowKnee,rollStrike,armDrag,spinningBodyBlow',
+    'burningBloom|Burning Bloom|Flurry|sideKick,bodyLock,runningKnee,breakdanceSweep',
+    'goldenAmbush|Golden Ambush|Flurry|skipSideKick,slidingLowKick,dashClinch,thighCrusher',
+    'velvetFury|Velvet Fury|Flurry|collarToss,longJab,straightCross,slidingLegLock',
+    'howlingTide|Howling Tide|Flurry|spinBackfist,snapJab,shinKick,overhandSmash',
+    'crimsonLotus|Crimson Lotus|Flurry|corkscrewSweep,hopFrontKick,crossStepKnee,bodyRoundhouse',
+    'jadeWave|Jade Wave|Flurry|lungePunch,slidingLowKick,stretchKick,hurricaneKick',
+    'solarChain|Solar Chain|Flurry|ankleHook,pushKick,cometDive,avalancheSlide',
+    'crimsonEcho|Crimson Echo|Flurry|reachingHammer,snapKick,leapingElbow,doubleHook',
+    'desertMonsoon|Desert Monsoon|Flurry|backLock,jumpDoubleKnee,palmStrike,slidingLegLock',
+    'lunarFury|Lunar Fury|Flurry|shinKick,dashClinch,neckPull,runningKneeSmash',
+    'sapphireEclipse|Sapphire Eclipse|Dance|vaultOver,lungeElbow,hopFrontKick,spinningBodyBlow',
+    'savageAmbush|Savage Ambush|Dance|duck,lowPunch,thunderSideKick,tumbleKick',
+    'suddenRampage|Sudden Rampage|Dance|snapBob,reachYank,sideKick,tornadoKick',
+    'desertWing|Desert Wing|Dance|circleOut,collarToss,lowKick,earthquakeStomp',
+    'solarDance|Solar Dance|Dance|whiskerSlip,bodyFlurry,lowKick,flyBackfist',
+    'ghostEclipse|Ghost Eclipse|Dance|bobWeaveIn,neckPull,highSideKick,breakdanceSweep',
+    'ghostBloom|Ghost Bloom|Dance|heelPop,palmStrike,crushingRoundhouse,earthquakeStomp',
+    'blackTalon|Black Talon|Dance|paperSway,sideElbow,highKick,corkscrewSweep',
+    'dragonTempest|Dragon Tempest|Dance|bounceBack,lowKnee,jumpingRoundhouse,flyBackfist',
+    'whiteWaltz|White Waltz|Dance|skip,stretchKick,highSideKick,whirlwind',
+    'twinHurricane|Twin Hurricane|Dance|suckIn,lassoGrab,jumpingRoundhouse,spinHookKick',
+    'brokenStorm|Broken Storm|Dance|hollowGut,armWhip,flickKick,rollStrike',
+    'fallingGambit|Falling Gambit|Dance|sidestep,lungeBody,flickKick,spinElbow',
+    'goldenBlossom|Golden Blossom|Dance|flashBackstep,flyBackfist,reachingSweep,slideTackle',
+    'blackCrash|Black Crash|Dance|ghostUnder,doubleKnee,stretchKick,hurricaneSpin',
+    'serpentRush|Serpent Rush|Dance|headSlip,spinBackfist,heavyFrontKick,cyclone',
+    'rubyHammer|Ruby Hammer|Wrestler|lassoGrab,sideElbow,highPunch,armDrag',
+    'whiteVortex|White Vortex|Wrestler|chokeHold,thighCrusher,bodyFlurry,divingTakedown',
+    'goldenAvalanche|Golden Avalanche|Wrestler|hipToss,faceKnee,reachingHammer,ankleLock',
+    'velvetTempest|Velvet Tempest|Wrestler|lassoSlam,skipKnee,doubleHook,chargingBearHug',
+    'lunarDance|Lunar Dance|Wrestler|suplex,brutalKnee,cannonPunch,headClinch',
+    'shadowAvalanche|Shadow Avalanche|Wrestler|waistSnatch,clinchKnees,snapJab,hipToss',
+    'ghostAmbush|Ghost Ambush|Wrestler|armWhip,skipKnee,palmStrike,headlockSlam',
+    'rubyMonsoon|Ruby Monsoon|Wrestler|headlockSlam,doubleElbow,spearFist,suplex',
+    'ragingBreaker|Raging Breaker|Wrestler|backLock,kneeStrike,lowPunch,tackle',
+    'eternalEcho|Eternal Echo|Wrestler|flyingHeadlock,elbowSpike,spearFist,ankleLock',
+    'riverCascade|River Cascade|Wrestler|runningSuplex,leapingElbow,highPunch,shootTrip',
+    'ghostThorn|Ghost Thorn|Wrestler|waistSnatch,elbowCrush,haymaker,flyingHeadlock',
+    'whiteBlossom|White Blossom|Wrestler|armDrag,freightTrainKnee,straightCross,bodySlam',
+    'luckyLadder|Lucky Ladder|Wrestler|waistSnatch,thighCrusher,palmStrike,collarToss',
+    'ragingLotus|Raging Lotus|Storm|batteringRam,reachingSweep,flyingKnee,breakdanceSweep',
+    'blazingHurricane|Blazing Hurricane|Storm|spearFist,pushKick,jumpDoubleKnee,shoulderCharge',
+    'blazingCrash|Blazing Crash|Storm|heavyLowHook,stretchKick,runningKnee,spinSweep',
+    'midnightAmbush|Midnight Ambush|Storm|longBodyJab,thunderSideKick,lowKnee,corkscrewSweep',
+    'risingRush|Rising Rush|Storm|meteorFist,spearKick,brutalKnee,whirlwind',
+    'wildWaltz|Wild Waltz|Storm|longBodyJab,stretchKick,lungeElbow,dashThrough',
+    'stoneRequiem|Stone Requiem|Storm|longGroundPound,hopFrontKick,elbowCrush,dashPunch',
+    'solarWave|Solar Wave|Storm|longBodyJab,skyAxe,spearElbow,spinSideKick',
+    'luckyEclipse|Lucky Eclipse|Storm|kneeBreaker,snapKick,sideElbow,spinBackfist',
+    'twinComet|Twin Comet|Storm|heavyLowHook,crescentKick,doubleElbow,corkscrewSweep',
+    'shadowBarrage|Shadow Barrage|Storm|doubleJab,hopFrontKick,lungingThighKnee,flyBackfist',
+    'emeraldRoar|Emerald Roar|Storm|runningOverhand,stretchKick,kneeStomp,whirlwind',
+    'silentBarrage|Silent Barrage|Storm|highPunch,stomachKick,faceKnee,cometDive',
+    'sapphireCyclone|Sapphire Cyclone|Storm|uppercut,calfTap,doubleElbow,cometDive',
+    'blazingBloom|Blazing Bloom|Storm|sweepingHook,axeFlick,elbowSmash,spinningHeel',
+    'brokenCyclone|Broken Cyclone|Storm|doubleHook,stretchKick,lowLungeKnee,dashPunch',
+    'crimsonHammer|Crimson Hammer|Late Counter|catSkip,crescentKick',
+    'riverHammer|River Hammer|Late Counter|whiskerSlip,flyingCartwheel',
+    'jadeStorm|Jade Storm|Late Counter|fadeAway,earthquakeStomp',
+    'phoenixWing|Phoenix Wing|Late Counter|backHandspring,haymaker',
+    'savageCascade|Savage Cascade|Late Counter|vaultOver,whipThrow',
+    'desertComet|Desert Comet|Late Counter|snapBob,faceKnee',
+    'eternalViper|Eternal Viper|Late Counter|razorDuck,slidingSweep',
+    'wanderingMirror|Wandering Mirror|Late Counter|paperSway,heavyFlurry',
+    'scarletBloom|Scarlet Bloom|Late Counter|catSkip,heavyFlurry',
+    'rubyPrism|Ruby Prism|Late Counter|snapBob,supermanKnee',
+    'solarMonsoon|Solar Monsoon|Late Counter|pounceIn,heavyFlurry',
+    'rubyRampage|Ruby Rampage|Late Counter|vaultOver,earthquakeStomp',
+    'savageViper|Savage Viper|Sidestep Strike|secondWind,sideElbow',
+    'ironTalon|Iron Talon|Sidestep Strike|recoilParry,armWhip',
+    'serpentCascade|Serpent Cascade|Sidestep Strike|shellRetreat,highPunch',
+    'steelBlossom|Steel Blossom|Sidestep Strike|footTwistFree,waistSnatch',
+    'crescentHurricane|Crescent Hurricane|Sidestep Strike|hopOver,hammerFist',
+    'thousandVortex|Thousand Vortex|Sidestep Strike|slipParry,hammerFist',
+    'paperLandslide|Paper Landslide|Sidestep Strike|deflectTurn,doubleJab',
+    'wildRoar|Wild Roar|Sidestep Strike|elbowGuard,slidingLowKick',
+    'silentDance|Silent Dance|Sidestep Strike|rollBack,reachingHammer',
+    'bambooCyclone|Bamboo Cyclone|Sidestep Strike|tumbleOut,waistSnatch',
+    'wildMonsoon|Wild Monsoon|Sidestep Strike|parryShove,armDrag',
+    'silentWheel|Silent Wheel|Sidestep Strike|backRoll,stretchKick',
+    'eternalRapids|Eternal Rapids|Reversal|steelPalm,chokeHold',
+    'silentAnvil|Silent Anvil|Reversal|trapEnter,lassoSlam',
+    'velvetQuake|Velvet Quake|Reversal|heelDeflect,lassoGrab',
+    'frozenKite|Frozen Kite|Reversal|scoopTurn,doubleLegTakedown',
+    'howlingKite|Howling Kite|Reversal|catchStep,legSweepThrow',
+    'ragingArrow|Raging Arrow|Reversal|elbowDeflect,whipThrow',
+    'cobaltPrism|Cobalt Prism|Reversal|groundSwat,hipToss',
+    'phoenixWave|Phoenix Wave|Reversal|trapStep,leapHeadlock',
+    'mirrorAmbush|Mirror Ambush|Reversal|parryShove,slidingLegLock',
+    'copperAnvil|Copper Anvil|Reversal|redirect,suplex',
+    'goldenGambit|Golden Gambit|Reversal|recoilParry,waistThrow',
+    'feralWaltz|Feral Waltz|Reversal|toughOut,neckPull',
+    'hollowArrow|Hollow Arrow|Reversal|risingBlock,tackle',
+    'dragonCrash|Dragon Crash|Reversal|slipParry,suplex',
+    'sapphireReaper|Sapphire Reaper|Escape Artist|pullAway,slidingLegLock',
+    'wolfTempest|Wolf Tempest|Escape Artist|headTwist,ankleLock',
+    'risingTide|Rising Tide|Escape Artist|rollOut,bodySlam',
+    'jadePrism|Jade Prism|Escape Artist|slipStrikeStance,spearTackle',
+    'hollowViper|Hollow Viper|Escape Artist|burstOut,reachYank',
+    'wolfLantern|Wolf Lantern|Escape Artist|bodyPop,dashClinch',
+    'thunderPrism|Thunder Prism|Escape Artist|ankleTwist,shootTrip',
+    'wildHurricane|Wild Hurricane|Escape Artist|lastGaspTwist,chargingBearHug',
+    'serpentEcho|Serpent Echo|Escape Artist|wriggleFree,lassoSlam',
+    'obsidianBlossom|Obsidian Blossom|Escape Artist|bodyShake,neckPull',
+    'shadowTide|Shadow Tide|Escape Artist|shrugOff,chargingBearHug',
+    'crimsonRoar|Crimson Roar|Escape Artist|neckRoll,lassoGrab',
+    'mirrorVortex|Mirror Vortex|Jab Setup|lowPunch,snapJab,legBreaker',
+    'blackInferno|Black Inferno|Jab Setup|lowPunch,supermanPunch,runningOverhand',
+    'spiralSting|Spiral Sting|Jab Setup|liverShot,straightCross,bodySlam',
+    'mountainWheel|Mountain Wheel|Jab Setup|hammerFist,supermanPunch,tornadoElbow',
+    'whiteRequiem|White Requiem|Jab Setup|palmStrike,divingLow,kneeBreaker',
+    'silverWheel|Silver Wheel|Jab Setup|thighJab,supermanPunch,piledriverPunch',
+    'riverRiposte|River Riposte|Jab Setup|thighJab,spearFist,crescentKick',
+    'desertArrow|Desert Arrow|Jab Setup|thighJab,liverShot,doubleLegTakedown',
+    'phoenixViper|Phoenix Viper|Jab Setup|longLowJab,straightCross,bodyHook',
+    'hiddenRiposte|Hidden Riposte|Jab Setup|lungeBody,bodyFlurry,bodyRoundhouse',
+    'luckyGambit|Lucky Gambit|Jab Setup|hammerFist,highPunch,groundPound',
+    'cobaltBreaker|Cobalt Breaker|Jab Setup|hammerFist,supermanPunch,hurricaneSpin',
+    'luckyBlossom|Lucky Blossom|Jab Setup|bodyJab,straightCross,divingTakedown',
+    'solarThorn|Solar Thorn|Jab Setup|hammerFist,longLowJab,spinningLegSlam',
+    'suddenWheel|Sudden Wheel|Kickboxer|overhandSmash,supermanPunch,toeSweep',
+    'bambooAnvil|Bamboo Anvil|Kickboxer|kneeBreaker,cannonPunch,lowKick',
+    'ghostAnvil|Ghost Anvil|Kickboxer|kneeBreaker,liverShot,lowKick',
+    'ashenCrown|Ashen Crown|Kickboxer|cannonPunch,palmStrike,shinKick',
+    'whiteChain|White Chain|Kickboxer|longGroundPound,uppercut,axeKick',
+    'serpentWheel|Serpent Wheel|Kickboxer|longLowJab,reachingHammer,slidingSweep',
+    'hollowPrism|Hollow Prism|Kickboxer|longLowJab,meteorFist,hopFrontKick',
+    'riverThorn|River Thorn|Kickboxer|divingLow,palmStrike,thunderSideKick',
+    'serpentMeteor|Serpent Meteor|Kickboxer|supermanPunch,uppercut,skyAxe',
+    'goldenChain|Golden Chain|Kickboxer|haymaker,kneeBreaker,spearKick',
+    'thousandComet|Thousand Comet|Kickboxer|piledriverPunch,longGroundPound,slidingSweep',
+    'burningSaber|Burning Saber|Kickboxer|longBodyJab,spearFist,crescentKick',
+    'wanderingCyclone|Wandering Cyclone|Kickboxer|lowPunch,gutBuster,snapKick',
+    'suddenLandslide|Sudden Landslide|Kickboxer|supermanPunch,hammerFist,reachingSweep',
+    'silverChain|Silver Chain|Muay Thai|dropElbowSlam,freightTrainKnee,twinFlick',
+    'mirrorLantern|Mirror Lantern|Muay Thai|lowLungeKnee,crossStepKnee,jumpingRoundhouse',
+    'goldenWing|Golden Wing|Muay Thai|runningKnee,faceKnee,skyAxe',
+    'ivoryWheel|Ivory Wheel|Muay Thai|risingElbow,lungingThighKnee,crushingRoundhouse',
+    'wolfBloom|Wolf Bloom|Muay Thai|runningKnee,flyingKnee,hurricaneKick',
+    'wildMirror|Wild Mirror|Muay Thai|droppingElbow,flyingDoubleKnee,twinFlick',
+    'whiteTalon|White Talon|Muay Thai|lungeElbow,flyingKnee,skyAxe',
+    'desertLadder|Desert Ladder|Muay Thai|clinchKnees,elbowCrush,shinKick',
+    'whiteArrow|White Arrow|Muay Thai|cometElbow,flyingDoubleKnee,heelStomp',
+    'tigerEclipse|Tiger Eclipse|Muay Thai|thighCrusher,doubleElbow,twinFlick',
+    'riverKite|River Kite|Acrobat|flyBackfist,backflipKick,hurricaneSpin',
+    'thunderStorm|Thunder Storm|Acrobat|spinningBodyBlow,tumbleSlam,flyingCartwheel',
+    'howlingRapids|Howling Rapids|Acrobat|spinningLegSlam,spinThrough,corkscrewSweep',
+    'riverAnvil|River Anvil|Acrobat|rollStrike,flyingCartwheel,dashThrough',
+    'ghostDance|Ghost Dance|Acrobat|jumpingJab,backflipKick,tumbleSlam',
+    'brokenKite|Broken Kite|Acrobat|spinHookKick,dashPunch,jumpingJab',
+    'mountainMeteor|Mountain Meteor|Acrobat|flyBackfist,avalancheSlide,rollStrike',
+    'midnightGambit|Midnight Gambit|Acrobat|whirlwind,spinElbow,meteorStrike',
+    'midnightFang|Midnight Fang|Acrobat|earthquakeStomp,cyclone,spinSideKick',
+    'frozenMirror|Frozen Mirror|Acrobat|spinningHeel,tumbleSlam,longSlide',
+    'brokenMirror|Broken Mirror|Low Sweep|dropElbowSlam,thighJab,legLasso',
+    'spiralGauntlet|Spiral Gauntlet|Low Sweep|chopKick,thighCrusher,divingElbow',
+    'monsoonAmbush|Monsoon Ambush|Low Sweep|slidingLowKick,reachingHammer,divingElbow',
+    'fallingCrash|Falling Crash|Low Sweep|spinningLegSlam,breakdanceSweep,ankleLock',
+    'crimsonMirror|Crimson Mirror|Low Sweep|twisterSweep,anklePick,slidingLegLock',
+    'rubyArrow|Ruby Arrow|Low Sweep|breakdanceSweep,ankleHook,rollStrike',
+    'phoenixSpark|Phoenix Spark|Low Sweep|legLasso,meteorFist,legCatch',
+    'blazingSpear|Blazing Spear|Low Sweep|thighCrusher,cometElbow,divingTakedown',
+    'crescentBreaker|Crescent Breaker|Low Sweep|groundPound,sweepingHook,dropElbowSlam',
+    'northernQuake|Northern Quake|Headhunter|skyAxe,flyingHeadlock,cannonPunch',
+    'silverGambit|Silver Gambit|Headhunter|elbowCrush,headClinch,runningSuplex',
+    'eternalWave|Eternal Wave|Headhunter|spinBackfist,headClinch,jumpingRoundhouse',
+    'jadeDrift|Jade Drift|Headhunter|tornadoKick,spinBackfist,lassoGrab',
+    'midnightTide|Midnight Tide|Headhunter|risingElbow,overhandSmash,suplex',
+    'thousandReaper|Thousand Reaper|Headhunter|lassoSlam,axeKick,headlockSlam',
+    'tigerRush|Tiger Rush|Headhunter|stretchKick,jumpingRoundhouse,hurricaneKick',
+    'bambooCrash|Bamboo Crash|Headhunter|runningSuplex,headClinch,tornadoKick',
+    'fallingThorn|Falling Thorn|Headhunter|doubleElbow,risingElbow,hopFrontKick',
+    'steelAmbush|Steel Ambush|Body Breaker|dragonRush,runningKnee,bodyLock',
+    'sapphireStorm|Sapphire Storm|Body Breaker|cannonball,rocketSideKick,dashPunch',
+    'scarletWave|Scarlet Wave|Body Breaker|armDrag,cyclone,spearKick',
+    'mountainRequiem|Mountain Requiem|Body Breaker|bodyFlurry,pushKick,freightTrainKnee',
+    'dragonLantern|Dragon Lantern|Body Breaker|spinSideKick,spearKick,runningKnee',
+    'finalCrown|Final Crown|Body Breaker|rocketSideKick,spinSideKick,piledriverPunch',
+    'stoneFang|Stone Fang|Body Breaker|spinningBodyBlow,armDrag,tackle',
+    'paperReaper|Paper Reaper|Body Breaker|flyingDoubleKnee,piledriverPunch,spearKick',
+    'monsoonMeteor|Monsoon Meteor|Body Breaker|bearHugCrush,lungeBody,waistThrow',
+    'scarletRush|Scarlet Rush|Long Game|skipKnee,flyingHeadlock,corkscrewPunch',
+    'suddenAmbush|Sudden Ambush|Long Game|leapingHaymaker,muleKick,spinHookKick',
+    'eternalInferno|Eternal Inferno|Long Game|piledriverPunch,corkscrewSweep,dashClinch',
+    'hiddenCrown|Hidden Crown|Long Game|lowLungeKnee,tackle,slidingLowKick',
+    'twinWheel|Twin Wheel|Long Game|cannonPunch,slidingLowKick,straightCross',
+    'spiralVortex|Spiral Vortex|Long Game|supermanKnee,cometDive,runningSuplex',
+    'thousandGambit|Thousand Gambit|Long Game|piledriverPunch,batteringRam,lungePunch',
+    'cobaltWing|Cobalt Wing|Long Game|spearFist,divingLow,lowLungeKnee',
+    'steelKite|Steel Kite|Long Game|whirlwind,hurricaneSpin,jumpingRoundhouse',
+    'monsoonTalon|Monsoon Talon|Hit & Run|headClinch,shootTrip,resetStep',
+    'velvetEmber|Velvet Ember|Hit & Run|dashPalm,longShinKick,matadorParry',
+    'dragonEmber|Dragon Ember|Hit & Run|waistSnatch,ankleHook,jumpIn',
+    'wildRiposte|Wild Riposte|Hit & Run|tumbleKick,doubleJab,parryPop',
+    'burningMonsoon|Burning Monsoon|Hit & Run|longBodyJab,jumpingKnee,deepBreath',
+    'bambooRapids|Bamboo Rapids|Hit & Run|twinFlick,highSideKick,scoopTurn',
+    'ivoryMeteor|Ivory Meteor|Hit & Run|slidingKnee,calfTap,sprawl',
+    'rubySaber|Ruby Saber|Hit & Run|spearFist,whirlwind,checkHopBack',
+    'copperRush|Copper Rush|Hit & Run|jumpingJab,doubleElbow,jumpIn',
+    'whiteLotus|White Lotus|Hit & Run|backLock,divingLow,shoveFree',
+    'monsoonLadder|Monsoon Ladder|Hit & Run|armDrag,elbowSmash,lungeFree',
+    'brokenTempest|Broken Tempest|Hit & Run|bodyLock,toeSweep,shadowStep',
+    'serpentQuake|Serpent Quake|Bait|kneeWallStep,longShinKick,legBreaker,legLift',
+    'risingWing|Rising Wing|Bait|shoulderRollBehind,divingLegGrab,highKick,vaultOver',
+    'ashenBarrage|Ashen Barrage|Bait|bodyShell,leapingElbow,haymaker,coreReset',
+    'blazingFury|Blazing Fury|Bait|brickStep,headClinch,hurricaneSpin,duck',
+    'crescentKite|Crescent Kite|Bait|rootedCheck,lungeBody,cyclone,vaultOver',
+    'riverWheel|River Wheel|Bait|rootedCheck,spinBackfist,muleKick,bob',
+    'stoneDance|Stone Dance|Bait|crossedArms,longLowJab,lungingThighKnee,hopOver',
+    'frozenDance|Frozen Dance|Bait|kneeGuard,bodyJab,longGroundPound,paperSway',
+    'mirrorAnvil|Mirror Anvil|Bait|guardCharge,jumpingKnee,whipThrow,slipOut',
+    'hollowRiposte|Hollow Riposte|Bait|shieldSpin,doubleElbow,kneeStomp,slipOut',
+    'ironLandslide|Iron Landslide|Bait|helmetGuard,shinKick,hipToss,catSkip',
+    'ironMeteor|Iron Meteor|Bait|ironKnee,bodyFlurry,bodySlam,vaultOver',
+    'desertChain|Desert Chain|Bait|rollingGuard,supermanPunch,thunderSideKick,bob',
+    'finalAvalanche|Final Avalanche|Bait|steelForearms,kneeStrike,kneeStomp,toeLift',
+    'fallingRequiem|Falling Requiem|Grand Slam|ankleHook,waistSnatch,batteringRam,muleKick',
+    'feralFang|Feral Fang|Grand Slam|lassoGrab,legSweepThrow,kneeBreaker,bodyRoundhouse',
+    'riverCyclone|River Cyclone|Grand Slam|ankleHook,suplex,heavyFlurry,heavyFrontKick',
+    'hiddenFury|Hidden Fury|Grand Slam|shootTrip,runningSuplex,haymaker,skyAxe',
+    'monsoonWheel|Monsoon Wheel|Grand Slam|headlockSlam,ankleHook,doubleHook,crushingRoundhouse',
+    'desertThorn|Desert Thorn|Grand Slam|legSweepThrow,legLasso,cannonPunch,bodyRoundhouse',
+    'feralSpear|Feral Spear|Grand Slam|collarToss,legSweepThrow,batteringRam,bodyRoundhouse',
+    'suddenWave|Sudden Wave|Grand Slam|headlockSlam,slidingLegLock,meteorFist,treeFeller',
+    'burningSting|Burning Sting|Grand Slam|bodySlam,armDrag,cannonPunch,bodyRoundhouse',
+    'silverSaber|Silver Saber|Grand Slam|waistThrow,headlockSlam,corkscrewPunch,legBreaker',
+    'ragingEmber|Raging Ember|Grand Slam|chokeHold,collarToss,sweepingHook,turningBodyKick',
+    'silentAmbush|Silent Ambush|Grand Slam|doubleLegTakedown,divingTakedown,gutBuster,slidingSweep',
+    'wolfClaw|Wolf Claw|Avalanche|slidingSweep,dragonRush,flyingHeadlock,piledriverPunch',
+    'serpentSaber|Serpent Saber|Avalanche|overhandSmash,tornadoKick,lungingThighKnee,slidingLegLock',
+    'suddenKite|Sudden Kite|Avalanche|spearElbow,spinningBodyBlow,thighCrusher,kneeBreaker',
+    'shadowHammer|Shadow Hammer|Avalanche|headlockSlam,crushingRoundhouse,doubleLegTakedown,haymaker',
+    'phoenixClaw|Phoenix Claw|Avalanche|uppercut,doubleLegTakedown,kneeSlideCrash,whipThrow',
+    'emeraldStorm|Emerald Storm|Avalanche|hurricaneSpin,divingTakedown,longGroundPound,whipThrow',
+    'goldenLandslide|Golden Landslide|Avalanche|runningOverhand,jumpingRoundhouse,kneeBreaker,thighCrusher',
+    'phoenixDrift|Phoenix Drift|Avalanche|slidingLegLock,cyclone,earthquakeStomp,leapingHaymaker',
+    'velvetLandslide|Velvet Landslide|Whirlwind|twinFlick,lowPunch,stomachKick,dashPunch',
+    'finalBlossom|Final Blossom|Whirlwind|risingElbow,shinKick,liverShot,spinSweep',
+    'obsidianHurricane|Obsidian Hurricane|Whirlwind|doubleJab,slidingLowKick,armDrag,longSlide',
+    'mirrorInferno|Mirror Inferno|Whirlwind|stretchKick,shootTrip,bodyJab,cometDive',
+    'twinTide|Twin Tide|Whirlwind|headClinch,reachingHammer,doubleBodyKick,tumbleKick',
+    'riverHurricane|River Hurricane|Whirlwind|flyingKnee,toeSweep,spearKick,cometDive',
+    'desertWheel|Desert Wheel|Whirlwind|risingElbow,slideTackle,longBodyJab,dashThrough',
+    'sapphireCascade|Sapphire Cascade|Whirlwind|hopFrontKick,anklePick,sideKick,spinSweep',
+    'midnightBlossom|Midnight Blossom|Full Circle|matadorStep,shinKick,stompParry,whipThrow',
+    'sapphireDance|Sapphire Dance|Full Circle|shuffleOut,divingElbow,parryPop,gutBuster',
+    'copperKite|Copper Kite|Full Circle|shadowStep,liverShot,hollowGut,legLasso',
+    'obsidianMonsoon|Obsidian Monsoon|Full Circle|bob,skipSideKick,slipOut,elbowSpike',
+    'ashenBloom|Ashen Bloom|Full Circle|palmParry,hopFrontKick,steelNerves,meteorStrike',
+    'paperRush|Paper Rush|Full Circle|razorDuck,jumpingJab,legTrapStep,leapingHaymaker',
+    'risingAnvil|Rising Anvil|Full Circle|heelDeflect,bodyFlurry,matadorTwist,chokeHold',
+    'ghostBarrage|Ghost Barrage|Full Circle|lateSlipBack,twinFlick,steelLegs,chargingBearHug',
+    'mountainWaltz|Mountain Waltz|Full Circle|perfectParry,legCatch,toeLift,batteringRam',
+    'finalLandslide|Final Landslide|Full Circle|handSwat,flyBackfist,quickBreath,jumpingRoundhouse',
+    'steelWheel|Steel Wheel|Full Circle|elbowDeflect,spearKick,staggerBack,gutBuster',
+    'steelMonsoon|Steel Monsoon|Full Circle|parryPop,lungeElbow,legYank,suplex',
+    'thousandRush|Thousand Rush|Gauntlet|doubleHook,stompKick,crossStepKnee,tackle,spinningHeel',
+    'velvetRequiem|Velvet Requiem|Gauntlet|haymaker,doubleBodyKick,flyingKnee,divingTakedown,whirlwind',
+    'savageReaper|Savage Reaper|Gauntlet|divingLow,heelStomp,doubleKnee,lassoGrab,hurricaneSpin',
+    'steelEcho|Steel Echo|Gauntlet|leapingHaymaker,flickKick,jumpingKnee,shootTrip,cometDive',
+    'midnightBarrage|Midnight Barrage|Gauntlet|heavyFlurry,slidingSweep,kneeStrike,leapHeadlock,rollStrike',
+    'emeraldBreaker|Emerald Breaker|Gauntlet|longLowJab,stretchKick,lungingThighKnee,chargingBearHug,breakdanceSweep',
+    'bambooBlossom|Bamboo Blossom|Gauntlet|doubleJab,sideKick,cometElbow,slidingLegLock,tornadoKick',
+    'burningComet|Burning Comet|Gauntlet|sweepingHook,flickKick,lowKnee,bodyLock,rollStrike',
+    'goldenKite|Golden Kite|Gauntlet|cannonPunch,crescentKick,sideElbow,divingTakedown,jumpingJab',
+    'obsidianMeteor|Obsidian Meteor|Gauntlet|supermanPunch,shinKick,elbowCrush,hipToss,whirlwind',
+    'ghostRush|Ghost Rush|Five Fury|spinSideKick,longBodyJab,ankleHook,legCatch,legLasso',
+    'riverMonsoon|River Monsoon|Five Fury|backLock,thighJab,jumpingJab,liverShot,clinchKnees',
+    'wanderingSpear|Wandering Spear|Five Fury|dashClinch,dashThrough,straightCross,slidingLowKick,spinningLegSlam',
+    'hiddenGauntlet|Hidden Gauntlet|Five Fury|sideKick,spinSideKick,spinBackfist,neckPull,hurricaneSpin',
+    'emeraldTalon|Emerald Talon|Five Fury|jumpingJab,divingElbow,snapJab,bodyJab,spinningBodyBlow',
+    'howlingHammer|Howling Hammer|Five Fury|spinElbow,lowLungeKnee,slideTackle,reachingHammer,heavyFrontKick',
+    'suddenPrism|Sudden Prism|Five Fury|corkscrewSweep,waistSnatch,legCatch,leapHeadlock,corkscrewPunch',
+    'rubyBreaker|Ruby Breaker|Five Fury|pushKick,spinHookKick,dashPalm,calfTap,runningOverhand',
+    'lunarEclipse|Lunar Eclipse|Five Fury|bodyJab,rollStrike,highPunch,supermanPunch,uppercut',
+    'copperViper|Copper Viper|Five Fury|shootTrip,reachYank,slidingLowKick,jumpDoubleKnee,kneeSlideCrash',
+    'ghostTide|Ghost Tide|Perfect Round|slipOut,lungeElbow,thighJab,steadyCore,spinningLegSlam',
+    'mountainPrism|Mountain Prism|Perfect Round|featherHop,bodyJab,tackle,legPullAway,highKick',
+    'bambooChain|Bamboo Chain|Perfect Round|bob,lassoGrab,reachingSweep,handSwat,lassoSlam',
+    'whiteEclipse|White Eclipse|Perfect Round|leanAway,longJab,bodyLock,stampBlock,kneeSlideCrash',
+    'blackClaw|Black Claw|Perfect Round|leapBack,kneeTrip,waistSnatch,parryStep,groundPound',
+    'luckySting|Lucky Sting|Perfect Round|razorDuck,spinElbow,armWhip,cutInside,meteorFist',
+    'blackSaber|Black Saber|Perfect Round|headSlip,reachingHammer,lungeBody,skipParry,backflipKick',
+    'crimsonWing|Crimson Wing|Perfect Round|legLift,lowKnee,cometDive,sweepParry,hipToss',
+    'crimsonAmbush|Crimson Ambush|Perfect Round|hollowGut,slidingLowKick,reachYank,wristDeflect,skyAxe',
+    'scarletDance|Scarlet Dance|Perfect Round|rootDown,spinSideKick,lowPunch,deflectTurn,runningSuplex',
+    'feralLantern|Feral Lantern|Tower|shootTrip,anklePick,doubleBodyKick,leapingHaymaker,skipKnee',
+    'crimsonVortex|Crimson Vortex|Tower|thighJab,spinSweep,hipToss,backLock,dashClinch',
+    'ironTempest|Iron Tempest|Tower|legSweepThrow,dropElbowSlam,waistSnatch,faceKnee,flyingCartwheel',
+    'ragingMirror|Raging Mirror|Tower|ankleLock,kneeCheck,batteringRam,backLock,doubleHook',
+    'ivoryCyclone|Ivory Cyclone|Tower|legLasso,calfTap,doubleBodyKick,collarToss,leapingHaymaker',
+    'northernRapids|Northern Rapids|Tower|kneeTrip,divingLegGrab,bodySlam,suplex,hopFrontKick',
+    'thunderCrown|Thunder Crown|Tower|doubleLegTakedown,thighCrusher,spearElbow,doubleHook,twinFlick',
+    'velvetLantern|Velvet Lantern|Tower|ankleHook,legBreaker,armWhip,cannonPunch,flyingKnee',
+    'silverTalon|Silver Talon|Tower|tumbleSlam,earthquakeStomp,dashThrough,flyingHeadlock,crescentKick',
+    'eternalComet|Eternal Comet|Tower|legSweepThrow,cometElbow,brutalKnee,uppercut,cartwheelKick',
+    'tigerWave|Tiger Wave|Ultimate|supermanKnee,hipToss,runningSuplex,cyclone,skyAxe',
+    'silverWaltz|Silver Waltz|Ultimate|legBreaker,faceKnee,bodyLock,longSlide,batteringRam',
+    'thousandLantern|Thousand Lantern|Ultimate|jumpingRoundhouse,slidingSweep,slidingLegLock,tumbleSlam,hipToss',
+    'silentVortex|Silent Vortex|Ultimate|flyingDoubleKnee,doubleHook,lassoSlam,spinningHeel,sweepingHook',
+    'desertRapids|Desert Rapids|Ultimate|kneeBreaker,crushingRoundhouse,bodySlam,cannonball,breakdanceSweep',
+    'whiteViper|White Viper|Ultimate|crushingRoundhouse,hipToss,leapHeadlock,rocketSideKick,stompKick',
+    'ashenWing|Ashen Wing|Ultimate|meteorStrike,cannonball,bearHugCrush,longSlide,supermanKnee',
+    'feralMonsoon|Feral Monsoon|Ultimate|meteorFist,uppercut,leapHeadlock,slideTackle,meteorStrike',
+    'wolfPrism|Wolf Prism|Ultimate|faceKnee,bearHugCrush,whipThrow,breakdanceSweep,runningSuplex',
+    'silverLotus|Silver Lotus|Ultimate|chopKick,ankleLock,runningSuplex,dashPunch,slidingSweep'
+];
+for (const row of MORE_COMBOS) {
+    const [id, name, style, seq] = row.split('|');
+    COMBOS.push({ id, name, style, seq: seq.split(',') });
+}
 const COMBO_SPEED = 1.4;                             // equipped combos run this much faster than single moves
 const MID_COMBO_PUSH = 0.45;                         // how much a mid-combo hit pushes, vs a normal hit
 const COMBO_GAP = 40;                                // ticks allowed between one attack ending and the next starting
 const fightClock = () => match ? match.phaseT : t;   // stops during hit-freeze, unlike t
 let chainEnd = 0;                                    // when the player's last attack finished
 let unlockedCombos = JSON.parse(localStorage.getItem('stickFighterCombos') || '[]');
+// combos you sold: you still know them (name and moves) but can't use them until you buy them back
+let knownCombos = JSON.parse(localStorage.getItem('stickFighterKnown') || '[]');
 let newCombos = [];                                  // found since the last result screen
 let comboChain = [];                                 // the player's recent attacks: { id, t }
 function recordAttack(id) {
     if (comboChain.length && fightClock() - chainEnd > COMBO_GAP) comboChain = [];
     comboChain.push({ id });
-    if (comboChain.length > 4) comboChain.shift();
+    if (comboChain.length > 5) comboChain.shift();
     for (const c of COMBOS) {
-        if (unlockedCombos.includes(c.id) || c.seq.length > comboChain.length) continue;
+        if (unlockedCombos.includes(c.id) || knownCombos.includes(c.id) || c.seq.length > comboChain.length) continue;
         const tail = comboChain.slice(-c.seq.length).map(a => a.id);
         if (tail.every((id, i) => id === c.seq[i])) {
             unlockedCombos.push(c.id); newCombos.push(c);
@@ -1117,6 +1637,15 @@ const ownedSlots = () => SLOT_ORDER.slice(0, slotCount);
 const nextSlotPrice = () => SLOT_PRICES[slotCount - 4];
 let loadout = { ...DEFAULT_LOADOUT, ...JSON.parse(localStorage.getItem('stickFighterLoadout') || '{}') };
 const comboById = id => COMBOS.find(c => c.id === id);
+// Buying a combo you haven't found: every move in it you don't own, plus 1 Sapphire for
+// finding it early. Capped at the 9 Ruby top price. You still don't own those moves on
+// their own; the combo key just plays them.
+const COMBO_FIND_FEE = 10;
+const comboMissing = c => [...new Set(c.seq)].filter(id => !ownedMoves().includes(id));
+const comboValue = c => [...new Set(c.seq)].reduce((n, id) => n + PRICE[id], 0);
+// a combo you sold costs its full value to buy back; one you've never had costs the moves you're missing + the finding fee
+const comboPrice = c => Math.min(MAX_PRICE, knownCombos.includes(c.id) ? comboValue(c)
+                                           : comboMissing(c).reduce((n, id) => n + PRICE[id], 0) + COMBO_FIND_FEE);
 const slotSeq = slot => !loadout[slot] ? [] : comboById(loadout[slot])?.seq ?? [loadout[slot]];
 const itemName = v => !v ? 'EMPTY' : comboById(v)?.name.toUpperCase() ?? MOVE_INFO[v].label;
 const equipped = () => ownedSlots().map(sl => loadout[sl]);
@@ -1245,7 +1774,8 @@ const MOVE_INFO = {
 };
 const STARTER_MOVES = ['highPunch', 'lowPunch', 'highKick', 'lowKick'];
 let ownedExtra = JSON.parse(localStorage.getItem('stickFighterOwned') || '[]');
-const ownedMoves = () => [...STARTER_MOVES, ...ownedExtra.filter(id => MOVE_INFO[id])];
+let soldStarters = JSON.parse(localStorage.getItem('stickFighterSoldStarters') || '[]');   // starter moves you sold
+const ownedMoves = () => [...STARTER_MOVES.filter(id => !soldStarters.includes(id)), ...ownedExtra.filter(id => MOVE_INFO[id])];
 let mouse = { x: -1, y: -1 }, hoverMove = null, hoverChange = null, hoverBuy = false, homeMove = null, homeMoveT = 0;
 
 // Home page circles: every slot you own, plus a "+" circle to buy the next one.
@@ -1287,6 +1817,15 @@ function iconFit(id, n, i) {
     const key = id + n + '_' + i;
     if (ICON_FIT[key]) return ICON_FIT[key];
     const blobs = poseBlobs(id);
+    if (n > 1) {                                         // combo pieces: fit the pose's box in the biggest circle the piece holds
+        const L = 1 - 7 / 46 - 0.05, LINE = 0.06, half = Math.PI / n;
+        const mid = SPLIT_START[n] * Math.PI / 180 + (2 * i + 1) * half;
+        const rho = L * Math.sin(half) / (1 + Math.sin(half)) - LINE, dist = L - rho - LINE;
+        let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+        for (const [bx, by, r] of blobs) { x0 = Math.min(x0, bx - r); x1 = Math.max(x1, bx + r); y0 = Math.min(y0, by - r); y1 = Math.max(y1, by + r); }
+        const k = 2 * rho / Math.hypot(x1 - x0, y1 - y0);
+        return ICON_FIT[key] = { x: Math.cos(mid) * dist - (x0 + x1) / 2 * k, y: Math.sin(mid) * dist - (y0 + y1) / 2 * k, k };
+    }
     const L = 1 - 7 / 46 - 0.05;                                  // clear of the inner ring (circle radius 1)
     const LINE = 0.06;                                             // clear of a divider line
     const half = Math.PI / n, mid = n === 1 ? 0 : SPLIT_START[n] * Math.PI / 180 + (2 * i + 1) * half;
@@ -1314,7 +1853,7 @@ function drawIconPose(id, cx, cy, R, n, i, phase) {
 }
 // Where each piece of a combo icon starts (degrees, clockwise from 3 o'clock):
 // 2 = left | right, 3 = top, lower right, lower left, 4 = quarters from top left.
-const SPLIT_START = { 2: 90, 3: 210, 4: 180 };
+const SPLIT_START = { 2: 90, 3: 210, 4: 180, 5: 234 };
 
 // a move's pose fitted inside a black, gold-ringed circle. A combo's circle is cut
 // into one piece per move, in order, each showing that move.
@@ -1944,7 +2483,7 @@ for (const row of DEFENSE_ROWS) {
 // reward) on top, up to about 1.6x for the very best.
 const tidy = v => v < 20 ? Math.round(v) : v < 100 ? Math.round(v / 5) * 5 : v < 400 ? Math.round(v / 10) * 10 : Math.round(v / 50) * 50;
 const PRICE = {}, POWER = {};
-const LOW_KICK_PRICE = 11, PRICE_CURVE = 10.8;          // 1.0 -> 11 Jade, 1.25 -> ~1 Ruby, 1.5 -> ~10 Ruby
+const LOW_KICK_PRICE = 11, MAX_PRICE = 900;            // Low Kick-level = 11 Jade; the very best move = 9 Ruby
 (() => {
     const atkScore = a => a.dmg * (a.hits || 1) * 3 + a.stun * 0.8 + a.reach * 0.15 + Math.max(0, 14 - a.start) * 1.5 + a.kb * 0.5
                           + (a.swap ? 10 : 0) + (a.pull ? 6 : 0) + (a.dash || 0) + (a.hop ? 3 : 0);
@@ -1958,11 +2497,12 @@ const LOW_KICK_PRICE = 11, PRICE_CURVE = 10.8;          // 1.0 -> 11 Jade, 1.25 
     // defense ratings spread over the same range attacks use (about 0.75 to 1.5)
     const dv = Object.values(defScore), lo = Math.min(...dv), hi = Math.max(...dv);
     for (const id in defScore) POWER[id] = 0.75 + 0.75 * (defScore[id] - lo) / (hi - lo);
+    // the curve is set so the strongest move lands exactly on the 9 Ruby cap
+    const curve = Math.log(MAX_PRICE / LOW_KICK_PRICE) / Math.log(Math.max(...Object.values(POWER)));
     for (const id in POWER) {
-        if (STARTER_MOVES.includes(id)) continue;
-        PRICE[id] = Math.max(3, tidy(LOW_KICK_PRICE * Math.pow(POWER[id], PRICE_CURVE)));
+        PRICE[id] = Math.min(MAX_PRICE, Math.max(3, tidy(LOW_KICK_PRICE * Math.pow(POWER[id], curve))));
         const boost = 1 + Math.max(0, POWER[id] - 1) * 1.2;     // the pricier, the stronger
-        if (boost === 1) continue;
+        if (boost === 1 || STARTER_MOVES.includes(id)) continue;   // the starters keep their stats
         const d = DEF[id];
         if (!d) { ATK[id].dmg = Math.round(ATK[id].dmg * boost); continue; }
         d.value = d.type === 'G' ? Math.round(d.value / boost * 100) / 100 : Math.round(d.value * boost);
@@ -2165,7 +2705,7 @@ function botInput(f, o, level, s) {
         // top bots (level 8-10) now and then throw a whole combo; the Impossible Bot never does
         const comboChance = imp ? 0 : { 8: 0.04, 9: 0.07, 10: 0.1 }[level] || 0;
         if (Math.random() < comboChance) {
-            const c = pick(COMBOS.filter(c => inRange.includes(c.seq[0])));
+            const c = pick(BOT_COMBOS.filter(c => inRange.includes(c.seq[0])));
             if (c) { inp.combo = c.seq; inp.attack = c.seq[0]; }
         }
     } else if (!inRange.length && Math.random() < 0.08 * (11 - Math.min(10, level))) {
@@ -2199,13 +2739,17 @@ const heightOf = id => (MOVE_INFO[id]?.path[4] || 'High').toLowerCase();
 // opens its window; an escape or recovery makes you untouchable for a moment and moves you.
 // Any move works any time; there are no conditions to meet first.
 function startSlot(f, slot, o) {
-    const seq = slotSeq(slot), d = DEF[seq[0]];
-    if (d) {
-        f.state = 'defend'; f.def = seq[0]; f.st = 0; f.queue = null; f.fast = false;
-        if (d.type === 'X' || d.type === 'R') { f.invuln = d.timing === 'E' ? d.value : 10; if (o) defenseGo(f, o, d); }
-        return;
-    }
-    startAttack(f, seq[0]); f.queue = seq.slice(1); f.fast = seq.length > 1;
+    const seq = slotSeq(slot);
+    startItem(f, seq[0], o);
+    f.queue = seq.slice(1); f.fast = seq.length > 1;
+}
+// one move: an attack swings, a defense move opens its window (combos can mix both)
+function startItem(f, id, o) {
+    const d = DEF[id];
+    if (!d) { startAttack(f, id); return; }
+    f.state = 'defend'; f.def = id; f.st = 0; f.atk = null;
+    if (d.type === 'X' || d.type === 'R') { f.invuln = d.timing === 'E' ? d.value : 10; if (o) defenseGo(f, o, d); }
+    if (!f.isBot) recordAttack(id);
 }
 // a defense move that ends with "Move" puts you somewhere new once it works
 function defenseGo(f, o, d) {
@@ -2243,18 +2787,20 @@ function updateFighter(f, o, inp, s, live) {
         if (!f.isBot && live && inp.attack && f.buf.length < 3) f.buf.push(inp.attack);
         if (f.st >= a.start + a.active + a.rec) {
             if (!f.isBot) chainEnd = fightClock();
-            if (f.queue && f.queue.length) startAttack(f, f.queue.shift());   // next hit of a combo
+            if (f.queue && f.queue.length) startItem(f, f.queue.shift(), o);   // next move of a combo
             else if (f.buf && f.buf.length && slotSeq(f.buf[0]).length) { f.state = 'idle'; f.atk = null; f.fast = false; startSlot(f, f.buf.shift(), o); }
             else { f.state = 'idle'; f.atk = null; f.fast = false; }
         }
     } else if (f.state === 'defend') {
-        f.st++;
+        f.st += f.fast ? COMBO_SPEED : 1;
         const d = DEF[f.def];
         f.buf = f.buf || [];
         if (!f.isBot && live && inp.attack && f.buf.length < 3) f.buf.push(inp.attack);
         if (f.st >= d.start + d.active + d.rec) {
+            if (!f.isBot) chainEnd = fightClock();
             f.state = 'idle'; f.def = null;
-            if (f.buf.length && slotSeq(f.buf[0]).length) startSlot(f, f.buf.shift(), o);
+            if (f.queue && f.queue.length) startItem(f, f.queue.shift(), o);
+            else { f.fast = false; if (f.buf.length && slotSeq(f.buf[0]).length) startSlot(f, f.buf.shift(), o); }
         }
     } else if (live) {
         f.state = 'idle';
@@ -2645,6 +3191,12 @@ document.getElementById('resetConfirm').addEventListener('click', () => {
     localStorage.removeItem('stickFighterCombos');
     localStorage.removeItem('stickFighterLoadout');
     localStorage.removeItem('stickFighterOwned');
+    localStorage.removeItem('stickFighterPaid');
+    localStorage.removeItem('stickFighterSoldStarters');
+    localStorage.removeItem('stickFighterKnown');
+    knownCombos = [];
+    soldStarters = [];
+    paid = {};
     ownedExtra = [];
     loadout = { ...DEFAULT_LOADOUT };
     localStorage.removeItem('stickFighterSlots');
@@ -2727,9 +3279,9 @@ function openMovePage(slot) {
     };
     fill(document.getElementById('muStrong'), mu.beats, 'When you trade hits, you deal more damage and take less.');
     fill(document.getElementById('muWeak'), mu.loses, 'When you trade hits, you take more damage and deal less.');
-    document.getElementById('comboList').innerHTML = COMBOS.map(c => unlockedCombos.includes(c.id)
-        ? `<div class="combo"><b>${c.name}</b><div class="seq">${seqHTML(c.seq)}</div></div>`
-        : `<div class="combo locked"><b>???</b></div>`).join('');
+    const found = COMBOS.filter(c => unlockedCombos.includes(c.id));
+    document.getElementById('comboList').innerHTML = found.map(c => `<div class="combo"><b>${c.name}</b><div class="seq">${seqHTML(c.seq)}</div></div>`).join('')
+        + `<div class="combo locked"><b>???</b> &nbsp;${COMBOS.length - found.length} more to find or buy in the Move Library</div>`;
     // everything that could take this slot: the 4 moves and every unlocked combo.
     // Anything already on another key is grayed out (no doubles).
     const list = document.getElementById('replaceList');
@@ -2764,10 +3316,46 @@ document.getElementById('moveBack').addEventListener('click', () => {
 const buyScreen = document.getElementById('buyScreen');
 // one confirm box for everything you can buy (slots, moves)
 let onPurchase = null;
+// What you paid for each move or combo you bought, so selling gives the exact amount back.
+let paid = JSON.parse(localStorage.getItem('stickFighterPaid') || '{}');
+const savePaid = () => localStorage.setItem('stickFighterPaid', JSON.stringify(paid));
+// A combo you found in a fight was free, so it sells for the value of its moves. Once sold you
+// can't find it again; you keep seeing it, and buy it back for that same value.
+const refundOf = id => id in paid ? paid[id] : comboById(id) ? comboValue(comboById(id)) : PRICE[id] ?? 0;
+// every move you own and every combo you have can be sold
+const canSell = id => comboById(id) ? unlockedCombos.includes(id) : ownedMoves().includes(id);
+function sellItem(id) {
+    const amount = refundOf(id), combo = comboById(id);
+    openPurchase(`Sell ${itemName(id)}?`,
+        (combo && !(id in paid) ? 'You found this one in a fight, so you get the value of its moves.' : 'You get back everything you paid.') +
+        (combo ? ' You keep seeing it, but you can\'t use it or find it again. Buy it back to use it.' : '') +
+        `${slotOf(id) ? ` It comes off the <kbd>${SLOT_KEYS[slotOf(id)]}</kbd> key.` : ''}` +
+        (combo ? '' : ' Combos you already found with it stay yours.'),
+        -amount, () => {
+            if (combo) {
+                unlockedCombos = unlockedCombos.filter(x => x !== id);
+                knownCombos.push(id); localStorage.setItem('stickFighterKnown', JSON.stringify(knownCombos));
+            }
+            else if (STARTER_MOVES.includes(id)) soldStarters.push(id);
+            else ownedExtra = ownedExtra.filter(x => x !== id);
+            localStorage.setItem('stickFighterSoldStarters', JSON.stringify(soldStarters));
+            delete paid[id]; savePaid();
+            for (const sl of ownedSlots()) if (loadout[sl] === id) loadout[sl] = null;
+            localStorage.setItem('stickFighterCombos', JSON.stringify(unlockedCombos));
+            localStorage.setItem('stickFighterOwned', JSON.stringify(ownedExtra));
+            localStorage.setItem('stickFighterLoadout', JSON.stringify(loadout));
+            const top = libScreen.scrollTop;
+            renderLib(true);
+            libScreen.scrollTop = top;
+        });
+}
+// price < 0 means a sale: you get -price back
 function openPurchase(title, text, price, onBuy) {
+    const selling = price < 0;
+    document.getElementById('buyConfirm').textContent = selling ? 'Sell' : 'Buy';
     document.getElementById('buyTitle').textContent = title;
     document.getElementById('buyText').innerHTML = text;
-    document.getElementById('buyPrice').innerHTML = gemsHTML(price);
+    document.getElementById('buyPrice').innerHTML = selling ? `+${gemsHTML(-price)}` : gemsHTML(price);
     const short = price - gemTotal;
     document.getElementById('buyShort').innerHTML = short > 0 ? `You need ${gemsHTML(short)} more.` : '';
     document.getElementById('buyConfirm').disabled = short > 0;
@@ -2794,7 +3382,10 @@ function openBuy() {
 }
 function buyMove(id) {
     openPurchase(`Buy ${itemName(id)}?`, `${MOVE_INFO[id].path.join(' › ')}<br>${MOVE_INFO[id].desc}`, PRICE[id], () => {
-        ownedExtra.push(id);
+        if (STARTER_MOVES.includes(id)) soldStarters = soldStarters.filter(x => x !== id);
+        else ownedExtra.push(id);
+        localStorage.setItem('stickFighterSoldStarters', JSON.stringify(soldStarters));
+        paid[id] = PRICE[id]; savePaid();
         localStorage.setItem('stickFighterOwned', JSON.stringify(ownedExtra));
         const top = libScreen.scrollTop;
         renderLib(true);
@@ -2853,6 +3444,106 @@ const libScreen = document.getElementById('libScreen');
     const step = () => { for (let i = 0; i < 4 && todo.length; i++) iconFit(todo.shift(), 1, 0); if (todo.length) setTimeout(step, 30); };
     setTimeout(step, 3000);
 })();
+// Combos in the library: grouped by length, then by style. Found (or bought) combos show in
+// full. The rest show their style, which moves you'd still need, and a price to buy it now.
+function libComboCard(c) {
+    const have = unlockedCombos.includes(c.id), el = document.createElement('div');
+    el.className = 'mcard combo-card' + (have ? '' : ' locked');
+    if (have) {
+        const sl = slotOf(c.id);
+        el.innerHTML = `<canvas width="72" height="72"></canvas><div>
+            <b>${c.name.toUpperCase()}${sl ? `<kbd>${SLOT_KEYS[sl]}</kbd>` : '<span class="off">not equipped</span>'}</b>
+            <div class="d">${c.style || 'Original'} · ${c.seq.length} moves</div>
+            <div class="seq">${seqHTML(c.seq)}</div>
+            <div class="buyrow"><span class="price">+${gemsHTML(refundOf(c.id))}</span><button class="sellbtn">Sell</button></div></div>`;
+        if (canSell(c.id)) el.querySelector('.sellbtn').onclick = () => sellItem(c.id);
+        const keep = ctx;
+        ctx = el.querySelector('canvas').getContext('2d');
+        drawMoveIcon({ id: c.id, item: c.id, i: 0, x: 36, y: 36, r: 33, label: '' }, 1, false);
+        ctx = keep;
+        el.dataset.price = 0;
+        return el;
+    }
+    if (knownCombos.includes(c.id)) {                       // sold: visible, not usable, buy back for its value
+        const price = comboPrice(c);
+        el.innerHTML = `<canvas width="72" height="72"></canvas><div>
+            <b>${c.name.toUpperCase()}<span class="off">sold</span></b>
+            <div class="d">${c.style || 'Original'} · ${c.seq.length} moves · buy it back to use it</div>
+            <div class="seq">${seqHTML(c.seq)}</div>
+            <div class="buyrow"><span class="price">${gemsHTML(price)}</span><button class="buybtn"${price > gemTotal ? ' disabled' : ''}>Buy back</button></div></div>`;
+        const keep = ctx;
+        ctx = el.querySelector('canvas').getContext('2d');
+        drawMoveIcon({ id: c.id, item: c.id, i: 0, x: 36, y: 36, r: 33, label: '' }, 1, false);
+        ctx = keep;
+        el.dataset.price = price;
+        el.querySelector('.buybtn').onclick = () => openPurchase(`Buy back ${c.name}?`, 'It goes back on your list and you can put it on a key again.', price, () => {
+            knownCombos = knownCombos.filter(x => x !== c.id); localStorage.setItem('stickFighterKnown', JSON.stringify(knownCombos));
+            unlockedCombos.push(c.id); localStorage.setItem('stickFighterCombos', JSON.stringify(unlockedCombos));
+            paid[c.id] = price; savePaid();
+            const top = libScreen.scrollTop; renderLib(true); libScreen.scrollTop = top;
+        });
+        return el;
+    }
+    // the first 7 can't be bought until you've had them (sold ones are bought back above)
+    const missing = comboMissing(c), price = comboPrice(c), original = BOT_COMBOS.includes(c);
+    el.innerHTML = `<div class="qmark">?</div><div>
+        <b>???</b>
+        <div class="d">${c.style || 'Original'} · ${c.seq.length} moves</div>
+        <div class="wa">${missing.length ? `Needs: ${missing.map(id => MOVE_INFO[id].label.toLowerCase()).join(', ')}`
+                                         : '<span class="g">You own every move in it. Find it in a fight for free!</span>'}</div>
+        ${original ? '<div class="d"><b style="color:#6a1b9a">One of the first 7 combos: these can only be found in a fight.</b></div>'
+                   : `<div class="buyrow"><span class="price">${gemsHTML(price)}</span><button class="buybtn"${price > gemTotal ? ' disabled' : ''}>Buy</button></div>`}</div>`;
+    el.dataset.price = original ? 0 : price;
+    if (!original) el.querySelector('.buybtn').onclick = () => openPurchase(`Buy a ${c.style || ''} combo?`,
+        `A ${c.seq.length}-move combo. You'll see what it is once it's yours, and you can put it on a key even without owning its moves.` +
+        (missing.length ? `<br>Includes ${missing.length} move${missing.length > 1 ? 's' : ''} you don't own, plus ${gemsHTML(COMBO_FIND_FEE)} for finding it early.` : `<br>${gemsHTML(COMBO_FIND_FEE)} for finding it early.`),
+        price, () => {
+            unlockedCombos.push(c.id);
+            paid[c.id] = price; savePaid();
+            localStorage.setItem('stickFighterCombos', JSON.stringify(unlockedCombos));
+            const top = libScreen.scrollTop;
+            renderLib(true);
+            libScreen.scrollTop = top;
+        });
+    return el;
+}
+function comboTree() {
+    const tree = document.createElement('div');
+    tree.className = 'tree';
+    tree.style.cssText = '--accent:#8e24aa;--edge:#5e1780;--soft:#faf3fd;--soft2:#e3c6f0';
+    tree.innerHTML = '<div class="lvls">COMBOS › LENGTH › STYLE</div>';
+    const node = (depth, path, label, cls) => {
+        const n = document.createElement('div');
+        n.className = 'tnode';
+        n.dataset.path = path; n.dataset.depth = depth;
+        n.innerHTML = `<div class="tlbl ${cls}">${label}</div>`;
+        n.firstChild.onclick = () => n.classList.toggle('folded');
+        return n;
+    };
+    const root = node(0, 'Combos', `🔗 COMBOS`, 'd0'), rootKids = document.createElement('div');
+    rootKids.className = 'tkids'; root.append(rootKids);
+    for (const len of [2, 3, 4, 5]) {
+        const group = COMBOS.filter(c => c.seq.length === len);
+        if (!group.length) continue;
+        const ln = node(1, `Combos › ${len}`, `${len} moves`, 'd1'), lnKids = document.createElement('div');
+        lnKids.className = 'tkids'; ln.append(lnKids); rootKids.append(ln);
+        const styles = [...new Set(group.map(c => c.style || 'Original'))];
+        for (const st of styles) {
+            const inStyle = group.filter(c => (c.style || 'Original') === st);
+            const leaf = node(4, `Combos › ${len} › ${st}`, `${st} (${inStyle.filter(c => unlockedCombos.includes(c.id)).length}/${inStyle.length})`, 'd4');
+            leaf.classList.add('tleaf');
+            if (inStyle.some(c => unlockedCombos.includes(c.id))) leaf.classList.add('has');
+            const moves = document.createElement('div');
+            moves.className = 'tmoves';
+            inStyle.forEach(c => moves.append(libComboCard(c)));
+            leaf.append(moves);
+            lnKids.append(leaf);
+        }
+    }
+    tree.append(root);
+    return tree;
+}
+
 // The whole tree at once, drawn as a branching diagram left to right. The moves you own
 // sit in their category at the end of each branch, with description and matchups.
 function libMoveCard(id) {
@@ -2865,10 +3556,12 @@ function libMoveCard(id) {
         <div class="wa">${DEF[id] ? `<span class="g">🛡 Works against:</span> ${DEF[id].height} attacks` :
             `<span class="g">▲ Beats:</span> ${matchupText(mu.beats)}<br>
              <span class="r">▼ Loses to:</span> ${matchupText(mu.loses)}`}</div>
-        ${own ? '' : `<div class="buyrow"><span class="price">${gemsHTML(PRICE[id])}</span>
+        ${own ? (canSell(id) ? `<div class="buyrow"><span class="price">+${gemsHTML(refundOf(id))}</span><button class="sellbtn">Sell</button></div>` : '')
+              : `<div class="buyrow"><span class="price">${gemsHTML(PRICE[id])}</span>
             <button class="buybtn"${PRICE[id] > gemTotal ? ' disabled' : ''}>Buy</button></div>`}</div>`;
     el.dataset.price = own ? 0 : PRICE[id];
     if (!own) el.querySelector('.buybtn').onclick = () => buyMove(id);
+    else if (canSell(id)) el.querySelector('.sellbtn').onclick = () => sellItem(id);
     const keep = ctx;
     ctx = el.querySelector('canvas').getContext('2d');
     drawMoveIcon({ id, item: id, i: 0, x: 36, y: 36, r: 33, label: '' }, 1, false);
@@ -2882,7 +3575,7 @@ function renderLib(keepNav) {
     for (const [id, m] of Object.entries(MOVE_INFO)) (inCat[m.path.join(' › ')] = inCat[m.path.join(' › ')] || []).push(id);
     const mineList = ownedMoves();
     document.getElementById('libSub').innerHTML =
-        `You have <b>${mineList.length}</b> of ${Object.keys(MOVE_INFO).length} moves. <span class="own"></span> marks the categories yours are in. Click a branch to fold it.`;
+        `You have <b>${mineList.length}</b> of ${Object.keys(MOVE_INFO).length} moves and <b>${unlockedCombos.length}</b> of ${COMBOS.length} combos. <span class="own"></span> marks the categories yours are in. Click a branch to fold it.`;
     for (const t of Object.values(LIB_TREES)) {
         const tree = document.createElement('div');
         tree.className = 'tree';
@@ -2920,6 +3613,7 @@ function renderLib(keepNav) {
         tree.append(branch(0, []));
         wrap.append(tree);
     }
+    wrap.append(comboTree());
     if (!keepNav) { navPath = []; }
     renderLibNav();
     foldLibTo(libFoldLevel);
@@ -2929,6 +3623,15 @@ function renderLib(keepNav) {
 // The top bar: the path so far, then the choices for the next level. Picking one scrolls
 // the tree to that branch (opening it if it was folded) and flashes it.
 let navPath = [], libFoldLevel = 5, libPriceRange = 0;
+// the combos branch, shaped like a tree for the top bar: Length, then the styles that length has
+function comboNavTree() {
+    const lens = [...new Set(COMBOS.map(c => c.seq.length))].sort();
+    const styles = navPath[1] ? [...new Set(COMBOS.filter(c => c.seq.length === +navPath[1]).map(c => c.style || 'Original'))] : [];
+    return { name: 'Combos', icon: '🔗', accent: '#8e24aa',
+             crumb: (i, name) => i === 1 ? `${name} moves` : name,
+             levels: [{ ask: 'Length', opts: lens.map(n => ({ name: String(n), label: `${n} moves` })) },
+                      { ask: 'Style', opts: styles.map(st => ({ name: st })) }] };
+}
 const PRICE_RANGES = [
     { label: () => 'All', test: () => true },
     { label: () => 'I can afford', test: p => p > 0 && p <= gemTotal },
@@ -2971,15 +3674,16 @@ function renderLibNav() {
         b.onclick = onClick;
         bar.append(b);
     };
-    const t = navPath.length ? Object.values(LIB_TREES).find(t => t.name === navPath[0]) : null;
+    const t = !navPath.length ? null : navPath[0] === 'Combos' ? comboNavTree() : Object.values(LIB_TREES).find(t => t.name === navPath[0]);
     if (!t) {
         bar.insertAdjacentHTML('beforeend', '<span class="ask">Go to</span>');
         for (const tr of Object.values(LIB_TREES))
             btn('opt', `${tr.icon} ${tr.name}`, tr.accent, () => { navPath = [tr.name]; renderLibNav(); libGoTo(navPath); });
+        btn('opt', '🔗 Combos', '#8e24aa', () => { navPath = ['Combos']; renderLibNav(); libGoTo(navPath); });
     } else {
         navPath.forEach((name, i) => {
             if (i) bar.insertAdjacentHTML('beforeend', '<span class="sep">›</span>');
-            btn('crumb', i ? name : `${t.icon} ${name}`, t.accent, () => {
+            btn('crumb', i ? (t.crumb ? t.crumb(i, name) : name) : `${t.icon} ${name}`, t.accent, () => {
                 navPath = navPath.slice(0, i + 1); renderLibNav(); libGoTo(navPath);
             });
         });
@@ -2987,7 +3691,7 @@ function renderLibNav() {
         if (lvl) {
             bar.insertAdjacentHTML('beforeend', `<span class="sep">›</span><span class="ask">${lvl.ask}</span>`);
             for (const o of lvl.opts)
-                btn('opt', `${o.icon} ${o.name}`, t.accent, () => { navPath = [...navPath, o.name]; renderLibNav(); libGoTo(navPath); });
+                btn('opt', `${o.icon ? o.icon + ' ' : ''}${o.label || o.name}`, t.accent, () => { navPath = [...navPath, o.name]; renderLibNav(); libGoTo(navPath); });
         }
         bar.insertAdjacentHTML('beforeend', '<span class="sep"></span>');
         btn('opt', '✕ Clear', '#7d93a5', () => { navPath = []; renderLibNav(); libScreen.scrollTo({ top: 0, behavior: 'smooth' }); });
@@ -3034,7 +3738,7 @@ document.getElementById('libBack').addEventListener('click', () => {
 // ---------- MY MOVES: what's equipped and where, every move and combo, matchups ----------
 const collScreen = document.getElementById('collScreen');
 let moveFromColl = false;
-const isLocked = id => !!comboById(id) && !unlockedCombos.includes(id);
+const isLocked = id => !!comboById(id) && !unlockedCombos.includes(id) && !knownCombos.includes(id);
 const nameOrSecret = id => isLocked(id) ? '???' : itemName(id);
 function collCard(id, slot) {
     const card = document.createElement('div');
@@ -3078,9 +3782,13 @@ function openCollection() {
     document.getElementById('collEqHead').innerHTML =
         `EQUIPPED <small>${slotCount} of ${MAX_SLOTS} slots. Click one to change it.</small>`;
     fillGrid(document.getElementById('collMoves'), ownedMoves().map(id => collCard(id)));
-    fillGrid(document.getElementById('collCombos'), COMBOS.map(c => collCard(c.id)));
+    const rest = document.createElement('div');
+    rest.className = 'ccard locked';
+    rest.innerHTML = `<div class="q">?</div><div><b>???</b><div class="st">${COMBOS.length - unlockedCombos.length} more combos</div>
+        <div class="mu2">Pull them off in a fight, or buy them in the Move Library.</div></div>`;
+    fillGrid(document.getElementById('collCombos'), [...COMBOS.filter(c => unlockedCombos.includes(c.id)).map(c => collCard(c.id)), rest]);
     document.getElementById('collComboHead').innerHTML =
-        `COMBOS <small>${unlockedCombos.length} of ${COMBOS.length} found. Pull one off in a fight to unlock it.</small>`;
+        `COMBOS <small>${unlockedCombos.length} of ${COMBOS.length} found.</small>`;
     homeScreen.classList.add('hidden');
     collScreen.scrollTop = 0;
     collScreen.classList.remove('hidden');
