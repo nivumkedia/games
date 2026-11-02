@@ -166,6 +166,20 @@
     .mcard { width:230px; display:flex; gap:7px; padding:6px 9px 7px 6px; border-radius:11px; background:#111; border:2px solid #d4a017;
              box-shadow:0 3px 0 #a87708; color:#f5f0dc; }
     .mcard canvas { width:36px; height:36px; flex:none; }
+    .mcard .buyrow { margin-top:5px; display:flex; align-items:center; justify-content:space-between; gap:6px; }
+    .mcard .price { font-size:12px; font-weight:900; color:#1f2a36; }
+    .mcard .price .amt { margin:0 3px 0 0; } .mcard .price .gem { width:14px; height:14px; }
+    .mcard .buybtn { font:900 12px 'Segoe UI', sans-serif; letter-spacing:.06em; color:#f5c542; background:#111; border:2px solid #d4a017;
+                     border-radius:999px; padding:2px 12px; cursor:pointer; }
+    .mcard .buybtn:hover { color:#ffe58a; }
+    .mcard .buybtn:disabled { opacity:.35; cursor:not-allowed; }
+    .tnode.nomatch { display:none; }
+    #libPrice { width:100%; display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:4px; }
+    #libPrice .pf { font:800 12.5px 'Segoe UI', sans-serif; color:#6a1b9a; background:#fff; border:2px solid #b388d9; border-radius:999px; padding:3px 11px; cursor:pointer; }
+    #libPrice .pf .amt { margin:0 2px; } #libPrice .pf .gem { width:13px; height:13px; }
+    #libPrice .pf.on { background:#6a1b9a; color:#fff; border-color:#6a1b9a; }
+    #libPrice .have { margin-left:auto; font-size:12.5px; font-weight:800; color:#1f2a36; }
+    #libPrice .have .gem { width:15px; height:15px; }
     .mcard.locked { background:#eef2f5; border-color:#c3d0da; box-shadow:0 3px 0 #c3d0da; color:#4d6d84; }
     .mcard.locked canvas { filter:grayscale(1); opacity:.5; }
     .mcard.locked b { color:#4d6d84; } .mcard.locked .d { color:#5f7a8e; } .mcard.locked .wa { color:#7d93a5; }
@@ -405,7 +419,7 @@
 
 <div id="buyScreen" class="screen hidden">
     <div class="card">
-        <h3>Buy a new move slot?</h3>
+        <h3 id="buyTitle">Buy a new move slot?</h3>
         <p id="buyText"></p>
         <div class="price" id="buyPrice"></div>
         <div class="short" id="buyShort"></div>
@@ -1020,6 +1034,31 @@ const COUNTERS = {                                  // winner: loser
     twinStrike: 'risingDragon', risingDragon: 'groundBreaker', groundBreaker: 'stormFist',
     stormFist: 'thunderStep', thunderStep: 'ironLotus', ironLotus: 'sweepSnap', sweepSnap: 'twinStrike'
 };
+// Attacks trade by limb, in a circle of five where each limb beats two others and loses
+// to the other two. A few pairs (the starter punches and kicks, the combos) also have their
+// own matchups in COUNTERS above.
+const LIMB_BEATS = {
+    'Punch':        ['Grab', 'Special'],
+    'Kick':         ['Punch', 'Grab'],
+    'Elbow / Knee': ['Punch', 'Kick'],
+    'Grab':         ['Elbow / Knee', 'Special'],
+    'Special':      ['Kick', 'Elbow / Knee']
+};
+const LIMB_PLURAL = { 'Punch': 'all punches', 'Kick': 'all kicks', 'Elbow / Knee': 'all elbows & knees', 'Grab': 'all grabs', 'Special': 'all specials' };
+// { beats, loses }: each a list of { id } (one move or combo) or { limb } (a whole limb)
+function matchups(id) {
+    const out = { beats: [], loses: [] };
+    if (COUNTERS[id]) out.beats.push({ id: COUNTERS[id] });
+    const by = Object.keys(COUNTERS).find(k => COUNTERS[k] === id);
+    if (by) out.loses.push({ id: by });
+    const limb = MOVE_INFO[id]?.path[0] === 'Attack' ? MOVE_INFO[id].path[3] : null;
+    if (limb) {
+        for (const l of LIMB_BEATS[limb]) out.beats.push({ limb: l });
+        for (const l in LIMB_BEATS) if (LIMB_BEATS[l].includes(limb)) out.loses.push({ limb: l });
+    }
+    return out;
+}
+const matchupText = list => list.length ? list.map(x => x.limb ? LIMB_PLURAL[x.limb] : nameOrSecret(x.id)).join(', ') : 'nothing';
 // Combos: do these moves back to back in a fight (each within COMBO_GAP ticks of the last)
 // to unlock them. You aren't told what they are until you find them.
 const COMBOS = [
@@ -1879,10 +1918,8 @@ function describeDefense(d) {
         D: `Press it ${when} and it misses you${d.value ? `, leaving them off balance` : ''}.`,
         G: `Press it ${when} and you only take ${Math.round(d.value * 100)}% of the damage, with no stun.`,
         P: `Press it ${when} to knock it aside: no damage, and they're stunned${d.value >= 30 ? ' for a long time' : ''}.`,
-        X: d.timing === 'E' ? `Use it while stuck in a ${h} grab or a flurry of hits to break out right away.`
-                            : `Use it in the second half of a ${h} grab or flurry to break out and leave them stunned.`,
-        R: d.timing === 'E' ? `Use it while stunned by a ${h} strike to shake it off right away.`
-                            : `Use it in the second half of a stun from a ${h} strike to recover and catch them off guard.`
+        X: `Use it any time. If you're grabbed or stunned it breaks you out at once${d.timing === 'L' ? ' and leaves them stunned' : ''}; otherwise you're untouchable for a moment.`,
+        R: `Use it any time. If you're stunned you shake it off at once${d.timing === 'L' ? ' and catch them off guard' : ''}; otherwise you're untouchable for a moment.`
     }[d.type];
     return what + ' ' + (d.end === 'Move' ? GO_TEXT[d.go] : 'You stay where you are.');
 }
@@ -1899,6 +1936,40 @@ for (const row of DEFENSE_ROWS) {
     if (t === 'L') pose.torso += 4;                     // late moves are a touch more committed
     MOVE_POSES[id] = pose;
 }
+
+// ---------- Prices (in Jade) ----------
+// Every move gets a power rating, measured against Low Kick (= 1.0, worth 11 Jade).
+// Price climbs very steeply with power, so the expensive moves are also made much
+// stronger: anything rated above Low Kick gets extra damage (or a bigger defensive
+// reward) on top, up to about 1.6x for the very best.
+const tidy = v => v < 20 ? Math.round(v) : v < 100 ? Math.round(v / 5) * 5 : v < 400 ? Math.round(v / 10) * 10 : Math.round(v / 50) * 50;
+const PRICE = {}, POWER = {};
+const LOW_KICK_PRICE = 11, PRICE_CURVE = 10.8;          // 1.0 -> 11 Jade, 1.25 -> ~1 Ruby, 1.5 -> ~10 Ruby
+(() => {
+    const atkScore = a => a.dmg * (a.hits || 1) * 3 + a.stun * 0.8 + a.reach * 0.15 + Math.max(0, 14 - a.start) * 1.5 + a.kb * 0.5
+                          + (a.swap ? 10 : 0) + (a.pull ? 6 : 0) + (a.dash || 0) + (a.hop ? 3 : 0);
+    const base = atkScore(ATK.lowKick), defScore = {};
+    for (const id in MOVE_INFO) {
+        const d = DEF[id];
+        if (!d) { POWER[id] = atkScore(ATK[id]) / base; continue; }
+        const variant = d.active === DEF_NUMBERS[d.timing].active.wide ? 0.85 : d.active === DEF_NUMBERS[d.timing].active.sharp ? 1.2 : 1;
+        defScore[id] = { D: 60, G: 40, P: 80, X: 55, R: 50 }[d.type] * (d.timing === 'L' ? 1.6 : 1) * variant * (d.end === 'Move' ? 1.2 : 1);
+    }
+    // defense ratings spread over the same range attacks use (about 0.75 to 1.5)
+    const dv = Object.values(defScore), lo = Math.min(...dv), hi = Math.max(...dv);
+    for (const id in defScore) POWER[id] = 0.75 + 0.75 * (defScore[id] - lo) / (hi - lo);
+    for (const id in POWER) {
+        if (STARTER_MOVES.includes(id)) continue;
+        PRICE[id] = Math.max(3, tidy(LOW_KICK_PRICE * Math.pow(POWER[id], PRICE_CURVE)));
+        const boost = 1 + Math.max(0, POWER[id] - 1) * 1.2;     // the pricier, the stronger
+        if (boost === 1) continue;
+        const d = DEF[id];
+        if (!d) { ATK[id].dmg = Math.round(ATK[id].dmg * boost); continue; }
+        d.value = d.type === 'G' ? Math.round(d.value / boost * 100) / 100 : Math.round(d.value * boost);
+        const [flavor] = MOVE_INFO[id].desc.split(/(?<=\.) (?=Press|Use)/);
+        MOVE_INFO[id].desc = flavor + ' ' + describeDefense(d);
+    }
+})();
 
 const BOT_NAMES = ['KAITO', 'RIKU', 'MIRA', 'JUNO', 'DRAKE', 'SORA', 'VEX', 'NOVA', 'BRUNO', 'ZARA', 'TAO', 'KIRA'];
 const BOT_COLORS = ['#d84315', '#8e24aa', '#2e7d32', '#00838f', '#6d4c41', '#c2185b', '#37474f', '#ef6c00'];
@@ -2125,12 +2196,13 @@ function startAttack(f, id) {
 
 const heightOf = id => (MOVE_INFO[id]?.path[4] || 'High').toLowerCase();
 // A slot key for the player: an attack (or combo) starts swinging; a dodge, guard or parry
-// opens its window. Escape and Recovery only work while you're stunned (see updateFighter).
-function startSlot(f, slot) {
+// opens its window; an escape or recovery makes you untouchable for a moment and moves you.
+// Any move works any time; there are no conditions to meet first.
+function startSlot(f, slot, o) {
     const seq = slotSeq(slot), d = DEF[seq[0]];
     if (d) {
-        if (d.type === 'X' || d.type === 'R') return;
         f.state = 'defend'; f.def = seq[0]; f.st = 0; f.queue = null; f.fast = false;
+        if (d.type === 'X' || d.type === 'R') { f.invuln = d.timing === 'E' ? d.value : 10; if (o) defenseGo(f, o, d); }
         return;
     }
     startAttack(f, seq[0]); f.queue = seq.slice(1); f.fast = seq.length > 1;
@@ -2149,11 +2221,10 @@ function updateFighter(f, o, inp, s, live) {
     if (f.invuln > 0) f.invuln--;
     if (f.ko) return;
     const grounded = f.h <= 0;
-    // Escape (from grabs and flurries) and Recovery (from strikes) cut a stun short
+    // an Escape or Recovery move breaks you out of any stun or hold straight away
     if (f.stun > 0 && !f.isBot && live && inp.attack) {
-        const id = slotSeq(inp.attack)[0], d = DEF[id], by = f.stunBy;
-        if (d && by && (d.type === 'X' || d.type === 'R') && d.height === by.height && (d.type === 'X') === by.hold
-            && (d.timing === 'E' || f.stun <= f.stunMax / 2)) {
+        const id = slotSeq(inp.attack)[0], d = DEF[id];
+        if (d && (d.type === 'X' || d.type === 'R')) {
             f.stun = 0; f.state = 'defend'; f.def = id; f.st = d.start;
             f.invuln = d.timing === 'E' ? d.value : 10;
             if (d.timing === 'L') { o.stun = Math.max(o.stun, d.value); o.state = 'hurt'; o.atk = null; o.queue = null; o.fast = false; }
@@ -2173,7 +2244,7 @@ function updateFighter(f, o, inp, s, live) {
         if (f.st >= a.start + a.active + a.rec) {
             if (!f.isBot) chainEnd = fightClock();
             if (f.queue && f.queue.length) startAttack(f, f.queue.shift());   // next hit of a combo
-            else if (f.buf && f.buf.length && slotSeq(f.buf[0]).length) { f.state = 'idle'; f.atk = null; f.fast = false; startSlot(f, f.buf.shift()); }
+            else if (f.buf && f.buf.length && slotSeq(f.buf[0]).length) { f.state = 'idle'; f.atk = null; f.fast = false; startSlot(f, f.buf.shift(), o); }
             else { f.state = 'idle'; f.atk = null; f.fast = false; }
         }
     } else if (f.state === 'defend') {
@@ -2183,13 +2254,13 @@ function updateFighter(f, o, inp, s, live) {
         if (!f.isBot && live && inp.attack && f.buf.length < 3) f.buf.push(inp.attack);
         if (f.st >= d.start + d.active + d.rec) {
             f.state = 'idle'; f.def = null;
-            if (f.buf.length && slotSeq(f.buf[0]).length) startSlot(f, f.buf.shift());
+            if (f.buf.length && slotSeq(f.buf[0]).length) startSlot(f, f.buf.shift(), o);
         }
     } else if (live) {
         f.state = 'idle';
         if (inp.attack) {
             if (f.isBot) { const seq = inp.combo || [inp.attack]; startAttack(f, seq[0]); f.queue = seq.slice(1); f.fast = seq.length > 1; }
-            else startSlot(f, inp.attack);
+            else startSlot(f, inp.attack, o);
         }
         else {
             if (inp.jump && grounded) f.vy = 11 * s;
@@ -2628,7 +2699,7 @@ function openMovePage(slot) {
     ctx = ic;
     drawMoveIcon({ id, item: id, i: 0, x: 130, y: 130, r: 120, label: '' }, 1, false);
     ctx = keep;
-    const beats = COUNTERS[id], beatenBy = Object.keys(COUNTERS).find(k => COUNTERS[k] === id);
+    const mu = id ? matchups(id) : { beats: [], loses: [] };
     const row = (other, note) => {
         const box = document.createElement('div');
         // a combo you haven't found yet stays a secret
@@ -2642,13 +2713,20 @@ function openMovePage(slot) {
         ctx = keep;
         return box;
     };
-    const fill = (el, other, note) => {
+    const fill = (el, list, note) => {
         el.replaceChildren();
-        if (other) el.append(row(other, note));
-        else el.innerHTML = '<div class="none">None</div>';
+        if (DEF[id]) { el.innerHTML = `<div class="none">Defense moves don't trade hits. Works against ${DEF[id].height} attacks.</div>`; return; }
+        if (!list.length) { el.innerHTML = '<div class="none">None</div>'; return; }
+        for (const x of list) {
+            if (x.id) { el.append(row(x.id, '')); continue; }
+            const d = document.createElement('div');
+            d.innerHTML = `<div class="who"><span class="q">${LIB_TREES.attack.levels[2].opts.find(o => o.name === x.limb).icon}</span>${LIMB_PLURAL[x.limb].toUpperCase()}</div>`;
+            el.append(d);
+        }
+        el.insertAdjacentHTML('beforeend', `<small>${note}</small>`);
     };
-    fill(document.getElementById('muStrong'), beats, 'When you trade hits, you deal more damage and take less.');
-    fill(document.getElementById('muWeak'), beatenBy, 'When you trade hits, you take more damage and deal less.');
+    fill(document.getElementById('muStrong'), mu.beats, 'When you trade hits, you deal more damage and take less.');
+    fill(document.getElementById('muWeak'), mu.loses, 'When you trade hits, you take more damage and deal less.');
     document.getElementById('comboList').innerHTML = COMBOS.map(c => unlockedCombos.includes(c.id)
         ? `<div class="combo"><b>${c.name}</b><div class="seq">${seqHTML(c.seq)}</div></div>`
         : `<div class="combo locked"><b>???</b></div>`).join('');
@@ -2684,28 +2762,48 @@ document.getElementById('moveBack').addEventListener('click', () => {
 
 // ---------- Buying move slots ----------
 const buyScreen = document.getElementById('buyScreen');
-function openBuy() {
-    const price = nextSlotPrice(), slot = SLOT_ORDER[slotCount];
-    document.getElementById('buyText').innerHTML =
-        `Slot ${slotCount + 1} of ${MAX_SLOTS}. It uses the <kbd>${SLOT_KEYS[slot]}</kbd> key and starts empty.`;
+// one confirm box for everything you can buy (slots, moves)
+let onPurchase = null;
+function openPurchase(title, text, price, onBuy) {
+    document.getElementById('buyTitle').textContent = title;
+    document.getElementById('buyText').innerHTML = text;
     document.getElementById('buyPrice').innerHTML = gemsHTML(price);
     const short = price - gemTotal;
     document.getElementById('buyShort').innerHTML = short > 0 ? `You need ${gemsHTML(short)} more.` : '';
     document.getElementById('buyConfirm').disabled = short > 0;
+    onPurchase = () => {
+        if (gemTotal < price) return;
+        gemTotal -= price;
+        localStorage.setItem('stickFighterGems', gemTotal);
+        showWallet();
+        for (const c of ['jade', 'sapphire', 'ruby']) bump(document.getElementById('cur-' + c));
+        onBuy();
+    };
     buyScreen.classList.remove('hidden');
+}
+function openBuy() {
+    const slot = SLOT_ORDER[slotCount];
+    openPurchase('Buy a new move slot?',
+        `Slot ${slotCount + 1} of ${MAX_SLOTS}. It uses the <kbd>${SLOT_KEYS[slot]}</kbd> key and starts empty.`,
+        nextSlotPrice(), () => {
+            loadout[slot] = null;
+            slotCount++;
+            localStorage.setItem('stickFighterSlots', slotCount);
+            localStorage.setItem('stickFighterLoadout', JSON.stringify(loadout));
+        });
+}
+function buyMove(id) {
+    openPurchase(`Buy ${itemName(id)}?`, `${MOVE_INFO[id].path.join(' › ')}<br>${MOVE_INFO[id].desc}`, PRICE[id], () => {
+        ownedExtra.push(id);
+        localStorage.setItem('stickFighterOwned', JSON.stringify(ownedExtra));
+        const top = libScreen.scrollTop;
+        renderLib(true);
+        libScreen.scrollTop = top;
+    });
 }
 document.getElementById('buyCancel').addEventListener('click', () => buyScreen.classList.add('hidden'));
 document.getElementById('buyConfirm').addEventListener('click', () => {
-    const price = nextSlotPrice();
-    if (gemTotal < price || slotCount >= MAX_SLOTS) return;
-    gemTotal -= price;
-    localStorage.setItem('stickFighterGems', gemTotal);
-    loadout[SLOT_ORDER[slotCount]] = null;
-    slotCount++;
-    localStorage.setItem('stickFighterSlots', slotCount);
-    localStorage.setItem('stickFighterLoadout', JSON.stringify(loadout));
-    showWallet();
-    for (const c of ['jade', 'sapphire', 'ruby']) bump(document.getElementById('cur-' + c));
+    if (onPurchase) onPurchase();
     buyScreen.classList.add('hidden');
 });
 
@@ -2758,22 +2856,26 @@ const libScreen = document.getElementById('libScreen');
 // The whole tree at once, drawn as a branching diagram left to right. The moves you own
 // sit in their category at the end of each branch, with description and matchups.
 function libMoveCard(id) {
-    const own = ownedMoves().includes(id), sl = slotOf(id), beats = COUNTERS[id], beatenBy = Object.keys(COUNTERS).find(k => COUNTERS[k] === id);
+    const own = ownedMoves().includes(id), sl = slotOf(id), mu = matchups(id);
     const el = document.createElement('div');
     el.className = 'mcard' + (own ? '' : ' locked');
     el.innerHTML = `<canvas width="72" height="72"></canvas><div>
-        <b>${itemName(id)}${!own ? '<span class="off">not owned</span>' : sl ? `<kbd>${SLOT_KEYS[sl]}</kbd>` : '<span class="off">not equipped</span>'}</b>
+        <b>${itemName(id)}${!own ? '' : sl ? `<kbd>${SLOT_KEYS[sl]}</kbd>` : '<span class="off">not equipped</span>'}</b>
         <div class="d">${MOVE_INFO[id].desc}</div>
         <div class="wa">${DEF[id] ? `<span class="g">🛡 Works against:</span> ${DEF[id].height} attacks` :
-            `<span class="g">▲ Beats:</span> ${beats ? nameOrSecret(beats) : 'nothing'} &nbsp;
-             <span class="r">▼ Loses to:</span> ${beatenBy ? nameOrSecret(beatenBy) : 'nothing'}`}</div></div>`;
+            `<span class="g">▲ Beats:</span> ${matchupText(mu.beats)}<br>
+             <span class="r">▼ Loses to:</span> ${matchupText(mu.loses)}`}</div>
+        ${own ? '' : `<div class="buyrow"><span class="price">${gemsHTML(PRICE[id])}</span>
+            <button class="buybtn"${PRICE[id] > gemTotal ? ' disabled' : ''}>Buy</button></div>`}</div>`;
+    el.dataset.price = own ? 0 : PRICE[id];
+    if (!own) el.querySelector('.buybtn').onclick = () => buyMove(id);
     const keep = ctx;
     ctx = el.querySelector('canvas').getContext('2d');
     drawMoveIcon({ id, item: id, i: 0, x: 36, y: 36, r: 33, label: '' }, 1, false);
     ctx = keep;
     return el;
 }
-function renderLib() {
+function renderLib(keepNav) {
     const wrap = document.getElementById('libTrees');
     wrap.replaceChildren();
     const inCat = {};                                     // path -> every move in that category
@@ -2818,13 +2920,37 @@ function renderLib() {
         tree.append(branch(0, []));
         wrap.append(tree);
     }
-    navPath = [];
+    if (!keepNav) { navPath = []; }
     renderLibNav();
+    foldLibTo(libFoldLevel);
+    applyPriceFilter();
 }
 
 // The top bar: the path so far, then the choices for the next level. Picking one scrolls
 // the tree to that branch (opening it if it was folded) and flashes it.
-let navPath = [], libFoldLevel = 5;
+let navPath = [], libFoldLevel = 5, libPriceRange = 0;
+const PRICE_RANGES = [
+    { label: () => 'All', test: () => true },
+    { label: () => 'I can afford', test: p => p > 0 && p <= gemTotal },
+    { label: () => `Under ${gemsHTML(10)}`, test: p => p > 0 && p < 10 },
+    { label: () => `${gemsHTML(10)} – ${gemsHTML(50)}`, test: p => p >= 10 && p < 50 },
+    { label: () => `${gemsHTML(50)} – ${gemsHTML(100)}`, test: p => p >= 50 && p < 100 },
+    { label: () => `${gemsHTML(100)} – ${gemsHTML(500)}`, test: p => p >= 100 && p < 500 },
+    { label: () => `${gemsHTML(500)} +`, test: p => p >= 500 },
+    { label: () => 'Owned only', test: p => p === 0 }
+];
+function applyPriceFilter() {
+    const r = PRICE_RANGES[libPriceRange], all = libPriceRange === 0;
+    document.querySelectorAll('#libTrees .mcard').forEach(c => { c.style.display = all || r.test(+c.dataset.price) ? '' : 'none'; });
+    // hide categories, then branches, that have nothing left to show
+    const nodes = [...document.querySelectorAll('#libTrees .tnode')].sort((a, b) => b.dataset.depth - a.dataset.depth);
+    for (const n of nodes) {
+        let has;
+        if (n.classList.contains('tleaf')) has = all || [...n.querySelectorAll('.mcard')].some(c => c.style.display !== 'none');
+        else has = [...n.querySelector('.tkids').children].some(k => !k.classList.contains('nomatch'));
+        n.classList.toggle('nomatch', !has);
+    }
+}
 function foldLibTo(lvl) {
     document.querySelectorAll('#libTrees .tnode').forEach(n => n.classList.toggle('folded', +n.dataset.depth >= lvl));
 }
@@ -2869,6 +2995,19 @@ function renderLibNav() {
     const tools = document.createElement('div');
     tools.className = 'tools';
     bar.append(tools);
+    // price filter: only show moves (you don't own) in this range; branches with none left fold away
+    const pr = document.createElement('div');
+    pr.id = 'libPrice';
+    pr.innerHTML = '<span class="ask">Price</span>';
+    PRICE_RANGES.forEach((r, i) => {
+        const b = document.createElement('button');
+        b.className = 'pf' + (libPriceRange === i ? ' on' : '');
+        b.innerHTML = r.label();
+        b.onclick = () => { libPriceRange = i; applyPriceFilter(); renderLibNav(); };
+        pr.append(b);
+    });
+    pr.insertAdjacentHTML('beforeend', `<span class="have">You have ${gemsHTML(gemTotal)}</span>`);
+    bar.append(pr);
     // fold the whole tree down to a chosen level: 1 = just the first split ... 4 = every
     // category but no moves, All = everything open
     tools.insertAdjacentHTML('beforeend', '<span class="foldto">Show down to</span>');
@@ -2916,14 +3055,15 @@ function collCard(id, slot) {
         card.innerHTML = `<div class="q">?</div><div><b>???</b><div class="st">Not found yet</div></div>`;
         return card;
     }
-    const combo = comboById(id), beats = COUNTERS[id], beatenBy = Object.keys(COUNTERS).find(k => COUNTERS[k] === id);
+    const combo = comboById(id), mu = matchups(id);
     card.className = 'ccard' + (keyOf ? ' eq' : '') + (slot ? ' slot' : '');
     card.innerHTML = `<canvas width="128" height="128"></canvas><div>
         <b>${itemName(id)}</b>
         <div class="st">${keyOf ? `Equipped on <kbd>${SLOT_KEYS[keyOf]}</kbd>` : 'Not equipped'}</div>
         ${combo ? `<div class="seq">${seqHTML(combo.seq)}</div>` : ''}
-        <div class="mu2"><span class="g">▲ Beats:</span> ${beats ? nameOrSecret(beats) : 'nothing'}<br>
-             <span class="r">▼ Loses to:</span> ${beatenBy ? nameOrSecret(beatenBy) : 'nothing'}</div></div>`;
+        <div class="mu2">${DEF[id] ? `<span class="g">🛡 Works against:</span> ${DEF[id].height} attacks` :
+            `<span class="g">▲ Beats:</span> ${matchupText(mu.beats)}<br>
+             <span class="r">▼ Loses to:</span> ${matchupText(mu.loses)}`}</div></div>`;
     const keep = ctx;
     ctx = card.querySelector('canvas').getContext('2d');
     drawMoveIcon({ id, item: id, i: 0, x: 64, y: 64, r: 58, label: '' }, 1, false);

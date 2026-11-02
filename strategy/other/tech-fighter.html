@@ -834,7 +834,7 @@
     // 23. DJ — every key has to land on the beat. The bot and its tag pulse
     // with it; a key off the beat gets you struck.
     enemies.push(streetBot('dj', buildings[23], 0.5, {
-        blocks: ['zas'], beat: 0.7, beatWindow: 0.13, beatClock: 0
+        blocks: ['zas'], beat: 0.7, beatWindow: 0.22, beatClock: 0
     }));
 
     // 24. drone handler — a drone circles it. Swat the drone with A while
@@ -896,6 +896,90 @@
         ]
     }));
 
+    // ================= skyline: tower enemies =================
+    // the Z<->X / A<->S pairing the mirror bot and shadow both use
+    const KEY_PAIRS = { z: 'x', x: 'z', a: 's', s: 'a' };
+
+    // 31. glitch — its tag scrambles the letter order every second, because
+    // the order doesn't matter: ANY arrangement of those letters, anywhere
+    // in a row, counts as the block.
+    enemies.push(streetBot('glitch', buildings[31], 0.5, {
+        blocks: ['zxa'], anyOrder: true, glitchClock: 0
+    }));
+
+    // 32. mirror bot — answers every key you land with its mirror (Z<->X,
+    // A<->S). Its echoes go into the combo too, so an echo can complete a
+    // block and get you struck. Kill length counts your keys only.
+    enemies.push(streetBot('mirrorBot', buildings[32], 0.5, {
+        blocks: ['xa', 'sz'], mirror: true
+    }));
+
+    // 33. window washer — rides a gondola up and down the outside of the
+    // tower. It's only in reach while the platform is level with the roof.
+    {
+        const b = buildings[33];
+        enemies.push(streetBot('windowWasher', b, 1, {
+            x: b.x + b.width + 6,
+            blocks: ['saz'], washRoofY: b.y, washClock: 0, lookBuilding: b
+        }));
+    }
+
+    // 34. neon sign — its tag flickers between two blocks. Each key is
+    // checked against whichever block is lit at that moment.
+    enemies.push(streetBot('neonSign', buildings[34], 0.5, {
+        blocks: ['zx'], signBlocks: ['zx', 'as'], signClock: 0
+    }));
+
+    // 35 is an open roof — you cross it under the sniper's fire.
+    // 36. sniper — on the far end of the next tower. From the moment you
+    // reach roof 35 its laser tracks you; when the dot flares, duck (Q/W)
+    // or be in the air, or the shot drops you. Up close it stops shooting
+    // and fights like anything else.
+    enemies.push(streetBot('sniper', buildings[36], 0.82, {
+        blocks: ['xsz'], sniper: true, aimFrom: buildings[35].x - 10, aimTimer: 1.4
+    }));
+
+    // 37. elevator — rides up out of a shaft in the roof. Every key you
+    // land lifts it a floor; stall for 1.6s and it sinks a floor (and you
+    // lose that key). Finish it at the top.
+    {
+        const b = buildings[37];
+        enemies.push(streetBot('elevator', b, 0.5, {
+            blocks: ['zas'], shaftRoofY: b.y, floorLift: 0, sinkTimer: 0
+        }));
+    }
+
+    // 38. countdown — its number is exactly how many keys the combo must be,
+    // instead of the usual block length + 1.
+    enemies.push(streetBot('countdown', buildings[38], 0.5, {
+        blocks: ['zx', 'as'], killLength: 6
+    }));
+
+    // 39. shadow — every second key you press has to be the partner of the
+    // key before it (Z<->X, A<->S).
+    enemies.push(streetBot('shadow', buildings[39], 0.5, {
+        blocks: ['xsz'], pairRule: true
+    }));
+
+    // 40. blackout — the roof goes dark every few seconds; in the dark you
+    // only see it (and its tag) in lightning flashes. Keys still count.
+    enemies.push(streetBot('blackout', buildings[40], 0.5, {
+        blocks: ['azx', 'sxz'], blackout: true, darkClock: 0, dark: false, flash: 0
+    }));
+
+    // 41. architect (boss) — builds a wall of blocks around itself: every
+    // phase ADDS a block and keeps the old ones, until it's dodging five.
+    enemies.push(streetBot('architect', buildings[41], 0.5, {
+        bossPhase: 0,
+        bossPhases: [
+            { blocks: ['zx'] },
+            { blocks: ['zx', 'as'] },
+            { blocks: ['zx', 'as', 'xa'] },
+            { blocks: ['zx', 'as', 'xa', 'sz'] },
+            { blocks: ['zx', 'as', 'xa', 'sz', 'za'] }
+        ]
+    }));
+
     // ---------- enemy looks: shiny towers get cooler bots ----------
     // Bots standing on suburban houses stay plain grey scrap metal
     // (urban 0). Bots on any tower get the upgraded look, and it climbs
@@ -913,8 +997,8 @@
         return '#ff3fd2';               // neon: magenta
     }
     for (const e of enemies){
-        if (e.type === 'kingpin') setBossPhase(e, 0);
-        const b = buildingAt(e.x + e.w / 2);
+        if (e.type === 'kingpin' || e.type === 'architect') setBossPhase(e, 0);
+        const b = e.lookBuilding || buildingAt(e.x + e.w / 2);
         const base = b ? (SHINY_STYLE_BASE[b.style] || (b.neon ? 0.55 : 0)) : 0;
         // every bot on a brown brick tower gets the exact same look as the
         // twin blades; the silver towers climb from there
@@ -924,7 +1008,7 @@
         e.accent = e.bossPhases ? '#ffcf3d' : urbanAccent(e.urban);
         // bots on the silver glass / stepped / spire towers are elites: a
         // whole different, much flashier chassis (see drawEnemy)
-        const b = buildingAt(e.x + e.w / 2);
+        const b = e.lookBuilding || buildingAt(e.x + e.w / 2);
         e.elite = !!b && ['glassTower', 'steppedTower', 'spireTower'].includes(b.style);
     }
 
@@ -1008,6 +1092,19 @@
                     <li><b>Lookalikes:</b> only one is real. Fakes give themselves away if you watch.</li>
                     <li><b>Rhythm, lights, drones and swaps</b> change <i>when</i> or <i>how</i> your keys count. Don't rush in.</li>
                     <li><b>Crews</b> chain together: the key that finishes one bot starts the next.</li>
+                </ul>`
+        },
+        {
+            title: 'Skyline',
+            body: `<p>The tallest towers play the hardest tricks.</p>
+                <ul>
+                    <li><b>ANY ORDER</b> means the letters count as a block however they're arranged.</li>
+                    <li><b>Partners:</b> Z goes with X, A goes with S. Some bots care about that, so read their tag.</li>
+                    <li><b>Out of reach?</b> Some bots move in and out of range. Strike while they're level with you.</li>
+                    <li><b>Lasers:</b> when the dot flares, get low or get airborne.</li>
+                    <li><b>EXACTLY</b> means your combo must be exactly that long.</li>
+                    <li><b>In the dark</b>, your keys still work. Remember what you saw.</li>
+                    <li><b>The last boss</b> never forgets a block. Every phase adds one more.</li>
                 </ul>`
         },
         {
@@ -1106,6 +1203,11 @@
             }
             if (e.bossPhases && e.alive) setBossPhase(e, 0);
             if (e.alive && e.droneAlive === false) e.droneAlive = true; // the drone comes back up
+            if (e.alive){
+                e.echoSeq = [];
+                if (e.shaftRoofY != null){ e.floorLift = 0; e.sinkTimer = 0; }
+                if (e.sniper){ e.aimTimer = 1.4; e.charging = false; }
+            }
             if (e.alive && e.hopStops){
                 e.hopping = false;
                 e.hopAt = 0;
@@ -1209,6 +1311,75 @@
                     e.comboWindowTimer = 0;
                     if (!(deathSequence && deathSequence.phase)) startPunishSequence(e);
                 }
+            }
+
+            // glitch: just the clock its scrambled tag runs off
+            if (e.anyOrder && e.alive) e.glitchClock += dt;
+
+            // window washer: gondola rides up and down the side of the tower
+            if (e.washRoofY != null && e.alive){
+                e.washClock += dt;
+                const depth = (0.5 - 0.5 * Math.cos(e.washClock * 1.25)) * 130; // 0 = level with the roof
+                e.y = e.washRoofY - 66 + depth;
+                e.level = depth < 14;
+            }
+
+            // neon sign: flicks between its two blocks
+            if (e.signBlocks && e.alive){
+                e.signClock += dt;
+                const lit = Math.floor(e.signClock / 1.3) % 2;
+                if (e.signLit !== lit){ e.signLit = lit; e.shiftFlash = 0.15; }
+                e.blocks = [e.signBlocks[lit]];
+                if (e.shiftFlash > 0) e.shiftFlash = Math.max(0, e.shiftFlash - dt);
+            }
+
+            // sniper: laser tracks you across its approach; flares, then fires
+            if (e.sniper && e.alive){
+                const dxp = (e.x + e.w / 2) - (player.x + player.w / 2);
+                const dist = Math.hypot(dxp, (e.y + e.h / 2) - (player.y + player.h / 2));
+                e.aiming = player.x >= e.aimFrom && dist > SWORD_REACH + 10 && !(deathSequence && deathSequence.phase);
+                if (!e.aiming){
+                    e.aimTimer = Math.max(e.aimTimer, 1.0);
+                    e.charging = false;
+                } else {
+                    e.aimTimer -= dt;
+                    e.charging = e.aimTimer < 0.6;
+                    if (e.aimTimer <= 0){
+                        const dodged = player.combatPose === 'duck' || !player.onGround;
+                        if (dodged){
+                            spawnEffect(player.x + player.w / 2, player.y + 6, '#ffcf3d', 0.25);
+                        } else {
+                            spawnEffect(player.x + player.w / 2, player.y + player.h * 0.4, '#ff3030', 0.35);
+                            respawnPlayer();
+                        }
+                        e.aimTimer = randRange(1.3, 2.0);
+                        e.charging = false;
+                    }
+                }
+            }
+
+            // elevator: rides up a floor per landed key, sinks back if you stall
+            if (e.shaftRoofY != null && e.alive){
+                const keys = (e.pressedKeys || []).length;
+                if (keys > 0){
+                    e.sinkTimer += dt;
+                    if (e.sinkTimer >= 1.6){
+                        e.pressedKeys.pop();
+                        e.comboStep = e.pressedKeys.length;
+                        e.sinkTimer = 0;
+                    }
+                } else e.sinkTimer = 0;
+                const targetLift = Math.min(3, (e.pressedKeys || []).length);
+                e.floorLift += (targetLift - e.floorLift) * Math.min(1, dt * 8);
+                e.y = e.shaftRoofY - 66 + (3 - e.floorLift) * 14;
+            }
+
+            // blackout: lights on 2s, dark 2.6s with the odd lightning flash
+            if (e.blackout && e.alive){
+                e.darkClock = (e.darkClock + dt) % 4.6;
+                e.dark = e.darkClock > 2.0;
+                if (e.flash > 0) e.flash = Math.max(0, e.flash - dt);
+                if (e.dark && e.flash <= 0 && rand() < dt * 0.9) e.flash = 0.14;
             }
 
             // tagger: graffiti covers one letter of its tag for a while,
@@ -1399,6 +1570,13 @@
         if (k === 'c' && !cUnlocked) return; // C doesn't exist yet
         if (k === 'w' && !wUnlocked) return; // W doesn't exist yet
 
+        // a sniper has you in its sights: Q / W just duck under the shot
+        if ((k === 'q' || k === 'w') && enemies.some(e => e.sniper && e.alive && e.aiming)){
+            player.combatPose = 'duck';
+            player.combatTimer = 0.75; // long enough to cover the whole 0.6s flare
+            return;
+        }
+
         // "duckable" enemies (anything with a swingState) are a completely
         // different mechanic — a timed dodge, not a key-order puzzle — so
         // handle them before anything else. Each one can configure:
@@ -1477,6 +1655,7 @@
         for (const e of enemies){
             if (!e.alive || e.swingState) continue; // handled above, not the block-combo system
             if (e.hopping) continue; // mid-leap — can't reach it
+            if (e.washRoofY != null && !e.level) continue; // gondola's below the roof
             const dx = (e.x + e.w / 2) - (player.x + player.w / 2);
             const dy = (e.y + e.h / 2) - (player.y + player.h / 2);
             const dist = Math.hypot(dx, dy);
@@ -1525,16 +1704,31 @@
         // both enemies' blocks, and the longer block sets the kill length
         const twin = target.twin && target.twin.alive ? target.twin : null;
         const blocks = (target.blocks || ['z']).concat(twin ? twin.blocks : []); // 'z' fallback shouldn't normally be hit
-        const killLength = Math.max(...blocks.map(b => b.length)) + 1;
+        // countdown sets its own exact length
+        const killLength = target.killLength || (Math.max(...blocks.map(b => b.length)) + 1);
 
         const lastKey = target.pressedKeys[target.pressedKeys.length - 1];
         const repeatFail = lastKey === k;
 
-        const tentative = target.pressedKeys.concat([k]).join('');
+        // mirror bot: its echo of your key goes into the sequence too
+        const echo = target.mirror ? (KEY_PAIRS[k] || k) : null;
+        const seqSoFar = target.mirror ? (target.echoSeq || []) : target.pressedKeys;
+        const tentative = seqSoFar.concat(echo ? [k, echo] : [k]).join('');
         const blockFail = blocks.some(b => {
+            if (target.anyOrder){
+                // glitch: any arrangement of the block's letters in a row
+                const want = b.split('').sort().join('');
+                for (let i = 0; i + b.length <= tentative.length; i++){
+                    if (tentative.slice(i, i + b.length).split('').sort().join('') === want) return true;
+                }
+                return false;
+            }
             const rev = b.split('').reverse().join('');
             return tentative.includes(b) || tentative.includes(rev);
         });
+
+        // shadow: every second key must be the partner of the one before it
+        const pairFail = target.pairRule && target.pressedKeys.length % 2 === 1 && k !== KEY_PAIRS[lastKey];
 
         // some enemies require a specific opening move (e.g. phantom must be
         // opened with C — the flip in) before anything else counts
@@ -1543,8 +1737,12 @@
         // bouncer: one key isn't allowed in at all
         const bannedFail = target.banned && k === target.banned;
 
-        const correct = !repeatFail && !blockFail && !firstKeyFail && !bannedFail;
-        if (correct) target.pressedKeys.push(k);
+        const correct = !repeatFail && !blockFail && !firstKeyFail && !bannedFail && !pairFail;
+        if (correct){
+            target.pressedKeys.push(k);
+            if (target.mirror) target.echoSeq = tentative.split('');
+            if (target.shaftRoofY != null) target.sinkTimer = 0;
+        }
 
         if (correct){
             target.comboStep = target.pressedKeys.length;
@@ -2401,6 +2599,40 @@
             }
         }
         if (e.droneAlive && e.alive && Math.sin(e.droneAngle) <= 0.35) drawDrone(e, sx, sy); // behind the bot
+        if (e.washRoofY != null && e.alive){
+            // gondola: platform under its feet, cables up to a davit on the roof
+            const roofSY = e.washRoofY - camera.y;
+            const cx = sx + e.w / 2;
+            ctx.save();
+            ctx.strokeStyle = '#3a3f4a';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(cx - 18, sy + e.h + 2); ctx.lineTo(cx - 18, roofSY - 28);
+            ctx.moveTo(cx + 18, sy + e.h + 2); ctx.lineTo(cx + 18, roofSY - 28);
+            ctx.stroke();
+            ctx.fillStyle = '#3a3f4a';
+            ctx.fillRect(cx - 34, roofSY - 30, 54, 4);
+            ctx.fillRect(cx - 34, roofSY - 30, 4, 30);
+            ctx.fillStyle = e.level ? '#3dff7a' : '#ffcf3d';
+            ctx.fillRect(cx - 24, sy + e.h, 48, 5);
+            ctx.fillStyle = '#2a2f38';
+            ctx.fillRect(cx - 24, sy + e.h + 5, 48, 10);
+            ctx.restore();
+        }
+        if (e.sniper && e.alive && e.aiming){
+            // laser sight, flaring as it's about to fire
+            const fx = sx + e.w / 2, fy = sy + e.h * 0.12;
+            const px = player.x + player.w / 2 - camera.x, py = player.y + player.h * 0.4 - camera.y;
+            ctx.save();
+            ctx.strokeStyle = e.charging ? 'rgba(255,40,40,0.9)' : 'rgba(255,40,40,0.35)';
+            ctx.lineWidth = e.charging ? 2 : 1;
+            ctx.shadowColor = '#ff2828';
+            ctx.shadowBlur = e.charging ? 10 : 0;
+            ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(px, py); ctx.stroke();
+            ctx.fillStyle = '#ff2828';
+            ctx.beginPath(); ctx.arc(px, py, e.charging ? 5 + Math.sin(gameTime * 30) * 1.5 : 3, 0, Math.PI * 2); ctx.fill();
+            ctx.restore();
+        }
         const dying = !e.alive;
         const deathT = dying ? 1 - Math.max(0, e.deathTimer) / 0.5 : 0; // 0..1
         const alpha = dying ? Math.max(0, 1 - deathT * 1.3) : 1;
@@ -2488,6 +2720,8 @@
             ctx.restore();
         }
         if (isPatroller || isCharger || isCourier) ctx.scale(facingDir, 1);
+        // glitch: the chassis skips sideways every so often
+        if (e.anyOrder && e.alive && Math.floor(gameTime * 12) % 9 === 0) ctx.translate((Math.floor(gameTime * 50) % 2 ? 3 : -3), 0);
         // magician's fakes flicker for a split second now and then
         if (e.decoy && e.flicker > 0) ctx.globalAlpha *= 0.35;
         // DJ bobs on the beat
@@ -2953,6 +3187,16 @@
             return hint ? phase + ' · ' + hint : phase;
         }
         let text = 'BLOCKS ' + blocksText(e);
+        if (e.anyOrder){
+            // glitch: show the letters in a different order every second
+            const perms = ['012', '201', '120', '102', '021', '210'];
+            const pm = perms[Math.floor(e.glitchClock) % perms.length];
+            text = 'BLOCKS ' + e.blocks.map(b => pm.split('').map(i => b[+i] || '').join('').toUpperCase()).join(', ') + ' · ANY ORDER';
+        }
+        if (e.mirror) text = 'MIRROR Z↔X A↔S · ' + text;
+        if (e.pairRule) text = 'PAIRS Z↔X A↔S · ' + text;
+        if (e.killLength) text = 'EXACTLY ' + e.killLength + ' KEYS · ' + text;
+        if (e.shaftRoofY != null) text = 'FLOOR ' + Math.min(3, (e.pressedKeys || []).length) + '/3 · ' + text;
         if (e.banned) text = 'NO ENTRY: ' + e.banned.toUpperCase() + ' · ' + text;
         if (e.swap) text = 'SWAP ' + Object.keys(e.swap)[0].toUpperCase() + '↔' + Object.values(e.swap)[0].toUpperCase() + ' · ' + text;
         if (e.droneAlive) text = 'SWAT DRONE (A) · ' + text;
@@ -3022,7 +3266,51 @@
     }
 
     function drawEnemies(){
-        for (const e of enemies) drawEnemy(e);
+        for (const e of enemies){
+            if (e.shaftRoofY != null){
+                // elevator: only the part above the roof shows — the rest is
+                // still down the shaft
+                const roofSY = e.shaftRoofY - camera.y;
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(0, -1000, W, roofSY + 1000);
+                ctx.clip();
+                drawEnemy(e);
+                ctx.restore();
+                const cx = e.x + e.w / 2 - camera.x;
+                ctx.save();
+                ctx.fillStyle = '#14171c';
+                ctx.fillRect(cx - 26, roofSY - 3, 52, 5);
+                ctx.fillStyle = '#ffcf3d';
+                for (let i = 0; i < 6; i++) ctx.fillRect(cx - 26 + i * 9, roofSY - 3, 4, 2);
+                ctx.fillStyle = '#3a3f4a';
+                ctx.fillRect(cx - 28, roofSY - 22, 3, 22);
+                ctx.fillRect(cx + 25, roofSY - 22, 3, 22);
+                ctx.restore();
+            } else drawEnemy(e);
+        }
+    }
+
+    // blackout: the city around the blackout bot goes dark (drawn between
+    // the enemies and the player, so you can still see yourself)
+    function drawBlackout(){
+        for (const e of enemies){
+            if (!e.blackout || !e.alive || !e.dark || e.flash > 0) continue;
+            const sx = e.x - camera.x;
+            if (sx < -400 || sx > W + 400) continue;
+            ctx.save();
+            ctx.fillStyle = 'rgba(8,12,22,0.86)';
+            ctx.fillRect(0, 0, W, H);
+            ctx.restore();
+        }
+        for (const e of enemies){
+            if (e.blackout && e.alive && e.flash > 0){
+                ctx.save();
+                ctx.fillStyle = 'rgba(255,255,255,' + (e.flash / 0.14) * 0.35 + ')';
+                ctx.fillRect(0, 0, W, H);
+                ctx.restore();
+            }
+        }
     }
 
     // ---------- humanoid robot ----------
@@ -3237,6 +3525,7 @@
         drawBackground();
         drawBuildings();
         drawEnemies();
+        drawBlackout();
         drawRobot();
         for (const fx of effects){
             const progress = (gameTime - fx.start) / fx.duration;
