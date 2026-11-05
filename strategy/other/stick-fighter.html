@@ -276,6 +276,25 @@
     #upClose { margin-top:16px; font:800 16px 'Segoe UI', sans-serif; border-radius:999px; padding:9px 30px; cursor:pointer; background:#fff; color:#1f2a36; border:3px solid #1f2a36; }
     .upbtn { font:900 12px 'Segoe UI', sans-serif; color:#111; background:#f5c542; border:2px solid #a87708; border-radius:999px; padding:2px 10px; cursor:pointer; }
     .uplv { font-size:11px; font-weight:800; color:#c9b98a; margin-top:3px; letter-spacing:.02em; }
+    #profileScreen { background:rgba(200,228,245,0.85); z-index:30; }
+    #profileScreen .card { background:#fff; border-radius:24px; padding:26px 30px 22px; width:min(420px, 92vw); text-align:center;
+                           box-shadow:0 10px 0 #c9d6df, 0 24px 50px rgba(30,50,70,.25); }
+    #profileScreen h3 { font-size:28px; font-weight:900; letter-spacing:.06em; color:#1f2a36; }
+    #profList { margin-top:14px; display:grid; gap:8px; }
+    .prof { display:flex; align-items:center; gap:8px; }
+    .prof button.pick { flex:1; font:800 17px 'Segoe UI', sans-serif; color:#1f2a36; background:#f3f7fa; border:3px solid #dbe4ea; border-radius:14px; padding:10px; cursor:pointer; text-align:left; }
+    .prof button.pick:hover, .prof button.pick.on { border-color:#1e88e5; background:#e3f2fd; }
+    .prof button.del { font:700 12px 'Segoe UI', sans-serif; color:#c62828; background:none; border:none; cursor:pointer; }
+    #profForm { margin-top:12px; display:grid; gap:8px; }
+    #profForm input { font:700 15px 'Segoe UI', sans-serif; padding:10px 14px; border-radius:12px; border:2px solid #c3d0da; outline:none; }
+    #profForm input:focus { border-color:#1e88e5; }
+    #profForm button { font:900 16px 'Segoe UI', sans-serif; color:#fff; background:linear-gradient(#2f80e8, #1565c0); border:none; border-radius:999px; padding:10px; cursor:pointer; }
+    #profMsg { margin-top:8px; min-height:18px; font-size:13px; font-weight:700; color:#c62828; }
+    #profNew { margin-top:6px; font:800 14px 'Segoe UI', sans-serif; color:#1565c0; background:none; border:2px dashed #90caf9; border-radius:999px; padding:8px 18px; cursor:pointer; }
+    #profileChip { position:fixed; top:18px; right:200px; z-index:6; font:800 14px 'Segoe UI', sans-serif; color:#1f2a36;
+                   background:rgba(255,255,255,0.9); border:2px solid rgba(31,42,54,0.25); border-radius:999px; padding:8px 14px; cursor:pointer; }
+    #profileChip:hover { border-color:#1e88e5; color:#1565c0; }
+    #profileChip.hidden { display:none; }
     #buyCancel { background:#fff; color:#1f2a36; border:3px solid #1f2a36; }
     #buyConfirm { background:#111; color:#f5c542; border:3px solid #d4a017; box-shadow:0 5px 0 #a87708; }
     #buyConfirm:hover { color:#ffe58a; }
@@ -489,6 +508,17 @@
 <body>
 <canvas id="bg"></canvas>
 
+<div id="profileScreen" class="screen hidden">
+    <div class="card">
+        <h3>WHO'S PLAYING?</h3>
+        <div id="profList"></div>
+        <div id="profForm"></div>
+        <div id="profMsg"></div>
+        <button id="profNew">+ New profile</button>
+    </div>
+</div>
+<button id="profileChip" class="hidden"></button>
+
 <div id="startScreen" class="screen">
     <h1 id="title">STICK<span>FIGHTER</span></h1>
     <div id="tagline">Last one standing wins</div>
@@ -631,6 +661,31 @@
 <div id="help" class="hidden"><b>Space</b> jump &nbsp;·&nbsp; <span id="helpKeys"></span><b>Esc</b> quit</div>
 
 <script>
+// ---------- Profiles ----------
+// Several players can share the game: each profile has a name and password and keeps its own
+// progress (gems, moves, combos, upgrades, records, keys...). Everything the game saves goes
+// through `store`, which files it under the signed-in profile. Passwords are stored hashed,
+// but this is only a lock against mix-ups: anyone on this computer could still dig into the save.
+const PROFILES_KEY = 'stickFighterProfiles';
+let profiles = JSON.parse(localStorage.getItem(PROFILES_KEY) || '[]');          // [{ name, hash }]
+const currentProfile = sessionStorage.getItem('stickFighterProfile');
+const signedIn = profiles.some(p => p.name === currentProfile);
+const savePrefix = signedIn ? `sf:${currentProfile}:` : 'sf:__nobody__:';
+const store = {
+    getItem: k => localStorage.getItem(savePrefix + k),
+    setItem: (k, v) => localStorage.setItem(savePrefix + k, v),
+    removeItem: k => localStorage.removeItem(savePrefix + k)
+};
+async function hashPassword(name, pw) {
+    const text = name.toLowerCase() + ':' + pw;
+    if (crypto?.subtle) {
+        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+        return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    let h = 5381; for (const ch of text) h = (h * 33 ^ ch.charCodeAt(0)) >>> 0;   // fallback if the browser has no crypto
+    return 'x' + h.toString(16);
+}
+
 const cv = document.getElementById('bg');
 const screenCtx = cv.getContext('2d');
 let ctx = screenCtx;
@@ -975,6 +1030,7 @@ function draw() {
         ctx.beginPath(); ctx.moveTo(x, ground + 6); ctx.lineTo(x - 60, H); ctx.stroke();
     }
 
+    profileChip.classList.toggle('hidden', !signedIn || !!match || (homeScreen.classList.contains('hidden') && startScreen.classList.contains('hidden')));
     walletEl.classList.toggle('hidden', homeT < 50 || (!!match && match.phase !== 'result') || !moveScreen.classList.contains('hidden'));
     if (match) drawMatch(ground, s);
     else if (homeT >= 0) { if ([moveScreen, collScreen, libScreen].every(el => el.classList.contains('hidden'))) drawHome(ground, s); }
@@ -1724,9 +1780,9 @@ const MID_COMBO_PUSH = 0.45;                         // how much a mid-combo hit
 const COMBO_GAP = 40;                                // ticks allowed between one attack ending and the next starting
 const fightClock = () => match ? match.phaseT : t;   // stops during hit-freeze, unlike t
 let chainEnd = 0;                                    // when the player's last attack finished
-let unlockedCombos = JSON.parse(localStorage.getItem('stickFighterCombos') || '[]');
+let unlockedCombos = JSON.parse(store.getItem('stickFighterCombos') || '[]');
 // combos you sold: you still know them (name and moves) but can't use them until you buy them back
-let knownCombos = JSON.parse(localStorage.getItem('stickFighterKnown') || '[]');
+let knownCombos = JSON.parse(store.getItem('stickFighterKnown') || '[]');
 let newCombos = [];                                  // found since the last result screen
 let comboChain = [];                                 // the player's recent attacks: { id, t }
 function recordAttack(id) {
@@ -1738,7 +1794,7 @@ function recordAttack(id) {
         const tail = comboChain.slice(-c.seq.length).map(a => a.id);
         if (tail.every((id, i) => id === c.seq[i])) {
             unlockedCombos.push(c.id); newCombos.push(c);
-            localStorage.setItem('stickFighterCombos', JSON.stringify(unlockedCombos));
+            store.setItem('stickFighterCombos', JSON.stringify(unlockedCombos));
         }
     }
 }
@@ -1764,7 +1820,7 @@ const keyCode = k => k === ';' ? 'Semicolon' : 'Key' + k;
 // Any slot can be set to any key you like (type it on the move page or My Moves).
 // customKeys[slot] = { code, label }; everything else uses the home-row default.
 const DEFAULT_SLOT_KEYS = { ...SLOT_KEYS };
-let customKeys = JSON.parse(localStorage.getItem('stickFighterKeyCodes') || '{}');
+let customKeys = JSON.parse(store.getItem('stickFighterKeyCodes') || '{}');
 for (const sl in customKeys) SLOT_KEYS[sl] = customKeys[sl].label;
 const keyCodeOf = sl => customKeys[sl]?.code || keyCode(DEFAULT_SLOT_KEYS[sl]);
 const RESERVED_KEYS = ['Space', 'Escape', 'Enter', 'Tab'];          // arrows are free to use for moves now
@@ -1782,17 +1838,17 @@ function listenForKey(slot, el, done) {
         if (other) customKeys[other] = { code: keyCodeOf(slot), label: SLOT_KEYS[slot] };     // swap
         customKeys[slot] = { code: e.code, label };
         for (const sl in customKeys) SLOT_KEYS[sl] = customKeys[sl].label;
-        localStorage.setItem('stickFighterKeyCodes', JSON.stringify(customKeys));
+        store.setItem('stickFighterKeyCodes', JSON.stringify(customKeys));
         done(other ? `Swapped with the move that was on ${label}.` : '');
     };
     addEventListener('keydown', onKey, true);
 }
 const SLOT_ORDER = Object.keys(SLOT_KEYS), MAX_SLOTS = 10;
 const SLOT_PRICES = [100, 200, 350, 500, 750, 1000];          // slots 5 to 10
-let slotCount = Math.max(4, Math.min(MAX_SLOTS, +(localStorage.getItem('stickFighterSlots') || 4)));
+let slotCount = Math.max(4, Math.min(MAX_SLOTS, +(store.getItem('stickFighterSlots') || 4)));
 const ownedSlots = () => SLOT_ORDER.slice(0, slotCount);
 const nextSlotPrice = () => SLOT_PRICES[slotCount - 4];
-let loadout = { ...DEFAULT_LOADOUT, ...JSON.parse(localStorage.getItem('stickFighterLoadout') || '{}') };
+let loadout = { ...DEFAULT_LOADOUT, ...JSON.parse(store.getItem('stickFighterLoadout') || '{}') };
 const comboById = id => COMBOS.find(c => c.id === id);
 // Buying a combo you haven't found: every move in it you don't own, plus 1 Sapphire for
 // finding it early. Capped at the 9 Ruby top price. You still don't own those moves on
@@ -1930,8 +1986,8 @@ const MOVE_INFO = {
     kneeBreaker:  { label: 'KNEE BREAKER',   path: [...HSP, 'Low'],  desc: 'A heavy punch straight into the knee. Their leg gives out for a long time.' }
 };
 const STARTER_MOVES = ['highPunch', 'lowPunch', 'highKick', 'lowKick'];
-let ownedExtra = JSON.parse(localStorage.getItem('stickFighterOwned') || '[]');
-let soldStarters = JSON.parse(localStorage.getItem('stickFighterSoldStarters') || '[]');   // starter moves you sold
+let ownedExtra = JSON.parse(store.getItem('stickFighterOwned') || '[]');
+let soldStarters = JSON.parse(store.getItem('stickFighterSoldStarters') || '[]');   // starter moves you sold
 const ownedMoves = () => [...STARTER_MOVES.filter(id => !soldStarters.includes(id)), ...ownedExtra.filter(id => MOVE_INFO[id])];
 let mouse = { x: -1, y: -1 }, hoverMove = null, hoverChange = null, hoverBuy = false, homeMove = null, homeMoveT = 0;
 
@@ -2681,7 +2737,7 @@ const pick = a => a[Math.floor(Math.random() * a.length)];
 // Your level (1-10) goes up with every 1v1 win and down with every loss.
 // 1v1 picks a random rival within one level of you.
 const MAX_LEVEL = 10;
-let playerLevel = +(localStorage.getItem('stickFighterLevel') || 3);
+let playerLevel = +(store.getItem('stickFighterLevel') || 3);
 const rivalLevel = () => Math.max(1, Math.min(MAX_LEVEL, playerLevel + pick([-1, 0, 0, 1])));
 
 const held = {}, tapped = {};
@@ -2707,8 +2763,8 @@ function gemsHTML(v) {
     return out.join('') || `<span class="amt">0${document.querySelector('#cur-jade .gem').outerHTML}</span>`;
 }
 const walletEl = document.getElementById('wallet');
-for (const k of ['stickFighterJade', 'stickFighter_jade', 'stickFighter_sapphire', 'stickFighter_ruby']) localStorage.removeItem(k);
-let gemTotal = +(localStorage.getItem('stickFighterGems') || 0);
+for (const k of ['stickFighterJade', 'stickFighter_jade', 'stickFighter_sapphire', 'stickFighter_ruby']) store.removeItem(k);
+let gemTotal = +(store.getItem('stickFighterGems') || 0);
 const breakdown = v => ({ ruby: Math.floor(v / 100), sapphire: Math.floor(v / 10) % 10, jade: v % 10 });
 function showWallet() {
     const b = breakdown(gemTotal);
@@ -2719,7 +2775,7 @@ function bump(el) { el.classList.remove('bump'); void el.offsetWidth; el.classLi
 // Earned gems pop up at `fromEl`, then zoom one by one to their counters; each landing adds its value.
 function awardGems(amount, fromEl) {
     gemTotal += amount;
-    localStorage.setItem('stickFighterGems', gemTotal);    // saved right away, the animation just shows it
+    store.setItem('stickFighterGems', gemTotal);    // saved right away, the animation just shows it
     let shown = gemTotal - amount;
     const tokens = [];
     const parts = breakdown(amount);
@@ -2936,8 +2992,8 @@ const UPGRADES = [
     { key: 'form',       name: 'Form',       icon: '🥋', atk: 'Stun and knockback +10% a level',     def: 'Window stays open 10% longer a level' }
 ];
 const MAX_UP = 5;
-let upgrades = JSON.parse(localStorage.getItem('stickFighterUpgrades') || '{}');   // id -> { power, speed, ... }
-let upSpent = JSON.parse(localStorage.getItem('stickFighterUpSpent') || '{}');     // id -> gems spent (refunded on sale)
+let upgrades = JSON.parse(store.getItem('stickFighterUpgrades') || '{}');   // id -> { power, speed, ... }
+let upSpent = JSON.parse(store.getItem('stickFighterUpSpent') || '{}');     // id -> gems spent (refunded on sale)
 const upLevel = (id, k) => upgrades[id]?.[k] || 0;
 const upValue = id => comboById(id) ? Math.max(30, comboValue(comboById(id))) : PRICE[id];
 // each level costs more: 30% of the item's value times the level you're buying, at least 5 Jade, at most 9 Ruby
@@ -3190,7 +3246,7 @@ function endRound() {
     const earn = res === 'win' ? m.level * WIN_JADE_PER_LEVEL + (quick ? QUICK_KO_JADE : 0) : 0;
     m.results.push({ name: m.b.name, color: m.b.color, level: m.level, res, earn, quick });
     const runTotal = m.results.reduce((n, r) => n + r.earn, 0);
-    const record = +(localStorage.getItem('stickFighterAdaptiveBest') || 0);
+    const record = +(store.getItem('stickFighterAdaptiveBest') || 0);
     const old = m.level;
     if (res === 'win') m.level = Math.min(10, m.level + 1);
     if (res === 'loss') m.level = Math.max(1, m.level - 1);
@@ -3220,7 +3276,7 @@ function show1v1Result(res) {
     const m = match, old = playerLevel;
     if (res === 'win') playerLevel = Math.min(MAX_LEVEL, playerLevel + 1);
     if (res === 'loss') playerLevel = Math.max(1, playerLevel - 1);
-    localStorage.setItem('stickFighterLevel', playerLevel);
+    store.setItem('stickFighterLevel', playerLevel);
     const title = { win: 'YOU WIN!', loss: 'YOU LOSE', draw: 'DRAW' }[res];
     const win = res === 'win', base = win ? m.level * WIN_JADE_PER_LEVEL : 0;
     const quick = win && m.b.hp <= 0 && ROUND_TIME - m.timer < QUICK_KO_SECS * 60;
@@ -3255,9 +3311,9 @@ function showSummary() {
         <span class="earn">${r.earn ? gemsHTML(r.earn) + (r.quick ? ' ⚡' : '') : ''}</span>
         <b>${r.res === 'win' ? 'WIN' : r.res === 'loss' ? 'LOSS' : 'DRAW'}</b></div>`).join('');
     const total = m.results.reduce((n, r) => n + r.earn, 0);
-    const prev = +(localStorage.getItem('stickFighterAdaptiveBest') || 0);
+    const prev = +(store.getItem('stickFighterAdaptiveBest') || 0);
     const isBest = total > prev;
-    if (isBest) localStorage.setItem('stickFighterAdaptiveBest', total);
+    if (isBest) store.setItem('stickFighterAdaptiveBest', total);
     resultScreen.innerHTML = `<div class="card wide">
         <div class="small">Adaptive Matchup complete</div>
         <h2>${wins} / ${ROUNDS} WINS</h2>
@@ -3276,9 +3332,9 @@ function showSummary() {
 
 function showImpossibleResult() {
     const m = match, dmg = Math.round(m.damage);
-    const prev = +(localStorage.getItem('stickFighterImpossibleBest') || 0);
+    const prev = +(store.getItem('stickFighterImpossibleBest') || 0);
     const isBest = dmg > prev;
-    if (isBest) localStorage.setItem('stickFighterImpossibleBest', dmg);
+    if (isBest) store.setItem('stickFighterImpossibleBest', dmg);
     const earned = isBest ? dmg * IMPOSSIBLE_JADE_PER_DMG : 0;   // 5 Jade per point of damage, only for a new record
     resultScreen.innerHTML = `<div class="card">
         <div class="small">The Impossible Bot wins. It always does.</div>
@@ -3424,11 +3480,82 @@ const startScreen = document.getElementById('startScreen');
 showWallet();
 const homeScreen = document.getElementById('homeScreen');
 function play() {
-    if (introT >= 0) return;
+    if (introT >= 0 || !signedIn) return;               // pick a profile first
     startScreen.classList.add('hidden');
     introT = 0;
 }
 document.getElementById('playBtn').addEventListener('click', play);
+
+// ---------- Profile screen ----------
+const profileScreen = document.getElementById('profileScreen'), profMsg = document.getElementById('profMsg');
+const profileChip = document.getElementById('profileChip');
+function switchTo(name) { sessionStorage.setItem('stickFighterProfile', name); location.reload(); }
+function profForm(fields, button, onSubmit) {
+    const f = document.getElementById('profForm');
+    f.innerHTML = fields.map(([id, ph, type]) => `<input id="${id}" placeholder="${ph}" type="${type || 'text'}" maxlength="16">`).join('')
+                + `<button>${button}</button>`;
+    const go = () => onSubmit(Object.fromEntries(fields.map(([id]) => [id, document.getElementById(id).value])));
+    f.querySelector('button').onclick = go;
+    f.querySelectorAll('input').forEach(i => i.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') go(); });
+    f.querySelector('input').focus();
+}
+function renderProfiles() {
+    const list = document.getElementById('profList');
+    list.replaceChildren();
+    profMsg.textContent = profiles.length ? '' : 'Make a profile to start playing.';
+    document.getElementById('profForm').replaceChildren();
+    for (const p of profiles) {
+        const row = document.createElement('div');
+        row.className = 'prof';
+        row.innerHTML = `<button class="pick">👤 ${p.name}</button><button class="del" title="Delete this profile">delete</button>`;
+        row.querySelector('.pick').onclick = () => {
+            list.querySelectorAll('.pick').forEach(b => b.classList.remove('on'));
+            row.querySelector('.pick').classList.add('on');
+            profMsg.textContent = '';
+            profForm([['pw', `${p.name}'s password`, 'password']], 'Sign in', async ({ pw }) => {
+                if (await hashPassword(p.name, pw) === p.hash) switchTo(p.name);
+                else profMsg.textContent = 'Wrong password.';
+            });
+        };
+        row.querySelector('.del').onclick = () => {
+            profMsg.textContent = `Deleting ${p.name} erases all of their progress.`;
+            profForm([['pw', `${p.name}'s password to confirm`, 'password']], `Delete ${p.name}`, async ({ pw }) => {
+                if (await hashPassword(p.name, pw) !== p.hash) { profMsg.textContent = 'Wrong password.'; return; }
+                for (const k of Object.keys(localStorage)) if (k.startsWith(`sf:${p.name}:`)) localStorage.removeItem(k);
+                profiles = profiles.filter(x => x !== p);
+                localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
+                if (currentProfile === p.name) sessionStorage.removeItem('stickFighterProfile');
+                renderProfiles();
+            });
+        };
+        list.append(row);
+    }
+}
+document.getElementById('profNew').addEventListener('click', () => {
+    document.querySelectorAll('#profList .pick').forEach(b => b.classList.remove('on'));
+    profMsg.textContent = '';
+    profForm([['nm', 'Name'], ['pw', 'Password', 'password'], ['pw2', 'Password again', 'password']], 'Create profile', async ({ nm, pw, pw2 }) => {
+        const name = nm.trim();
+        if (!name) { profMsg.textContent = 'Pick a name.'; return; }
+        if (profiles.some(p => p.name.toLowerCase() === name.toLowerCase())) { profMsg.textContent = 'That name is taken.'; return; }
+        if (pw.length < 3) { profMsg.textContent = 'Password needs at least 3 characters.'; return; }
+        if (pw !== pw2) { profMsg.textContent = 'The passwords don\'t match.'; return; }
+        // the very first profile takes over any progress saved before profiles existed
+        if (!profiles.length) for (const k of Object.keys(localStorage))
+            if (k.startsWith('stickFighter') && k !== PROFILES_KEY) { localStorage.setItem(`sf:${name}:${k}`, localStorage.getItem(k)); localStorage.removeItem(k); }
+        profiles.push({ name, hash: await hashPassword(name, pw) });
+        localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
+        switchTo(name);
+    });
+});
+if (signedIn) {
+    profileChip.textContent = `👤 ${currentProfile} · switch`;
+    profileChip.classList.remove('hidden');
+    profileChip.onclick = () => { sessionStorage.removeItem('stickFighterProfile'); location.reload(); };
+} else {
+    renderProfiles();
+    profileScreen.classList.remove('hidden');
+}
 addEventListener('keydown', e => {
     if (e.code === 'Enter' && introT < 0) play();
 });
@@ -3438,19 +3565,19 @@ document.getElementById('resetBtn').addEventListener('click', () => resetScreen.
 document.getElementById('resetCancel').addEventListener('click', () => resetScreen.classList.add('hidden'));
 document.getElementById('resetConfirm').addEventListener('click', () => {
     gemTotal = 0;
-    localStorage.removeItem('stickFighterGems');
-    localStorage.removeItem('stickFighterImpossibleBest');
-    localStorage.removeItem('stickFighterAdaptiveBest');
-    localStorage.removeItem('stickFighterLevel');
-    localStorage.removeItem('stickFighterCombos');
-    localStorage.removeItem('stickFighterLoadout');
-    localStorage.removeItem('stickFighterOwned');
-    localStorage.removeItem('stickFighterPaid');
-    localStorage.removeItem('stickFighterSoldStarters');
-    localStorage.removeItem('stickFighterKnown');
-    localStorage.removeItem('stickFighterKeyCodes');
-    localStorage.removeItem('stickFighterUpgrades');
-    localStorage.removeItem('stickFighterUpSpent');
+    store.removeItem('stickFighterGems');
+    store.removeItem('stickFighterImpossibleBest');
+    store.removeItem('stickFighterAdaptiveBest');
+    store.removeItem('stickFighterLevel');
+    store.removeItem('stickFighterCombos');
+    store.removeItem('stickFighterLoadout');
+    store.removeItem('stickFighterOwned');
+    store.removeItem('stickFighterPaid');
+    store.removeItem('stickFighterSoldStarters');
+    store.removeItem('stickFighterKnown');
+    store.removeItem('stickFighterKeyCodes');
+    store.removeItem('stickFighterUpgrades');
+    store.removeItem('stickFighterUpSpent');
     upgrades = {}; upSpent = {};
     customKeys = {};
     Object.assign(SLOT_KEYS, DEFAULT_SLOT_KEYS);
@@ -3459,7 +3586,7 @@ document.getElementById('resetConfirm').addEventListener('click', () => {
     paid = {};
     ownedExtra = [];
     loadout = { ...DEFAULT_LOADOUT };
-    localStorage.removeItem('stickFighterSlots');
+    store.removeItem('stickFighterSlots');
     slotCount = 4;
     unlockedCombos = [];
     playerLevel = 3;
@@ -3566,7 +3693,7 @@ function openMovePage(slot) {
         ctx = keep;
         if (!taken) tile.onclick = () => {
             loadout[slot] = other;
-            localStorage.setItem('stickFighterLoadout', JSON.stringify(loadout));
+            store.setItem('stickFighterLoadout', JSON.stringify(loadout));
             openMovePage(slot);
         };
         list.append(tile);
@@ -3586,8 +3713,8 @@ const buyScreen = document.getElementById('buyScreen');
 // one confirm box for everything you can buy (slots, moves)
 let onPurchase = null;
 // What you paid for each move or combo you bought, so selling gives the exact amount back.
-let paid = JSON.parse(localStorage.getItem('stickFighterPaid') || '{}');
-const savePaid = () => localStorage.setItem('stickFighterPaid', JSON.stringify(paid));
+let paid = JSON.parse(store.getItem('stickFighterPaid') || '{}');
+const savePaid = () => store.setItem('stickFighterPaid', JSON.stringify(paid));
 // A combo you found in a fight was free, so it sells for the value of its moves. Once sold you
 // can't find it again; you keep seeing it, and buy it back for that same value.
 const baseRefund = id => id in paid ? paid[id] : comboById(id) ? comboValue(comboById(id)) : PRICE[id] ?? 0;
@@ -3604,19 +3731,19 @@ function sellItem(id) {
         -amount, () => {
             if (combo) {
                 unlockedCombos = unlockedCombos.filter(x => x !== id);
-                knownCombos.push(id); localStorage.setItem('stickFighterKnown', JSON.stringify(knownCombos));
+                knownCombos.push(id); store.setItem('stickFighterKnown', JSON.stringify(knownCombos));
             }
             else if (STARTER_MOVES.includes(id)) soldStarters.push(id);
             else ownedExtra = ownedExtra.filter(x => x !== id);
-            localStorage.setItem('stickFighterSoldStarters', JSON.stringify(soldStarters));
+            store.setItem('stickFighterSoldStarters', JSON.stringify(soldStarters));
             delete paid[id]; savePaid();
             delete upgrades[id]; delete upSpent[id];
-            localStorage.setItem('stickFighterUpgrades', JSON.stringify(upgrades));
-            localStorage.setItem('stickFighterUpSpent', JSON.stringify(upSpent));
+            store.setItem('stickFighterUpgrades', JSON.stringify(upgrades));
+            store.setItem('stickFighterUpSpent', JSON.stringify(upSpent));
             for (const sl of ownedSlots()) if (loadout[sl] === id) loadout[sl] = null;
-            localStorage.setItem('stickFighterCombos', JSON.stringify(unlockedCombos));
-            localStorage.setItem('stickFighterOwned', JSON.stringify(ownedExtra));
-            localStorage.setItem('stickFighterLoadout', JSON.stringify(loadout));
+            store.setItem('stickFighterCombos', JSON.stringify(unlockedCombos));
+            store.setItem('stickFighterOwned', JSON.stringify(ownedExtra));
+            store.setItem('stickFighterLoadout', JSON.stringify(loadout));
             // refresh whichever page you sold from, keeping your place
             if (!collScreen.classList.contains('hidden')) { const top = collScreen.scrollTop; openCollection(); collScreen.scrollTop = top; }
             else { const top = libScreen.scrollTop; renderLib(true); libScreen.scrollTop = top; }
@@ -3637,7 +3764,7 @@ function openPurchase(title, text, price, onBuy) {
         if (selling) awardGems(-price, document.getElementById('buyPrice'));   // gems fly to your counter
         else {
             gemTotal -= price;
-            localStorage.setItem('stickFighterGems', gemTotal);
+            store.setItem('stickFighterGems', gemTotal);
             showWallet();
             for (const c of ['jade', 'sapphire', 'ruby']) bump(document.getElementById('cur-' + c));
         }
@@ -3652,17 +3779,17 @@ function openBuy() {
         nextSlotPrice(), () => {
             loadout[slot] = null;
             slotCount++;
-            localStorage.setItem('stickFighterSlots', slotCount);
-            localStorage.setItem('stickFighterLoadout', JSON.stringify(loadout));
+            store.setItem('stickFighterSlots', slotCount);
+            store.setItem('stickFighterLoadout', JSON.stringify(loadout));
         });
 }
 function buyMove(id) {
     openPurchase(`Buy ${itemName(id)}?`, `${MOVE_INFO[id].path.join(' › ')}<br>${MOVE_INFO[id].desc}`, PRICE[id], () => {
         if (STARTER_MOVES.includes(id)) soldStarters = soldStarters.filter(x => x !== id);
         else ownedExtra.push(id);
-        localStorage.setItem('stickFighterSoldStarters', JSON.stringify(soldStarters));
+        store.setItem('stickFighterSoldStarters', JSON.stringify(soldStarters));
         paid[id] = PRICE[id]; savePaid();
-        localStorage.setItem('stickFighterOwned', JSON.stringify(ownedExtra));
+        store.setItem('stickFighterOwned', JSON.stringify(ownedExtra));
         const top = libScreen.scrollTop;
         renderLib(true);
         libScreen.scrollTop = top;
@@ -3766,8 +3893,8 @@ function libComboCardInner(c) {
         ctx = keep;
         el.dataset.price = price;
         el.querySelector('.buybtn').onclick = () => openPurchase(`Buy back ${c.name}?`, 'It goes back on your list and you can put it on a key again.', price, () => {
-            knownCombos = knownCombos.filter(x => x !== c.id); localStorage.setItem('stickFighterKnown', JSON.stringify(knownCombos));
-            unlockedCombos.push(c.id); localStorage.setItem('stickFighterCombos', JSON.stringify(unlockedCombos));
+            knownCombos = knownCombos.filter(x => x !== c.id); store.setItem('stickFighterKnown', JSON.stringify(knownCombos));
+            unlockedCombos.push(c.id); store.setItem('stickFighterCombos', JSON.stringify(unlockedCombos));
             paid[c.id] = price; savePaid();
             const top = libScreen.scrollTop; renderLib(true); libScreen.scrollTop = top;
         });
@@ -3789,7 +3916,7 @@ function libComboCardInner(c) {
         price, () => {
             unlockedCombos.push(c.id);
             paid[c.id] = price; savePaid();
-            localStorage.setItem('stickFighterCombos', JSON.stringify(unlockedCombos));
+            store.setItem('stickFighterCombos', JSON.stringify(unlockedCombos));
             const top = libScreen.scrollTop;
             renderLib(true);
             libScreen.scrollTop = top;
@@ -4192,9 +4319,9 @@ function giveChampionPrizes() {
     for (const id of pool.slice(0, P.moves)) { ownedExtra.push(id); got.push(itemName(id)); }
     const cpool = COMBOS.filter(c => !unlockedCombos.includes(c.id) && !BOT_COMBOS.includes(c)).sort(() => Math.random() - 0.5);
     for (const c of cpool.slice(0, P.combos)) { unlockedCombos.push(c.id); knownCombos = knownCombos.filter(x => x !== c.id); got.push('🔗 ' + c.name.toUpperCase()); }
-    localStorage.setItem('stickFighterOwned', JSON.stringify(ownedExtra));
-    localStorage.setItem('stickFighterCombos', JSON.stringify(unlockedCombos));
-    localStorage.setItem('stickFighterKnown', JSON.stringify(knownCombos));
+    store.setItem('stickFighterOwned', JSON.stringify(ownedExtra));
+    store.setItem('stickFighterCombos', JSON.stringify(unlockedCombos));
+    store.setItem('stickFighterKnown', JSON.stringify(knownCombos));
     return got;
 }
 function showBracket(state) {
@@ -4263,12 +4390,12 @@ function openUpgrade(id, refresh) {
             ${lv >= MAX_UP ? '<button disabled>MAX</button>' : `<button${cost > gemTotal ? ' disabled' : ''}>⬆ ${gemsHTML(cost)}</button>`}`;
         if (lv < MAX_UP) row.querySelector('button').onclick = () => {
             if (gemTotal < cost) return;
-            gemTotal -= cost; localStorage.setItem('stickFighterGems', gemTotal);
+            gemTotal -= cost; store.setItem('stickFighterGems', gemTotal);
             showWallet(); for (const c of ['jade', 'sapphire', 'ruby']) bump(document.getElementById('cur-' + c));
             (upgrades[id] = upgrades[id] || {})[u.key] = next;
             upSpent[id] = (upSpent[id] || 0) + cost;
-            localStorage.setItem('stickFighterUpgrades', JSON.stringify(upgrades));
-            localStorage.setItem('stickFighterUpSpent', JSON.stringify(upSpent));
+            store.setItem('stickFighterUpgrades', JSON.stringify(upgrades));
+            store.setItem('stickFighterUpSpent', JSON.stringify(upSpent));
             openUpgrade(id, refresh);
         };
         rows.append(row);
@@ -4341,7 +4468,7 @@ function dropOn(card, slot) {
         if (from === slot) return;
         if (from) { loadout[slot] = loadout[from] || null; loadout[from] = here; }   // swap the two keys
         else loadout[slot] = dragging.item;                         // put it on this key (what was here comes off)
-        localStorage.setItem('stickFighterLoadout', JSON.stringify(loadout));
+        store.setItem('stickFighterLoadout', JSON.stringify(loadout));
         const top = collScreen.scrollTop; openCollection(); collScreen.scrollTop = top;
     });
 }

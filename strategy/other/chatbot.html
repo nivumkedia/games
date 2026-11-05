@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sunny Bot</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: linear-gradient(160deg, #fff8e1 0%, #e3f2fd 100%);
+    height: 100vh; display: flex; justify-content: center; align-items: center;
+    color: #263238;
+  }
+  .app {
+    width: min(760px, 96vw); height: min(860px, 94vh);
+    background: #fff; border-radius: 22px; overflow: hidden;
+    box-shadow: 0 12px 40px rgba(33, 150, 243, 0.18);
+    display: flex; flex-direction: column;
+  }
+  header {
+    background: linear-gradient(90deg, #ffb300, #ff8f00);
+    color: #fff; padding: 14px 20px; display: flex; align-items: center; gap: 12px;
+  }
+  .avatar { font-size: 34px; }
+  header h1 { font-size: 22px; }
+  header p { font-size: 13px; opacity: .9; }
+  header .spacer { flex: 1; }
+  header button {
+    background: rgba(255,255,255,.25); border: none; color: #fff; padding: 8px 14px;
+    border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px;
+  }
+  header button:hover { background: rgba(255,255,255,.4); }
+  #chat { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; background: #fafcff; }
+  .msg { max-width: 78%; padding: 10px 14px; border-radius: 16px; line-height: 1.45; white-space: pre-wrap; word-wrap: break-word; animation: pop .2s ease-out; }
+  @keyframes pop { from { transform: scale(.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .bot { background: #fff3cd; align-self: flex-start; border-bottom-left-radius: 4px; }
+  .user { background: #2196f3; color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+  .bot.learn { background: #e8f5e9; border: 1px dashed #66bb6a; }
+  .typing { color: #999; font-style: italic; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 20px 0; background: #fff; }
+  .chip {
+    background: #e3f2fd; color: #1565c0; border: none; padding: 6px 12px; border-radius: 999px;
+    cursor: pointer; font-size: 13px;
+  }
+  .chip:hover { background: #bbdefb; }
+  form { display: flex; gap: 10px; padding: 14px 20px 18px; background: #fff; }
+  #input {
+    flex: 1; padding: 12px 16px; border: 2px solid #e0e0e0; border-radius: 14px; font-size: 16px; outline: none;
+  }
+  #input:focus { border-color: #ffb300; }
+  form button {
+    background: #ff8f00; color: #fff; border: none; padding: 0 22px; border-radius: 14px;
+    font-size: 16px; font-weight: 700; cursor: pointer;
+  }
+  form button:hover { background: #ef6c00; }
+  /* Brain panel */
+  #panel {
+    position: fixed; inset: 0; background: rgba(0,0,0,.3); display: none; justify-content: center; align-items: center;
+  }
+  #panel.open { display: flex; }
+  .panel-box {
+    background: #fff; width: min(640px, 94vw); max-height: 86vh; border-radius: 18px; padding: 22px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .panel-box h2 { color: #ef6c00; }
+  .panel-box .row { display: flex; gap: 8px; }
+  .panel-box input { flex: 1; padding: 9px 12px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 14px; }
+  .panel-box button { background: #2196f3; color: #fff; border: none; padding: 9px 14px; border-radius: 10px; cursor: pointer; font-weight: 600; }
+  .panel-box button.gray { background: #90a4ae; }
+  .panel-box button.red { background: #e53935; }
+  #learned { overflow-y: auto; flex: 1; border: 1px solid #eee; border-radius: 10px; min-height: 120px; }
+  .item { display: flex; gap: 10px; padding: 8px 12px; border-bottom: 1px solid #f0f0f0; align-items: center; font-size: 14px; }
+  .item .q { font-weight: 600; color: #1565c0; }
+  .item .a { color: #555; flex: 1; }
+  .item button { padding: 4px 9px; font-size: 12px; }
+  .stats { font-size: 13px; color: #777; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="avatar">🌞</div>
+    <div>
+      <h1>Sunny Bot</h1>
+      <p>I learn from you. Teach me anything!</p>
+    </div>
+    <div class="spacer"></div>
+    <button id="brainBtn">🧠 My Brain</button>
+  </header>
+  <div id="chat"></div>
+  <div class="chips" id="chips"></div>
+  <form id="form">
+    <input id="input" autocomplete="off" placeholder="Say something..." autofocus>
+    <button type="submit">Send</button>
+  </form>
+</div>
+
+<div id="panel">
+  <div class="panel-box">
+    <h2>🧠 Sunny's Brain</h2>
+    <div class="stats" id="stats"></div>
+    <div class="row">
+      <input id="teachQ" placeholder="When someone says...">
+      <input id="teachA" placeholder="Sunny replies...">
+      <button id="teachBtn">Teach</button>
+    </div>
+    <div id="learned"></div>
+    <div class="row">
+      <button class="gray" id="exportBtn">Export</button>
+      <button class="gray" id="importBtn">Import</button>
+      <button class="red" id="wipeBtn">Forget everything I taught</button>
+      <div style="flex:1"></div>
+      <button id="closeBtn">Close</button>
+    </div>
+    <input type="file" id="fileIn" accept=".json" style="display:none">
+  </div>
+</div>
+
+<script>
+// ---------- Built-in training data ----------
+// Each intent: example phrases the bot learns from, and replies to pick from.
+const BASE = [
+  { tag: 'greet', ex: ['hi', 'hello', 'hey', 'yo', 'good morning', 'good afternoon', 'howdy', 'sup', 'hiya'],
+    re: ['Hi{name}! 😊', 'Hello{name}! What do you want to talk about?', 'Hey{name}! Good to see you.'] },
+  { tag: 'bye', ex: ['bye', 'goodbye', 'see you later', 'see ya', 'gotta go', 'good night', 'cya'],
+    re: ['Bye{name}! Come back soon! 👋', 'See you later{name}!', 'Goodbye! Have a sunny day ☀️'] },
+  { tag: 'how', ex: ['how are you', 'how are you doing', 'how is it going', 'whats up', 'how do you feel'],
+    re: ['I\'m great, thanks for asking! How about you?', 'Feeling sunny! ☀️ How are you?', 'Doing awesome! What about you?'] },
+  { tag: 'good', ex: ['i am good', 'im fine', 'i am great', 'good thanks', 'pretty good', 'i am happy', 'awesome'],
+    re: ['Yay, glad to hear it! 🎉', 'Awesome! What have you been up to?', 'Great! Want to hear a joke?'] },
+  { tag: 'bad', ex: ['i am sad', 'i feel bad', 'not good', 'i am tired', 'bad day', 'i am bored', 'i am upset'],
+    re: ['Oh no 😟 Want to talk about it?', 'Sorry to hear that. Want a joke to cheer you up?', 'Sending you a big sunny hug 🤗'] },
+  { tag: 'name', ex: ['what is your name', 'who are you', 'what are you called', 'your name'],
+    re: ['I\'m Sunny Bot! 🌞 A chatbot that learns from you.'] },
+  { tag: 'what', ex: ['what are you', 'are you a robot', 'are you real', 'are you human', 'are you ai'],
+    re: ['I\'m a little chatbot that lives in this web page. I don\'t know everything, but you can teach me!'] },
+  { tag: 'age', ex: ['how old are you', 'what is your age', 'when were you born'],
+    re: ['I was born the first time you opened this page! So pretty young 👶'] },
+  { tag: 'maker', ex: ['who made you', 'who created you', 'who built you', 'who is your creator'],
+    re: ['I was made for Niv\'s Games! 🎮'] },
+  { tag: 'thanks', ex: ['thanks', 'thank you', 'thx', 'ty', 'thanks a lot'],
+    re: ['You\'re welcome! 😊', 'Anytime!', 'No problem!'] },
+  { tag: 'joke', ex: ['tell me a joke', 'joke', 'make me laugh', 'say something funny', 'another joke'],
+    re: [
+      'Why did the scarecrow win an award? Because he was outstanding in his field! 🌾',
+      'Why don\'t skeletons fight each other? They don\'t have the guts. 💀',
+      'What do you call a fake noodle? An impasta! 🍝',
+      'Why did the math book look sad? It had too many problems. 📘',
+      'What do you call a bear with no teeth? A gummy bear! 🐻',
+      'Why can\'t a bicycle stand up by itself? It\'s two tired! 🚲',
+      'What did the ocean say to the beach? Nothing, it just waved. 🌊',
+      'Why did the computer go to the doctor? It had a virus! 💻',
+      'How does a penguin build its house? Igloos it together! 🐧',
+      'What do you call a sleeping dinosaur? A dino-snore! 🦖'
+    ] },
+  { tag: 'fact', ex: ['tell me a fact', 'fun fact', 'teach me something', 'tell me something cool', 'did you know'],
+    re: [
+      'Octopuses have three hearts and blue blood! 🐙',
+      'Honey never spoils. People found 3000-year-old honey in Egyptian tombs that was still good! 🍯',
+      'A day on Venus is longer than a year on Venus. 🪐',
+      'Bananas are berries, but strawberries are not! 🍌',
+      'Sharks existed before trees did. 🦈',
+      'There are more stars in the universe than grains of sand on every beach on Earth. ✨',
+      'A group of flamingos is called a flamboyance. 🦩',
+      'Your brain uses about 20% of your body\'s energy. 🧠',
+      'Lightning is five times hotter than the surface of the sun. ⚡',
+      'Wombat poop is cube-shaped! 🟫'
+    ] },
+  { tag: 'game', ex: ['what games are there', 'what games do you have', 'recommend a game', 'i want to play a game', 'what should i play'],
+    re: ['Try Pulse Runner, Stick Fighter, Tower Defense, 2048, or City Builder! 🎮', 'How about Block Blast or Fruit Ninja? 🍉', 'Racing Game and Turbo Clash 2 are fun if you like speed! 🏎️'] },
+  { tag: 'color', ex: ['what is your favorite color', 'favorite colour', 'what color do you like'],
+    re: ['Sunny yellow, of course! 💛'] },
+  { tag: 'food', ex: ['what is your favorite food', 'what do you eat', 'are you hungry', 'favorite food'],
+    re: ['I eat words for breakfast! 📖 But pizza looks pretty good 🍕'] },
+  { tag: 'love', ex: ['i love you', 'you are cool', 'you are awesome', 'you are smart', 'i like you', 'you are the best'],
+    re: ['Aww, thank you! You\'re awesome too! 💛', 'That made my day! ☀️'] },
+  { tag: 'mean', ex: ['you are dumb', 'you are stupid', 'you are bad', 'i hate you', 'you suck'],
+    re: ['Aw 😢 I\'m still learning! Teach me something and I\'ll get smarter.', 'Sorry! Use the 🧠 button to teach me better answers.'] },
+  { tag: 'help', ex: ['help', 'what can you do', 'how do you work', 'what do you know', 'commands'],
+    re: ['I can:\n• Chat and tell jokes and facts\n• Do math (try "what is 12 * 7")\n• Tell the time and date\n• Flip a coin or roll a dice\n• Remember your name ("my name is ...")\n• LEARN! If I don\'t know something, tell me the answer and I\'ll remember it.\n• Teach me directly: "teach: question = answer"'] },
+  { tag: 'weather', ex: ['what is the weather', 'is it raining', 'is it sunny outside', 'weather today'],
+    re: ['I can\'t see outside 🙈 but in here it\'s always sunny! ☀️'] },
+  { tag: 'yes', ex: ['yes', 'yeah', 'yep', 'sure', 'ok', 'okay'],
+    re: ['Cool! 😄', 'Okay!', 'Great!'] },
+  { tag: 'no', ex: ['no', 'nope', 'nah', 'no thanks'],
+    re: ['Okay, no problem!', 'Alright!'] },
+  { tag: 'lol', ex: ['lol', 'haha', 'lmao', 'hahaha', 'that is funny'],
+    re: ['😂 Glad you liked it!', 'Hehe 😄'] },
+  { tag: 'animal', ex: ['what is your favorite animal', 'do you like animals', 'do you have a pet'],
+    re: ['I love cats 🐱 and dogs 🐶 equally! Also octopuses, they\'re so smart.'] },
+  { tag: 'sport', ex: ['do you like sports', 'what is your favorite sport', 'do you play soccer'],
+    re: ['I\'d play soccer ⚽ but I don\'t have legs. I cheer really loudly though!'] },
+  { tag: 'meaning', ex: ['what is the meaning of life', 'why are we here'],
+    re: ['42! 😄 Or maybe: have fun, be kind, and keep learning.'] },
+  { tag: 'rps', ex: ['rock paper scissors', 'play rock paper scissors', 'lets play a game'],
+    re: ['Let\'s play! Type rock, paper, or scissors ✊✋✌️'] },
+];
+
+// ---------- Text processing ----------
+function stem(w) {
+  if (w.length > 5 && w.endsWith('ing')) return w.slice(0, -3);
+  if (w.length > 4 && w.endsWith('ed')) return w.slice(0, -2);
+  if (w.length > 3 && w.endsWith('s') && !w.endsWith('ss')) return w.slice(0, -1);
+  return w;
+}
+const ALIAS = { u: 'you', ur: 'your', r: 'are', im: 'i', "i'm": 'i', whats: 'what', "what's": 'what', pls: 'please', plz: 'please', colour: 'color', wanna: 'want' };
+function tokens(text) {
+  return text.toLowerCase().replace(/[^a-z0-9'\s]/g, ' ').split(/\s+/).filter(Boolean)
+    .map(w => ALIAS[w] || w).map(w => w.replace(/'/g, '')).map(stem);
+}
+
+// ---------- Memory ----------
+const STORE = 'sunnybot_brain_v1';
+let mem = JSON.parse(localStorage.getItem(STORE) || 'null') || { learned: [], name: '', chats: 0 };
+function save() { localStorage.setItem(STORE, JSON.stringify(mem)); }
+
+// ---------- Model: TF-IDF vectors over every training example ----------
+let docs = [], idf = {};
+function train() {
+  docs = [];
+  BASE.forEach(it => it.ex.forEach(e => docs.push({ toks: tokens(e), intent: it })));
+  mem.learned.forEach((l, i) => docs.push({ toks: tokens(l.q), learned: l, idx: i }));
+  const df = {};
+  docs.forEach(d => new Set(d.toks).forEach(t => df[t] = (df[t] || 0) + 1));
+  idf = {};
+  for (const t in df) idf[t] = Math.log(1 + docs.length / df[t]);
+  docs.forEach(d => { d.vec = vectorize(d.toks); });
+}
+function vectorize(toks) {
+  const v = {};
+  toks.forEach(t => v[t] = (v[t] || 0) + (idf[t] || Math.log(1 + docs.length)));
+  let n = 0; for (const t in v) n += v[t] * v[t];
+  n = Math.sqrt(n) || 1;
+  for (const t in v) v[t] /= n;
+  return v;
+}
+function cosine(a, b) { let s = 0; for (const t in a) if (b[t]) s += a[t] * b[t]; return s; }
+// Filler words: a match must share at least one real word, not just "what is the"
+const FILLER = new Set('a an the is are am was be do doe did i you your my me it its to of in on at for and or what who how why when where can could would will should that this there tell say please some about with like want'.split(' ').map(stem));
+function bestMatch(text) {
+  const qt = tokens(text);
+  const v = vectorize(qt);
+  const content = qt.filter(t => !FILLER.has(t));
+  let best = null, score = 0;
+  docs.forEach(d => {
+    if (content.length && !content.some(t => d.toks.includes(t))) return;
+    let s = cosine(v, d.vec);
+    if (d.learned) s += 0.02; // your teaching wins ties
+    if (s > score) { score = s; best = d; }
+  });
+  return { best, score };
+}
+
+// ---------- Skills ----------
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+// Safe math parser (no eval)
+function tryMath(text) {
+  let s = text.toLowerCase()
+    .replace(/what('s| is)|calculate|solve|equals|=|\?/g, ' ')
+    .replace(/plus/g, '+').replace(/minus/g, '-').replace(/times|multiplied by|x(?=\s*\d)/g, '*')
+    .replace(/divided by|over/g, '/').replace(/to the power of|squared/g, m => m === 'squared' ? '^2' : '^')
+    .replace(/\s+/g, '');
+  if (!/^[\d.+\-*/^()%]+$/.test(s) || !/\d/.test(s) || !/[+\-*/^%]/.test(s)) return null;
+  let i = 0;
+  const peek = () => s[i];
+  function num() {
+    if (peek() === '(') { i++; const v = expr(); if (s[i] !== ')') throw 0; i++; return v; }
+    if (peek() === '-') { i++; return -factor(); }
+    const m = s.slice(i).match(/^\d*\.?\d+/); if (!m) throw 0; i += m[0].length; return parseFloat(m[0]);
+  }
+  function factor() { let b = num(); if (peek() === '^') { i++; return Math.pow(b, factor()); } return b; }
+  function term() { let v = factor(); while ('*/%'.includes(peek()) && peek()) { const o = s[i++]; const r = factor(); v = o === '*' ? v * r : o === '/' ? v / r : v % r; } return v; }
+  function expr() { let v = term(); while ((peek() === '+' || peek() === '-')) { const o = s[i++]; const r = term(); v = o === '+' ? v + r : v - r; } return v; }
+  try {
+    const v = expr(); if (i !== s.length || !isFinite(v)) return null;
+    return `${+v.toFixed(8)} 🧮`;
+  } catch { return null; }
+}
+
+let rpsMode = false;
+function skills(text) {
+  const t = text.toLowerCase().trim();
+
+  // Direct teaching: "teach: question = answer"
+  const tm = text.match(/^teach\s*:?\s*(.+?)\s*=\s*(.+)$/i);
+  if (tm) { learn(tm[1], tm[2]); return { text: `Got it! When someone says "${tm[1]}", I'll say "${tm[2]}". 🧠`, learn: true }; }
+
+  const nm = text.match(/(?:my name is|call me|i am called)\s+([a-z][a-z\s'-]{0,20})/i);
+  if (nm) { mem.name = nm[1].trim().replace(/\b\w/g, c => c.toUpperCase()); save(); return { text: `Nice to meet you, ${mem.name}! I'll remember that. 😊` }; }
+  if (/what'?s my name|what is my name|do you know my name|who am i/.test(t))
+    return { text: mem.name ? `You're ${mem.name}! 😄` : 'I don\'t know yet! Tell me: "my name is ..."' };
+
+  if (rpsMode && /^(rock|paper|scissors)$/.test(t)) {
+    rpsMode = false;
+    const me = pick(['rock', 'paper', 'scissors']);
+    const em = { rock: '✊', paper: '✋', scissors: '✌️' };
+    const win = { rock: 'scissors', paper: 'rock', scissors: 'paper' };
+    const res = me === t ? 'Tie! 🤝' : win[t] === me ? 'You win! 🎉' : 'I win! 😎';
+    return { text: `I picked ${me} ${em[me]}. ${res}` };
+  }
+
+  if (/\b(what time|the time|time is it)\b/.test(t)) return { text: `It's ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} ⏰` };
+  if (/\b(what day|the date|today's date|what is today|date today)\b/.test(t))
+    return { text: `Today is ${new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} 📅` };
+  if (/flip a coin|coin flip|heads or tails/.test(t)) return { text: `${pick(['Heads', 'Tails'])}! 🪙` };
+  if (/roll (a )?(dice|die)/.test(t)) return { text: `You rolled a ${1 + Math.floor(Math.random() * 6)}! 🎲` };
+  const rn = t.match(/random number(?: between| from)? (\d+) (?:and|to) (\d+)/);
+  if (rn) { const a = +rn[1], b = +rn[2]; return { text: `${Math.min(a, b) + Math.floor(Math.random() * (Math.abs(b - a) + 1))} 🎯` }; }
+
+  const m = tryMath(text);
+  if (m) return { text: m };
+  return null;
+}
+
+// ---------- Learning ----------
+let pendingQuestion = null;
+function learn(q, a) {
+  const key = tokens(q).join(' ');
+  const existing = mem.learned.find(l => tokens(l.q).join(' ') === key);
+  if (existing) existing.a = a; else mem.learned.push({ q, a });
+  save(); train(); renderBrain();
+}
+
+function reply(text) {
+  mem.chats++; save();
+  if (pendingQuestion) {
+    const q = pendingQuestion; pendingQuestion = null;
+    if (/^(skip|never ?mind|idk|i don'?t know|no)$/i.test(text.trim())) return { text: 'Okay, no worries! Ask me something else.' };
+    learn(q, text);
+    return { text: `Thanks! I learned that. Next time someone says "${q}", I'll answer that. 🧠✨`, learn: true };
+  }
+  const sk = skills(text);
+  if (sk) return sk;
+
+  const { best, score } = bestMatch(text);
+  if (best && score >= 0.45) {
+    if (best.intent && best.intent.tag === 'rps') rpsMode = true;
+    const r = best.learned ? best.learned.a : pick(best.intent.re);
+    return { text: r.replace('{name}', mem.name ? ', ' + mem.name : '') };
+  }
+  // Don't know: ask to be taught
+  pendingQuestion = text;
+  const guess = best && score >= 0.25 ? ` (Did you mean something like "${best.learned ? best.learned.q : best.intent.ex[0]}"?)` : '';
+  return { text: `Hmm, I don't know that one yet${guess}.\nWhat should I say when someone says "${text}"? (or type "skip")`, learn: true };
+}
+
+// ---------- UI ----------
+const chat = document.getElementById('chat');
+const input = document.getElementById('input');
+function addMsg(text, who, learnStyle) {
+  const d = document.createElement('div');
+  d.className = 'msg ' + who + (learnStyle ? ' learn' : '');
+  d.textContent = text;
+  chat.appendChild(d);
+  chat.scrollTop = chat.scrollHeight;
+  return d;
+}
+function send(text) {
+  text = text.trim(); if (!text) return;
+  addMsg(text, 'user');
+  input.value = '';
+  const t = addMsg('Sunny is typing...', 'bot');
+  t.classList.add('typing');
+  setTimeout(() => {
+    t.remove();
+    const r = reply(text);
+    addMsg(r.text, 'bot', r.learn);
+  }, 350 + Math.random() * 400);
+}
+document.getElementById('form').addEventListener('submit', e => { e.preventDefault(); send(input.value); });
+
+const CHIPS = ['Tell me a joke', 'Fun fact', 'What is 25 * 4', 'What can you do?', 'Flip a coin', 'Rock paper scissors'];
+const chips = document.getElementById('chips');
+CHIPS.forEach(c => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = c; b.onclick = () => send(c); chips.appendChild(b); });
+
+// Brain panel
+const panel = document.getElementById('panel');
+function renderBrain() {
+  const box = document.getElementById('learned');
+  box.innerHTML = '';
+  document.getElementById('stats').textContent =
+    `Built-in knowledge: ${BASE.length} topics · Things you taught me: ${mem.learned.length} · Messages: ${mem.chats}`;
+  if (!mem.learned.length) { box.innerHTML = '<div class="item" style="color:#999">Nothing taught yet. Teach me above, or just chat!</div>'; return; }
+  mem.learned.slice().reverse().forEach((l, ri) => {
+    const i = mem.learned.length - 1 - ri;
+    const row = document.createElement('div'); row.className = 'item';
+    const q = document.createElement('span'); q.className = 'q'; q.textContent = l.q;
+    const a = document.createElement('span'); a.className = 'a'; a.textContent = '→ ' + l.a;
+    const del = document.createElement('button'); del.className = 'red'; del.textContent = 'Forget';
+    del.onclick = () => { mem.learned.splice(i, 1); save(); train(); renderBrain(); };
+    row.append(q, a, del); box.appendChild(row);
+  });
+}
+document.getElementById('brainBtn').onclick = () => { renderBrain(); panel.classList.add('open'); };
+document.getElementById('closeBtn').onclick = () => panel.classList.remove('open');
+panel.onclick = e => { if (e.target === panel) panel.classList.remove('open'); };
+document.getElementById('teachBtn').onclick = () => {
+  const q = document.getElementById('teachQ'), a = document.getElementById('teachA');
+  if (q.value.trim() && a.value.trim()) { learn(q.value.trim(), a.value.trim()); q.value = ''; a.value = ''; }
+};
+document.getElementById('exportBtn').onclick = () => {
+  const blob = new Blob([JSON.stringify(mem.learned, null, 2)], { type: 'application/json' });
+  const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'sunny-brain.json'; link.click();
+};
+document.getElementById('importBtn').onclick = () => document.getElementById('fileIn').click();
+document.getElementById('fileIn').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  f.text().then(txt => {
+    try {
+      const arr = JSON.parse(txt);
+      arr.forEach(l => { if (l.q && l.a) learn(l.q, l.a); });
+      alert(`Imported ${arr.length} things!`);
+    } catch { alert('That file didn\'t work.'); }
+  });
+};
+document.getElementById('wipeBtn').onclick = () => {
+  if (confirm('Forget everything you taught Sunny?')) { mem.learned = []; save(); train(); renderBrain(); }
+};
+
+train();
+addMsg(mem.name ? `Welcome back, ${mem.name}! ☀️ What's up?` : 'Hi! I\'m Sunny Bot 🌞\nI\'m a learning chatbot. If I don\'t know something, tell me the answer and I\'ll remember it forever!\nType "help" to see what I can do.', 'bot');
+</script>
+</body>
+</html>

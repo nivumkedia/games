@@ -1,0 +1,2592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Python Editor</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/comment/comment.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"></script>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.28.3/full/pyodide.js"></script>
+<style>
+  :root {
+    --bg: #f4f7fb; --panel: #ffffff; --border: #dde3ec; --text: #1f2933;
+    --muted: #6b7785; --accent: #3b82f6; --accent-d: #2563eb; --green: #16a34a;
+    --red: #dc2626; --tab: #eef2f7;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+  body { display: flex; flex-direction: column; }
+
+  header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0 12px 0 0; display: flex; align-items: center; gap: 8px; }
+  header h1 .logo { width: 26px; height: 26px; border-radius: 6px; background: linear-gradient(135deg,#3776ab 50%,#ffd43b 50%); }
+  .status { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #f59e0b; }
+  .dot.ready { background: var(--green); }
+  .dot.busy { background: var(--accent); animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .spacer { flex: 1; }
+
+  button, select { font: inherit; font-size: 14px; border: 1px solid var(--border); background: var(--panel); color: var(--text); padding: 7px 12px; border-radius: 8px; cursor: pointer; }
+  button:hover { background: var(--tab); }
+  button.primary { background: var(--green); color: #fff; border-color: var(--green); font-weight: 600; padding: 7px 18px; }
+  button.primary:hover { filter: brightness(1.08); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+
+  main { flex: 1; display: flex; min-height: 0; }
+  .left { flex: 1.3; display: flex; flex-direction: column; min-width: 0; border-right: 1px solid var(--border); }
+  .right { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+  .tabs { display: flex; align-items: flex-end; gap: 2px; padding: 6px 8px 0; background: var(--tab); border-bottom: 1px solid var(--border); overflow-x: auto; }
+  .tab { padding: 7px 12px; border: 1px solid transparent; border-bottom: none; border-radius: 8px 8px 0 0; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 8px; white-space: nowrap; color: var(--muted); }
+  .tab.active { background: var(--panel); border-color: var(--border); color: var(--text); margin-bottom: -1px; }
+  .tab .x { opacity: .4; font-size: 14px; }
+  .tab .x:hover { opacity: 1; color: var(--red); }
+  .tab.add { color: var(--accent); font-weight: 700; }
+
+  .editor-wrap { flex: 1; min-height: 0; background: var(--panel); }
+  .CodeMirror { height: 100%; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 14px; line-height: 1.55; }
+  .CodeMirror-gutters { background: #fafbfd; border-right: 1px solid var(--border); }
+  .CodeMirror-activeline-background { background: #f2f7ff; }
+
+  .panel-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--tab); border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 600; color: var(--muted); }
+  .panel-head button { padding: 4px 10px; font-size: 12px; }
+  #console { flex: 1; overflow-y: auto; padding: 12px 14px; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; background: var(--panel); }
+  #console .err { color: var(--red); }
+  #console .info { color: var(--muted); font-style: italic; }
+  #console .echo { color: var(--accent-d); }
+  #console .in { color: var(--green); font-weight: 600; }
+  #console img { max-width: 100%; border: 1px solid var(--border); border-radius: 8px; margin: 6px 0; display: block; }
+
+  .repl { display: flex; align-items: center; border-top: 1px solid var(--border); background: #fafbfd; }
+  .repl span { padding: 0 6px 0 12px; color: var(--accent); font-family: monospace; font-weight: 700; }
+  .repl input { flex: 1; border: none; background: transparent; padding: 10px 8px; font-family: "SF Mono", Menlo, monospace; font-size: 13.5px; outline: none; }
+
+  .pip { display: flex; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--border); background: var(--tab); }
+  .pip input { flex: 1; border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-family: monospace; font-size: 13px; }
+
+  .hint { font-size: 12px; color: var(--muted); }
+  kbd { background: var(--tab); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 11px; }
+
+  @media (max-width: 800px) { main { flex-direction: column; } .left { border-right: none; border-bottom: 1px solid var(--border); flex: 1.2; } }
+
+  .learn-btn { background: #fff7e0; border-color: #f5c94a; font-weight: 600; }
+  .learn-btn:hover { background: #ffefbf; }
+  .learn { width: 410px; flex-shrink: 0; display: flex; flex-direction: column; background: #fffdf7; border-right: 1px solid var(--border); min-height: 0; }
+  .learn[hidden] { display: none; }
+  .learn-head { padding: 10px 14px; border-bottom: 1px solid var(--border); background: #fff7e0; }
+  .learn-top { display: flex; align-items: center; gap: 8px; }
+  .learn-top button { padding: 2px 8px; font-size: 13px; }
+  .dots span.gate { border-radius: 6px; border-color: #f59e0b; color: #b45309; font-weight: 700; }
+  .dots span.locked { opacity: .45; cursor: not-allowed; background: #f3f4f6; }
+  .learn-body .project { background: #fff1f2; border-color: #fda4af; }
+  .feedback pre { background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; margin: 4px 0; font-weight: 400; font-size: 12.5px; white-space: pre; overflow-x: auto; }
+  .feedback .diffline { background: #fecaca; display: inline-block; min-width: 100%; }
+  .feedback .testcase { display: flex; gap: 8px; margin: 6px 0; }
+  .feedback .testcase > div { flex: 1; min-width: 0; }
+  .feedback p { margin: 6px 0; font-weight: 400; }
+  .levels { display: flex; gap: 4px; margin-top: 8px; }
+  .levels button { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: #fff; }
+  .levels button.on { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+  .dots { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+  .dots span { width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 1.5px solid #e5d7a8; font-size: 11px; display: grid; place-items: center; cursor: pointer; color: var(--muted); }
+  .dots span.done { background: #dcfce7; border-color: var(--green); color: var(--green); }
+  .dots span.cur { border-color: var(--accent); background: var(--accent); color: #fff; font-weight: 700; }
+  .learn-body { flex: 1; overflow-y: auto; padding: 14px 18px 20px; font-size: 15px; line-height: 1.6; }
+  .learn-body h2 { font-size: 20px; margin: 4px 0 10px; }
+  .learn-body h3 { font-size: 15px; margin: 18px 0 6px; }
+  .learn-body p { margin: 8px 0; }
+  .learn-body code { background: #eef2f7; padding: 1px 5px; border-radius: 4px; font-family: "SF Mono", Menlo, monospace; font-size: 13px; }
+  .learn-body pre { background: #f4f7fb; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-family: "SF Mono", Menlo, monospace; font-size: 13px; line-height: 1.5; white-space: pre-wrap; margin: 8px 0; }
+  .learn-body .tip { background: #eff6ff; border-left: 4px solid var(--accent); padding: 8px 12px; border-radius: 6px; margin: 10px 0; font-size: 14px; }
+  .learn-body .challenge { background: #fff7e0; border: 1px solid #f5c94a; border-radius: 10px; padding: 10px 14px; margin-top: 16px; }
+  .learn-body .challenge h3 { margin-top: 2px; }
+  .learn-body .row { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 4px; }
+  .learn-body .row button { font-size: 13px; padding: 6px 10px; }
+  .learn-body .go { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .learn-body .go:hover { background: var(--accent-d); }
+  .hintbox { background: #f5f3ff; border-left: 4px solid #8b5cf6; padding: 8px 12px; border-radius: 6px; margin: 8px 0; font-size: 14px; }
+  .feedback { margin-top: 10px; padding: 10px 12px; border-radius: 8px; font-size: 14px; font-weight: 600; }
+  .feedback.good { background: #dcfce7; color: #166534; }
+  .feedback.bad { background: #fef3c7; color: #92400e; }
+  .learn-nav { display: flex; padding: 10px 14px; border-top: 1px solid var(--border); background: #fff7e0; }
+  .learn-nav .next { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+  #console .friendly { display: block; background: #fef3c7; color: #78350f; border-left: 4px solid #f59e0b; padding: 8px 12px; border-radius: 6px; margin: 6px 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 14px; white-space: normal; }
+  @media (max-width: 800px) { .learn { width: 100%; max-height: 45vh; border-right: none; border-bottom: 1px solid var(--border); } }
+
+  button.stop { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; font-weight: 600; }
+  button.stop:hover { background: #fecaca; }
+  #stageWrap { flex: 1.6; min-height: 0; display: flex; align-items: center; justify-content: center; background: #e9eef5; border-bottom: 1px solid var(--border); position: relative; padding: 8px; }
+  #stageWrap[hidden] { display: none; }
+  #stageCanvas { background: #fff; border-radius: 6px; box-shadow: 0 2px 10px rgba(0,0,0,.12); outline: none; }
+  #stageCanvas:focus { box-shadow: 0 0 0 3px var(--accent), 0 2px 10px rgba(0,0,0,.12); }
+  #stageHint { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); background: rgba(31,41,51,.85); color: #fff; padding: 6px 14px; border-radius: 999px; font-size: 13px; pointer-events: none; }
+  #stageHint[hidden] { display: none; }
+  .inline-in { font: inherit; color: var(--green); font-weight: 600; border: none; border-bottom: 2px solid var(--accent); background: #eef6ff; outline: none; padding: 1px 6px; min-width: 180px; border-radius: 4px 4px 0 0; }
+
+  /* ---------- presenting mode ---------- */
+  #presentBar, #presentSplash { display: none; }
+  body.presenting header, body.presenting .left, body.presenting .learn, body.presenting .repl,
+  body.presenting .pip, body.presenting .panel-head { display: none !important; }
+  body.presenting .right { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; padding: 0 32px 28px;
+    background: radial-gradient(1200px 600px at 10% 0%, #e0f2fe 0%, transparent 60%), radial-gradient(900px 600px at 100% 100%, #fef3c7 0%, transparent 60%), linear-gradient(160deg, #f8fbff, #fdf7ff); }
+  body.presenting #presentBar { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 1280px; padding: 18px 0 14px; }
+  body.presenting #presentBar button { font-size: 15px; padding: 9px 18px; border-radius: 999px; }
+  body.presenting #presentBar #pExit { background: rgba(255,255,255,.7); }
+  .ptitle { font-size: 24px; font-weight: 800; letter-spacing: -.3px; color: #1e293b; }
+  body.presenting #stageWrap { flex: 1 1 auto; width: 100%; background: transparent; border: none; padding: 4px; }
+  body.presenting #stageCanvas { border-radius: 16px; box-shadow: 0 24px 60px rgba(30,60,120,.22); }
+  body.presenting #stageCanvas:focus { box-shadow: 0 24px 60px rgba(30,60,120,.22); }
+  body.presenting #console { width: 100%; max-width: 920px; flex: 1 1 auto; background: #fff; border-radius: 20px; box-shadow: 0 16px 50px rgba(30,60,120,.14);
+    padding: 30px 38px; font-size: 21px; line-height: 1.65; margin-top: 6px; }
+  body.presenting.has-stage #console { flex: 0 0 auto; max-height: 22vh; font-size: 16px; padding: 12px 22px; margin-top: 16px; border-radius: 14px; }
+  body.presenting.has-stage #console:empty { display: none; }
+  body.presenting #console .info { display: none; }
+  body.presenting #console img { margin: 10px auto; }
+  body.presenting .inline-in { min-width: 280px; }
+  body.presenting #presentSplash.show { display: flex; position: absolute; inset: 0; z-index: 5; align-items: center; justify-content: center; background: inherit; }
+  #presentSplash .card { background: #fff; border-radius: 28px; padding: 48px 72px 40px; text-align: center; box-shadow: 0 30px 80px rgba(30,60,120,.18); max-width: 90vw; }
+  #presentSplash .emoji { font-size: 56px; }
+  #presentSplash .big-title { font-size: 44px; font-weight: 800; letter-spacing: -.5px; margin: 6px 0 26px; color: #1e293b; }
+  #presentSplash button { font-size: 24px; font-weight: 700; padding: 16px 54px; border-radius: 999px; background: var(--green); color: #fff; border: none; box-shadow: 0 10px 24px rgba(22,163,74,.35); transition: transform .12s; }
+  #presentSplash button:hover { transform: scale(1.05); background: var(--green); }
+  #presentSplash p { color: var(--muted); margin: 18px 0 0; font-size: 15px; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="logo"></span>Python Editor</h1>
+  <div class="status"><span class="dot" id="dot"></span><span id="statusText">Loading Python…</span></div>
+  <div class="spacer"></div>
+  <button id="learnBtn" class="learn-btn">🎓 Learn Python</button>
+  <select id="examples">
+    <option value="">📚 Examples…</option>
+  </select>
+  <button id="openBtn" title="Open a .py file">📂 Open</button>
+  <button id="saveBtn" title="Download this file">💾 Download</button>
+  <button id="presentBtn" title="Show just the output, big and clean">🎬 Present</button>
+  <button id="stopBtn" class="stop" hidden>■ Stop</button>
+  <button id="runBtn" class="primary" disabled>▶ Run</button>
+  <input type="file" id="fileInput" accept=".py,.txt" hidden>
+</header>
+
+<main>
+  <aside class="learn" id="learn" hidden>
+    <div class="learn-head">
+      <div class="learn-top">
+        <strong>🎓 Learn Python</strong>
+        <span id="stepLabel" class="hint"></span>
+        <div class="spacer"></div>
+        <button id="learnClose" title="Hide lessons">✕</button>
+      </div>
+      <div class="levels" id="levels"></div>
+      <div class="dots" id="dots"></div>
+    </div>
+    <div class="learn-body" id="learnBody"></div>
+    <div class="learn-nav">
+      <button id="prevStep">← Back</button>
+      <div class="spacer"></div>
+      <button id="nextStep" class="next">Next →</button>
+    </div>
+  </aside>
+  <section class="left">
+    <div class="tabs" id="tabs"></div>
+    <div class="editor-wrap" id="editorWrap"></div>
+  </section>
+  <section class="right">
+    <div id="presentBar">
+      <span class="ptitle" id="presentTitle"></span>
+      <div class="spacer"></div>
+      <button id="pStop" class="stop" hidden>■ Stop</button>
+      <button id="pRun" class="primary">▶ Run</button>
+      <button id="pExit" title="Exit presenting (Esc)">✕ Exit</button>
+    </div>
+    <div id="presentSplash">
+      <div class="card">
+        <div class="emoji">🎮</div>
+        <div class="big-title" id="splashTitle"></div>
+        <button id="splashRun">▶ Run</button>
+        <p>Press the button (or Enter) to start</p>
+      </div>
+    </div>
+    <div class="panel-head">
+      Output
+      <div class="spacer"></div>
+      <span class="hint"><kbd>⌘/Ctrl</kbd>+<kbd>Enter</kbd> to run</span>
+      <button id="clearBtn">Clear</button>
+    </div>
+    <div id="stageWrap" hidden>
+      <canvas id="stageCanvas" tabindex="0" width="600" height="500"></canvas>
+      <div id="stageHint" hidden>🎮 Click the stage to control it with your keyboard</div>
+    </div>
+    <div id="console"></div>
+    <div class="repl"><span>&gt;&gt;&gt;</span><input id="replInput" placeholder="Type Python here and press Enter (uses variables from your last run)" disabled></div>
+    <div class="pip">
+      <input id="pipInput" placeholder="package name, e.g. numpy, pandas, requests, matplotlib">
+      <button id="pipBtn" disabled>pip install</button>
+    </div>
+  </section>
+</main>
+
+<script type="text/plain" id="kidturtle">
+"""A browser version of Python's turtle module (draws on the Stage canvas)."""
+import math, sys, json
+import js
+
+try:
+    from pyodide.ffi import create_proxy
+except ImportError:  # pragma: no cover
+    create_proxy = lambda f: f
+
+_TS = js.TS
+
+
+def _headless():
+    return getattr(sys, "_turtle_headless", False)
+
+
+def _q(*a):
+    if not _headless():
+        _TS.q(*a)
+
+
+def _proxy(fun):
+    return create_proxy(fun) if fun is not None else None
+
+
+_colormode = [1.0]
+
+
+def _col(args):
+    c = args[0] if len(args) == 1 else args
+    if isinstance(c, str):
+        return c
+    r, g, b = c
+    if _colormode[0] == 1.0:
+        r, g, b = r * 255, g * 255, b * 255
+    return f"rgb({int(r)},{int(g)},{int(b)})"
+
+
+def _yield_frame():
+    y = getattr(sys, "_kid_yield", None)
+    if y:
+        y(True)
+
+
+class Vec2D(tuple):
+    def __new__(cls, x, y):
+        return tuple.__new__(cls, (x, y))
+
+    def __add__(self, o):
+        return Vec2D(self[0] + o[0], self[1] + o[1])
+
+    def __sub__(self, o):
+        return Vec2D(self[0] - o[0], self[1] - o[1])
+
+    def __mul__(self, o):
+        if isinstance(o, (int, float)):
+            return Vec2D(self[0] * o, self[1] * o)
+        return self[0] * o[0] + self[1] * o[1]
+
+    __rmul__ = __mul__
+
+    def __abs__(self):
+        return math.hypot(self[0], self[1])
+
+    def __neg__(self):
+        return Vec2D(-self[0], -self[1])
+
+    def __repr__(self):
+        return "(%.2f,%.2f)" % self
+
+
+class Terminator(Exception):
+    pass
+
+
+class TurtleGraphicsError(Exception):
+    pass
+
+
+class _Screen:
+    def __init__(self):
+        self._w, self._h = 600, 500
+        self._tracer = 1
+        self._bg = "white"
+
+    def setup(self, width=600, height=500, startx=None, starty=None):
+        if isinstance(width, float) and width <= 1:
+            width = int(900 * width)
+        if isinstance(height, float) and height <= 1:
+            height = int(700 * height)
+        self._w, self._h = int(width), int(height)
+        _q("setup", 0, self._w, self._h)
+
+    def screensize(self, canvwidth=None, canvheight=None, bg=None):
+        if canvwidth is None and canvheight is None and bg is None:
+            return (self._w, self._h)
+        if canvwidth and canvheight:
+            self.setup(canvwidth, canvheight)
+        if bg:
+            self.bgcolor(bg)
+
+    def bgcolor(self, *c):
+        if not c:
+            return self._bg
+        self._bg = _col(c)
+        _q("bg", 0, self._bg)
+
+    def bgpic(self, *a):
+        pass
+
+    def title(self, t):
+        _q("title", 0, str(t))
+
+    def tracer(self, n=None, delay=None):
+        if n is None:
+            return self._tracer
+        self._tracer = n
+
+    def update(self):
+        _q("update", 0)
+        _yield_frame()
+
+    def delay(self, d=None):
+        return 0
+
+    def listen(self, *a):
+        if not _headless():
+            _TS.listen()
+
+    def _bindkey(self, kind, fun, key):
+        if _headless():
+            return
+        _TS.bindKey(kind, "" if key is None else str(key), _proxy(fun))
+
+    def onkeypress(self, fun, key=None):
+        self._bindkey("down", fun, key)
+
+    onkey = onkeypress
+
+    def onkeyrelease(self, fun, key=None):
+        self._bindkey("up", fun, key)
+
+    def ontimer(self, fun, t=0):
+        if _headless() or fun is None:
+            return
+        _TS.timer(_proxy(fun), int(t or 0))
+
+    def onscreenclick(self, fun, btn=1, add=None):
+        if not _headless():
+            _TS.bindClick(_proxy(fun))
+
+    onclick = onscreenclick
+
+    def window_width(self):
+        return self._w
+
+    def window_height(self):
+        return self._h
+
+    def mainloop(self):
+        pass
+
+    done = exitonclick = bye = mainloop
+
+    def turtles(self):
+        return list(_all)
+
+    def clear(self):
+        for t in _all:
+            t.clear()
+
+    clearscreen = resetscreen = reset = clear
+
+    def colormode(self, m=None):
+        if m is None:
+            return _colormode[0]
+        _colormode[0] = 255 if m == 255 else 1.0
+
+    def register_shape(self, name, shape=None):
+        pass
+
+    addshape = register_shape
+
+    def getshapes(self):
+        return ["arrow", "blank", "circle", "classic", "square", "triangle", "turtle"]
+
+    def textinput(self, title, prompt):
+        return input(prompt + " ")
+
+    def numinput(self, title, prompt, default=None, minval=None, maxval=None):
+        return float(input(prompt + " "))
+
+    def getcanvas(self):
+        return None
+
+
+_screen = _Screen()
+_all = []
+_ids = [0]
+
+_SPEEDS = {"fastest": 0, "fast": 10, "normal": 6, "slow": 3, "slowest": 1}
+
+
+class Turtle:
+    def __init__(self, shape="classic", undobuffersize=None, visible=True):
+        _ids[0] += 1
+        self._id = _ids[0]
+        _all.append(self)
+        self._x = 0.0
+        self._y = 0.0
+        self._h = 0.0
+        self._pd = True
+        self._pc = "black"
+        self._fc = "black"
+        self._ps = 1
+        self._speed = 3
+        self._vis = visible
+        self._shape = shape
+        self._stretch = (1, 1)
+        self._filling = False
+        self._fillpts = []
+        self._seg_count = 0
+        self._seg_len = 0.0
+        self._stamps = 0
+        _q("new", self._id, shape, 1 if visible else 0)
+
+    # ---- internal ----
+    def _anim(self):
+        return self._speed if (self._speed != 0 and _screen._tracer) else 0
+
+    def _moveto(self, x, y):
+        x, y = float(x), float(y)
+        if self._pd:
+            d = math.hypot(x - self._x, y - self._y)
+            if d > 0:
+                self._seg_count += 1
+                self._seg_len += d
+        self._x, self._y = x, y
+        if self._filling:
+            self._fillpts.append((round(x, 2), round(y, 2)))
+        _q("move", self._id, x, y, 1 if self._pd else 0, self._pc, self._ps, self._anim())
+        y_ = getattr(sys, "_kid_yield", None)
+        if y_:
+            y_(False)
+
+    def _rotate(self, delta):
+        self._h = (self._h + delta) % 360
+        _q("turn", self._id, self._h, delta, self._anim())
+
+    # ---- movement ----
+    def forward(self, distance):
+        r = math.radians(self._h)
+        self._moveto(self._x + distance * math.cos(r), self._y + distance * math.sin(r))
+
+    fd = forward
+
+    def back(self, distance):
+        self.forward(-distance)
+
+    bk = backward = back
+
+    def left(self, angle):
+        self._rotate(angle)
+
+    lt = left
+
+    def right(self, angle):
+        self._rotate(-angle)
+
+    rt = right
+
+    def setheading(self, to_angle):
+        delta = (to_angle - self._h + 180) % 360 - 180
+        self._rotate(delta)
+
+    seth = setheading
+
+    def goto(self, x, y=None):
+        if y is None:
+            x, y = x
+        self._moveto(x, y)
+
+    setpos = setposition = goto
+
+    def teleport(self, x=None, y=None, fill_gap=False):
+        pd = self._pd
+        self._pd = False
+        self.goto(self._x if x is None else x, self._y if y is None else y)
+        self._pd = pd
+
+    def setx(self, x):
+        self._moveto(x, self._y)
+
+    def sety(self, y):
+        self._moveto(self._x, y)
+
+    def home(self):
+        self.goto(0, 0)
+        self.setheading(0)
+
+    def circle(self, radius, extent=None, steps=None):
+        if extent is None:
+            extent = 360
+        if steps is None:
+            frac = abs(extent) / 360
+            steps = 1 + int(min(11 + abs(radius) / 6.0, 59.0) * frac)
+        w = 1.0 * extent / steps
+        w2 = 0.5 * w
+        l = 2.0 * radius * math.sin(math.radians(w2))
+        if radius < 0:
+            l, w, w2 = -l, -w, -w2
+        self._rotate(w2)
+        for _ in range(steps):
+            self.forward(l)
+            self._rotate(w)
+        self._rotate(-w2)
+
+    # ---- state ----
+    def position(self):
+        return Vec2D(self._x, self._y)
+
+    pos = position
+
+    def xcor(self):
+        return self._x
+
+    def ycor(self):
+        return self._y
+
+    def heading(self):
+        return self._h
+
+    def _xy(self, x, y):
+        if y is None:
+            if isinstance(x, Turtle):
+                return x._x, x._y
+            return x[0], x[1]
+        return x, y
+
+    def towards(self, x, y=None):
+        x, y = self._xy(x, y)
+        return math.degrees(math.atan2(y - self._y, x - self._x)) % 360
+
+    def distance(self, x, y=None):
+        x, y = self._xy(x, y)
+        return math.hypot(x - self._x, y - self._y)
+
+    def penup(self):
+        self._pd = False
+
+    pu = up = penup
+
+    def pendown(self):
+        self._pd = True
+
+    pd = down = pendown
+
+    def isdown(self):
+        return self._pd
+
+    def pensize(self, width=None):
+        if width is None:
+            return self._ps
+        self._ps = width
+
+    width = pensize
+
+    def pencolor(self, *c):
+        if not c:
+            return self._pc
+        self._pc = _col(c)
+        _q("state", self._id, "pen", self._pc)
+
+    def fillcolor(self, *c):
+        if not c:
+            return self._fc
+        self._fc = _col(c)
+        _q("state", self._id, "fill", self._fc)
+
+    def color(self, *args):
+        if not args:
+            return (self._pc, self._fc)
+        if len(args) == 1 or (len(args) == 3 and all(isinstance(a, (int, float)) for a in args)):
+            self.pencolor(*args)
+            self.fillcolor(*args)
+        else:
+            self.pencolor(args[0])
+            self.fillcolor(args[1])
+
+    def speed(self, s=None):
+        if s is None:
+            return self._speed
+        if isinstance(s, str):
+            s = _SPEEDS.get(s, 6)
+        if s > 10 or s < 0.5:
+            s = 0
+        self._speed = int(round(s))
+
+    def begin_fill(self):
+        self._filling = True
+        self._fillpts = [(round(self._x, 2), round(self._y, 2))]
+        _q("fillstart", self._id)
+
+    def end_fill(self):
+        if self._filling:
+            _q("fillend", self._id, self._fc, json.dumps(self._fillpts))
+        self._filling = False
+        self._fillpts = []
+
+    def filling(self):
+        return self._filling
+
+    def dot(self, size=None, *color):
+        if size is None:
+            size = max(self._ps + 4, 2 * self._ps)
+        col = _col(color) if color else self._pc
+        _q("dot", self._id, self._x, self._y, size, col)
+
+    def write(self, arg, move=False, align="left", font=("Arial", 8, "normal")):
+        if isinstance(font, str):
+            font = (font, 8, "normal")
+        fam = font[0] if len(font) > 0 else "Arial"
+        size = font[1] if len(font) > 1 else 8
+        style = font[2] if len(font) > 2 else "normal"
+        css = f"{'bold ' if 'bold' in style else ''}{'italic ' if 'italic' in style else ''}{size * 1.33:.0f}px {fam}, sans-serif"
+        _q("write", self._id, self._x, self._y, str(arg), align, css, self._pc)
+
+    def clear(self):
+        _q("clear", self._id)
+
+    def reset(self):
+        self.clear()
+        pd = self._pd
+        self._pd = False
+        self.home()
+        self._pd = True
+        self.pencolor("black")
+        self.fillcolor("black")
+        self._ps = 1
+
+    def stamp(self):
+        _q("stamp", self._id)
+        self._stamps += 1
+        return self._stamps
+
+    def clearstamps(self, n=None):
+        _q("clearstamps", self._id)
+
+    def clearstamp(self, stampid):
+        pass
+
+    def hideturtle(self):
+        self._vis = False
+        _q("state", self._id, "visible", 0)
+
+    ht = hideturtle
+
+    def showturtle(self):
+        self._vis = True
+        _q("state", self._id, "visible", 1)
+
+    st = showturtle
+
+    def isvisible(self):
+        return self._vis
+
+    def shape(self, name=None):
+        if name is None:
+            return self._shape
+        self._shape = name
+        _q("state", self._id, "shape", name)
+
+    def shapesize(self, stretch_wid=None, stretch_len=None, outline=None):
+        if stretch_wid is None and stretch_len is None:
+            return (self._stretch[0], self._stretch[1], 1)
+        if stretch_wid is None:
+            stretch_wid = self._stretch[0]
+        if stretch_len is None:
+            stretch_len = stretch_wid
+        self._stretch = (stretch_wid, stretch_len)
+        _q("state", self._id, "stretch", f"{stretch_wid},{stretch_len}")
+
+    turtlesize = shapesize
+
+    def onclick(self, fun, btn=1, add=None):
+        if not _headless():
+            _TS.bindTurtleClick(self._id, _proxy(fun))
+
+    def onrelease(self, fun, btn=1, add=None):
+        pass
+
+    def ondrag(self, fun, btn=1, add=None):
+        pass
+
+    def clone(self):
+        t = Turtle(self._shape, visible=self._vis)
+        pd = self._pd
+        t._pd = False
+        t.goto(self._x, self._y)
+        t.setheading(self._h)
+        t._pd = pd
+        t.pencolor(self._pc)
+        t.fillcolor(self._fc)
+        t._ps = self._ps
+        t._speed = self._speed
+        if self._stretch != (1, 1):
+            t.shapesize(*self._stretch)
+        return t
+
+    def getscreen(self):
+        return _screen
+
+    def getturtle(self):
+        return self
+
+    getpen = getturtle
+
+    def undo(self):
+        pass
+
+    def degrees(self, fullcircle=360.0):
+        pass
+
+    def tilt(self, angle):
+        pass
+
+    def settiltangle(self, angle):
+        pass
+
+    def tiltangle(self, angle=None):
+        return 0
+
+    def setundobuffer(self, size):
+        pass
+
+
+Pen = RawTurtle = RawPen = Turtle
+TurtleScreen = _Screen
+
+
+def Screen():
+    return _screen
+
+
+_default = [None]
+
+
+def getturtle():
+    if _default[0] is None:
+        _default[0] = Turtle()
+    return _default[0]
+
+
+getpen = getturtle
+
+
+def _make(name):
+    def f(*a, **k):
+        return getattr(getturtle(), name)(*a, **k)
+    f.__name__ = name
+    return f
+
+
+def _makes(name):
+    def f(*a, **k):
+        return getattr(_screen, name)(*a, **k)
+    f.__name__ = name
+    return f
+
+
+for _n in ["forward", "fd", "back", "bk", "backward", "left", "lt", "right", "rt", "setheading", "seth",
+           "goto", "setpos", "setposition", "teleport", "setx", "sety", "home", "circle", "position", "pos",
+           "xcor", "ycor", "heading", "towards", "distance", "penup", "pu", "up", "pendown", "pd", "down",
+           "isdown", "pensize", "width", "pencolor", "fillcolor", "color", "speed", "begin_fill", "end_fill",
+           "filling", "dot", "write", "clear", "reset", "stamp", "clearstamps", "clearstamp", "hideturtle",
+           "ht", "showturtle", "st", "isvisible", "shape", "shapesize", "turtlesize", "onclick", "onrelease",
+           "ondrag", "clone", "undo", "degrees", "tilt", "settiltangle", "tiltangle"]:
+    globals()[_n] = _make(_n)
+
+for _n in ["setup", "screensize", "bgcolor", "bgpic", "title", "tracer", "update", "delay", "listen", "onkey",
+           "onkeypress", "onkeyrelease", "ontimer", "onscreenclick", "window_width", "window_height",
+           "mainloop", "done", "exitonclick", "bye", "turtles", "clearscreen", "resetscreen", "colormode",
+           "register_shape", "addshape", "getshapes", "textinput", "numinput", "getcanvas"]:
+    globals()[_n] = _makes(_n)
+</script>
+<script>
+let presenting = false;
+const STORAGE_KEY = "pyeditor.files.v1";
+const EXAMPLES = {
+  "Hello world": `print("Hello, world!")\n\nname = input("What's your name? ")\nprint(f"Nice to meet you, {name}!")\n`,
+  "Number guessing game": `import random\n\nsecret = random.randint(1, 100)\ntries = 0\nprint("I'm thinking of a number between 1 and 100.")\n\nwhile True:\n    guess = int(input("Your guess: "))\n    tries += 1\n    if guess < secret:\n        print("Too low!")\n    elif guess > secret:\n        print("Too high!")\n    else:\n        print(f"Got it in {tries} tries! 🎉")\n        break\n`,
+  "Lists & loops": `fruits = ["apple", "banana", "cherry", "mango"]\n\nfor i, fruit in enumerate(fruits, start=1):\n    print(i, fruit.upper())\n\nsquares = [n * n for n in range(1, 11)]\nprint("Squares:", squares)\nprint("Sum:", sum(squares))\n`,
+  "Classes": `class Dog:\n    def __init__(self, name, age):\n        self.name = name\n        self.age = age\n\n    def bark(self):\n        return f"{self.name} says woof!"\n\n    def __repr__(self):\n        return f"Dog({self.name!r}, {self.age})"\n\n\ndogs = [Dog("Rex", 3), Dog("Bella", 5)]\nfor d in dogs:\n    print(d, "->", d.bark())\n\noldest = max(dogs, key=lambda d: d.age)\nprint("Oldest:", oldest.name)\n`,
+  "Fibonacci": `def fib(n):\n    a, b = 0, 1\n    for _ in range(n):\n        yield a\n        a, b = b, a + b\n\nprint(list(fib(20)))\n`,
+  "Plot a chart (matplotlib)": `import matplotlib.pyplot as plt\nimport numpy as np\n\nx = np.linspace(0, 2 * np.pi, 200)\nplt.plot(x, np.sin(x), label="sin")\nplt.plot(x, np.cos(x), label="cos")\nplt.title("Sine and Cosine")\nplt.legend()\nplt.grid(True)\nplt.show()\n`,
+  "Data with pandas": `import pandas as pd\n\ndf = pd.DataFrame({\n    "name": ["Ava", "Ben", "Cara", "Dev"],\n    "score": [88, 92, 79, 95],\n    "grade": [10, 11, 10, 12],\n})\n\nprint(df)\nprint()\nprint("Average score:", df["score"].mean())\nprint(df.groupby("grade")["score"].mean())\n`,
+  "Import from another tab": `# Make a new tab called helpers.py with:\n#     def greet(who):\n#         return f"Hi {who}!"\n# Then run this file:\n\nfrom helpers import greet\nprint(greet("there"))\n`,
+};
+
+// ---------- files / tabs ----------
+let state = load();
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (s && s.files && Object.keys(s.files).length) return s;
+  } catch {}
+  return { files: { "main.py": EXAMPLES["Hello world"] }, active: "main.py" };
+}
+function persist() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+const editor = CodeMirror(document.getElementById("editorWrap"), {
+  value: state.files[state.active] || "",
+  mode: "python", lineNumbers: true, indentUnit: 4, tabSize: 4,
+  matchBrackets: true, autoCloseBrackets: true, styleActiveLine: true,
+  lineWrapping: true,
+  extraKeys: {
+    "Tab": cm => cm.somethingSelected() ? cm.indentSelection("add") : cm.replaceSelection("    ", "end"),
+    "Shift-Tab": cm => cm.indentSelection("subtract"),
+    "Cmd-Enter": () => runCode(), "Ctrl-Enter": () => runCode(),
+    "Cmd-/": "toggleComment", "Ctrl-/": "toggleComment",
+    "Cmd-S": () => persist(), "Ctrl-S": () => persist(),
+  },
+});
+editor.on("change", () => { state.files[state.active] = editor.getValue(); persist(); });
+
+function renderTabs() {
+  const el = document.getElementById("tabs");
+  el.innerHTML = "";
+  for (const name of Object.keys(state.files)) {
+    const t = document.createElement("div");
+    t.className = "tab" + (name === state.active ? " active" : "");
+    t.innerHTML = `<span></span><span class="x" title="Delete">×</span>`;
+    t.firstChild.textContent = name;
+    t.onclick = e => {
+      if (e.target.classList.contains("x")) return deleteFile(name);
+      switchTo(name);
+    };
+    t.ondblclick = () => renameFile(name);
+    t.title = "Double-click to rename";
+    el.appendChild(t);
+  }
+  const add = document.createElement("div");
+  add.className = "tab add"; add.textContent = "+"; add.title = "New file";
+  add.onclick = newFile;
+  el.appendChild(add);
+}
+function switchTo(name) {
+  state.active = name; persist();
+  editor.setValue(state.files[name]); editor.clearHistory(); editor.focus();
+  renderTabs();
+}
+function cleanName(n) {
+  n = (n || "").trim().replace(/[^\w.\-]/g, "_");
+  if (!n) return null;
+  if (!n.endsWith(".py")) n += ".py";
+  return n;
+}
+function newFile() {
+  let n = cleanName(prompt("New file name:", "untitled.py"));
+  if (!n) return;
+  if (state.files[n] !== undefined) return switchTo(n);
+  state.files[n] = ""; switchTo(n);
+}
+function renameFile(old) {
+  const n = cleanName(prompt("Rename file:", old));
+  if (!n || n === old) return;
+  if (state.files[n] !== undefined) return alert("A file with that name already exists.");
+  const files = {};
+  for (const [k, v] of Object.entries(state.files)) files[k === old ? n : k] = v;
+  state.files = files;
+  if (state.active === old) state.active = n;
+  persist(); renderTabs();
+}
+function deleteFile(name) {
+  if (!confirm(`Delete ${name}?`)) return;
+  delete state.files[name];
+  if (!Object.keys(state.files).length) state.files["main.py"] = "";
+  if (state.active === name) state.active = Object.keys(state.files)[0];
+  persist(); switchTo(state.active);
+}
+renderTabs();
+
+// examples
+const exSel = document.getElementById("examples");
+for (const k of Object.keys(EXAMPLES)) { const o = document.createElement("option"); o.value = o.textContent = k; exSel.appendChild(o); }
+exSel.onchange = () => {
+  const k = exSel.value; exSel.value = "";
+  if (!k) return;
+  let n = cleanName(k.toLowerCase().replace(/\(.*\)/, "").trim().replace(/\s+/g, "_").replace(/[^\w]/g, ""));
+  let base = n.slice(0, -3), i = 2;
+  while (state.files[n] !== undefined && state.files[n] !== EXAMPLES[k]) n = `${base}_${i++}.py`;
+  state.files[n] = EXAMPLES[k]; switchTo(n);
+};
+
+// open / download
+document.getElementById("openBtn").onclick = () => document.getElementById("fileInput").click();
+document.getElementById("fileInput").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const n = cleanName(f.name);
+  state.files[n] = await f.text(); switchTo(n);
+  e.target.value = "";
+};
+document.getElementById("saveBtn").onclick = () => {
+  const blob = new Blob([editor.getValue()], { type: "text/x-python" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = state.active; a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+// ---------- console ----------
+const cons = document.getElementById("console");
+let curLine = null;
+let capture = null; // collects program output while a run is happening
+function write(text, cls) {
+  if (!text) return;
+  if (presenting && cls === "info") return;
+  if (capture && (!cls || cls === "err")) { if (cls === "err") capture.err = true; else capture.out += text; }
+  const atBottom = cons.scrollHeight - cons.scrollTop - cons.clientHeight < 40;
+  const span = document.createElement("span");
+  if (cls) span.className = cls;
+  span.textContent = text;
+  cons.appendChild(span);
+  if (atBottom) cons.scrollTop = cons.scrollHeight;
+}
+function writeLine(text, cls) { write(text + "\n", cls); }
+document.getElementById("clearBtn").onclick = () => { cons.innerHTML = ""; };
+window.showPlot = b64 => {
+  const img = document.createElement("img");
+  img.src = "data:image/png;base64," + b64;
+  cons.appendChild(img);
+  cons.scrollTop = cons.scrollHeight;
+};
+window.consoleWrite = (t, cls) => write(t, cls);
+
+// ---------- turtle stage (canvas that the turtle module draws on) ----------
+const SHAPES = {
+  classic: [[0, 0], [-9, 5], [-7, 0], [-9, -5]],
+  arrow: [[10, 0], [0, 10], [0, -10]],
+  triangle: [[10, 0], [-5, 8.66], [-5, -8.66]],
+  square: [[10, 10], [-10, 10], [-10, -10], [10, -10]],
+  turtle: [[0,16],[-2,14],[-1,10],[-4,7],[-7,9],[-9,8],[-6,5],[-7,1],[-5,-3],[-8,-6],[-6,-8],[-4,-5],[0,-7],[4,-5],[6,-8],[8,-6],[5,-3],[7,1],[6,5],[9,8],[7,9],[4,7],[1,10],[2,14]].map(([x, y]) => [y, -x]),
+};
+const KEYMAP = { ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right", " ": "space", Enter: "Return", Escape: "Escape", Backspace: "BackSpace", Tab: "Tab", Shift: "Shift_L", Control: "Control_L" };
+const TS = {
+  w: 600, h: 500, bg: "white", turtles: new Map(), items: [], queue: [], used: false, active: null,
+  keys: { down: new Map(), up: new Map() }, click: null, tclicks: new Map(), timers: new Map(), scale: 1, title: "",
+  canvas: null, ctx: null, cache: null, cctx: null, dirty: false,
+  init() {
+    this.canvas = document.getElementById("stageCanvas");
+    this.ctx = this.canvas.getContext("2d");
+    this.cache = document.createElement("canvas");
+    this.cctx = this.cache.getContext("2d");
+    this.canvas.addEventListener("mousedown", e => this.onMouse(e));
+    new ResizeObserver(() => this.fit()).observe(document.getElementById("stageWrap"));
+    const loop = () => { requestAnimationFrame(loop); try { this.frame(); } catch (e) { console.error(e); this.queue.shift(); } };
+    requestAnimationFrame(loop);
+  },
+  reset() {
+    this.stopEvents();
+    this.w = 600; this.h = 500; this.bg = "white"; this.title = "";
+    this.turtles.clear(); this.items = []; this.queue = []; this.active = null;
+    this.used = false;
+    document.getElementById("stageWrap").hidden = true;
+    document.body.classList.remove("has-stage");
+    this.fit();
+  },
+  stopEvents() {
+    for (const m of [this.keys.down, this.keys.up]) { for (const f of m.values()) f.destroy?.(); m.clear(); }
+    for (const [id, f] of this.timers) { clearTimeout(id); f.destroy?.(); }
+    this.timers.clear();
+    this.click?.destroy?.(); this.click = null;
+    for (const f of this.tclicks.values()) f.destroy?.();
+    this.tclicks.clear();
+    updateStopBtn();
+  },
+  hasEvents() { return this.keys.down.size + this.keys.up.size + this.timers.size + this.tclicks.size + (this.click ? 1 : 0) > 0; },
+  show() {
+    if (this.used) return;
+    this.used = true;
+    document.getElementById("stageWrap").hidden = false;
+    document.body.classList.add("has-stage");
+    this.fit();
+  },
+  fit() {
+    const wrap = document.getElementById("stageWrap");
+    const bw = wrap.clientWidth - 16, bh = wrap.clientHeight - 16;
+    if (bw <= 0 || bh <= 0) return;
+    const s = Math.min(bw / this.w, bh / this.h);
+    this.canvas.style.width = Math.floor(this.w * s) + "px";
+    this.canvas.style.height = Math.floor(this.h * s) + "px";
+    const px = Math.min(4, Math.max(1, s * (window.devicePixelRatio || 1)));
+    if (Math.abs(px - this.scale) > 0.05 || this.canvas.width !== Math.round(this.w * px) || this.cache.width !== this.canvas.width || this.cache.height !== this.canvas.height) {
+      this.scale = px;
+      this.canvas.width = this.cache.width = Math.round(this.w * px);
+      this.canvas.height = this.cache.height = Math.round(this.h * px);
+      this.rebuild();
+    }
+  },
+  q(kind, tid, ...a) { this.show(); this.queue.push({ kind, tid, a, done: 0 }); },
+  T(tid) {
+    let t = this.turtles.get(tid);
+    if (!t) { t = { x: 0, y: 0, h: 0, shape: "classic", pen: "black", fill: "black", vis: true, sw: 1, sl: 1, fillItem: null }; this.turtles.set(tid, t); }
+    return t;
+  },
+  pxPerFrame: s => 2 + s * s * 1.6,
+  degPerFrame: s => 6 + s * s * 3,
+  cost(c) {
+    if (c.kind === "move") {
+      const sp = c.a[5]; if (!sp) return 0;
+      const t = this.T(c.tid);
+
+      if (c.sx === undefined) { c.sx = t.x; c.sy = t.y; }
+      return Math.hypot(c.a[0] - c.sx, c.a[1] - c.sy) / this.pxPerFrame(sp);
+    }
+    if (c.kind === "turn") { const sp = c.a[2]; return sp ? Math.abs(c.a[1]) / this.degPerFrame(sp) : 0; }
+    return 0;
+  },
+  frame() {
+    if (!this.used) return;
+    let budget = 1, n = 0;
+    while (this.queue.length && n++ < 50000) {
+      const c = this.queue[0];
+      const full = this.cost(c);
+      const remain = full * (1 - c.done);
+      if (remain <= budget) { budget -= remain; this.apply(c, 1); this.queue.shift(); }
+      else { if (budget > 0) { c.done += budget / full; this.apply(c, c.done); } break; }
+    }
+    if (!this.queue.length) this.active = null;
+    this.render();
+  },
+  apply(c, f) {
+    const t = c.tid ? this.T(c.tid) : null, a = c.a;
+    switch (c.kind) {
+      case "new": t.shape = a[0]; t.vis = !!a[1]; break;
+      case "move": {
+        if (c.sx === undefined) { c.sx = t.x; c.sy = t.y; }
+        const [x, y, pd, col, w] = a;
+        t.x = c.sx + (x - c.sx) * f; t.y = c.sy + (y - c.sy) * f;
+        if (f >= 1) { this.active = null; if (pd) this.add({ tid: c.tid, t: "line", x1: c.sx, y1: c.sy, x2: x, y2: y, col, w }); }
+        else this.active = pd ? { x1: c.sx, y1: c.sy, x2: t.x, y2: t.y, col, w } : null;
+        break;
+      }
+      case "turn": {
+        if (c.sh === undefined) c.sh = t.h;
+        t.h = f >= 1 ? a[0] : c.sh + a[1] * f; break;
+      }
+      case "state": {
+        const [k, v] = a;
+        if (k === "pen") t.pen = v; else if (k === "fill") t.fill = v; else if (k === "visible") t.vis = !!v;
+        else if (k === "shape") t.shape = v; else if (k === "stretch") { const [sw, sl] = v.split(",").map(Number); t.sw = sw; t.sl = sl; }
+        break;
+      }
+      case "fillstart": t.fillItem = { tid: c.tid, t: "fill", pts: null, col: null }; this.items.push(t.fillItem); break;
+      case "fillend": if (t.fillItem) { t.fillItem.col = a[0]; t.fillItem.pts = JSON.parse(a[1]); t.fillItem = null; this.rebuild(); } break;
+      case "dot": this.add({ tid: c.tid, t: "dot", x: a[0], y: a[1], r: a[2] / 2, col: a[3] }); break;
+      case "write": this.add({ tid: c.tid, t: "text", x: a[0], y: a[1], text: a[2], align: a[3], font: a[4], col: a[5] }); break;
+      case "stamp": this.add({ tid: c.tid, t: "stamp", st: { ...t } }); break;
+      case "clear": this.items = this.items.filter(i => i.tid !== c.tid); this.rebuild(); break;
+      case "clearstamps": this.items = this.items.filter(i => !(i.tid === c.tid && i.t === "stamp")); this.rebuild(); break;
+      case "bg": this.bg = a[0]; break;
+      case "setup": this.w = a[0]; this.h = a[1]; this.fit(); this.rebuild(); break;
+      case "title": this.title = a[0]; updatePresentTitle(); break;
+    }
+  },
+  add(item) { this.items.push(item); this.drawItem(this.cctx, item); },
+  rebuild() {
+    const g = this.cctx;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, this.cache.width, this.cache.height);
+    for (const i of this.items) this.drawItem(g, i);
+  },
+  X(x) { return (x + this.w / 2) * this.scale; },
+  Y(y) { return (this.h / 2 - y) * this.scale; },
+  drawItem(g, i) {
+    const s = this.scale;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    if (i.t === "line") {
+      g.strokeStyle = i.col; g.lineWidth = Math.max(1, i.w) * s; g.lineCap = "round"; g.lineJoin = "round";
+      g.beginPath(); g.moveTo(this.X(i.x1), this.Y(i.y1)); g.lineTo(this.X(i.x2), this.Y(i.y2)); g.stroke();
+    } else if (i.t === "fill" && i.pts && i.pts.length > 2) {
+      g.fillStyle = i.col; g.beginPath();
+      i.pts.forEach(([x, y], k) => k ? g.lineTo(this.X(x), this.Y(y)) : g.moveTo(this.X(x), this.Y(y)));
+      g.closePath(); g.fill("nonzero");
+    } else if (i.t === "dot") {
+      g.fillStyle = i.col; g.beginPath(); g.arc(this.X(i.x), this.Y(i.y), Math.max(0.5, i.r) * s, 0, Math.PI * 2); g.fill();
+    } else if (i.t === "text") {
+      g.fillStyle = i.col; g.textBaseline = "alphabetic";
+      g.textAlign = i.align === "center" ? "center" : i.align === "right" ? "right" : "left";
+      let fs = 12;
+      g.font = i.font.replace(/([\d.]+)px/, (m, n) => { fs = +n; return (n * s) + "px"; });
+      const lines = String(i.text).split("\n");
+      lines.forEach((ln, k) => g.fillText(ln, this.X(i.x), this.Y(i.y + (lines.length - 1 - k) * fs * 1.25)));
+    } else if (i.t === "stamp") this.drawSprite(g, i.st);
+  },
+  drawSprite(g, t) {
+    if (t.shape === "blank") return;
+    const s = this.scale;
+    g.setTransform(s, 0, 0, s, this.X(t.x), this.Y(t.y));
+    g.rotate(-t.h * Math.PI / 180);
+    g.scale(t.sl, t.sw);
+    g.fillStyle = t.fill; g.strokeStyle = t.pen; g.lineWidth = 1 / Math.max(t.sl, t.sw);
+    g.beginPath();
+    if (t.shape === "circle") g.arc(0, 0, 10, 0, Math.PI * 2);
+    else (SHAPES[t.shape] || SHAPES.classic).forEach(([x, y], k) => k ? g.lineTo(x, -y) : g.moveTo(x, -y));
+    g.closePath(); g.fill(); g.stroke();
+    g.setTransform(1, 0, 0, 1, 0, 0);
+  },
+  render() {
+    const g = this.ctx;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.fillStyle = this.bg; g.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    g.drawImage(this.cache, 0, 0);
+    if (this.active) this.drawItem(g, { t: "line", ...this.active });
+    for (const t of this.turtles.values()) if (t.vis) this.drawSprite(g, t);
+  },
+  // ---- events ----
+  listen() { if (!presenting) this.canvas.focus(); },
+  bindKey(kind, key, fn) {
+    const m = this.keys[kind];
+    m.get(key)?.destroy?.();
+    if (fn) m.set(key, fn); else m.delete(key);
+    showStageHint(); updateStopBtn();
+  },
+  timer(fn, ms) {
+    const id = setTimeout(() => {
+      this.timers.delete(id);
+      this.call(fn);
+      fn.destroy?.();
+      updateStopBtn();
+    }, ms);
+    this.timers.set(id, fn);
+    updateStopBtn();
+  },
+  bindClick(fn) { this.click?.destroy?.(); this.click = fn; updateStopBtn(); },
+  bindTurtleClick(tid, fn) { this.tclicks.get(tid)?.destroy?.(); if (fn) this.tclicks.set(tid, fn); else this.tclicks.delete(tid); updateStopBtn(); },
+  call(fn, ...args) {
+    try { fn(...args); }
+    catch (e) {
+      const tb = cleanTraceback(String(e.message || e)).trimEnd();
+      writeLine(tb, "err"); friendlyError(tb);
+      this.stopEvents();
+    }
+  },
+  onMouse(e) {
+    this.canvas.focus();
+    const r = this.canvas.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width * this.w - this.w / 2;
+    const y = this.h / 2 - (e.clientY - r.top) / r.height * this.h;
+    for (const [tid, fn] of this.tclicks) {
+      const t = this.turtles.get(tid);
+      if (t && Math.hypot(t.x - x, t.y - y) < 12 * Math.max(t.sw, t.sl)) return this.call(fn, x, y);
+    }
+    if (this.click) this.call(this.click, x, y);
+  },
+  onKey(e, kind) {
+    const m = this.keys[kind];
+    if (!m.size) return false;
+    const k = KEYMAP[e.key] || e.key;
+    const fn = m.get(k) || m.get(k.length === 1 ? (k === k.toLowerCase() ? k.toUpperCase() : k.toLowerCase()) : "\0") || m.get("");
+    if (!fn) return false;
+    if (kind === "down" || true) this.call(fn);
+    return true;
+  },
+  nextFrame() { return new Promise(r => requestAnimationFrame(() => r())); },
+  sleep(ms) { return new Promise(r => setTimeout(r, ms)); },
+};
+window.TS = TS;
+function showStageHint() {
+  const h = document.getElementById("stageHint");
+  h.hidden = presenting || document.activeElement === TS.canvas || !(TS.keys.down.size || TS.keys.up.size);
+}
+window.addEventListener("keydown", e => {
+  if (!TS.used) return;
+  const inField = /INPUT|TEXTAREA/.test(document.activeElement?.tagName) || document.activeElement?.closest?.(".CodeMirror");
+  if (!(presenting ? !inField : document.activeElement === TS.canvas)) return;
+  if (TS.onKey(e, "down") || ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) e.preventDefault();
+});
+window.addEventListener("keyup", e => {
+  if (!TS.used) return;
+  const inField = /INPUT|TEXTAREA/.test(document.activeElement?.tagName) || document.activeElement?.closest?.(".CodeMirror");
+  if (!(presenting ? !inField : document.activeElement === TS.canvas)) return;
+  TS.onKey(e, "up");
+});
+
+document.getElementById("stageCanvas").addEventListener("focus", showStageHint);
+document.getElementById("stageCanvas").addEventListener("blur", showStageHint);
+TS.init();
+
+// inline input() box (used when the browser supports pausing Python)
+let pendingInput = null;
+window.askInput = prompt => new Promise(res => {
+  const inp = document.createElement("input");
+  inp.className = "inline-in";
+  inp.placeholder = "type here, then Enter";
+  cons.appendChild(inp);
+  cons.scrollTop = cons.scrollHeight;
+  setTimeout(() => inp.focus(), 0);
+  pendingInput = v => {
+    pendingInput = null;
+    inp.remove();
+    if (v !== null) write(v + "\n", "in");
+    res(v);
+  };
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); pendingInput?.(inp.value); } });
+});
+
+let running = false;
+window.pyStop = false;
+function updateStopBtn() {
+  const show = running || TS.hasEvents();
+  document.getElementById("stopBtn").hidden = !show;
+  document.getElementById("pStop").hidden = !show;
+}
+function stopProgram() {
+  window.pyStop = true;
+  pendingInput?.(null);
+  const hadGame = TS.hasEvents();
+  TS.stopEvents();
+  TS.queue = [];
+  if (!running && hadGame) { writeLine("■ Stopped", "info"); setStatus("Ready", "ready"); }
+  updateStopBtn();
+}
+document.getElementById("stopBtn").onclick = stopProgram;
+document.getElementById("pStop").onclick = stopProgram;
+
+function setStatus(text, kind) {
+  document.getElementById("statusText").textContent = text;
+  document.getElementById("dot").className = "dot " + (kind || "");
+}
+
+// ---------- python ----------
+let py = null, busy = false, lastNs = null;
+const dec = new TextDecoder();
+
+async function boot() {
+  try {
+    py = await loadPyodide();
+    py.setStdout({ write: buf => { write(dec.decode(buf)); return buf.length; } });
+    py.setStderr({ write: buf => { write(dec.decode(buf), "err"); return buf.length; } });
+    await py.loadPackage("micropip");
+    py.FS.mkdirTree("/home/pyodide/.kidlib");
+    py.FS.writeFile("/home/pyodide/.kidlib/turtle.py", document.getElementById("kidturtle").textContent);
+    py.runPython(`
+import builtins, js, sys
+import time as _time
+if "/home/pyodide/.kidlib" not in sys.path: sys.path.insert(0, "/home/pyodide/.kidlib")
+try:
+    from pyodide.ffi import run_sync as _run_sync, can_run_sync as _can_run_sync
+except Exception:
+    _run_sync = None
+    _can_run_sync = lambda: False
+
+class ProgramTooLong(Exception):
+    pass
+
+class ProgramStopped(Exception):
+    pass
+
+_rs = {"last": 0.0, "sync": False, "active": False}
+def _kid_yield(force=False):
+    if not _rs["active"]:
+        return
+    now = _time.time()
+    if not force and now - _rs["last"] < 0.03:
+        return
+    if _rs["sync"]:
+        try:
+            _run_sync(js.TS.nextFrame())
+        except Exception:
+            _rs["sync"] = False
+        _rs["last"] = _time.time()
+        if js.pyStop:
+            raise ProgramStopped("Stopped")
+    elif now - _rs["last"] > 10:
+        _rs["last"] = now
+        raise ProgramTooLong("your program ran for 10 seconds without a break, so it was stopped")
+sys._kid_yield = _kid_yield
+
+_cnt = [0]
+def _line_tracer(frame, event, arg):
+    _cnt[0] += 1
+    if _cnt[0] >= 200:
+        _cnt[0] = 0
+        _kid_yield(False)
+    return _line_tracer
+def _tracer(frame, event, arg):
+    fn = frame.f_code.co_filename
+    if fn == "<exec>" or (fn.startswith("/home/pyodide/") and "/.kidlib/" not in fn):
+        return _line_tracer
+    return None
+def _begin_run():
+    _rs["sync"] = bool(_run_sync) and _can_run_sync()
+    _rs["active"] = True
+    _rs["last"] = _time.time()
+    sys.modules.pop("turtle", None)
+    sys._turtle_headless = False
+    sys.settrace(_tracer)
+def _end_run():
+    sys.settrace(None)
+    _rs["active"] = False
+
+_orig_sleep = _time.sleep
+def _kid_sleep(secs):
+    if _rs["active"] and _rs["sync"]:
+        _run_sync(js.TS.sleep(max(0, secs) * 1000))
+        _rs["last"] = _time.time()
+        if js.pyStop:
+            raise ProgramStopped("Stopped")
+    else:
+        _orig_sleep(secs)
+_time.sleep = _kid_sleep
+
+_test_inputs = None
+def _input(prompt=""):
+    if _test_inputs is not None:
+        if not _test_inputs:
+            raise EOFError("your program asked for more input than this test typed in. Check when your loop should stop.")
+        return _test_inputs.pop(0)
+    prompt = str(prompt)
+    sys.stdout.write(prompt); sys.stdout.flush()
+    if _rs["active"] and _rs["sync"]:
+        r = _run_sync(js.askInput(prompt))
+        _rs["last"] = _time.time()
+        if r is None:
+            raise ProgramStopped("Stopped")
+        return str(r)
+    r = js.prompt(prompt or "Input:")
+    _rs["last"] = _time.time()
+    if r is None:
+        print()
+        raise ProgramStopped("input cancelled")
+    js.consoleWrite(r + "\\n", "in")
+    return r
+builtins.input = _input
+def _run_test(src, inputs):
+    global _test_inputs
+    import io, contextlib
+    sys.modules.pop("turtle", None)
+    sys._turtle_headless = True
+    _test_inputs = [str(x) for x in inputs]
+    buf = io.StringIO()
+    ns = {"__name__": "__main__"}
+    count = [0]
+    def tr(frame, event, arg):
+        if event == "line":
+            count[0] += 1
+            if count[0] > 400000:
+                raise RuntimeError("your program ran for too long. Is there a loop that never stops?")
+        return tr
+    err = None
+    try:
+        with contextlib.redirect_stdout(buf):
+            sys.settrace(tr)
+            try:
+                exec(compile(src, "<exec>", "exec"), ns)
+            finally:
+                sys.settrace(None)
+    except SystemExit:
+        pass
+    except BaseException as e:
+        err = f"{type(e).__name__}: {e}"
+    finally:
+        _test_inputs = None
+        sys._turtle_headless = False
+        sys.modules.pop("turtle", None)
+    return buf.getvalue(), err
+_mpl_ready = False
+def _setup_mpl():
+    global _mpl_ready
+    if _mpl_ready: return
+    import os; os.environ["MPLBACKEND"] = "AGG"
+    import matplotlib; matplotlib.use("AGG")
+    import matplotlib.pyplot as plt, io, base64
+    def _show(*a, **k):
+        for n in plt.get_fignums():
+            b = io.BytesIO()
+            plt.figure(n).savefig(b, format="png", bbox_inches="tight", dpi=110)
+            js.showPlot(base64.b64encode(b.getvalue()).decode())
+        plt.close("all")
+    plt.show = _show
+    _mpl_ready = True
+`);
+    const ver = py.runPython("import sys; sys.version.split()[0]");
+    setStatus(`Python ${ver} ready`, "ready");
+    writeLine(`Python ${ver} is ready. Write code on the left and press ▶ Run.`, "info");
+    for (const id of ["runBtn", "replInput", "pipBtn"]) document.getElementById(id).disabled = false;
+  } catch (e) {
+    setStatus("Failed to load Python", "");
+    writeLine("Could not load Python. Check your internet connection and reload.\n" + e, "err");
+  }
+}
+
+function cleanTraceback(msg) {
+  const lines = msg.split("\n");
+  const i = lines.findIndex(l => /File "(<exec>|\/home\/pyodide\/)/.test(l));
+  if (i > 0) return ["Traceback (most recent call last):", ...lines.slice(i)].join("\n")
+    .replace(/File "<exec>"/g, `File "${state.active}"`).replace(/\/home\/pyodide\//g, "");
+  return msg;
+}
+
+async function prepare(code) {
+  // write every tab into the filesystem so they can import each other
+  for (const [name, src] of Object.entries(state.files)) py.FS.writeFile("/home/pyodide/" + name, src);
+  const mods = Object.keys(state.files).map(n => n.slice(0, -3));
+  py.globals.set("_tab_mods", py.toPy(mods));
+  py.runPython(`
+import sys, importlib
+if "/home/pyodide" not in sys.path: sys.path.insert(0, "/home/pyodide")
+for _m in _tab_mods: sys.modules.pop(_m, None)
+importlib.invalidate_caches()
+`);
+  const allSrc = Object.values(state.files).join("\n");
+  await py.loadPackagesFromImports(allSrc, { messageCallback: m => /Loading|Loaded/.test(m) && writeLine(m, "info"), errorCallback: () => {} });
+  if (/^\s*(import|from)\s+(matplotlib|pylab)/m.test(allSrc)) py.runPython("_setup_mpl()");
+}
+
+function friendlyError(msg) {
+  const lines = msg.trim().split("\n");
+  const last = lines[lines.length - 1] || "";
+  let lineNo = null;
+  for (const l of lines) { const m = l.match(/line (\d+)/); if (m && !/_pyodide|\/lib\//.test(l)) lineNo = m[1]; }
+  let tip = null;
+  if (/unterminated string|EOL while scanning|unterminated triple/.test(last)) tip = "You started some text with a quote <b>\"</b> but never closed it. Every opening quote needs a matching closing quote.";
+  else if (/expected ':'/.test(last)) tip = "Lines that start with <b>if</b>, <b>else</b>, <b>elif</b>, <b>for</b>, <b>while</b> or <b>def</b> need a colon <b>:</b> at the end.";
+  else if (/IndentationError|TabError/.test(last)) tip = "Spacing problem! Lines <i>inside</i> an if / for / while / def need to be pushed in by 4 spaces (press Tab). Lines that aren't inside one shouldn't be pushed in.";
+  else if (/was never closed|unmatched|does not match opening/.test(last)) tip = "Your brackets don't match up. Every <b>(</b> needs a <b>)</b>, every <b>[</b> needs a <b>]</b>.";
+  else if (/NameError: name '(.+?)' is not defined/.test(last)) {
+    const n = last.match(/name '(.+?)'/)[1];
+    tip = `Python doesn't know what <b>${n}</b> is. Check: Is it spelled the same everywhere (capitals matter)? If it's meant to be text, put it in quotes: <code>"${n}"</code>. If it's a variable, did you create it <i>before</i> this line?`;
+  }
+  else if (/can only concatenate str|unsupported operand type.*'str'.*'int'|unsupported operand type.*'int'.*'str'/.test(last)) tip = "You're mixing text and numbers. Answers from <b>input()</b> are text — wrap them in <b>int()</b> to make them numbers, or use an f-string like <code>f\"I am {age}\"</code> to put numbers in text.";
+  else if (/not supported between instances of/.test(last)) tip = "You're comparing text with a number. If the text came from <b>input()</b>, wrap it in <b>int()</b> first.";
+  else if (/invalid literal for int/.test(last)) tip = "<b>int()</b> only works on whole numbers like <code>42</code>. Did you type a word or a decimal instead?";
+  else if (/ZeroDivisionError/.test(last)) tip = "You can't divide by zero — not even Python can!";
+  else if (/'=' .*Maybe you meant '=='|cannot assign to/.test(last)) tip = "Use <b>==</b> (two equals) to <i>check</i> if things are equal. One <b>=</b> is only for putting something into a variable.";
+  else if (/SyntaxError/.test(last)) tip = "Python couldn't understand how this line is written. Look for a missing quote, bracket, colon or a typo.";
+  else if (/ProgramTooLong/.test(last)) tip = "Your program ran for a long time without stopping, so I stopped it. Is there a <b>while</b> loop that never ends? For games, use <code>screen.ontimer(loop, 16)</code> instead of <code>while True</code>.";
+  else if (/ProgramStopped: input cancelled/.test(last)) tip = "You pressed Cancel on the question box, so the program stopped. Run it again and type an answer.";
+  if (!tip) return;
+  const el = document.createElement("span");
+  el.className = "friendly";
+  el.innerHTML = "💡 <b>What went wrong?</b> " + tip + (lineNo ? ` <br>👉 Look at <b>line ${lineNo}</b>.` : "");
+  cons.appendChild(el);
+  cons.scrollTop = cons.scrollHeight;
+}
+
+async function runCode() {
+  if (!py || busy) return;
+  busy = true; running = true; window.pyStop = false;
+  pendingInput?.(null);
+  TS.reset();
+  updateStopBtn();
+  if (presenting) { cons.innerHTML = ""; hideSplash(); }
+  capture = { out: "", err: false };
+  const code = editor.getValue();
+  document.getElementById("runBtn").disabled = true;
+  document.getElementById("pRun").disabled = true;
+  setStatus("Running…", "busy");
+  if (cons.childNodes.length) writeLine("");
+  writeLine(`▶ Running ${state.active}`, "info");
+  await new Promise(r => setTimeout(r, 20)); // let the UI paint
+  const t0 = performance.now();
+  try {
+    await prepare(code);
+    const ns = py.globals.get("dict")();
+    ns.set("__name__", "__main__");
+    await py.runPythonAsync("_begin_run()");
+    try { await py.runPythonAsync(code, { globals: ns, filename: "<exec>" }); }
+    finally { py.runPython("_end_run()"); }
+    if (lastNs) lastNs.destroy();
+    lastNs = ns;
+    if (py.runPython("'matplotlib.pyplot' in sys.modules")) py.runPython("import matplotlib.pyplot as _p; _p.show()");
+    writeLine(`✓ Finished in ${((performance.now() - t0) / 1000).toFixed(2)}s`, "info");
+  } catch (e) {
+    const tb = cleanTraceback(String(e.message || e)).trimEnd();
+    if (/ProgramStopped: Stopped/.test(tb)) writeLine("■ Stopped", "info");
+    else { writeLine(tb, "err"); friendlyError(tb); }
+    capture.err = true;
+  } finally {
+    const result = capture; capture = null;
+    busy = false; running = false;
+    if (window.onRunFinished) window.onRunFinished(code, result);
+    document.getElementById("runBtn").disabled = false;
+    document.getElementById("pRun").disabled = false;
+    document.getElementById("pRun").textContent = "↻ Run again";
+    updateStopBtn();
+    if (TS.hasEvents()) {
+      setStatus("Game running", "busy");
+      if (!presenting && (TS.keys.down.size || TS.keys.up.size)) TS.canvas.focus();
+    } else setStatus("Ready", "ready");
+  }
+}
+document.getElementById("runBtn").onclick = runCode;
+
+// REPL
+const repl = document.getElementById("replInput");
+const hist = []; let hIdx = 0;
+repl.addEventListener("keydown", async e => {
+  if (e.key === "ArrowUp") { if (hIdx > 0) repl.value = hist[--hIdx]; e.preventDefault(); return; }
+  if (e.key === "ArrowDown") { hIdx = Math.min(hist.length, hIdx + 1); repl.value = hist[hIdx] || ""; e.preventDefault(); return; }
+  if (e.key !== "Enter" || !py || busy) return;
+  const src = repl.value; if (!src.trim()) return;
+  hist.push(src); hIdx = hist.length; repl.value = "";
+  writeLine(">>> " + src, "echo");
+  if (!lastNs) { lastNs = py.globals.get("dict")(); lastNs.set("__name__", "__main__"); }
+  busy = true;
+  try {
+    await py.loadPackagesFromImports(src);
+    py.globals.set("_repl_src", src);
+    py.globals.set("_repl_ns", lastNs);
+    await py.runPythonAsync(`
+import ast
+_t = ast.parse(_repl_src, mode="exec")
+if _t.body and isinstance(_t.body[-1], ast.Expr):
+    _last = ast.Expression(_t.body.pop().value)
+    exec(compile(_t, "<repl>", "exec"), _repl_ns)
+    _v = eval(compile(_last, "<repl>", "eval"), _repl_ns)
+    if _v is not None: print(repr(_v))
+else:
+    exec(compile(_t, "<repl>", "exec"), _repl_ns)
+`);
+  } catch (err) {
+    const m = String(err.message || err).split("\n");
+    const i = m.findIndex(l => l.includes('"<repl>"'));
+    writeLine((i > 0 ? m.slice(i) : m.slice(-2)).join("\n").trimEnd(), "err");
+  } finally { busy = false; }
+});
+
+// pip
+async function pipInstall() {
+  const inp = document.getElementById("pipInput");
+  const pkgs = inp.value.trim().split(/[\s,]+/).filter(Boolean);
+  if (!pkgs.length || !py || busy) return;
+  const btn = document.getElementById("pipBtn"); btn.disabled = true;
+  setStatus("Installing…", "busy");
+  for (const p of pkgs) {
+    writeLine(`$ pip install ${p}`, "echo");
+    try {
+      py.globals.set("_pkg", p);
+      await py.runPythonAsync("import micropip; await micropip.install(_pkg)");
+      writeLine(`Installed ${p}`, "info");
+    } catch (e) {
+      writeLine(String(e.message || e).split("\n").filter(Boolean).slice(-1)[0], "err");
+    }
+  }
+  inp.value = ""; btn.disabled = false; setStatus("Ready", "ready");
+}
+document.getElementById("pipBtn").onclick = pipInstall;
+document.getElementById("pipInput").addEventListener("keydown", e => e.key === "Enter" && pipInstall());
+
+document.addEventListener("keydown", e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); runCode(); }
+});
+
+// ---------- Learn Python: step-by-step lessons ----------
+const strip = c => c.replace(/#.*$/gm, "");
+const LESSONS = [
+{
+  title: "👋 Welcome! Your first line of code",
+  body: `<p>Python is a language for giving a computer instructions. The computer does <b>exactly</b> what you tell it, one line at a time, from top to bottom.</p>
+<p>The <code>print()</code> command makes the computer show something in the <b>Output</b> panel on the right. Text has to go inside <b>quotes</b>.</p>
+<div class="tip">🧭 <b>How this works:</b> click <b>"Put this in the editor"</b>, then press the green <b>▶ Run</b> button at the top (or <kbd>⌘/Ctrl</kbd>+<kbd>Enter</kbd>). Watch the Output panel!</div>`,
+  example: `print("Hello, world!")`,
+  challenge: `Change the message so the computer says hi to <b>you</b>, by name. Then add a <b>second</b> print line that says something else.`,
+  starter: `# Write two print lines below. Example: print("Hi, I'm Alex")\n\n`,
+  hint: `Two lines, each one like <code>print("your text here")</code>. Don't forget both quotes and both brackets!`,
+  check: (c, o) => (strip(c).match(/print\s*\(/g) || []).length < 2 ? "Almost! You need at least two print lines." : o.trim() === "Hello, world!" ? "Change the message to something of your own!" : true,
+},
+{
+  title: "🧮 Python can do math",
+  body: `<p>If you <b>don't</b> use quotes, Python treats things as numbers and does the math for you.</p>
+<p><code>+</code> add &nbsp; <code>-</code> subtract &nbsp; <code>*</code> multiply &nbsp; <code>/</code> divide</p>
+<div class="tip">🤔 Notice the difference: <code>print(2 + 3)</code> shows <b>5</b>, but <code>print("2 + 3")</code> shows the text <b>2 + 3</b>. Quotes mean "this is text, don't do math".</div>`,
+  example: `print(2 + 3)\nprint(10 * 4)\nprint(100 / 8)\nprint("2 + 3")`,
+  challenge: `How many <b>seconds</b> are in one day? Don't use a calculator — make Python figure it out. (There are 60 seconds in a minute, 60 minutes in an hour, and 24 hours in a day.)`,
+  starter: `# Make Python calculate the seconds in a day\n\n`,
+  hint: `Multiply them all together inside one print: <code>print(60 * 60 * 24)</code>`,
+  check: (c, o) => !/86400/.test(o) ? "Not quite — the answer should show up in the Output. Multiply 60 × 60 × 24." : !/\*/.test(strip(c)) ? "Right answer! But let Python do the math using * instead of typing the answer." : true,
+},
+{
+  title: "📦 Variables: boxes with names",
+  body: `<p>A <b>variable</b> is like a box with a label on it. You put something in the box, and later you can use it by saying the label.</p>
+<p><code>name = "Maya"</code> means: <i>"make a box called <b>name</b> and put "Maya" in it"</i>. The <code>=</code> sign means <b>"put this in"</b>, not "equals".</p>
+<div class="tip">📝 When you use a variable, <b>don't</b> put quotes around it. <code>print(name)</code> shows <b>Maya</b>, but <code>print("name")</code> just shows the word <b>name</b>.</div>
+<p>Variable names can't have spaces, so we use underscores: <code>favorite_color</code>.</p>`,
+  example: `name = "Maya"\nage = 14\nprint(name)\nprint(age)\n\nage = age + 1\nprint(age)`,
+  challenge: `Make a variable called <code>favorite_food</code>, put your favorite food in it, and print it.`,
+  starter: `# Make a variable called favorite_food and print it\n\n`,
+  hint: `Line 1: <code>favorite_food = "pizza"</code><br>Line 2: <code>print(favorite_food)</code> (no quotes here!)`,
+  check: c => !/favorite_food\s*=/.test(strip(c)) ? "Make the variable first: favorite_food = \"something\"" : !/print\s*\(\s*favorite_food/.test(strip(c)) ? "Now print it with print(favorite_food) — no quotes around the variable name." : true,
+},
+{
+  title: "✨ Mixing text and variables",
+  body: `<p>Want to put a variable <i>inside</i> a sentence? Use an <b>f-string</b>: put the letter <code>f</code> right before the quotes, and put variables inside <code>{curly braces}</code>.</p>
+<p>You can even do math inside the braces!</p>`,
+  example: `name = "Maya"\nage = 14\nprint(f"My name is {name} and I am {age}.")\nprint(f"Next year I'll be {age + 1}!")`,
+  challenge: `Make two variables: your <code>name</code> and your favorite <code>hobby</code>. Then print <b>one sentence</b> that uses both, with an f-string.`,
+  starter: `# Make two variables, then print a sentence with both using f"..."\n\n`,
+  hint: `<code>name = "Leo"</code><br><code>hobby = "skateboarding"</code><br><code>print(f"{name} loves {hobby}!")</code>`,
+  check: c => { const s = strip(c); return !/f["']/.test(s) ? "Use an f-string: put f right before the quotes, like f\"...\"" : ((s.match(/\{\s*\w+[^}]*\}/g) || []).length < 2) ? "Put both variables inside the sentence using {curly braces}." : true; },
+},
+{
+  title: "💬 Asking questions with input()",
+  body: `<p>So far, your programs say the same thing every time. Let's make them <b>talk to the user</b>!</p>
+<p><code>input("question")</code> asks a question and <b>waits</b> for the person to type an answer. Whatever they type gets stored in a variable.</p>
+<div class="tip">🪟 When you run this, a little box will pop up asking the question. Type your answer and press OK.</div>`,
+  example: `name = input("What's your name? ")\nprint(f"Hey {name}, nice to meet you!")`,
+  challenge: `Ask the user what their favorite animal is, then print a sentence about it. Bonus: ask a second question too!`,
+  starter: `# Ask for their favorite animal with input(), then print something about it\n\n`,
+  hint: `<code>animal = input("What's your favorite animal? ")</code><br><code>print(f"Wow, a {animal}? That's awesome!")</code>`,
+  check: c => !/\w+\s*=\s*input\s*\(/.test(strip(c)) ? "Store the answer in a variable: animal = input(\"...\")" : !/print/.test(strip(c)) ? "Now print something that uses their answer." : true,
+},
+{
+  title: "🔢 Turning text into numbers",
+  body: `<p>Here's a sneaky thing: <code>input()</code> <b>always</b> gives you text, even if the person types a number. And Python can't do math with text!</p>
+<p>To turn text into a whole number, wrap it in <code>int()</code>.</p>
+<pre>age = input("Age? ")         # "14"  (text)
+age = int(input("Age? "))    # 14    (a real number!)</pre>`,
+  example: `age = int(input("How old are you? "))\nprint(f"In 10 years you'll be {age + 10}!")`,
+  challenge: `Make a mini calculator: ask the user for <b>two numbers</b>, then print what they add up to.`,
+  starter: `# Ask for two numbers (use int!) and print their sum\n\n`,
+  hint: `<code>a = int(input("First number: "))</code><br><code>b = int(input("Second number: "))</code><br><code>print(f"{a} + {b} = {a + b}")</code>`,
+  check: c => { const s = strip(c); return (s.match(/int\s*\(\s*input/g) || []).length < 2 ? "You need two numbers, each one like int(input(\"...\"))" : !/\+/.test(s) ? "Now add them together with +" : true; },
+},
+{
+  title: "🚦 Making decisions with if",
+  body: `<p>Programs can make choices! <code>if</code> checks whether something is true. If it is, the lines underneath run. If not, Python skips them.</p>
+<div class="tip">⚠️ Two important rules:<br>1. The <code>if</code> line ends with a colon <code>:</code><br>2. The lines "inside" it are pushed in by <b>4 spaces</b> (press <kbd>Tab</kbd>). That's how Python knows they belong to the if.</div>
+<p><code>else:</code> means "otherwise, do this instead".</p>
+<p>Ways to compare: <code>==</code> equal to, <code>!=</code> not equal, <code>&gt;</code> bigger, <code>&lt;</code> smaller, <code>&gt;=</code> bigger or equal, <code>&lt;=</code> smaller or equal.</p>
+<div class="tip">🧠 <code>=</code> puts something in a box. <code>==</code> <b>checks</b> if two things are the same. Don't mix them up!</div>`,
+  example: `age = int(input("How old are you? "))\n\nif age >= 13:\n    print("You're a teenager!")\nelse:\n    print("You're not a teenager yet.")\n\nprint("This line always runs.")`,
+  challenge: `Make a secret door 🔐. Ask for a password. If they type <code>banana</code>, print <b>"Access granted"</b>. Otherwise print <b>"Access denied"</b>.`,
+  starter: `# Ask for a password. If it's "banana" say Access granted, else Access denied\n\n`,
+  hint: `<code>password = input("Password: ")</code><br><code>if password == "banana":</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;print("Access granted")</code><br><code>else:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;print("Access denied")</code>`,
+  check: c => { const s = strip(c); return !/\bif\b/.test(s) ? "Use an if to check the password." : !/==/.test(s) ? "Use == to check if the password matches." : !/\belse\s*:/.test(s) ? "Add an else: for when the password is wrong." : !/input/.test(s) ? "Ask for the password with input()." : true; },
+},
+{
+  gate: true,
+  title: "🎟️ PROJECT 1: Movie Ticket Machine",
+  body: `<p><b>Checkpoint!</b> 🚧 Before you can keep going, build this project. It uses <b>everything</b> from the last 7 lessons: print, math, variables, f-strings, input, int() and if/else.</p>
+<p>This time your program has to work <b>exactly</b> right. I'll test it with different answers (some tests are secret!) and check every line it prints.</p>`,
+  spec: `<p>Your program asks <b>3 questions</b>, in this order:</p>
+<p>1. the customer's <b>name</b><br>2. their <b>age</b><br>3. how many <b>tickets</b> they want</p>
+<p><b>Rules:</b> a ticket costs <b>$8</b> if they're <b>under 13</b>, otherwise it costs <b>$12</b>. The total is the price × the number of tickets.</p>
+<p>Then it prints <b>exactly</b> these 4 lines:</p>
+<pre>Welcome to the movies, NAME!
+Ticket price: $PRICE
+Total for TICKETS tickets: $TOTAL
+...last line...</pre>
+<p>The last line is <b>That's a lot of popcorn money!</b> if the total is <b>more than 50</b>, otherwise it's <b>Enjoy the show!</b></p>`,
+  tests: [
+    { inputs: ["Ava", "10", "3"], expect: "Welcome to the movies, Ava!\nTicket price: $8\nTotal for 3 tickets: $24\nEnjoy the show!" },
+    { inputs: ["Ben", "15", "5"], expect: "Welcome to the movies, Ben!\nTicket price: $12\nTotal for 5 tickets: $60\nThat's a lot of popcorn money!" },
+    { inputs: ["Cy", "13", "4"], expect: "Welcome to the movies, Cy!\nTicket price: $12\nTotal for 4 tickets: $48\nEnjoy the show!" },
+    { inputs: ["Dee", "12", "7"], expect: "Welcome to the movies, Dee!\nTicket price: $8\nTotal for 7 tickets: $56\nThat's a lot of popcorn money!" },
+  ],
+  requires: [[/input\s*\(/, "Use input() to ask the questions."], [/int\s*\(/, "Use int() so you can do math with the age and tickets."], [/f["']/, "Use f-strings to print the lines."], [/\bif\b/, "Use if / else to pick the price."], [/\*/, "Calculate the total with * (don't type the answer)."]],
+  starter: `# 🎟️ Movie Ticket Machine\n# 1. ask for name, age, and number of tickets\n\n# 2. pick the price with if / else\n\n# 3. work out the total\n\n# 4. print the 4 lines exactly\n`,
+  hint: `<code>name = input("Name: ")</code><br><code>age = int(input("Age: "))</code><br><code>tickets = int(input("Tickets: "))</code><br><code>if age &lt; 13:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;price = 8</code><br><code>else:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;price = 12</code><br><code>total = price * tickets</code><br><code>print(f"Welcome to the movies, {name}!")</code><br>…and so on. The $ is just a normal character inside the text.`,
+},
+{
+  title: "🛤️ More choices with elif",
+  body: `<p>What if there are more than two options? Use <code>elif</code> (short for "else if"). Python checks each one <b>from top to bottom</b> and runs the <b>first</b> one that's true.</p>`,
+  example: `score = int(input("Your test score (0-100): "))\n\nif score >= 90:\n    print("A — amazing! 🌟")\nelif score >= 80:\n    print("B — great job!")\nelif score >= 70:\n    print("C — not bad")\nelse:\n    print("Keep practicing, you got this 💪")`,
+  challenge: `Make a weather helper. Ask for the temperature (°C). If it's above 30, print "It's hot! 🥵". If it's above 15, print "Nice weather 😎". Otherwise print "Grab a jacket 🧥".`,
+  starter: `# Ask for the temperature and use if / elif / else\n\n`,
+  hint: `<code>temp = int(input("Temperature: "))</code><br><code>if temp &gt; 30:</code> ... <code>elif temp &gt; 15:</code> ... <code>else:</code> ...`,
+  check: c => { const s = strip(c); return !/\belif\b/.test(s) ? "Use elif for the middle choice." : !/\belse\s*:/.test(s) ? "Add an else: at the end for the cold option." : !/int\s*\(/.test(s) ? "Remember int() so you can compare the temperature to numbers." : true; },
+},
+{
+  title: "🔗 Combining checks: and, or, not",
+  body: `<p>Sometimes one check isn't enough. You can combine them:</p>
+<p><code>and</code> — true only if <b>both</b> sides are true<br>
+<code>or</code> — true if <b>at least one</b> side is true<br>
+<code>not</code> — flips true to false (and false to true)</p>
+<pre>age = 15
+age > 12 and age < 20    # True  (a teenager!)
+age < 5 or age > 65      # False
+not age > 18             # True</pre>`,
+  example: `day = input("What day is it? ").lower()\nweather = input("Is it sunny? (yes/no) ").lower()\n\nif day == "saturday" or day == "sunday":\n    print("It's the weekend! 🎉")\n\nif weather == "yes" and day != "monday":\n    print("Perfect day for the park.")\n\nif not weather == "yes":\n    print("Maybe a movie day then 🍿")`,
+  challenge: `Make a <b>roller coaster checker</b> 🎢. Ask for the rider's age and height (in cm). They can ride only if they're <b>at least 10 years old AND at least 140 cm tall</b>. Print "You can ride! 🎢" or "Sorry, not yet."`,
+  starter: `# Ask for age and height, then check both with "and"\n\n`,
+  hint: `<code>age = int(input("Age: "))</code><br><code>height = int(input("Height in cm: "))</code><br><code>if age &gt;= 10 and height &gt;= 140:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;print("You can ride! 🎢")</code><br><code>else:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;print("Sorry, not yet.")</code>`,
+  check: c => { const s = strip(c); return !/\band\b/.test(s) ? "Use and to check both things at once." : !/\bif\b/.test(s) || !/\belse\b/.test(s) ? "Use if / else to print the right message." : (s.match(/int\s*\(/g) || []).length < 2 ? "Ask for both the age and height with int(input(...))." : true; },
+},
+{
+  title: "🔁 Loops: repeat things",
+  body: `<p>Want to do something 100 times? You don't have to write it 100 times! A <code>for</code> loop repeats the indented lines for you.</p>
+<p><code>for i in range(5):</code> repeats 5 times. Each time, the variable <code>i</code> holds the count — but it starts at <b>0</b>, so it goes 0, 1, 2, 3, 4.</p>
+<p><code>range(1, 6)</code> counts from 1 up to (but <b>not including</b>) 6: 1, 2, 3, 4, 5.</p>`,
+  example: `for i in range(3):\n    print("Python is fun!")\n\nfor number in range(1, 6):\n    print(f"Counting: {number}")`,
+  challenge: `Print the <b>7 times table</b>, from <code>7 x 1 = 7</code> all the way to <code>7 x 10 = 70</code>.`,
+  starter: `# Print the 7 times table with a for loop\n\n`,
+  hint: `<code>for n in range(1, 11):</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;print(f"7 x {n} = {7 * n}")</code>`,
+  check: (c, o) => !/\bfor\b/.test(strip(c)) ? "Use a for loop so Python does the repeating." : ![7,14,21,28,35,42,49,56,63,70].every(n => new RegExp("(^|\\D)" + n + "(\\D|$)").test(o)) ? "Close! Make sure it goes all the way from 7 x 1 to 7 x 10 (hint: range(1, 11))." : true,
+},
+{
+  title: "➕ Keeping score: totals & records",
+  body: `<p>A super common trick: make a variable <b>before</b> a loop, then update it <b>inside</b> the loop.</p>
+<p><code>total += 5</code> is a shortcut for <code>total = total + 5</code>. (There's also <code>-=</code> and <code>*=</code>.)</p>
+<p>To find the <b>biggest</b> number, keep a "record" and beat it whenever you find something bigger:</p>
+<pre>best = 0
+for n in [4, 9, 2]:
+    if n > best:
+        best = n     # new record!</pre>`,
+  example: `total = 0\nfor n in range(1, 11):\n    total += n\nprint("1 + 2 + ... + 10 =", total)\n\nbest = 0\nfor n in [12, 45, 7, 33]:\n    if n > best:\n        best = n\nprint("Biggest:", best)`,
+  challenge: `Ask the user for <b>4 numbers</b> using a loop (only write <code>input</code> once!). Print the <b>total</b> of all of them and the <b>biggest</b> one.`,
+  starter: `total = 0\nbiggest = 0\n\n# loop 4 times: ask for a number, add it to total, check if it's the biggest\n\n# print the total and the biggest\n`,
+  hint: `<code>for i in range(4):</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;n = int(input("Number: "))</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;total += n</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;if n &gt; biggest:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;biggest = n</code><br><code>print("Total:", total)</code><br><code>print("Biggest:", biggest)</code>`,
+  check: c => { const s = strip(c); return !/\bfor\b|\bwhile\b/.test(s) ? "Use a loop so input() is only written once." : (s.match(/input\s*\(/g) || []).length > 1 ? "Only write input() once — put it inside the loop." : !/\+=|=\s*\w+\s*\+/.test(s) ? "Add each number to the total with total += n" : !/>/.test(s) ? "Track the biggest with if n > biggest:" : true; },
+},
+{
+  title: "📋 Lists: lots of things in one variable",
+  body: `<p>A <b>list</b> holds many things in one variable. Use square brackets <code>[ ]</code> and put commas between items.</p>
+<p>Each item has a position number — but counting starts at <b>0</b>! So <code>snacks[0]</code> is the first one.</p>
+<p><code>.append()</code> adds something to the end. <code>len()</code> tells you how many items there are. And a <code>for</code> loop can go through every item, one by one.</p>`,
+  example: `snacks = ["pizza", "tacos", "ice cream"]\n\nprint(snacks[0])\nsnacks.append("popcorn")\nprint(f"I have {len(snacks)} snacks")\n\nfor snack in snacks:\n    print(f"Yum, {snack}!")`,
+  challenge: `Make a list with the names of at least <b>3 friends</b>. Then use a <code>for</code> loop to say hi to each one.`,
+  starter: `# Make a list of 3+ friends and say hi to each one with a for loop\n\n`,
+  hint: `<code>friends = ["Sam", "Priya", "Jordan"]</code><br><code>for friend in friends:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;print(f"Hi {friend}!")</code>`,
+  check: c => { const s = strip(c); return !/\[[^\]]*,[^\]]*,[^\]]*\]/.test(s) ? "Make a list with at least 3 names, separated by commas, inside [ ]." : !/for\s+\w+\s+in\s+\w+/.test(s) ? "Now loop through it: for friend in friends:" : true; },
+},
+{
+  title: "⏳ While loops: repeat until...",
+  body: `<p>A <code>while</code> loop keeps repeating <b>as long as</b> something is true. It's perfect when you don't know how many times you'll need to repeat.</p>
+<div class="tip">🚨 Careful! If the thing never becomes false, the loop goes on <b>forever</b> and the page freezes. If that happens, just reload the page — your code is saved.</div>`,
+  example: `count = 5\nwhile count > 0:\n    print(count)\n    count = count - 1\nprint("Blast off! 🚀")`,
+  challenge: `Make a quiz question that won't let you escape 😈. Keep asking <b>"What is 6 x 7?"</b> until the user answers <b>42</b>. Then print "Correct!".`,
+  starter: `# Keep asking "What is 6 x 7?" until they answer 42\n\n`,
+  hint: `<code>answer = 0</code><br><code>while answer != 42:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;answer = int(input("What is 6 x 7? "))</code><br><code>print("Correct!")</code>`,
+  check: c => { const s = strip(c); return !/\bwhile\b/.test(s) ? "Use a while loop to keep asking." : !/input/.test(s) ? "Ask the question with input() inside the loop." : !/42/.test(s) ? "Check whether the answer is 42." : true; },
+},
+{
+  title: "🛠️ Functions: make your own commands",
+  body: `<p><code>print()</code> and <code>input()</code> are functions that come with Python. But you can make <b>your own</b>!</p>
+<p>Use <code>def</code> to define one. Give it a name, and in the brackets put the things it needs (called <b>parameters</b>). The indented lines are what it does.</p>
+<p><code>return</code> sends an answer back, so you can use it later.</p>
+<div class="tip">💡 Defining a function doesn't run it! It's like writing a recipe. You have to <b>call</b> it (use its name with brackets) to actually cook.</div>`,
+  example: `def greet(name):\n    print(f"Hello, {name}! 👋")\n\ngreet("Maya")\ngreet("Leo")\n\ndef double(n):\n    return n * 2\n\nprint(double(21))`,
+  challenge: `Write a function called <code>square</code> that takes a number and <b>returns</b> that number times itself. Then print <code>square(7)</code> — it should show <b>49</b>.`,
+  starter: `# Write a function called square, then print(square(7))\n\n`,
+  hint: `<code>def square(n):</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;return n * n</code><br><br><code>print(square(7))</code>`,
+  check: (c, o) => { const s = strip(c); return !/def\s+square\s*\(/.test(s) ? "Define it with def square(n):" : !/\breturn\b/.test(s) ? "Use return to send the answer back." : !/(^|\D)49(\D|$)/.test(o) ? "Now print(square(7)) — it should show 49." : true; },
+},
+{
+  gate: true,
+  title: "📝 PROJECT 2: Class Grade Report",
+  body: `<p><b>Checkpoint!</b> 🚧 Time to prove your skills. This project uses <b>everything</b> so far: functions, lists, for loops, while loops, totals & records, elif, and/or — plus all the Level-start basics.</p>
+<p>It has to work <b>exactly</b> right. I'll test it with different classes of students, including some secret tests.</p>
+<div class="tip">💬 Your <code>input()</code> questions can say anything — only the lines you <b>print</b> are checked.</div>`,
+  spec: `<p><b>1.</b> Ask how many students there are.</p>
+<p><b>2.</b> For each student, ask for their <b>name</b>, then their <b>score</b>. If the score is less than 0 <b>or</b> more than 100, print <code>Invalid score, try again.</code> and ask for the score again (keep asking until it's valid).</p>
+<p><b>3.</b> Write a function <code>letter(score)</code> that <b>returns</b> the grade: <b>A</b> for 90+, <b>B</b> for 80+, <b>C</b> for 70+, <b>D</b> for 60+, otherwise <b>F</b>.</p>
+<p><b>4.</b> After <b>all</b> the questions, print one line per student (in the order they were entered), then the average (rounded to 1 decimal with <code>round(average, 1)</code>), then the student with the highest score (if there's a tie, the first one):</p>
+<pre>NAME: SCORE (GRADE)
+...
+Class average: AVERAGE
+Top student: NAME</pre>`,
+  tests: [
+    { inputs: ["3", "Ava", "95", "Ben", "150", "82", "Cara", "67"], expect: "Invalid score, try again.\nAva: 95 (A)\nBen: 82 (B)\nCara: 67 (D)\nClass average: 81.3\nTop student: Ava" },
+    { inputs: ["2", "Zed", "59", "Amy", "100"], expect: "Zed: 59 (F)\nAmy: 100 (A)\nClass average: 79.5\nTop student: Amy" },
+    { inputs: ["1", "Solo", "-5", "101", "70"], expect: "Invalid score, try again.\nInvalid score, try again.\nSolo: 70 (C)\nClass average: 70.0\nTop student: Solo" },
+    { inputs: ["4", "Kai", "88", "Lu", "90", "Mo", "90", "Ned", "80"], expect: "Kai: 88 (B)\nLu: 90 (A)\nMo: 90 (A)\nNed: 80 (B)\nClass average: 87.0\nTop student: Lu" },
+  ],
+  requires: [[/def\s+letter\s*\(/, "Write a function called letter(score)."], [/\breturn\b/, "letter() should return the grade."], [/\belif\b/, "Use elif inside letter() for the different grades."], [/\bwhile\b/, "Use a while loop to keep asking until the score is valid."], [/\bfor\b/, "Use a for loop to go through the students."], [/\.append\s*\(/, "Store the names and scores in lists with .append()."], [/\bor\b|\band\b/, "Use or (or and) to check if the score is out of range."]],
+  starter: `# 📝 Class Grade Report\n\ndef letter(score):\n    # return "A", "B", "C", "D" or "F"\n    pass\n\n\nnames = []\nscores = []\n\n# 1. ask how many students\n\n# 2. for each student: ask name, then score (while loop until it's valid!)\n\n# 3. print each student's line, then the average and the top student\n`,
+  hint: `Getting a valid score:<br><code>score = int(input("Score: "))</code><br><code>while score &lt; 0 or score &gt; 100:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;print("Invalid score, try again.")</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;score = int(input("Score: "))</code><br><br>Printing the report:<br><code>for i in range(count):</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;print(f"{names[i]}: {scores[i]} ({letter(scores[i])})")</code><br><br>For the top student, keep a record: if <code>scores[i] &gt; best_score</code> (use <b>&gt;</b>, not <b>&gt;=</b>, so ties keep the first one!).`,
+},
+{
+  title: "🏆 You did it!",
+  body: `<p><b>You now know the basics of Python!</b> 🎉 Seriously — these are the same building blocks real programmers use every day:</p>
+<p>✅ print &nbsp; ✅ math &nbsp; ✅ variables &nbsp; ✅ f-strings &nbsp; ✅ input &nbsp; ✅ int() &nbsp; ✅ if / elif / else &nbsp; ✅ and / or / not &nbsp; ✅ for loops &nbsp; ✅ totals & records &nbsp; ✅ lists &nbsp; ✅ while loops &nbsp; ✅ functions</p>
+<h3>💡 Ideas to build next</h3>
+<p>• A <b>quiz game</b> with 5 questions that keeps score<br>
+• A <b>rock, paper, scissors</b> game against the computer (use <code>random.choice(["rock", "paper", "scissors"])</code>)<br>
+• A <b>story generator</b> that asks for words and makes a silly story<br>
+• A <b>tip calculator</b> or <b>pocket money tracker</b><br>
+• Draw a <b>chart</b> — check the 📚 Examples menu for the matplotlib one!</p>
+<div class="tip">🧑‍💻 Click the <b>+</b> tab above the editor to make a new file for each project. Everything saves automatically.</div>
+<div class="challenge"><h3>🔓 Level 2 unlocked!</h3><p>Ready for harder stuff? Level 2 covers string tricks, dictionaries, FizzBuzz, error handling, classes, files, recursion, charts, with two big checkpoint projects along the way, ending with a full Pet Shelter Manager app. 🐾</p><p>Click <b>"Start Level 2 →"</b> below.</p></div>`,
+},
+// ===== LEVEL 2: Challenger =====
+{
+  level: 2,
+  title: "🔤 String superpowers",
+  body: `<p>Welcome to <b>Level 2</b>! 💪 Things get harder from here, but you've got all the basics you need.</p>
+<p>Text in Python is called a <b>string</b>. Strings come with built-in tricks called <b>methods</b> — you use them with a dot:</p>
+<p><code>.upper()</code> ALL CAPS &nbsp; <code>.lower()</code> all lowercase &nbsp; <code>.title()</code> Every Word Capitalized &nbsp; <code>.replace("a", "b")</code> swap letters</p>
+<p><b>Slicing</b> grabs part of a string with square brackets. Positions start at 0:</p>
+<pre>word = "python"
+word[0]      # "p"   (first letter)
+word[-1]     # "n"   (last letter)
+word[0:3]    # "pyt" (from 0 up to, not including, 3)
+word[::-1]   # "nohtyp" (backwards!)</pre>
+<p><code>in</code> checks if something is inside: <code>"th" in "python"</code> is <b>True</b>.</p>
+<p><code>.split()</code> chops a string into a <b>list of words</b>: <code>"I love pizza".split()</code> → <code>["I", "love", "pizza"]</code>. And <code>.strip()</code> removes extra spaces from the ends.</p>`,
+  example: `word = "Python"\nprint(word.upper())\nprint(word.lower())\nprint(len(word), "letters")\nprint(word[0], "is the first letter")\nprint(word[::-1])\nprint("y" in word)
+print("I love pizza".split())`,
+  challenge: `Make a <b>palindrome checker</b>. A palindrome reads the same backwards, like <i>racecar</i> or <i>level</i>. Ask for a word, then print whether it's a palindrome or not. Bonus: make it work even if they type capital letters (like <i>Racecar</i>).`,
+  starter: `# Ask for a word, flip it with [::-1], and check if it's the same\n\n`,
+  hint: `<code>word = input("Type a word: ").lower()</code><br><code>if word == word[::-1]:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;print("Palindrome! 🔁")</code><br><code>else:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;print("Not a palindrome.")</code>`,
+  check: c => { const s = strip(c); return !/\[\s*:\s*:\s*-1\s*\]/.test(s) ? "Flip the word backwards with [::-1]" : !/\bif\b/.test(s) ? "Use if to compare the word with its backwards version." : !/input/.test(s) ? "Ask for the word with input()." : true; },
+},
+{
+  level: 2,
+  title: "📊 List power-ups",
+  body: `<p>Lists have lots of useful tools:</p>
+<p><code>max(nums)</code> biggest &nbsp; <code>min(nums)</code> smallest &nbsp; <code>sum(nums)</code> total &nbsp; <code>len(nums)</code> how many</p>
+<p><code>nums.sort()</code> puts them in order &nbsp; <code>nums.remove(5)</code> removes a 5 &nbsp; <code>nums[-1]</code> the last item</p>
+<p>You can start with an <b>empty list</b> <code>[]</code> and fill it up with <code>.append()</code> inside a loop. Super useful!</p>`,
+  example: `scores = []\nscores.append(72)\nscores.append(95)\nscores.append(88)\n\nscores.sort()\nprint("Sorted:", scores)\nprint("Highest:", max(scores))\nprint("Lowest:", min(scores))\nprint("Average:", sum(scores) / len(scores))`,
+  challenge: `Ask the user for <b>5 test scores</b> (use a loop!). Store them in a list, then print the <b>highest</b>, the <b>lowest</b>, and the <b>average</b>.`,
+  starter: `scores = []\n\n# Use a for loop to ask 5 times and append each score\n\n# Then print the highest, lowest and average\n`,
+  hint: `<code>for i in range(5):</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;score = int(input(f"Score {i + 1}: "))</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;scores.append(score)</code><br><br>Then use <code>max(scores)</code>, <code>min(scores)</code> and <code>sum(scores) / len(scores)</code>.`,
+  check: c => { const s = strip(c); return !/\bfor\b|\bwhile\b/.test(s) ? "Use a loop so you only write input() once." : !/\.append\s*\(/.test(s) ? "Add each score to the list with .append()" : !/max\s*\(/.test(s) || !/min\s*\(/.test(s) ? "Print the highest with max() and lowest with min()." : !/sum\s*\(/.test(s) ? "For the average, use sum(scores) / len(scores)." : true; },
+},
+{
+  level: 2,
+  title: "📖 Dictionaries: look things up",
+  body: `<p>A list stores things in order. A <b>dictionary</b> stores things by <b>name</b> — like a real dictionary where you look up a word to find its meaning.</p>
+<p>Each entry is a <b>key</b> and a <b>value</b>, with a colon between: <code>{"apples": 3, "bananas": 5}</code></p>
+<pre>stock = {"apples": 3, "bananas": 5}
+stock["apples"]        # 3
+stock["pears"] = 10    # add a new one
+stock["apples"] += 1   # change one
+"kiwi" in stock        # False</pre>
+<p>Loop through both keys and values with <code>.items()</code>.</p>`,
+  example: `inventory = {"sword": 1, "potion": 3, "gold": 50}\n\nprint(f"You have {inventory['gold']} gold")\ninventory["potion"] -= 1\ninventory["shield"] = 1\n\nfor item, amount in inventory.items():\n    print(f"{item}: {amount}")`,
+  challenge: `Make a <b>translator</b> 🌍. Create a dictionary of at least 4 English words and what they are in another language (like <code>"hello": "hola"</code>). Ask the user for a word. If it's in the dictionary, print the translation. If not, print "I don't know that word yet".`,
+  starter: `# Make a dictionary of words, ask for one, and translate it\n\n`,
+  hint: `<code>words = {"hello": "hola", "cat": "gato", "dog": "perro", "thank you": "gracias"}</code><br><code>word = input("English word: ").lower()</code><br><code>if word in words:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;print(words[word])</code><br><code>else:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;print("I don't know that word yet")</code>`,
+  check: c => { const s = strip(c); return (s.match(/["'][^"']*["']\s*:\s*["']/g) || []).length < 4 ? "Make a dictionary with at least 4 words, like {\"hello\": \"hola\", ...}" : !/\bin\b/.test(s) ? "Check if their word is in the dictionary with: if word in words:" : !/input/.test(s) ? "Ask for a word with input()." : true; },
+},
+{
+  level: 2,
+  title: "⭐ Patterns & loops inside loops",
+  body: `<p>Cool trick: you can <b>multiply a string</b>! <code>"ha" * 3</code> gives <b>hahaha</b>.</p>
+<p>You can also put a loop <b>inside</b> another loop. The inner loop runs all the way through, every single time the outer loop goes around once.</p>
+<p><code>print(..., end="")</code> stops print from jumping to a new line, so you can print several things on one row.</p>`,
+  example: `print("ha" * 3)\nprint("-" * 20)\n\nfor row in range(1, 4):\n    for col in range(1, 4):\n        print(f"({row},{col})", end=" ")\n    print()  # new line after each row`,
+  challenge: `Draw a <b>star triangle</b> 5 rows tall:<pre>*\n**\n***\n****\n*****</pre>Bonus: ask the user how tall it should be!`,
+  starter: `# Draw a triangle of stars with a loop\n\n`,
+  hint: `<code>for i in range(1, 6):</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;print("*" * i)</code>`,
+  check: (c, o) => !/\bfor\b|\bwhile\b/.test(strip(c)) ? "Use a loop to draw each row." : !/^\s*\*{5}\s*$/m.test(o) || !/^\s*\*\s*$/m.test(o) ? "Close! The triangle should go from 1 star up to 5 stars." : true,
+},
+{
+  level: 2,
+  title: "🐝 FizzBuzz (a famous coding test!)",
+  body: `<p>Meet <code>%</code>, the <b>remainder</b> operator. <code>10 % 3</code> is <b>1</b>, because 10 ÷ 3 = 3 with 1 left over.</p>
+<p>If <code>n % 3 == 0</code>, there's nothing left over, so <b>n divides evenly by 3</b>. That's how you check if a number is a multiple of something (or if it's even: <code>n % 2 == 0</code>).</p>
+<p>Two more loop controls: <code>break</code> stops a loop immediately, and <code>continue</code> skips to the next round.</p>
+<div class="tip">🧑‍💼 FizzBuzz is a real question companies ask in programming job interviews!</div>`,
+  example: `for n in range(1, 11):\n    if n % 2 == 0:\n        print(n, "is even")\n    else:\n        print(n, "is odd")\n\nfor n in range(1, 100):\n    if n * n > 50:\n        print("First square over 50 is", n * n)\n        break`,
+  challenge: `Print the numbers from <b>1 to 30</b>, but:<br>• for multiples of 3, print <b>Fizz</b> instead<br>• for multiples of 5, print <b>Buzz</b> instead<br>• for multiples of <b>both</b> 3 and 5, print <b>FizzBuzz</b><br>So it starts: 1, 2, Fizz, 4, Buzz, Fizz, 7…`,
+  starter: `# FizzBuzz from 1 to 30\n\n`,
+  hint: `Check the "both" case <b>first</b>, otherwise 15 will just say Fizz!<br><code>for n in range(1, 31):</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;if n % 15 == 0:</code> → FizzBuzz<br><code>&nbsp;&nbsp;&nbsp;&nbsp;elif n % 3 == 0:</code> → Fizz<br><code>&nbsp;&nbsp;&nbsp;&nbsp;elif n % 5 == 0:</code> → Buzz<br><code>&nbsp;&nbsp;&nbsp;&nbsp;else:</code> → print(n)`,
+  check: (c, o) => { const L = o.trim().split("\n").map(x => x.trim()); return !/%/.test(strip(c)) ? "Use % to check for multiples." : L[14] !== "FizzBuzz" ? "15 should say FizzBuzz — check the 'both' case first!" : (L[2] !== "Fizz" || L[4] !== "Buzz" || L[6] !== "7" || L[29] !== "FizzBuzz") ? "Almost — check it starts 1, 2, Fizz, 4, Buzz… and goes up to 30." : true; },
+},
+{
+  level: 2,
+  title: "🧰 Functions, level up",
+  body: `<p>Functions can take <b>lists</b> as input, return <b>True or False</b>, and have <b>default values</b> for parameters:</p>
+<pre>def greet(name, greeting="Hello"):
+    return f"{greeting}, {name}!"
+
+greet("Sam")          # "Hello, Sam!"
+greet("Sam", "Yo")    # "Yo, Sam!"</pre>
+<p>Variables made <i>inside</i> a function only exist inside it. That keeps things tidy!</p>
+<div class="tip">🧠 Good programmers split big problems into small functions that each do <b>one job</b>.</div>`,
+  example: `def is_even(n):\n    return n % 2 == 0\n\ndef biggest(numbers):\n    best = numbers[0]\n    for n in numbers:\n        if n > best:\n            best = n\n    return best\n\nprint(is_even(4), is_even(7))\nprint(biggest([3, 17, 8, 12]))`,
+  challenge: `Write a function <code>average(numbers)</code> that takes a list and <b>returns</b> the average. Then print <code>average([4, 8, 6])</code> (should show <b>6.0</b>) and <code>average([10, 20])</code> (should show <b>15.0</b>).`,
+  starter: `# Write average(numbers), then test it\n\n`,
+  hint: `<code>def average(numbers):</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;return sum(numbers) / len(numbers)</code>`,
+  check: (c, o) => { const s = strip(c); return !/def\s+average\s*\(/.test(s) ? "Define it with def average(numbers):" : !/\breturn\b/.test(s) ? "Use return to give back the answer." : !/(^|[^\d.])6(\.0)?(\D|$)/.test(o) || !/(^|[^\d.])15(\.0)?(\D|$)/.test(o) ? "Test it: print(average([4, 8, 6])) should show 6.0 and average([10, 20]) should show 15.0" : true; },
+},
+{
+  level: 2,
+  title: "🛡️ Catching errors with try / except",
+  body: `<p>Remember how <code>int(input())</code> crashes if someone types a word? Real programs don't crash — they <b>handle</b> the problem.</p>
+<p><code>try:</code> means "try running this". If an error happens, Python jumps to <code>except:</code> instead of crashing.</p>
+<pre>try:
+    age = int(input("Age: "))
+except ValueError:
+    print("That's not a number!")</pre>
+<p><code>ValueError</code> is the name of the error <code>int()</code> makes when it gets something that isn't a number.</p>`,
+  example: `text = input("Type a number (or a word to see what happens): ")\n\ntry:\n    number = int(text)\n    print(f"Double that is {number * 2}")\nexcept ValueError:\n    print(f"Oops, '{text}' isn't a number!")`,
+  challenge: `Make a program that <b>keeps asking</b> for a number until the user types a real one. If they type a word, print "That's not a number, try again!". Once they type a number, print its square.`,
+  starter: `# Keep asking until they type a real number (use while + try/except)\n\n`,
+  hint: `<code>while True:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;try:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n = int(input("Number: "))</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;break</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;except ValueError:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print("That's not a number, try again!")</code><br><code>print(n * n)</code>`,
+  check: c => { const s = strip(c); return !/\btry\s*:/.test(s) ? "Put the int(input()) inside a try:" : !/\bexcept\b/.test(s) ? "Add except ValueError: to catch the mistake." : !/\bwhile\b/.test(s) ? "Use a while loop so it keeps asking." : true; },
+},
+{
+  level: 2,
+  gate: true,
+  title: "🍿 PROJECT 3: Snack Shop Checkout",
+  body: `<p><b>Checkpoint!</b> 🚧 This project uses everything from Level 2 so far: string methods, dictionaries, lists, patterns with <code>*</code>, functions and try/except — and of course loops and ifs.</p>
+<p>It has to work <b>exactly</b>. I'll play shopper with different orders (some secret), including some silly typing to see if your program crashes. 😏</p>
+<div class="tip">💬 Your <code>input()</code> questions can say anything — only what you <b>print</b> is checked.</div>`,
+  spec: `<p>Start with this menu (it's in the starter code):</p>
+<pre>menu = {"chips": 2, "soda": 3, "candy": 1, "cookie": 2}</pre>
+<p><b>1.</b> Keep asking for an item. Make it lowercase and remove extra spaces (<code>.lower().strip()</code>). If they type <code>done</code>, stop asking.</p>
+<p><b>2.</b> If the item isn't on the menu, print <code>Sorry, we don't sell ITEM.</code> and ask again.</p>
+<p><b>3.</b> Otherwise ask how many. If it's not a number, print <code>That's not a number.</code> and skip that item (use try/except!). Otherwise add it to a <b>cart dictionary</b> — if they order the same thing twice, add the amounts together.</p>
+<p><b>4.</b> When they're done, print the receipt. Items go in the order they were first added. The lines of dashes are <b>15</b> characters long:</p>
+<pre>--- RECEIPT ---
+chips x3 = $6
+soda x1 = $3
+---------------
+Total: $9</pre>
+<p><b>5.</b> If they bought <b>5 or more snacks</b> in total, print <code>Discount: -$2</code> just before the Total line, and take $2 off the total.</p>`,
+  tests: [
+    { inputs: ["chips", "3", "SODA", "1", "pizza", "done"], expect: "Sorry, we don't sell pizza.\n--- RECEIPT ---\nchips x3 = $6\nsoda x1 = $3\n---------------\nTotal: $9" },
+    { inputs: ["candy", "lots", "candy", "4", "  Cookie ", "2", "candy", "1", "done"], expect: "That's not a number.\n--- RECEIPT ---\ncandy x5 = $5\ncookie x2 = $4\n---------------\nDiscount: -$2\nTotal: $7" },
+    { inputs: ["done"], expect: "--- RECEIPT ---\n---------------\nTotal: $0" },
+    { inputs: ["soda", "2", "gum", "chips", "three", "chips", "2", "soda", "1", "DONE"], expect: "Sorry, we don't sell gum.\nThat's not a number.\n--- RECEIPT ---\nsoda x3 = $9\nchips x2 = $4\n---------------\nDiscount: -$2\nTotal: $11" },
+  ],
+  requires: [[/menu\s*=\s*\{/, "Keep the menu dictionary."], [/\w+\s*=\s*\{\s*\}|dict\s*\(\s*\)/, "Make an empty cart dictionary: cart = {}"], [/\btry\s*:/, "Use try: around the int() for the amount."], [/\bexcept\b/, "Catch the mistake with except ValueError:"], [/\.lower\s*\(/, "Use .lower() so CHIPS and chips both work."], [/["']-["']\s*\*|\*\s*["']-["']/, "Make the dashed line with \"-\" * 15"]],
+  starter: `# 🍿 Snack Shop Checkout\n\nmenu = {"chips": 2, "soda": 3, "candy": 1, "cookie": 2}\ncart = {}\n\n# 1. keep asking for items until "done"\n#    - not on the menu? print the sorry message\n#    - ask how many (try/except!) and add to cart\n\n\n# 2. print the receipt\n`,
+  hint: `<code>while True:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;item = input("Item: ").lower().strip()</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;if item == "done":</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;break</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;if item not in menu:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f"Sorry, we don't sell {item}.")</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue</code><br><br>Adding to the cart: <code>cart[item] = cart.get(item, 0) + amount</code><br><br>Receipt: loop with <code>for item, amount in cart.items():</code> and keep a running total and a count of snacks.`,
+},
+{
+  level: 2,
+  title: "🎲 Modules: borrow code from Python",
+  body: `<p>Python comes with tons of ready-made code in <b>modules</b>. You <code>import</code> them to use them:</p>
+<p><code>import random</code> → <code>random.randint(1, 6)</code>, <code>random.choice(my_list)</code>, <code>random.shuffle(my_list)</code></p>
+<p><code>import math</code> → <code>math.sqrt(16)</code>, <code>math.pi</code></p>
+<p><code>import time</code> → <code>time.time()</code> (seconds since 1970!)</p>`,
+  example: `import random\nimport math\n\ncolors = ["red", "green", "blue", "purple"]\nprint("Random color:", random.choice(colors))\n\nrandom.shuffle(colors)\nprint("Shuffled:", colors)\n\nprint("Square root of 144:", math.sqrt(144))\nprint("Pi is about", round(math.pi, 4))`,
+  challenge: `Build <b>Rock, Paper, Scissors</b> ✊✋✌️ against the computer. The computer picks randomly with <code>random.choice</code>. Ask the player for their choice, then print who won (or a tie). Bonus: play best of 3!`,
+  starter: `import random\n\n# 1. computer picks rock, paper or scissors\n# 2. ask the player\n# 3. figure out who wins\n`,
+  hint: `<code>computer = random.choice(["rock", "paper", "scissors"])</code><br><code>player = input("rock, paper or scissors? ").lower()</code><br><code>if player == computer:</code> → tie<br><code>elif (player == "rock" and computer == "scissors") or (player == "paper" and computer == "rock") or (player == "scissors" and computer == "paper"):</code> → you win<br><code>else:</code> → computer wins`,
+  check: c => { const s = strip(c); return !/random\.choice/.test(s) ? "Let the computer pick with random.choice([...])" : !/input/.test(s) ? "Ask the player for their choice with input()." : !/\belif\b|\band\b/.test(s) ? "Work out who wins with if / elif / else (and the word 'and' helps!)." : true; },
+},
+{
+  level: 2,
+  title: "🐶 Classes: make your own types",
+  body: `<p>A <b>class</b> is a blueprint for making things (called <b>objects</b>). Each object has its own <b>data</b> and its own <b>abilities</b> (methods).</p>
+<p>Think of a video game: there's one <i>Player</i> blueprint, but each player has their own name, health and score.</p>
+<p><code>__init__</code> runs when you make a new object — it sets things up. <code>self</code> means "this particular object".</p>`,
+  example: `class Pet:\n    def __init__(self, name):\n        self.name = name\n        self.hunger = 5\n\n    def feed(self):\n        self.hunger -= 2\n        print(f"{self.name} munches happily. Hunger: {self.hunger}")\n\n    def play(self):\n        self.hunger += 1\n        print(f"{self.name} runs around! Hunger: {self.hunger}")\n\nrex = Pet("Rex")\nmilo = Pet("Milo")\nrex.feed()\nmilo.play()\nmilo.play()`,
+  challenge: `Make a <code>BankAccount</code> class 🏦. It should start with a <code>balance</code> of 0, and have a <code>deposit(amount)</code> method and a <code>withdraw(amount)</code> method. Withdrawing more than you have should print "Not enough money!" instead. Test it out!`,
+  starter: `class BankAccount:\n    def __init__(self, owner):\n        self.owner = owner\n        self.balance = 0\n\n    # add deposit and withdraw methods here\n\n\n# test it\nacct = BankAccount("You")\n`,
+  hint: `<code>def deposit(self, amount):</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;self.balance += amount</code><br><br><code>def withdraw(self, amount):</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;if amount &gt; self.balance:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print("Not enough money!")</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;else:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.balance -= amount</code><br><br>Test: <code>acct.deposit(50)</code>, <code>acct.withdraw(100)</code>, <code>print(acct.balance)</code>`,
+  check: c => { const s = strip(c); return !/class\s+BankAccount/.test(s) ? "Make a class called BankAccount." : !/def\s+deposit\s*\(\s*self/.test(s) ? "Add a deposit method: def deposit(self, amount):" : !/def\s+withdraw\s*\(\s*self/.test(s) ? "Add a withdraw method: def withdraw(self, amount):" : !/\.(deposit|withdraw)\s*\(/.test(s.replace(/def\s+\w+/g, "")) ? "Now test it by calling acct.deposit(...) and acct.withdraw(...)" : true; },
+},
+{
+  level: 2,
+  title: "💾 Saving to files",
+  body: `<p>Everything in your variables disappears when the program ends. To <b>save</b> stuff, write it to a <b>file</b>!</p>
+<pre>with open("notes.txt", "w") as f:    # "w" = write
+    f.write("Hello file!\\n")
+
+with open("notes.txt", "r") as f:    # "r" = read
+    print(f.read())</pre>
+<p><code>"a"</code> means <b>append</b> — add to the end without erasing what's there. <code>\\n</code> means "new line".</p>
+<div class="tip">📁 In this editor, files live inside the page while it's open. On a real computer they'd be saved to your disk.</div>`,
+  example: `with open("highscores.txt", "w") as f:\n    f.write("Maya 120\\n")\n    f.write("Leo 95\\n")\n\nwith open("highscores.txt", "a") as f:\n    f.write("Sam 150\\n")\n\nwith open("highscores.txt", "r") as f:\n    for line in f:\n        name, score = line.split()\n        print(f"{name} scored {score}")`,
+  challenge: `Make a <b>to-do list saver</b>. Ask the user for 3 to-do items and write each one to a file called <code>todo.txt</code> (one per line). Then open the file again, read it, and print every item with a number in front (1., 2., 3.).`,
+  starter: `# 1. ask for 3 items and write them to todo.txt\n\n# 2. read todo.txt and print each item numbered\n`,
+  hint: `<code>with open("todo.txt", "w") as f:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;for i in range(3):</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f.write(input("To-do: ") + "\\n")</code><br><br><code>with open("todo.txt") as f:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;for num, line in enumerate(f, start=1):</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f"{num}. {line.strip()}")</code>`,
+  check: c => { const s = strip(c); return !/open\s*\([^)]*["']w["']/.test(s) ? "Open the file for writing with open(\"todo.txt\", \"w\")" : !/\.write\s*\(/.test(s) ? "Write each item with f.write(...)" : (s.match(/open\s*\(/g) || []).length < 2 ? "Now open the file a second time to read it back." : true; },
+},
+{
+  level: 2,
+  title: "🌀 Recursion: a function that calls itself",
+  body: `<p>This one's a brain-bender 🤯. A <b>recursive</b> function solves a problem by calling <b>itself</b> on a smaller version of the problem.</p>
+<p>Every recursive function needs a <b>base case</b> — a point where it stops. Otherwise it would go on forever!</p>
+<p><b>Factorial</b> means multiplying all numbers down to 1: <code>5! = 5 × 4 × 3 × 2 × 1 = 120</code>. Notice that 5! is just 5 × 4!. That's recursion!</p>`,
+  example: `def countdown(n):\n    if n == 0:          # base case: stop!\n        print("Liftoff! 🚀")\n        return\n    print(n)\n    countdown(n - 1)    # call itself with a smaller number\n\ncountdown(5)`,
+  challenge: `Write a <b>recursive</b> function <code>factorial(n)</code>. If n is 1, return 1. Otherwise, return n times <code>factorial(n - 1)</code>. Then print <code>factorial(5)</code> — it should show <b>120</b>.`,
+  starter: `def factorial(n):\n    # base case: if n is 1, return 1\n\n    # otherwise: return n times factorial of (n - 1)\n\n\nprint(factorial(5))\n`,
+  hint: `<code>def factorial(n):</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;if n == 1:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return 1</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;return n * factorial(n - 1)</code>`,
+  check: (c, o) => { const s = strip(c); return !/def\s+factorial/.test(s) ? "Define def factorial(n):" : (s.match(/factorial\s*\(/g) || []).length < 3 ? "Make factorial call itself inside the function: return n * factorial(n - 1)" : !/(^|\D)120(\D|$)/.test(o) ? "print(factorial(5)) should show 120. Check your base case and the multiply." : true; },
+},
+{
+  level: 2,
+  title: "⚡ List comprehensions: lists in one line",
+  body: `<p>Making a new list from an old one is so common that Python has a shortcut called a <b>list comprehension</b>:</p>
+<pre>squares = [n * n for n in range(1, 6)]
+# [1, 4, 9, 16, 25]</pre>
+<p>Read it like a sentence: "<i>n times n, for every n in 1 to 5</i>".</p>
+<p>Add an <code>if</code> at the end to <b>filter</b>, keeping only some items:</p>
+<pre>evens = [n for n in range(10) if n % 2 == 0]
+# [0, 2, 4, 6, 8]</pre>
+<p>And <code>", ".join(list_of_words)</code> glues a list of strings together into one string.</p>`,
+  example: `names = ["maya", "leo", "sam", "priya"]\n\nshouty = [name.upper() for name in names]\nprint(shouty)\n\nshort = [name for name in names if len(name) <= 3]\nprint(short)\n\nprint(", ".join(names))`,
+  challenge: `Start with <code>words = ["cat", "elephant", "dog", "giraffe", "ant", "hippo"]</code>. In <b>one line</b>, make a list of only the words <b>longer than 4 letters</b>, in <b>UPPERCASE</b>. Print it.`,
+  starter: `words = ["cat", "elephant", "dog", "giraffe", "ant", "hippo"]\n\n# make a list of the long words in uppercase, in one line\n\n`,
+  hint: `<code>big = [w.upper() for w in words if len(w) &gt; 4]</code><br><code>print(big)</code>`,
+  check: (c, o) => { const s = strip(c); return !/\[[^\]]*\bfor\b[^\]]*\bin\b[^\]]*\bif\b[^\]]*\]/.test(s) ? "Write it as one list comprehension: [... for w in words if ...]" : !/\.upper\s*\(/.test(s) ? "Make them uppercase with .upper()" : !(/ELEPHANT/.test(o) && /GIRAFFE/.test(o) && /HIPPO/.test(o)) || /DOG|\bCAT\b|\bANT\b/.test(o) ? "Check your filter: it should keep ELEPHANT, GIRAFFE and HIPPO only." : true; },
+},
+{
+  level: 2,
+  title: "🗂️ Lists of dictionaries (real data!)",
+  body: `<p>Real apps store data like this: a <b>list</b> where each item is a <b>dictionary</b> (or an object). A list of players, a list of songs, a list of messages…</p>
+<p>To <b>sort</b> them, tell Python <i>what</i> to sort by using <code>key=</code>:</p>
+<pre>sorted(players, key=lambda p: p["score"])</pre>
+<p><code>lambda p: p["score"]</code> is a tiny nameless function that means "<i>for each player p, look at its score</i>". Add <code>reverse=True</code> to sort biggest-first.</p>
+<div class="tip">🐶 This works with objects too: <code>sorted(pets, key=lambda p: p.name)</code></div>`,
+  example: `players = [\n    {"name": "Maya", "score": 120},\n    {"name": "Leo", "score": 95},\n    {"name": "Sam", "score": 150},\n]\n\nprint("🏆 Leaderboard")\nfor p in sorted(players, key=lambda p: p["score"], reverse=True):\n    print(f"{p['name']}: {p['score']}")\n\ntotal = sum(p["score"] for p in players)\nprint("Total points:", total)`,
+  challenge: `Make a <b>playlist</b> 🎵: a list of at least 4 songs, where each song is a dictionary with a <code>"title"</code> and <code>"minutes"</code>. Print the songs sorted from <b>shortest to longest</b>, then print the total length of the playlist.`,
+  starter: `playlist = [\n    # {"title": "...", "minutes": 3},\n]\n\n# print sorted by minutes, then the total\n`,
+  hint: `<code>for song in sorted(playlist, key=lambda s: s["minutes"]):</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;print(song["title"], "-", song["minutes"], "min")</code><br><br><code>total = 0</code><br><code>for song in playlist:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;total += song["minutes"]</code>`,
+  check: c => { const s = strip(c); return (s.match(/\{[^}]*["']title["'][^}]*\}/g) || []).length < 4 ? "Add at least 4 songs, each like {\"title\": \"...\", \"minutes\": 3}" : !/sorted\s*\(|\.sort\s*\(/.test(s) || !/key\s*=/.test(s) ? "Sort them with sorted(playlist, key=lambda s: s[\"minutes\"])" : true; },
+},
+{
+  level: 2,
+  title: "📈 Drawing charts",
+  body: `<p>Python is used by scientists, game studios and sports teams to <b>visualize data</b>. The most popular tool is <b>matplotlib</b>.</p>
+<p><code>plt.plot(x, y)</code> draws a line &nbsp; <code>plt.bar(names, values)</code> draws bars &nbsp; <code>plt.title("...")</code> adds a title &nbsp; <code>plt.show()</code> displays it</p>
+<div class="tip">⏳ The first time you run a chart, it takes a few seconds to load matplotlib. After that it's fast.</div>`,
+  example: `import matplotlib.pyplot as plt\n\ndays = ["Mon", "Tue", "Wed", "Thu", "Fri"]\nminutes = [30, 45, 20, 60, 50]\n\nplt.bar(days, minutes, color="skyblue")\nplt.title("Minutes of coding this week")\nplt.ylabel("Minutes")\nplt.show()`,
+  challenge: `Make a <b>line chart</b> of the first 10 square numbers (1, 4, 9, 16…). Build the lists with a loop, give it a title, and show it.`,
+  starter: `import matplotlib.pyplot as plt\n\nx = []\ny = []\n# fill x with 1 to 10 and y with their squares using a loop\n\n# then plot it!\n`,
+  hint: `<code>for n in range(1, 11):</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;x.append(n)</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;y.append(n * n)</code><br><br><code>plt.plot(x, y)</code><br><code>plt.title("Square numbers")</code><br><code>plt.show()</code>`,
+  check: c => { const s = strip(c); return !/plt\.plot\s*\(/.test(s) ? "Draw a line chart with plt.plot(x, y)" : !/\bfor\b/.test(s) ? "Use a loop to fill the lists." : !/plt\.title/.test(s) ? "Give it a title with plt.title(\"...\")" : true; },
+},
+{
+  level: 2,
+  gate: true,
+  title: "🐾 PROJECT 4: Pet Shelter Manager",
+  body: `<p><b>Final checkpoint!</b> 🚧🐉 This is the big one. You'll build a real command-line app — the kind of thing professional programmers build. It uses <b>everything</b>: a class, a list of objects, string <code>.split()</code>, sorting with <code>key=</code>, a list comprehension, saving and loading a file, functions, loops and ifs.</p>
+<p>It must work <b>exactly</b>. I'll type lots of commands at it (some in secret tests).</p>
+<div class="tip">💬 Your <code>input()</code> prompt can say anything — only what you <b>print</b> is checked.</div>`,
+  spec: `<p>Make a <code>Pet</code> class with a <b>name</b>, <b>species</b> and <b>age</b> (a number). Keep all pets in a list.</p>
+<p>Keep reading commands with <code>input()</code> and do what each one says:</p>
+<p>• <code>add NAME SPECIES AGE</code> → add a pet, print <code>Added NAME the SPECIES.</code><br>
+• <code>list</code> → print every pet as <code>NAME (SPECIES, AGE)</code>, <b>sorted by name</b>. If there are none, print <code>No pets.</code><br>
+• <code>adopt NAME</code> → remove that pet and print <code>NAME found a home!</code> — or <code>No pet named NAME.</code> if it isn't there<br>
+• <code>young</code> → print <code>Young pets: </code> followed by the names of pets <b>under 2</b>, in the order they were added, joined with <code>", "</code>. If there are none: <code>Young pets: none</code><br>
+• <code>save</code> → write every pet to <code>shelter.txt</code>, one per line like <code>Rex,dog,3</code>, then print <code>Pets saved: COUNT</code><br>
+• <code>load</code> → replace the list with the pets from <code>shelter.txt</code> and print <code>Pets loaded: COUNT</code><br>
+• <code>quit</code> → print <code>Bye!</code> and stop<br>
+• anything else → print <code>Unknown command.</code></p>
+<p>Example run:</p>
+<pre>add Rex dog 3      →  Added Rex the dog.
+add Milo cat 1     →  Added Milo the cat.
+list               →  Milo (cat, 1)
+                      Rex (dog, 3)
+young              →  Young pets: Milo
+adopt Milo         →  Milo found a home!
+quit               →  Bye!</pre>`,
+  tests: [
+    { inputs: ["add Rex dog 3", "add Milo cat 1", "add Bean rabbit 1", "list", "young", "adopt Milo", "adopt Zed", "list", "quit"], expect: "Added Rex the dog.\nAdded Milo the cat.\nAdded Bean the rabbit.\nBean (rabbit, 1)\nMilo (cat, 1)\nRex (dog, 3)\nYoung pets: Milo, Bean\nMilo found a home!\nNo pet named Zed.\nBean (rabbit, 1)\nRex (dog, 3)\nBye!" },
+    { inputs: ["list", "young", "add Ace dog 5", "save", "adopt Ace", "list", "load", "list", "dance", "quit"], expect: "No pets.\nYoung pets: none\nAdded Ace the dog.\nPets saved: 1\nAce found a home!\nNo pets.\nPets loaded: 1\nAce (dog, 5)\nUnknown command.\nBye!" },
+    { inputs: ["add Zip ferret 0", "add Ash owl 2", "add Kit cat 1", "save", "add Tmp fish 9", "load", "list", "young", "quit"], expect: "Added Zip the ferret.\nAdded Ash the owl.\nAdded Kit the cat.\nPets saved: 3\nAdded Tmp the fish.\nPets loaded: 3\nAsh (owl, 2)\nKit (cat, 1)\nZip (ferret, 0)\nYoung pets: Zip, Kit\nBye!" },
+  ],
+  requires: [[/class\s+Pet\b/, "Make a class called Pet."], [/def\s+__init__\s*\(\s*self/, "Give Pet an __init__(self, name, species, age) method."], [/\.split\s*\(/, "Use .split() to break each command into words."], [/key\s*=/, "Sort the pets by name with sorted(pets, key=lambda p: p.name)."], [/\[[^\]]*\bfor\b[^\]]*\bin\b[^\]]*\]/, "Use a list comprehension for the young pets."], [/open\s*\([^)]*["']w["']/, "Save with open(\"shelter.txt\", \"w\")."], [s => (s.match(/open\s*\(/g) || []).length >= 2, "Load by opening shelter.txt again to read it."]],
+  starter: `# 🐾 Pet Shelter Manager\n\nclass Pet:\n    def __init__(self, name, species, age):\n        pass  # store name, species and age on self\n\n\npets = []\n\nwhile True:\n    words = input("> ").split()\n    # words[0] is the command, e.g. "add", "list", "adopt"...\n\n`,
+  hint: `Break the command apart: <code>"add Rex dog 3".split()</code> → <code>["add", "Rex", "dog", "3"]</code><br><br>Adding: <code>pets.append(Pet(words[1], words[2], int(words[3])))</code><br><br>Young pets: <code>young = [p.name for p in pets if p.age &lt; 2]</code> then <code>", ".join(young)</code><br><br>Saving: <code>f.write(f"{p.name},{p.species},{p.age}\\n")</code><br>Loading: <code>name, species, age = line.strip().split(",")</code><br><br>Adopting: loop through the list to find the pet with that name, then <code>pets.remove(pet)</code>. Stop the loop on <code>quit</code> with <code>break</code>.`,
+},
+{
+  level: 2,
+  title: "👑 Level 2 complete!",
+  body: `<p><b>You're officially a Python Challenger!</b> 👑 You just learned things that university students learn in their first programming class:</p>
+<p>✅ string methods & slicing &nbsp; ✅ list tools &nbsp; ✅ dictionaries &nbsp; ✅ nested loops &nbsp; ✅ % and FizzBuzz &nbsp; ✅ better functions &nbsp; ✅ try / except &nbsp; ✅ modules &nbsp; ✅ classes & objects &nbsp; ✅ files &nbsp; ✅ recursion &nbsp; ✅ list comprehensions &nbsp; ✅ sorting real data &nbsp; ✅ charts</p>
+<h3>🚀 Bigger projects to try</h3>
+<p>• <b>Tic-tac-toe</b> for two players (use a list of 9 spaces)<br>
+• <b>Hangman</b> (strings, lists, a while loop)<br>
+• A <b>pet simulator</b> using a class, with hunger and happiness that change over time<br>
+• A <b>text adventure</b> — store the rooms in a dictionary of dictionaries!<br>
+• A <b>grade tracker</b> that saves to a file and draws a chart of your progress<br>
+• A <b>quiz game</b> that reads its questions from a dictionary and keeps a high score file</p>
+<div class="tip">💡 Stuck on a project? Break it into tiny steps, build one step at a time, and run your code after every step. That's how pros do it.</div>
+<div class="challenge"><h3>🔓 Level 3 unlocked: Game Maker!</h3><p>Ready to make <b>video games</b>? 🎮 Level 3 starts with turtle graphics, then teaches game loops, keyboard controls, collisions, enemies, lives and polish. It ends with you building a complete, playable <b>Snake</b> game.</p><p>Click <b>"Start Level 3 →"</b> below.</p></div>`,
+},
+// ===== LEVEL 3: Game Maker =====
+{
+  level: 3,
+  title: "🐢 Meet the turtle",
+  body: `<p>Welcome to <b>Level 3: Game Maker</b>! 🎮 By the end of this level you'll build a real video game you can play with your keyboard.</p>
+<p>First, meet <b>turtle</b> — a module that lets you draw with code. Imagine a little turtle holding a pen. You tell it to walk and turn, and it draws a line wherever it goes.</p>
+<p><code>t.forward(100)</code> walks 100 steps &nbsp; <code>t.left(90)</code> turns left 90 degrees &nbsp; <code>t.right(45)</code> turns right 45 degrees</p>
+<div class="tip">🖼️ When you run turtle code, a drawing area called the <b>stage</b> pops up above the Output panel.</div>
+<p>Degrees are how much to turn: <b>90</b> is a corner (a quarter turn), <b>180</b> turns all the way around, <b>360</b> is a full spin.</p>`,
+  example: `import turtle\n\nt = turtle.Turtle()\nt.shape("turtle")\nt.color("green")\n\nt.forward(100)\nt.left(90)\nt.forward(100)\nt.right(135)\nt.forward(140)`,
+  challenge: `Make the turtle draw a <b>square</b> 🟩 with sides of 150 steps. (A square has 4 sides and 4 corners of 90°.) Bonus: give it a color you like.`,
+  starter: `import turtle\n\nt = turtle.Turtle()\nt.shape("turtle")\n\n# draw a square with sides of 150\n\n`,
+  hint: `Repeat this 4 times: <code>t.forward(150)</code> then <code>t.left(90)</code>. Or, even better, use a loop: <code>for i in range(4):</code>`,
+  check: c => { const s = strip(c); return !/import turtle|from turtle/.test(s) ? "Start with import turtle" : !(/range\s*\(\s*4\s*\)/.test(s) || (s.match(/forward|fd\(/g) || []).length >= 4) ? "A square needs 4 sides — use forward 4 times (or a loop with range(4))." : !/\b(left|right|lt|rt)\s*\(\s*90/.test(s) ? "Each corner of a square is a 90° turn." : true; },
+},
+{
+  level: 3,
+  title: "🔁 Loops + turtle = shapes",
+  body: `<p>Loops and turtles are best friends. To draw any shape with equal sides, turn by <code>360 / sides</code> each time.</p>
+<p>Make it look cool: <code>t.color("purple")</code>, <code>t.pensize(5)</code> for a thicker pen, and <code>t.speed(0)</code> for the fastest drawing (1 is slowest, 10 is fast, 0 is instant).</p>
+<p>And if you change the distance <i>inside</i> the loop, you get a <b>spiral</b>! 🌀</p>`,
+  example: `import turtle\n\nt = turtle.Turtle()\nt.speed(0)\nt.pensize(2)\n\ncolors = ["red", "orange", "gold", "green", "blue", "purple"]\nfor i in range(120):\n    t.color(colors[i % 6])\n    t.forward(i * 2)\n    t.left(59)`,
+  challenge: `Draw a <b>5-pointed star</b> ⭐ in gold. Hint: a star is 5 lines with a sharp turn of <b>144°</b> after each one. Bonus: draw it with a thick pen and a dark background using <code>turtle.Screen().bgcolor("navy")</code>.`,
+  starter: `import turtle\n\nt = turtle.Turtle()\nt.color("gold")\n\n# draw a star with a loop: 5 lines, turning 144 each time\n\n`,
+  hint: `<code>for i in range(5):</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;t.forward(200)</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;t.right(144)</code>`,
+  check: c => { const s = strip(c); return !/\bfor\b/.test(s) ? "Use a for loop so you only write forward once." : !/144/.test(s) ? "Each point of the star needs a 144° turn." : true; },
+},
+{
+  level: 3,
+  title: "📍 Moving without drawing",
+  body: `<p>The stage is a grid. The very middle is <code>(0, 0)</code>. <b>x</b> goes left ↔ right, <b>y</b> goes down ↕ up. The default stage goes from about -300 to 300 across, and -250 to 250 up and down.</p>
+<pre>              (0, 200)
+                 |
+(-200, 0) ---- (0, 0) ---- (200, 0)
+                 |
+              (0, -200)</pre>
+<p><code>t.penup()</code> lifts the pen so the turtle moves <b>without drawing</b>. <code>t.goto(x, y)</code> jumps to a spot. <code>t.pendown()</code> puts the pen back down.</p>
+<p><code>t.xcor()</code> and <code>t.ycor()</code> tell you where the turtle is right now. <code>t.setheading(90)</code> points it straight up (0 = right, 90 = up, 180 = left, 270 = down).</p>`,
+  example: `import turtle\n\nt = turtle.Turtle()\nt.speed(0)\n\nfor x in [-200, 0, 200]:\n    t.penup()\n    t.goto(x, 0)\n    t.pendown()\n    for i in range(3):\n        t.forward(80)\n        t.left(120)\n\nprint("The turtle ended at", t.xcor(), t.ycor())`,
+  challenge: `Draw a <b>house</b> 🏠: a square for the walls and a triangle roof on top. Then lift the pen, move somewhere else, and draw a <b>door</b> or a <b>window</b>.`,
+  starter: `import turtle\n\nt = turtle.Turtle()\n\n# 1. draw the square walls\n\n# 2. draw the roof (a triangle)\n\n# 3. penup, goto, pendown — then draw a door or window\n`,
+  hint: `Walls: a square loop with sides of 150.<br>Roof: from the top-left corner, <code>t.goto(75, 230)</code> then <code>t.goto(150, 150)</code> makes a pointy roof.<br>Door: <code>t.penup()</code>, <code>t.goto(55, 0)</code>, <code>t.pendown()</code>, then draw a small rectangle.`,
+  check: c => { const s = strip(c); return !/\b(penup|pu|up)\s*\(/.test(s) ? "Use t.penup() to move without drawing." : !/\bgoto\s*\(/.test(s) ? "Use t.goto(x, y) to jump to a spot." : !/\b(pendown|pd|down)\s*\(/.test(s) ? "Don't forget t.pendown() to start drawing again." : true; },
+},
+{
+  level: 3,
+  title: "🎨 Fill, circles & dots",
+  body: `<p>Time for color! 🎨</p>
+<p><code>t.circle(50)</code> draws a circle with a radius of 50. <code>t.circle(50, 180)</code> draws only half of it (an arc).</p>
+<p>To <b>fill</b> a shape with color, put <code>t.begin_fill()</code> before drawing it and <code>t.end_fill()</code> after. <code>t.color("black", "yellow")</code> means a black outline with a yellow fill.</p>
+<p><code>t.dot(20, "red")</code> stamps a round dot. <code>screen.bgcolor("skyblue")</code> colors the whole background.</p>`,
+  example: `import turtle\n\nscreen = turtle.Screen()\nscreen.bgcolor("skyblue")\nt = turtle.Turtle()\nt.speed(0)\n\n# the sun\nt.penup(); t.goto(150, 80); t.pendown()\nt.color("orange", "gold")\nt.begin_fill()\nt.circle(60)\nt.end_fill()\n\n# grass\nt.penup(); t.goto(-300, -250); t.pendown()\nt.color("green")\nt.begin_fill()\nfor side in [600, 120, 600, 120]:\n    t.forward(side)\n    t.left(90)\nt.end_fill()\nt.hideturtle()`,
+  challenge: `Draw a <b>smiley face</b> 😀: a big yellow filled circle, two eyes (use <code>dot</code>), and a smile (use <code>circle</code> with an extent, like <code>t.circle(60, 180)</code>).`,
+  starter: `import turtle\n\nt = turtle.Turtle()\nt.speed(0)\n\n# 1. big yellow filled circle (the face)\n\n# 2. two eyes with dot()\n\n# 3. a smile with circle(radius, extent)\n`,
+  hint: `Face: <code>t.penup(); t.goto(0, -100); t.pendown()</code>, <code>t.color("black", "yellow")</code>, <code>t.begin_fill()</code>, <code>t.circle(100)</code>, <code>t.end_fill()</code><br>Eyes: <code>t.penup(); t.goto(-35, 40); t.dot(20, "black")</code> (and again at 35, 40)<br>Smile: <code>t.goto(-60, -10); t.setheading(-60); t.pendown(); t.circle(70, 120)</code>`,
+  check: c => { const s = strip(c); return !/begin_fill/.test(s) || !/end_fill/.test(s) ? "Fill the face with begin_fill() and end_fill()." : (s.match(/\bdot\s*\(/g) || []).length < 2 && !/for[^\n]*\n[^\n]*dot/.test(s) ? "Use dot() for both eyes." : !/circle\s*\([^)]*,/.test(s) ? "For the smile, use circle with two numbers, like t.circle(60, 180)." : true; },
+},
+{
+  level: 3,
+  title: "🌌 Functions + random = art",
+  body: `<p>Here's where it gets powerful: put your drawing code in a <b>function</b>, then call it lots of times with different numbers. Add <code>random</code> and you get generative art — a different picture every time you press Run!</p>
+<div class="tip">⚡ Drawing lots of stuff? Add <code>screen.tracer(0)</code> at the start and <code>screen.update()</code> at the end. The turtle draws everything invisibly and then shows it all at once — super fast.</div>`,
+  example: `import turtle\nimport random\n\nscreen = turtle.Screen()\nscreen.bgcolor("white")\nscreen.tracer(0)\nt = turtle.Turtle()\nt.hideturtle()\n\ndef bubble(x, y, size, color):\n    t.penup()\n    t.goto(x, y - size)\n    t.pendown()\n    t.color(color)\n    t.begin_fill()\n    t.circle(size)\n    t.end_fill()\n\nfor i in range(40):\n    x = random.randint(-280, 280)\n    y = random.randint(-230, 230)\n    bubble(x, y, random.randint(5, 40), random.choice(["pink", "lightblue", "plum", "gold"]))\n\nscreen.update()`,
+  challenge: `Draw a <b>night sky</b> 🌃. Make the background dark, write a function <code>draw_star(x, y, size)</code> that draws a small star at that spot, and use a loop to draw <b>30 stars</b> at random positions with random sizes.`,
+  starter: `import turtle\nimport random\n\nscreen = turtle.Screen()\nscreen.bgcolor("midnightblue")\nscreen.tracer(0)\nt = turtle.Turtle()\nt.hideturtle()\nt.color("gold")\n\ndef draw_star(x, y, size):\n    # lift the pen, go to x, y, put it down, draw a star\n    pass\n\n# draw 30 random stars\n\nscreen.update()\n`,
+  hint: `<code>def draw_star(x, y, size):</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;t.penup()</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;t.goto(x, y)</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;t.pendown()</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;t.begin_fill()</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;for i in range(5):</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t.forward(size)</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t.right(144)</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;t.end_fill()</code><br><br><code>for i in range(30):</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;draw_star(random.randint(-280, 280), random.randint(-230, 230), random.randint(5, 25))</code>`,
+  check: c => { const s = strip(c); return !/def\s+draw_star\s*\(/.test(s) ? "Write the draw_star(x, y, size) function." : !/random\.randint|random\.random|random\.uniform/.test(s) ? "Pick random positions with random.randint(...)." : !/range\s*\(\s*30\s*\)/.test(s) ? "Draw 30 stars with for i in range(30):" : !/draw_star\s*\([^)]*random/.test(s) && (s.match(/draw_star\s*\(/g) || []).length < 2 ? "Call draw_star inside your loop." : true; },
+},
+{
+  level: 3,
+  title: "🏁 Many turtles & writing text",
+  body: `<p>You can make as many turtles as you want! Each one is its own object with its own position and color — and you can keep them in a <b>list</b>.</p>
+<p><code>t.write("Hello!", align="center", font=("Arial", 24, "bold"))</code> writes text where the turtle is. <code>t.hideturtle()</code> hides the turtle itself so only the drawing shows.</p>
+<p>Shapes you can use: <code>"turtle"</code>, <code>"circle"</code>, <code>"square"</code>, <code>"triangle"</code>, <code>"arrow"</code>, <code>"classic"</code>.</p>`,
+  example: `import turtle\n\nnames = ["red", "blue", "green"]\nracers = []\nfor i in range(3):\n    r = turtle.Turtle()\n    r.shape("turtle")\n    r.color(names[i])\n    r.penup()\n    r.goto(-250, 60 - i * 60)\n    racers.append(r)\n\nfor r in racers:\n    r.forward(100)\n\nsign = turtle.Turtle()\nsign.hideturtle()\nsign.penup()\nsign.goto(0, 150)\nsign.write("Ready... set...", align="center", font=("Arial", 24, "bold"))`,
+  challenge: `Make a <b>turtle race</b> 🐢🏁! Put 4 turtles of different colors on a starting line. In a <code>while</code> loop, move each one forward a <b>random</b> amount. When one gets past <code>x = 200</code>, stop and <code>write</code> who won.`,
+  starter: `import turtle\nimport random\n\ncolors = ["red", "blue", "green", "orange"]\nracers = []\n# 1. make 4 turtles, put them on the start line, add to racers\n\n# 2. race! keep moving them until one passes x = 200\n\n# 3. write the winner\n`,
+  hint: `<code>winner = None</code><br><code>while winner is None:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;for i in range(4):</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;racers[i].forward(random.randint(1, 10))</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if racers[i].xcor() &gt; 200 and winner is None:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;winner = colors[i]</code><br>Then use a hidden turtle to <code>write(f"{winner} wins!", ...)</code>`,
+  check: c => { const s = strip(c); return !/\.append\s*\(/.test(s) && !/\[\s*turtle\.Turtle/.test(s) ? "Keep your racers in a list." : !/\bwhile\b/.test(s) ? "Use a while loop for the race." : !/random/.test(s) ? "Move them a random amount with random.randint(...)." : !/\.write\s*\(/.test(s) ? "Write who won with .write(...)." : !/xcor/.test(s) ? "Check xcor() to see if someone crossed the finish line." : true; },
+},
+{
+  level: 3,
+  title: "⌨️ Controlling it with your keyboard",
+  body: `<p>Now the fun part — making it <b>interactive</b>! Instead of drawing by itself, your program waits for you to press keys.</p>
+<p>You write a function for what should happen, then connect it to a key: <code>screen.onkey(go_up, "Up")</code>. Then call <code>screen.listen()</code> so the screen starts listening.</p>
+<p>Key names: <code>"Up"</code> <code>"Down"</code> <code>"Left"</code> <code>"Right"</code> <code>"space"</code> <code>"Return"</code> (Enter), and letters like <code>"a"</code>.</p>
+<p><code>screen.onscreenclick(func)</code> calls <code>func(x, y)</code> wherever you click!</p>
+<div class="tip">🎮 After you press Run, <b>click on the stage</b> so it gets your key presses.</div>`,
+  example: `import turtle\n\nscreen = turtle.Screen()\nt = turtle.Turtle()\nt.shape("turtle")\nt.speed(0)\n\ndef go_forward():\n    t.forward(20)\n\ndef turn_left():\n    t.left(30)\n\ndef turn_right():\n    t.right(30)\n\ndef jump(x, y):\n    t.penup()\n    t.goto(x, y)\n    t.pendown()\n\nscreen.onkey(go_forward, "Up")\nscreen.onkey(turn_left, "Left")\nscreen.onkey(turn_right, "Right")\nscreen.onscreenclick(jump)\nscreen.listen()`,
+  challenge: `Make an <b>Etch-a-Sketch</b> ✏️. The arrow keys move the turtle up, down, left and right (drawing as it goes). <code>"space"</code> changes the pen to a random color, and <code>"c"</code> clears the drawing with <code>t.clear()</code>.`,
+  starter: `import turtle\nimport random\n\nscreen = turtle.Screen()\nt = turtle.Turtle()\nt.speed(0)\nt.pensize(3)\n\n# write functions for up, down, left, right, new color, and clear\n\n# connect them to keys with screen.onkey(...)\n\nscreen.listen()\n`,
+  hint: `<code>def up():</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;t.setheading(90)</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;t.forward(10)</code><br>(do the same with 270 for down, 180 for left, 0 for right)<br><br><code>def new_color():</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;t.color(random.choice(["red", "blue", "green", "purple"]))</code><br><br><code>screen.onkey(up, "Up")</code> … <code>screen.onkey(new_color, "space")</code> … <code>screen.onkey(t.clear, "c")</code>`,
+  check: c => { const s = strip(c); return (s.match(/onkey(press)?\s*\(/g) || []).length < 6 ? "Connect 6 keys: the 4 arrows, space and c." : !/["']space["']/.test(s) ? "Connect a function to \"space\" for a new color." : !/\.clear/.test(s) ? "Use t.clear() to wipe the drawing when c is pressed." : !/listen\s*\(/.test(s) ? "Call screen.listen() at the end." : true; },
+},
+{
+  level: 3,
+  gate: true,
+  title: "🏭 PROJECT 5: Shape Factory",
+  body: `<p><b>Checkpoint!</b> 🚧 Build a little shape factory: a set of drawing <b>functions</b> that other code can use. This uses everything from the last 7 lessons: turtles, loops, turning math, penup/goto, fill, random, functions and keyboard controls.</p>
+<p>This time I'll test your <b>functions</b> exactly: I'll create my own turtle, call your functions with it, and check how many lines were drawn, how long they were in total, and where the turtle ended up.</p>`,
+  spec: `<p>Write these 4 functions. Each one takes a turtle <code>t</code> as its first parameter and must leave the turtle back <b>where it started</b>, pointing the <b>same way</b> (except <code>row</code>, see below):</p>
+<p>• <code>polygon(t, sides, size)</code> — draw a regular shape with that many sides, each <code>size</code> long, turning <b>left</b> <code>360 / sides</code> after each one.<br>
+• <code>star(t, size)</code> — draw a 5-pointed star: 5 lines of length <code>size</code>, turning <b>right 144</b> after each.<br>
+• <code>flower(t, petals, size)</code> — call <code>polygon(t, 6, size)</code> <code>petals</code> times, turning left <code>360 / petals</code> after each one.<br>
+• <code>row(t, count, size, gap)</code> — draw <code>count</code> squares (use <code>polygon</code>!). After each square, lift the pen, move forward <code>size + gap</code>, and put the pen down. (So the turtle ends up <code>count × (size + gap)</code> further along.)</p>
+<p>Then, in your main program, use your functions to draw a <b>scene</b> with at least one filled shape, and make the <code>"space"</code> key draw a flower at a <b>random</b> spot.</p>`,
+  tests: [
+    { inputs: [], after: `t = turtle.Turtle()\npolygon(t, 4, 50)\n_report(t)\nt2 = turtle.Turtle()\nstar(t2, 100)\n_report(t2)`, expect: "lines: 4, length: 200, at: (0, 0), facing: 0\nlines: 5, length: 500, at: (0, 0), facing: 0" },
+    { inputs: [], after: `t = turtle.Turtle()\npolygon(t, 6, 30)\n_report(t)\nt = turtle.Turtle()\npolygon(t, 3, 100)\n_report(t)`, expect: "lines: 6, length: 180, at: (0, 0), facing: 0\nlines: 3, length: 300, at: (0, 0), facing: 0" },
+    { inputs: [], after: `t = turtle.Turtle()\nrow(t, 3, 20, 10)\n_report(t)`, expect: "lines: 12, length: 240, at: (90, 0), facing: 0" },
+    { inputs: [], after: `t = turtle.Turtle()\nflower(t, 6, 20)\n_report(t)\nt = turtle.Turtle()\nt.left(90)\nflower(t, 5, 30)\n_report(t)`, expect: "lines: 36, length: 720, at: (0, 0), facing: 0\nlines: 30, length: 900, at: (0, 0), facing: 90" },
+  ],
+  requires: [[/def\s+polygon\s*\(/, "Write the polygon(t, sides, size) function."], [/def\s+star\s*\(/, "Write the star(t, size) function."], [/def\s+flower\s*\(/, "Write the flower(t, petals, size) function."], [/def\s+row\s*\(/, "Write the row(t, count, size, gap) function."], [/begin_fill/, "Your scene needs at least one filled shape (begin_fill / end_fill)."], [/["']space["']/, "Make the \"space\" key draw a flower."], [/random/, "Put the space-key flower at a random spot."]],
+  starter: `import turtle\nimport random\n\ndef polygon(t, sides, size):\n    pass\n\ndef star(t, size):\n    pass\n\ndef flower(t, petals, size):\n    pass\n\ndef row(t, count, size, gap):\n    pass\n\n\n# ---- main program: draw a scene with your functions ----\nscreen = turtle.Screen()\npen = turtle.Turtle()\npen.speed(0)\n\n\n# ---- space key: flower at a random spot ----\n\nscreen.listen()\n`,
+  hint: `<code>def polygon(t, sides, size):</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;for i in range(sides):</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t.forward(size)</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t.left(360 / sides)</code><br><br><code>def row(t, count, size, gap):</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;for i in range(count):</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;polygon(t, 4, size)</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t.penup()</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t.forward(size + gap)</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t.pendown()</code><br><br>Space key: <code>def random_flower():</code> → <code>pen.penup()</code>, <code>pen.goto(random.randint(-250, 250), random.randint(-200, 200))</code>, <code>pen.pendown()</code>, <code>flower(pen, 8, 30)</code>. Then <code>screen.onkey(random_flower, "space")</code>.`,
+  testPrelude: `import turtle as _tt\ndef _report(t):\n    print(f"lines: {t._seg_count}, length: {round(t._seg_len)}, at: ({round(t.xcor())}, {round(t.ycor())}), facing: {round(t.heading()) % 360}")\n`,
+},
+{
+  level: 3,
+  title: "⏱️ The game loop",
+  body: `<p>Every video game has a <b>game loop</b>: a function that runs over and over, many times a second. Each time, it moves things a tiny bit and redraws the screen. That's what makes things look like they're moving!</p>
+<p>In turtle, you make a game loop with <code>screen.ontimer(loop, 16)</code>, which means "<i>run loop() again in 16 milliseconds</i>". The loop calls it at the end, so it keeps going forever (about 60 times a second).</p>
+<p>Speed is stored in variables like <code>dx</code> (how far to move sideways each frame) and <code>dy</code> (up and down). To bounce, just flip it: <code>dx = -dx</code>.</p>
+<div class="tip">🌍 <code>global dx</code> inside the function means "I want to change the dx variable from outside this function", not make a new one.</div>
+<p>Use <code>screen.tracer(0)</code> at the start, then <code>screen.update()</code> at the end of every loop, so each frame shows up all at once with no flicker.</p>`,
+  example: `import turtle\n\nscreen = turtle.Screen()\nscreen.bgcolor("lightblue")\nscreen.tracer(0)\n\nball = turtle.Turtle()\nball.shape("circle")\nball.color("red")\nball.penup()\n\ndx = 4\n\ndef loop():\n    global dx\n    ball.setx(ball.xcor() + dx)\n    if ball.xcor() > 290 or ball.xcor() < -290:\n        dx = -dx\n    screen.update()\n    screen.ontimer(loop, 16)\n\nloop()`,
+  challenge: `Make a ball that bounces off <b>all four walls</b> (like an old screensaver). It needs both <code>dx</code> and <code>dy</code>. The stage is 600 wide and 500 tall, so the walls are at x = ±290 and y = ±240. Bonus: change the ball's color every time it bounces!`,
+  starter: `import turtle\n\nscreen = turtle.Screen()\nscreen.tracer(0)\n\nball = turtle.Turtle()\nball.shape("circle")\nball.penup()\n\ndx = 3\ndy = 2\n\ndef loop():\n    global dx, dy\n    # move the ball by dx and dy\n\n    # bounce off the left/right walls and the top/bottom walls\n\n    screen.update()\n    screen.ontimer(loop, 16)\n\nloop()\n`,
+  hint: `<code>ball.goto(ball.xcor() + dx, ball.ycor() + dy)</code><br><code>if ball.xcor() &gt; 290 or ball.xcor() &lt; -290:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;dx = -dx</code><br><code>if ball.ycor() &gt; 240 or ball.ycor() &lt; -240:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;dy = -dy</code>`,
+  check: c => { const s = strip(c); return !/ontimer\s*\(/.test(s) ? "Keep the loop going with screen.ontimer(loop, 16)." : !/dy\s*=\s*-\s*dy/.test(s) || !/dx\s*=\s*-\s*dx/.test(s) ? "Bounce in both directions: dx = -dx and dy = -dy" : !/ycor/.test(s) ? "Check ycor() to bounce off the top and bottom." : true; },
+},
+{
+  level: 3,
+  title: "🕹️ Smooth player controls",
+  body: `<p>With <code>onkey</code>, holding a key down moves your player in jerky steps. Real games feel smooth because they check <b>which keys are held down</b> on every frame.</p>
+<p>The trick: a dictionary that remembers each key. <code>onkeypress</code> sets it to <code>True</code> when you press, <code>onkeyrelease</code> sets it back to <code>False</code> when you let go. Then the game loop moves the player if the key is held.</p>
+<p>A <code>lambda</code> is handy here — a tiny function written in one line: <code>lambda: keys.update(Left=True)</code>.</p>
+<p>Keep the player on screen by checking the edges before moving.</p>`,
+  example: `import turtle\n\nscreen = turtle.Screen()\nscreen.tracer(0)\n\nplayer = turtle.Turtle()\nplayer.shape("square")\nplayer.color("green")\nplayer.shapesize(1, 3)   # 1 tall, 3 wide\nplayer.penup()\nplayer.goto(0, -200)\n\nkeys = {"Left": False, "Right": False}\n\ndef hold(key, down):\n    keys[key] = down\n\nfor k in keys:\n    screen.onkeypress(lambda k=k: hold(k, True), k)\n    screen.onkeyrelease(lambda k=k: hold(k, False), k)\nscreen.listen()\n\ndef loop():\n    if keys["Left"] and player.xcor() > -270:\n        player.setx(player.xcor() - 6)\n    if keys["Right"] and player.xcor() < 270:\n        player.setx(player.xcor() + 6)\n    screen.update()\n    screen.ontimer(loop, 16)\n\nloop()`,
+  challenge: `Make a player that moves smoothly in <b>all 4 directions</b> with the arrow keys and <b>can't leave the screen</b>. Bonus: make it go faster while you hold <code>"space"</code>.`,
+  starter: `import turtle\n\nscreen = turtle.Screen()\nscreen.tracer(0)\n\nplayer = turtle.Turtle()\nplayer.shape("turtle")\nplayer.penup()\n\nkeys = {"Up": False, "Down": False, "Left": False, "Right": False}\n\n# connect onkeypress / onkeyrelease for every key\n\nscreen.listen()\n\ndef loop():\n    # move the player for each key that is held (stay inside the walls!)\n\n    screen.update()\n    screen.ontimer(loop, 16)\n\nloop()\n`,
+  hint: `Copy the <code>hold</code> function and the <code>for k in keys:</code> loop from the example.<br>In the loop:<br><code>if keys["Up"] and player.ycor() &lt; 230:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;player.sety(player.ycor() + 5)</code><br>…and the same idea for Down, Left and Right.`,
+  check: c => { const s = strip(c); return !/onkeyrelease\s*\(/.test(s) ? "Use onkeyrelease so the player stops when you let go." : !/ontimer/.test(s) ? "Move the player inside a game loop with ontimer." : !/["']Up["']/.test(s) || !/["']Down["']/.test(s) ? "Handle all 4 arrow keys." : !/ycor/.test(s) || !/xcor/.test(s) ? "Check xcor() and ycor() to keep the player on screen." : true; },
+},
+{
+  level: 3,
+  title: "💥 Collisions & keeping score",
+  body: `<p>How does a game know when two things touch? Measure the distance between them! <code>player.distance(coin)</code> gives the distance in steps. If it's small (like less than 20), they're touching. 💥</p>
+<p>When the player grabs the coin, add to the score and move the coin somewhere random.</p>
+<p>To show the score, use a hidden turtle that writes text. Each time the score changes, <code>clear()</code> it and <code>write()</code> again.</p>`,
+  example: `import turtle\nimport random\n\nscreen = turtle.Screen()\nscreen.tracer(0)\n\ncoin = turtle.Turtle("circle")\ncoin.color("gold")\ncoin.penup()\n\nhud = turtle.Turtle()\nhud.hideturtle()\nhud.penup()\nhud.goto(0, 210)\n\nscore = 0\n\ndef show_score():\n    hud.clear()\n    hud.write(f"Score: {score}", align="center", font=("Arial", 20, "bold"))\n\ndef clicked(x, y):\n    global score\n    if coin.distance(x, y) < 20:\n        score += 1\n        coin.goto(random.randint(-270, 270), random.randint(-220, 190))\n        show_score()\n        screen.update()\n\nshow_score()\nscreen.update()\nscreen.onscreenclick(clicked)\nprint("Click the coin!")`,
+  challenge: `Make a <b>coin collector</b> 🪙: a player you move with the arrow keys (use your smooth controls!), a coin at a random spot, and a score at the top. When the player touches the coin, the score goes up by 1 and the coin jumps to a new random spot.`,
+  starter: `import turtle\nimport random\n\nscreen = turtle.Screen()\nscreen.tracer(0)\n\nplayer = turtle.Turtle("turtle")\nplayer.color("green")\nplayer.penup()\n\ncoin = turtle.Turtle("circle")\ncoin.color("gold")\ncoin.penup()\ncoin.goto(100, 100)\n\nhud = turtle.Turtle()\nhud.hideturtle()\nhud.penup()\nhud.goto(0, 210)\nscore = 0\n\n# keyboard controls\n\n# game loop: move player, check distance to coin, update score\n`,
+  hint: `Inside your loop:<br><code>if player.distance(coin) &lt; 20:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;score += 1</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;coin.goto(random.randint(-270, 270), random.randint(-220, 190))</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;hud.clear()</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;hud.write(f"Score: {score}", align="center", font=("Arial", 20, "bold"))</code><br>Remember <code>global score</code> at the top of the loop function!`,
+  check: c => { const s = strip(c); return !/distance\s*\(/.test(s) ? "Check if they touch with player.distance(coin) < 20" : !/score\s*\+=|score\s*=\s*score\s*\+/.test(s) ? "Add 1 to the score when the coin is collected." : !/\.write\s*\(/.test(s) || !/\.clear\s*\(/.test(s) ? "Show the score: hud.clear() then hud.write(...)" : !/ontimer|onkey/.test(s) ? "Let the player move with the keyboard." : true; },
+},
+{
+  level: 3,
+  title: "🌧️ Lots of enemies: lists of sprites",
+  body: `<p>A game with one enemy is easy. What about 10? Put them in a <b>list</b> and loop over it every frame!</p>
+<p>Each frame: move every enemy, and if one goes off the bottom of the screen, send it back to the top at a random spot. Then check if any of them is touching the player.</p>
+<p>A <code>game_over</code> variable lets the loop know when to stop.</p>`,
+  example: `import turtle\nimport random\n\nscreen = turtle.Screen()\nscreen.bgcolor("black")\nscreen.tracer(0)\n\nflakes = []\nfor i in range(25):\n    f = turtle.Turtle("circle")\n    f.color("white")\n    f.shapesize(0.4)\n    f.penup()\n    f.goto(random.randint(-290, 290), random.randint(-250, 250))\n    flakes.append(f)\n\ndef loop():\n    for f in flakes:\n        f.sety(f.ycor() - 2)\n        if f.ycor() < -260:\n            f.goto(random.randint(-290, 290), 260)\n    screen.update()\n    screen.ontimer(loop, 16)\n\nloop()`,
+  challenge: `Make a <b>dodge game</b> ☄️: a player at the bottom that moves left and right, and at least 6 rocks falling from the top. Rocks that reach the bottom go back to the top. If a rock touches the player, write <b>GAME OVER</b> in the middle and stop the loop.`,
+  starter: `import turtle\nimport random\n\nscreen = turtle.Screen()\nscreen.tracer(0)\n\nplayer = turtle.Turtle("triangle")\nplayer.color("blue")\nplayer.setheading(90)\nplayer.penup()\nplayer.goto(0, -220)\n\nrocks = []\n# make 6+ rocks at random spots near the top\n\ngame_over = False\n\n# left / right controls\n\ndef loop():\n    global game_over\n    # move every rock down, recycle the ones that fall off\n    # check if any rock hits the player\n    screen.update()\n    if not game_over:\n        screen.ontimer(loop, 16)\n\nloop()\n`,
+  hint: `<code>for r in rocks:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;r.sety(r.ycor() - 4)</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;if r.ycor() &lt; -260:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;r.goto(random.randint(-280, 280), 260)</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;if r.distance(player) &lt; 20:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;game_over = True</code><br>Then if <code>game_over</code>, use a hidden turtle to write "GAME OVER".`,
+  check: c => { const s = strip(c); return !/for\s+\w+\s+in\s+rocks/.test(s) ? "Loop over your list of rocks: for r in rocks:" : !/\.append\s*\(/.test(s) ? "Add each rock to the list with rocks.append(...)." : !/distance\s*\(/.test(s) ? "Check if a rock hits the player with distance()." : !/GAME OVER/i.test(c) ? "Write GAME OVER when the player gets hit." : true; },
+},
+{
+  level: 3,
+  title: "🧱 Game objects with classes",
+  body: `<p>As games get bigger, the code gets messy. Pros organize it with <b>classes</b>: each kind of thing in the game (player, enemy, bullet, coin) gets its own class with its own <code>update()</code> method.</p>
+<p>Each object keeps a turtle for drawing (<code>self.sprite</code>) plus its own data, like its own speed. Then the game loop just says "everyone, update!"</p>`,
+  example: `import turtle\nimport random\n\nscreen = turtle.Screen()\nscreen.bgcolor("black")\nscreen.tracer(0)\n\nclass Bubble:\n    def __init__(self):\n        self.sprite = turtle.Turtle("circle")\n        self.sprite.color(random.choice(["cyan", "pink", "lime", "gold"]))\n        self.sprite.penup()\n        self.speed = random.uniform(1, 4)\n        self.sprite.goto(random.randint(-280, 280), random.randint(-250, 250))\n\n    def update(self):\n        self.sprite.sety(self.sprite.ycor() + self.speed)\n        if self.sprite.ycor() > 260:\n            self.sprite.goto(random.randint(-280, 280), -260)\n\nbubbles = [Bubble() for i in range(20)]\n\ndef loop():\n    for b in bubbles:\n        b.update()\n    screen.update()\n    screen.ontimer(loop, 16)\n\nloop()`,
+  challenge: `Make a <b>starfield</b> 🌠 — like flying through space. Write a class <code>Star</code> with an <code>update()</code> method. Each star moves <b>left</b> at its <b>own random speed</b>, and when it goes off the left edge it comes back on the right side at a random height. Make at least 30 stars.`,
+  starter: `import turtle\nimport random\n\nscreen = turtle.Screen()\nscreen.bgcolor("black")\nscreen.tracer(0)\n\nclass Star:\n    def __init__(self):\n        # make self.sprite, give it a random spot and self.speed\n        pass\n\n    def update(self):\n        # move left by self.speed, wrap around when off screen\n        pass\n\n# make 30 stars and a game loop that updates them all\n`,
+  hint: `<code>def __init__(self):</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;self.sprite = turtle.Turtle("circle")</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;self.sprite.color("white")</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;self.sprite.penup()</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;self.speed = random.uniform(1, 6)</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;self.sprite.shapesize(self.speed / 10)</code>  ← faster stars look bigger!<br><code>&nbsp;&nbsp;&nbsp;&nbsp;self.sprite.goto(random.randint(-300, 300), random.randint(-250, 250))</code>`,
+  check: c => { const s = strip(c); return !/class\s+Star/.test(s) ? "Make a class called Star." : !/def\s+update\s*\(\s*self/.test(s) ? "Give Star an update(self) method." : !/self\.speed/.test(s) ? "Give each star its own self.speed." : !/\.update\s*\(\s*\)/.test(s.replace(/screen\.update\s*\(\s*\)/g, "")) ? "Call update() on every star in your game loop." : true; },
+},
+{
+  level: 3,
+  title: "🎮 Game states, lives & restarting",
+  body: `<p>Real games have different <b>states</b>: a start screen, playing, and game over. Keep the state in a variable, and let the game loop do different things depending on it.</p>
+<pre>state = "start"      # "start", "playing" or "over"</pre>
+<p>Players also expect <b>lives</b> ❤️❤️❤️ and a way to <b>restart</b> without pressing Run again. A <code>reset_game()</code> function that puts everything back to how it started makes that easy.</p>
+<p>Want a high score that's remembered? Keep it in a variable that <code>reset_game()</code> doesn't touch (or save it to a file!).</p>`,
+  example: `import turtle\n\nscreen = turtle.Screen()\nscreen.tracer(0)\nhud = turtle.Turtle()\nhud.hideturtle()\nhud.penup()\n\nstate = "start"\nclicks = 0\nbest = 0\n\ndef draw():\n    hud.clear()\n    if state == "start":\n        hud.write("Press SPACE to start", align="center", font=("Arial", 24, "bold"))\n    elif state == "playing":\n        hud.write(f"Mash SPACE! {clicks}", align="center", font=("Arial", 24, "bold"))\n    else:\n        hud.write(f"Time's up! You got {clicks}. Best: {best}\\nPress SPACE to play again", align="center", font=("Arial", 20, "bold"))\n    screen.update()\n\ndef end_round():\n    global state, best\n    state = "over"\n    best = max(best, clicks)\n    draw()\n\ndef space():\n    global state, clicks\n    if state == "playing":\n        clicks += 1\n    else:\n        state = "playing"\n        clicks = 0\n        screen.ontimer(end_round, 3000)\n    draw()\n\nscreen.onkey(space, "space")\nscreen.listen()\ndraw()`,
+  challenge: `Upgrade your dodge game (or any game) with: a <b>start screen</b>, <b>3 lives</b> shown at the top (getting hit loses a life and sends that rock back to the top), a <b>game over</b> screen when lives run out, and <b>press space to play again</b>.`,
+  starter: `import turtle\nimport random\n\n# Tip: paste your dodge game here, then add:\n#   state = "start"\n#   lives = 3\n#   def reset_game(): ...\n#   a space key that starts / restarts\n`,
+  hint: `In the loop: <code>if state == "playing":</code> move things and check hits. On a hit: <code>lives -= 1</code>, move that rock to the top, and <code>if lives == 0: state = "over"</code>.<br><br><code>def space():</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;global state</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;if state != "playing":</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reset_game()</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;state = "playing"</code>`,
+  check: c => { const s = strip(c); return !/lives/.test(s) ? "Add a lives variable." : !/state/.test(s) ? "Keep track of the game state in a variable." : !/["']over["']|game_over/.test(s) ? "Add a game over state." : !/["']space["']/.test(s) ? "Press space to start / restart." : !/lives\s*-=|lives\s*=\s*lives\s*-/.test(s) ? "Lose a life when you get hit: lives -= 1" : true; },
+},
+{
+  level: 3,
+  title: "✨ Polish: difficulty & game feel",
+  body: `<p>The difference between an OK game and a <b>great</b> one is polish ✨. Some tricks the pros use:</p>
+<p>📈 <b>Difficulty that ramps up</b>: make things faster as the score goes up, like <code>speed = 3 + score * 0.2</code><br>
+💥 <b>Feedback</b>: flash the background when you get hit, then change it back with <code>ontimer</code><br>
+🎨 <b>Style</b>: <code>shapesize()</code> to resize sprites, nice colors, a <code>screen.title("My Game")</code><br>
+🏆 <b>Goals</b>: a high score to beat, levels, or a timer</p>`,
+  example: `import turtle\n\nscreen = turtle.Screen()\nscreen.tracer(0)\nscreen.bgcolor("white")\n\nhud = turtle.Turtle()\nhud.hideturtle()\nhud.penup()\n\nlevel = 1\n\ndef flash():\n    screen.bgcolor("tomato")\n    screen.ontimer(lambda: screen.bgcolor("white"), 120)\n\ndef level_up():\n    global level\n    level += 1\n    flash()\n    hud.clear()\n    hud.write(f"LEVEL {level}!", align="center", font=("Arial", 36, "bold"))\n    screen.update()\n    if level < 5:\n        screen.ontimer(level_up, 1000)\n\nlevel_up()`,
+  challenge: `Make one of your games get <b>harder as the score goes up</b>. For example, rocks fall faster, or the coin moves around by itself faster. Bonus: flash the screen when something happens!`,
+  starter: `import turtle\nimport random\n\n# Paste a game here, then make the speed depend on the score.\n# Example idea:  fall_speed = 3 + score * 0.5\n`,
+  hint: `Keep a <code>score</code> that goes up over time (like <code>score += 1</code> every time a rock reaches the bottom). Then when moving: <code>r.sety(r.ycor() - (3 + score * 0.2))</code>.`,
+  check: c => { const s = strip(c); return !/score/.test(s) ? "Your game needs a score." : !/score\s*[*\/+]|[*+]\s*score/.test(s) ? "Make a speed that uses the score, like 3 + score * 0.2" : !/ontimer/.test(s) ? "Use a game loop with ontimer." : true; },
+},
+{
+  level: 3,
+  gate: true,
+  title: "🐍 FINAL PROJECT: Snake",
+  body: `<p><b>The final boss!</b> 🐉 You're going to build a complete, playable <b>Snake</b> game: steer a snake around with the arrow keys, eat food to grow longer, and don't crash into the walls or yourself.</p>
+<p>It uses <b>everything</b>: lists, tuples, functions, if/elif, random, turtle drawing, keyboard events, the game loop, collision, score, and game over.</p>
+<p>Real game studios keep the <b>game rules</b> separate from the <b>drawing code</b>, so the rules can be tested. That's what you'll do: I'll test your rule functions exactly, then you play the game to test the fun part! 🎮</p>`,
+  spec: `<p>The snake lives on a grid where each square is <b>20</b> steps. It's stored as a <b>list of (x, y) tuples</b>, head first: <code>[(0, 0), (-20, 0), (-40, 0)]</code>. Directions are <code>"up"</code>, <code>"down"</code>, <code>"left"</code>, <code>"right"</code>.</p>
+<p><b>Rule functions</b> (tested exactly — they must <code>return</code> the answer, not print it):</p>
+<p>• <code>next_head(head, direction)</code> → the (x, y) the head moves to: 20 steps in that direction.<br>
+• <code>move_snake(snake, direction, grow)</code> → a <b>new list</b>: the new head, then the old snake. If <code>grow</code> is False, drop the last piece (so the length stays the same).<br>
+• <code>hit_wall(head)</code> → <code>True</code> if x or y is more than 280 or less than -280.<br>
+• <code>hit_self(snake)</code> → <code>True</code> if the head is in the same spot as any other piece.<br>
+• <code>can_turn(current, new)</code> → <code>False</code> if <code>new</code> is the exact opposite of <code>current</code> (a snake can't reverse into itself), otherwise <code>True</code>.</p>
+<p><b>The game</b> (you test this by playing): a 600×600 stage (<code>screen.setup(600, 600)</code>), arrow keys to steer (use <code>can_turn</code>!), a game loop with <code>ontimer</code> that uses <code>move_snake</code>, food at a random grid spot, the snake grows when it eats, a score, and a GAME OVER message when <code>hit_wall</code> or <code>hit_self</code>.</p>`,
+  tests: [
+    { inputs: [], after: `print(next_head((0, 0), "up"))\nprint(next_head((40, -20), "left"))\nprint(move_snake([(0, 0), (-20, 0), (-40, 0)], "right", False))\nprint(move_snake([(0, 0), (-20, 0)], "up", True))`, expect: "(0, 20)\n(20, -20)\n[(20, 0), (0, 0), (-20, 0)]\n[(0, 20), (0, 0), (-20, 0)]" },
+    { inputs: [], after: `print(hit_wall((300, 0)), hit_wall((280, -280)), hit_wall((0, -300)), hit_wall((-281, 0)))\nprint(hit_self([(0, 0), (20, 0), (20, 20), (0, 20), (0, 0)]), hit_self([(0, 0), (20, 0)]), hit_self([(0, 0)]))`, expect: "True False True True\nTrue False False" },
+    { inputs: [], after: `print(can_turn("up", "down"), can_turn("left", "up"), can_turn("right", "left"), can_turn("down", "down"))\nprint(next_head((-260, 280), "down"), next_head((0, 0), "right"))`, expect: "False True False True\n(-260, 260) (20, 0)" },
+    { inputs: [], after: `s = [(0, 0)]\nfor d in ["right", "right", "up", "left"]:\n    s = move_snake(s, d, True)\nprint(s)\nprint(len(s), hit_self(s))\ns = move_snake(s, "down", False)\nprint(s, hit_self(s))`, expect: "[(20, 20), (40, 20), (40, 0), (20, 0), (0, 0)]\n5 False\n[(20, 0), (20, 20), (40, 20), (40, 0), (20, 0)] True" },
+  ],
+  requires: [[/def\s+next_head\s*\(/, "Write next_head(head, direction)."], [/def\s+move_snake\s*\(/, "Write move_snake(snake, direction, grow)."], [/def\s+hit_wall\s*\(/, "Write hit_wall(head)."], [/def\s+hit_self\s*\(/, "Write hit_self(snake)."], [/def\s+can_turn\s*\(/, "Write can_turn(current, new)."], [/import turtle|from turtle/, "Build the playable game with turtle."], [/onkey(press)?\s*\(/, "Steer with the arrow keys using onkey."], [/ontimer\s*\(/, "Run the game loop with ontimer."], [/random/, "Put the food at a random spot."], [s => (s.match(/move_snake\s*\(/g) || []).length >= 2, "Use move_snake() in your game loop."], [s => /hit_wall\s*\(/.test(s.replace(/def\s+hit_wall/, "")) && /hit_self\s*\(/.test(s.replace(/def\s+hit_self/, "")), "Use hit_wall() and hit_self() in your game loop to end the game."], [/GAME OVER/i, "Show GAME OVER when the snake crashes."]],
+  starter: `import turtle\nimport random\n\n# ===== GAME RULES (these get tested) =====\n\ndef next_head(head, direction):\n    x, y = head\n    # return a new (x, y) 20 steps in that direction\n    pass\n\ndef move_snake(snake, direction, grow):\n    pass\n\ndef hit_wall(head):\n    pass\n\ndef hit_self(snake):\n    pass\n\ndef can_turn(current, new):\n    pass\n\n\n# ===== THE GAME (you test this by playing!) =====\n\nscreen = turtle.Screen()\nscreen.setup(600, 600)\nscreen.bgcolor("honeydew")\nscreen.title("Snake")\nscreen.tracer(0)\n\npen = turtle.Turtle()     # draws the snake and food every frame\npen.hideturtle()\npen.penup()\n\nhud = turtle.Turtle()     # writes the score\nhud.hideturtle()\nhud.penup()\n\nsnake = [(0, 0), (-20, 0), (-40, 0)]\ndirection = "right"\nfood = (100, 100)\nscore = 0\nalive = True\n\n# 1. arrow keys: change direction (only if can_turn allows it)\n\n# 2. game loop:\n#    - work out the new head; does it land on the food?\n#    - snake = move_snake(snake, direction, ate_food)\n#    - if it hit a wall or itself: alive = False, write GAME OVER\n#    - if it ate: score += 1, new random food\n#    - draw: pen.clear(), a dot/stamp for every piece, one for the food\n#    - screen.update(), and ontimer(loop, 120) if still alive\n\nscreen.listen()\n`,
+  hint: `<b>Rules:</b><br><code>if direction == "up": return (x, y + 20)</code> … and so on.<br><code>new = [next_head(snake[0], direction)] + snake</code> then <code>if not grow: new.pop()</code> and <code>return new</code><br><code>return abs(x) &gt; 280 or abs(y) &gt; 280</code><br><code>return snake[0] in snake[1:]</code><br><code>opposite = {"up": "down", "down": "up", "left": "right", "right": "left"}</code> → <code>return opposite[current] != new</code><br><br><b>Random food on the grid:</b> <code>(random.randint(-14, 14) * 20, random.randint(-14, 14) * 20)</code><br><b>Drawing:</b> <code>pen.goto(x, y)</code> then <code>pen.dot(18, "green")</code> for each piece.<br><b>Keys:</b> <code>def turn(new):</code> → <code>global direction</code>, <code>if can_turn(direction, new): direction = new</code>, then <code>screen.onkey(lambda: turn("up"), "Up")</code> …`,
+},
+{
+  level: 3,
+  title: "🎉 You're a game maker!",
+  body: `<p><b>YOU DID IT!</b> 🏆🎮 You went from <code>print("Hello")</code> all the way to building a real video game. That's a <i>huge</i> deal.</p>
+<p>✅ turtle drawing &nbsp; ✅ coordinates &nbsp; ✅ generative art &nbsp; ✅ keyboard & mouse events &nbsp; ✅ game loops &nbsp; ✅ smooth controls &nbsp; ✅ collisions &nbsp; ✅ lists of sprites &nbsp; ✅ game objects with classes &nbsp; ✅ game states & lives &nbsp; ✅ difficulty & polish &nbsp; ✅ testable game rules</p>
+<h3>🎬 Show it off!</h3>
+<p>Click <b>🎬 Present</b> at the top of the page. It hides the code and the lessons and shows just your game, big and clean, with a Run button to start it. Perfect for showing friends, family or your class!</p>
+<h3>🚀 Games to build next</h3>
+<p>• <b>Paddle ball</b> for 2 players: two paddles (W/S and Up/Down) and a bouncing ball<br>
+• <b>Brick breaker</b>: a paddle, a ball, and rows of bricks in a list that disappear when hit<br>
+• <b>Space shooter</b>: press space to fire bullets (a Bullet class!) at enemies that move side to side<br>
+• <b>Gravity hopper</b>: <code>dy -= 0.5</code> every frame for gravity, press space to jump through gaps in moving pipes<br>
+• <b>Maze runner</b>: draw walls from a list of strings like <code>"#####"</code> and <code>"#...#"</code><br>
+• <b>Your own idea!</b> The best games come from ideas nobody has made yet. 💡</p>`,
+},
+];
+LESSONS.forEach(l => l.level = l.level || 1);
+const LEVEL_NAMES = { 1: "Level 1 · Beginner", 2: "Level 2 · Challenger", 3: "Level 3 · Game Maker" };
+
+const LEARN_KEY = "pyeditor.learn.v2";
+let learn = (() => { try { return JSON.parse(localStorage.getItem(LEARN_KEY)) || null; } catch { return null; } })();
+const firstVisit = !learn;
+learn = learn || { step: 0, done: {}, open: true };
+const saveLearn = () => localStorage.setItem(LEARN_KEY, JSON.stringify(learn));
+const esc = t => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+let gateNo = 0;
+LESSONS.forEach(l => { if (l.gate) l.gateNo = ++gateNo; });
+const projFile = L => `project${L.gateNo}.py`;
+
+// everything after the first unpassed project is locked
+function lockAfter() {
+  const i = LESSONS.findIndex((l, k) => l.gate && !learn.done[k]);
+  return i === -1 ? Infinity : i;
+}
+function goTo(i) {
+  if (i > lockAfter()) return;
+  learn.step = i; saveLearn(); renderLearn();
+}
+
+function loadLesson(code, file = "lesson.py") {
+  state.files[file] = code;
+  switchTo(file);
+}
+
+function renderLearn() {
+  const lock = lockAfter();
+  if (learn.step > lock) learn.step = lock;
+  const L = LESSONS[learn.step];
+  const lvl = L.level;
+  const inLevel = LESSONS.map((l, i) => i).filter(i => LESSONS[i].level === lvl);
+  document.getElementById("stepLabel").textContent = `Step ${inLevel.indexOf(learn.step) + 1} of ${inLevel.length}`;
+  const lv = document.getElementById("levels");
+  lv.innerHTML = "";
+  for (const n of [1, 2, 3]) {
+    const b = document.createElement("button");
+    const first = LESSONS.findIndex(l => l.level === n);
+    const locked = first > lock;
+    b.textContent = (locked ? "🔒 " : "") + LEVEL_NAMES[n];
+    b.className = n === lvl ? "on" : "";
+    b.disabled = locked;
+    b.title = locked ? "Pass the project before it to unlock" : "";
+    b.onclick = () => goTo(Math.min(learn.lastStep?.[n] ?? first, lock));
+    lv.appendChild(b);
+  }
+  learn.lastStep = learn.lastStep || {}; learn.lastStep[lvl] = learn.step;
+  const dots = document.getElementById("dots");
+  dots.innerHTML = "";
+  inLevel.forEach((i, k) => {
+    const les = LESSONS[i];
+    const d = document.createElement("span");
+    d.textContent = i > lock ? "🔒" : learn.done[i] ? "✓" : les.gate ? "★" : k + 1;
+    d.className = (learn.done[i] ? "done " : "") + (les.gate ? "gate " : "") + (i > lock ? "locked " : "") + (i === learn.step ? "cur" : "");
+    d.title = i > lock ? "Locked — pass the project first" : les.title;
+    d.onclick = () => goTo(i);
+    dots.appendChild(d);
+  });
+  let h = `<h2>${L.title}</h2>${L.body}`;
+  if (L.example) h += `<h3>👀 Example</h3><pre>${esc(L.example)}</pre>
+    <div class="row"><button data-act="copy">📋 Put this in the editor</button><button class="go" data-act="run">▶ Put it in &amp; run it</button></div>`;
+  if (L.challenge) h += `<div class="challenge"><h3>🏆 Your challenge${learn.done[learn.step] ? " ✅" : ""}</h3><p>${L.challenge}</p>
+    <div class="row"><button class="go" data-act="start">✏️ Start the challenge</button><button data-act="hint">💡 Show a hint</button></div>
+    <div class="hintbox" id="hintBox" hidden>${L.hint}</div>
+    <div id="feedback"></div></div>`;
+  if (L.gate) {
+    const t = L.tests[0];
+    h += `<div class="challenge project"><h3>📋 What your program must do${learn.done[learn.step] ? " ✅ PASSED" : ""}</h3>${L.spec}
+    <h3>🧪 Example test</h3>
+    ${t.after ? `<p class="hint">I'll run your code, then this:</p><pre>${esc(t.after)}</pre>` : `<p class="hint">If someone types:</p><pre>${t.inputs.map(esc).map(x => x === "" ? "(blank)" : x).join("\n")}</pre>`}
+    <p class="hint">your program must print exactly:</p><pre>${esc(t.expect)}</pre>
+    <p class="hint">…plus <b>${L.tests.length - 1} secret tests</b> with different answers. Capitals, spaces and punctuation all count!</p>
+    <div class="row"><button data-act="pstart">✏️ ${state.files[projFile(L)] !== undefined ? "Open my project" : "Start the project"}</button><button class="go" data-act="ptest">🧪 Check my project</button><button data-act="hint">💡 Show a hint</button></div>
+    <div class="hintbox" id="hintBox" hidden>${L.hint}</div>
+    <div id="feedback"></div></div>`;
+  }
+  const body = document.getElementById("learnBody");
+  body.innerHTML = h; body.scrollTop = 0;
+  body.querySelectorAll("[data-act]").forEach(b => b.onclick = () => {
+    const a = b.dataset.act;
+    if (a === "copy") loadLesson(L.example + "\n");
+    if (a === "run") { loadLesson(L.example + "\n"); runCode(); }
+    if (a === "start") { loadLesson(L.starter); editor.setCursor(editor.lineCount(), 0); editor.focus(); setFeedback("bad", "✏️ Write your code in the editor, then press ▶ Run. I'll check it for you!"); }
+    if (a === "pstart") {
+      const f = projFile(L);
+      if (state.files[f] === undefined) loadLesson(L.starter, f); else switchTo(f);
+      b.textContent = "✏️ Open my project";
+      setFeedback("bad", `✏️ Build it in ${f}. Press ▶ Run to try it yourself, then 🧪 Check my project when you think it's perfect.`);
+    }
+    if (a === "ptest") checkProject(L);
+    if (a === "hint") { const hb = document.getElementById("hintBox"); hb.hidden = !hb.hidden; b.textContent = hb.hidden ? "💡 Show a hint" : "🙈 Hide the hint"; }
+  });
+  document.getElementById("prevStep").disabled = learn.step === 0;
+  const nx = document.getElementById("nextStep");
+  const next = LESSONS[learn.step + 1];
+  nx.disabled = !next || learn.step + 1 > lock;
+  nx.textContent = !next ? "Next →"
+    : learn.step + 1 > lock ? "🔒 Pass the project to continue"
+    : next.level !== lvl ? `Start Level ${next.level} →`
+    : learn.done[learn.step] || !L.challenge ? "Next →" : "Skip →";
+}
+function setFeedback(kind, text, html) {
+  const f = document.getElementById("feedback");
+  if (!f) return;
+  f.className = "feedback " + kind;
+  if (html) f.innerHTML = html; else f.textContent = text;
+  f.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+function setLearnOpen(open) {
+  learn.open = open; saveLearn();
+  document.getElementById("learn").hidden = !open;
+  setTimeout(() => editor.refresh(), 0);
+}
+
+const norm = t => t.replace(/\r/g, "").split("\n").map(l => l.trimEnd()).join("\n").replace(/\n+$/, "").replace(/^\n+/, "");
+async function checkProject(L) {
+  if (!py) return setFeedback("bad", "⏳ Python is still loading, try again in a second.");
+  if (busy) return;
+  const f = projFile(L);
+  if (state.files[f] === undefined) return setFeedback("bad", "Click ✏️ Start the project first.");
+  if (state.active !== f) switchTo(f);
+  const code = state.files[f];
+  const s = strip(code);
+  for (const [rule, msg] of L.requires) {
+    const ok = typeof rule === "function" ? rule(s) : rule.test(s);
+    if (!ok) return setFeedback("bad", "🤏 Not yet: " + msg);
+  }
+  busy = true; setStatus("Testing…", "busy");
+  setFeedback("bad", "🧪 Running tests…");
+  await new Promise(r => setTimeout(r, 30));
+  let passed = 0, fail = null;
+  try {
+    await prepare(code);
+    const run = py.globals.get("_run_test");
+    for (let k = 0; k < L.tests.length; k++) {
+      const t = L.tests[k];
+      const res = run(t.after ? code + "\n\n" + (L.testPrelude || "") + t.after + "\n" : code, py.toPy(t.inputs));
+      const [out, err] = res.toJs(); res.destroy();
+      const got = norm(out), want = norm(t.expect);
+      if (!err && got === want) { passed++; continue; }
+      fail = { k, t, got, want, err };
+      break;
+    }
+    run.destroy();
+  } catch (e) { fail = { k: 0, t: L.tests[0], got: "", want: norm(L.tests[0].expect), err: String(e.message || e) }; }
+  busy = false; setStatus("Ready", "ready");
+  if (!fail) {
+    const i = LESSONS.indexOf(L);
+    learn.done[i] = true; saveLearn(); renderLearn();
+    const nxt = LESSONS[i + 1];
+    return setFeedback("good", "", `🏆 <b>ALL ${L.tests.length} TESTS PASSED!</b> Your program is perfect. ${nxt ? `The next part is unlocked — click "${nxt.level !== L.level ? "Start Level " + nxt.level : "Next"} →".` : ""}`);
+  }
+  const secret = fail.k > 0;
+  const gl = fail.got.split("\n"), wl = fail.want.split("\n");
+  let line = 0; while (line < Math.max(gl.length, wl.length) && gl[line] === wl[line]) line++;
+  const show = (arr, other) => arr.map((x, j) => `<span class="${j === line ? "diffline" : ""}">${esc(x) || "&nbsp;"}</span>`).join("\n");
+  let html = `❌ <b>${passed} of ${L.tests.length} tests passed.</b> ${secret ? "Test " + (fail.k + 1) + " (a secret test) failed" : "Test 1 failed"}.<br>`;
+  html += fail.t.after ? `<div class="testcase"><div><b>Test code run after yours:</b><pre>${esc(fail.t.after)}</pre></div></div>` : `<div class="testcase"><div><b>Answers typed in:</b><pre>${fail.t.inputs.map(esc).join("\n")}</pre></div></div>`;
+  if (fail.err) html += `<div><b>💥 Your program crashed:</b><pre>${esc(fail.err)}</pre></div>`;
+  html += `<div class="testcase"><div><b>Expected:</b><pre>${show(wl)}</pre></div><div><b>Your program printed:</b><pre>${fail.got ? show(gl) : "(nothing)"}</pre></div></div>`;
+  if (!fail.err && line < Math.max(gl.length, wl.length)) html += `<p>👉 The first difference is on <b>line ${line + 1}</b> of the output${wl[line] !== undefined ? `: it should be <code>${esc(wl[line])}</code>` : " — your program printed extra lines"}.</p>`;
+  setFeedback("bad", "", html);
+}
+
+window.onRunFinished = (code, result) => {
+  if (!learn.open) return;
+  const L = LESSONS[learn.step];
+  if (L.gate) {
+    if (!result.err && state.active === projFile(L)) setFeedback("bad", "▶ That was a practice run. When you think it's perfect, press 🧪 Check my project.");
+    return;
+  }
+  if (!L.check) return;
+  if (L.example && code.trim() === L.example.trim()) {
+    if (!result.err) setFeedback("good", "👍 That's the example running! Now scroll down and try the challenge yourself.");
+    return;
+  }
+  if (result.err) return setFeedback("bad", "🐛 There's an error. Read the 💡 yellow tip in the Output panel, fix it, and run again. Errors are totally normal — every programmer gets them!");
+  const r = L.check(code, result.out);
+  if (r === true) {
+    const cheers = ["🎉 Nailed it!", "🔥 Awesome work!", "⭐ Perfect!", "🚀 You're a natural!", "💯 Great job!"];
+    learn.done[learn.step] = true; saveLearn(); renderLearn();
+    setFeedback("good", `${cheers[learn.step % cheers.length]} Challenge complete. Click "Next →" when you're ready.`);
+  } else setFeedback("bad", "🤏 " + r);
+};
+
+document.getElementById("learnBtn").onclick = () => setLearnOpen(document.getElementById("learn").hidden);
+document.getElementById("learnClose").onclick = () => setLearnOpen(false);
+document.getElementById("prevStep").onclick = () => { if (learn.step > 0) goTo(learn.step - 1); };
+document.getElementById("nextStep").onclick = () => { if (learn.step < LESSONS.length - 1) goTo(learn.step + 1); };
+renderLearn();
+setLearnOpen(learn.open);
+if (firstVisit) loadLesson(LESSONS[0].example + "\n");
+
+// ---------- presenting mode ----------
+function prettyName(f) {
+  return f.replace(/\.py$/, "").replace(/[_\-]+/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+}
+function updatePresentTitle() {
+  const t = TS.title || prettyName(state.active);
+  document.getElementById("presentTitle").textContent = t;
+  document.getElementById("splashTitle").textContent = t;
+}
+function hideSplash() { document.getElementById("presentSplash").classList.remove("show"); }
+function enterPresent() {
+  presenting = true;
+  document.body.classList.add("presenting");
+  TS.title = "";
+  updatePresentTitle();
+  document.getElementById("pRun").textContent = "▶ Run";
+  document.getElementById("presentSplash").classList.add("show");
+  TS.reset(); stopProgram(); window.pyStop = false;
+  cons.innerHTML = "";
+  document.documentElement.requestFullscreen?.().catch(() => {});
+  showStageHint();
+  setTimeout(() => document.getElementById("splashRun").focus(), 50);
+}
+function exitPresent() {
+  presenting = false;
+  document.body.classList.remove("presenting");
+  hideSplash();
+  if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+  setTimeout(() => { TS.fit(); editor.refresh(); showStageHint(); }, 50);
+}
+document.getElementById("presentBtn").onclick = enterPresent;
+document.getElementById("pExit").onclick = exitPresent;
+document.getElementById("pRun").onclick = () => runCode();
+document.getElementById("splashRun").onclick = () => runCode();
+document.addEventListener("keydown", e => {
+  if (!presenting) return;
+  const inField = /INPUT|TEXTAREA/.test(document.activeElement?.tagName);
+  if (e.key === "Escape" && !TS.keys.down.has("Escape") && !inField) { e.preventDefault(); exitPresent(); }
+  else if (e.key === "Enter" && document.getElementById("presentSplash").classList.contains("show")) { e.preventDefault(); runCode(); }
+});
+document.addEventListener("fullscreenchange", () => setTimeout(() => TS.fit(), 50));
+
+boot();
+editor.focus();
+</script>
+</body>
+</html>
