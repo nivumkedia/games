@@ -31,6 +31,10 @@
     border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px;
   }
   header button:hover { background: rgba(255,255,255,.4); }
+  header button.on { background: #fff; color: #ef6c00; }
+  #brainBar { display: none; padding: 8px 20px; background: #fff8e1; font-size: 13px; color: #8d6e00; border-bottom: 1px solid #ffe082; }
+  #brainBar .track { height: 8px; background: #ffe082; border-radius: 99px; margin-top: 5px; overflow: hidden; }
+  #brainBar .fill { height: 100%; width: 0; background: #ff8f00; transition: width .3s; }
   #chat { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; background: #fafcff; }
   .msg { max-width: 78%; padding: 10px 14px; border-radius: 16px; line-height: 1.45; white-space: pre-wrap; word-wrap: break-word; animation: pop .2s ease-out; }
   @keyframes pop { from { transform: scale(.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
@@ -86,9 +90,12 @@
       <p>I learn from you. Teach me anything!</p>
     </div>
     <div class="spacer"></div>
+    <button onclick="location.href='../../index.html'" title="Go to all the games">🎮 Playmerth</button>
+    <button id="smartBtn" title="A real AI brain that runs on your computer. Free, no account needed.">⚡ Smart brain</button>
     <button id="clearBtn">🗑 Clear chat</button>
     <button id="brainBtn">🧠 My Brain</button>
   </header>
+  <div id="brainBar"><span id="brainText"></span><div class="track"><div class="fill" id="brainFill"></div></div></div>
   <div id="chat"></div>
   <div class="chips" id="chips"></div>
   <form id="form">
@@ -106,6 +113,14 @@
       <input id="teachA" placeholder="Sunny replies...">
       <button id="teachBtn">Teach</button>
     </div>
+    <div class="row" style="align-items:center;font-size:14px">
+      ⚡ Smart brain size:
+      <select id="brainSize" style="padding:6px;border-radius:8px;border:2px solid #e0e0e0">
+        <option value="Llama-3.2-1B-Instruct">Small: faster, about 900 MB download</option>
+        <option value="Llama-3.2-3B-Instruct">Big: smarter, about 2.3 GB download</option>
+      </select>
+    </div>
+    <label style="font-size:14px"><input type="checkbox" id="lookupsBox"> 🌐 Look things up on Wikipedia and the dictionary</label>
     <div id="learned"></div>
     <div class="row">
       <button class="gray" id="exportBtn">Export</button>
@@ -118,10 +133,14 @@
   </div>
 </div>
 
+<!-- math.js: a big free math library (fractions, square roots, units, algebra...). If it can't load, Sunny uses its own simpler math. -->
+<script src="https://cdn.jsdelivr.net/npm/mathjs@13/lib/browser/math.js"></script>
 <script>
 // ---------- Built-in training data ----------
 // Each intent: example phrases the bot learns from, and replies to pick from.
 const BASE = [
+  { tag: 'back', ex: ['im back', 'i am back', 'i\'m back', 'guess who is back', 'back again', 'i am back whats up', 'dude i am back'],
+    re: ['Ayy, welcome back{name}! 🙌 What\'s good?', 'You\'re back! 😄 What\'s up?'] },
   { tag: 'greet', ex: ['hi', 'hello', 'hey', 'yo', 'good morning', 'good afternoon', 'howdy', 'sup', 'hiya'],
     re: ['Hi{name}! 😊', 'Hello{name}! What do you want to talk about?', 'Hey{name}! Good to see you.'] },
   { tag: 'bye', ex: ['bye', 'goodbye', 'see you later', 'see ya', 'gotta go', 'good night', 'cya'],
@@ -130,7 +149,7 @@ const BASE = [
     re: ['Just chatting with you! 😄 What are you doing?', 'Hanging out in this web page, waiting for you to say something! ☀️'] },
   { tag: 'how', ex: ['how are you', 'how are you doing', 'how is it going', 'whats up', 'how do you feel'],
     re: ['I\'m great, thanks for asking! How about you?', 'Feeling sunny! ☀️ How are you?', 'Doing awesome! What about you?'] },
-  { tag: 'good', ex: ['i am good', 'im fine', 'i am great', 'good thanks', 'pretty good', 'i am happy', 'awesome'],
+  { tag: 'good', ex: ['i am good', 'im fine', 'i am great', 'good thanks', 'pretty good', 'i am happy'],
     re: ['Yay, glad to hear it! 🎉', 'Awesome! What have you been up to?', 'Great! Want to hear a joke?'] },
   { tag: 'bad', ex: ['i am sad', 'i feel bad', 'not good', 'i am tired', 'bad day', 'i am bored', 'i am upset'],
     re: ['Oh no 😟 Want to talk about it?', 'Sorry to hear that. Want a joke to cheer you up?', 'Sending you a big sunny hug 🤗'] },
@@ -141,7 +160,7 @@ const BASE = [
   { tag: 'age', ex: ['how old are you', 'what is your age', 'when were you born'],
     re: ['I was born the first time you opened this page! So pretty young 👶'] },
   { tag: 'maker', ex: ['who made you', 'who created you', 'who built you', 'who is your creator'],
-    re: ['I was made for Niv\'s Games! 🎮'] },
+    re: ['I was made for Playmerth, the free games website! 🎮'] },
   { tag: 'thanks', ex: ['thanks', 'thank you', 'thx', 'ty', 'thanks a lot'],
     re: ['You\'re welcome! 😊', 'Anytime!', 'No problem!'] },
   { tag: 'joke', ex: ['tell me a joke', 'joke', 'make me laugh', 'say something funny', 'another joke'],
@@ -155,7 +174,27 @@ const BASE = [
       'What did the ocean say to the beach? Nothing, it just waved. 🌊',
       'Why did the computer go to the doctor? It had a virus! 💻',
       'How does a penguin build its house? Igloos it together! 🐧',
-      'What do you call a sleeping dinosaur? A dino-snore! 🦖'
+      'What do you call a sleeping dinosaur? A dino-snore! 🦖',
+      'Why did the cookie go to the nurse? Because it felt crummy! 🍪',
+      'What do you call a fish with no eyes? A fsh! 🐟',
+      'Why are ghosts bad at lying? Because you can see right through them! 👻',
+      'What did one plate say to the other? Dinner\'s on me! 🍽️',
+      'Why did the golfer bring two pairs of pants? In case he got a hole in one! ⛳',
+      'What do you call a cow with no legs? Ground beef! 🐄',
+      'Why don\'t eggs tell jokes? They\'d crack each other up! 🥚',
+      'What kind of shoes do ninjas wear? Sneakers! 🥷',
+      'Why did the student eat his homework? The teacher said it was a piece of cake! 🍰',
+      'What do you call a dog magician? A labracadabrador! 🐕',
+      'Why was the broom late? It over-swept! 🧹',
+      'What did the left eye say to the right eye? Between you and me, something smells! 👃',
+      'Why can\'t you give Elsa a balloon? Because she will let it go! 🎈',
+      'What do you call a dinosaur that crashes his car? Tyrannosaurus Wrecks! 🦖',
+      'How do you make a tissue dance? Put a little boogie in it! 🤧',
+      'Why did the tomato blush? It saw the salad dressing! 🍅',
+      'What do you call a train carrying bubblegum? A chew-chew train! 🚂',
+      'Why do bees have sticky hair? Because they use honeycombs! 🐝',
+      'What\'s orange and sounds like a parrot? A carrot! 🥕',
+      'Why did the music teacher need a ladder? To reach the high notes! 🎵'
     ] },
   { tag: 'fact', ex: ['tell me a fact', 'fun fact', 'teach me something', 'tell me something cool', 'did you know'],
     re: [
@@ -168,22 +207,33 @@ const BASE = [
       'A group of flamingos is called a flamboyance. 🦩',
       'Your brain uses about 20% of your body\'s energy. 🧠',
       'Lightning is five times hotter than the surface of the sun. ⚡',
-      'Wombat poop is cube-shaped! 🟫'
+      'Wombat poop is cube-shaped! 🟫',
+      'A snail can sleep for three years! 🐌',
+      'Cows have best friends and get sad when they\'re apart. 🐄',
+      'The Eiffel Tower gets about 15 cm taller in summer because the metal expands in the heat! 🗼',
+      'Butterflies taste with their feet! 🦋',
+      'A bolt of lightning has enough energy to toast about 100,000 slices of bread. ⚡🍞',
+      'Sea otters hold hands while they sleep so they don\'t float apart. 🦦',
+      'There\'s a planet made partly of diamonds! It\'s called 55 Cancri e. 💎',
+      'Your nose can remember about 50,000 different smells. 👃',
+      'A shrimp\'s heart is in its head! 🦐',
+      'Koalas sleep up to 22 hours a day. 🐨',
+      'The longest hiccup attack lasted 68 years! 😮',
+      'Hot water can freeze faster than cold water sometimes. It\'s called the Mpemba effect! 🧊',
+      'An ostrich\'s eye is bigger than its brain! 🦤',
+      'The moon has moonquakes! 🌙',
+      'Penguins propose to their partners with a pebble! 🐧'
     ] },
   { tag: 'game', ex: ['what games are there', 'what games do you have', 'recommend a game', 'i want to play a game', 'what should i play'],
-    re: ['Try Pulse Runner, Stick Fighter, Tower Defense, 2048, or City Builder! 🎮', 'How about Block Blast or Fruit Ninja? 🍉', 'Racing Game and Turbo Clash 2 are fun if you like speed! 🏎️'] },
-  { tag: 'color', ex: ['what is your favorite color', 'favorite colour', 'what color do you like'],
-    re: ['Sunny yellow, of course! 💛'] },
-  { tag: 'food', ex: ['what is your favorite food', 'what do you eat', 'are you hungry', 'favorite food'],
-    re: ['I eat words for breakfast! 📖 But pizza looks pretty good 🍕'] },
+    re: ['Try Fortress Fury, Bullet Storm, or Cosmic Blitz on Playmerth! 🎮', 'How about Slice Storm or Tag Frenzy? 🍉', 'Nitro Blaze and Turbo Clash are fun if you like speed! 🏎️', 'If you like brain games, try Number Showdown or Brain Breaker! 🧠'] },
   { tag: 'love', ex: ['i love you', 'you are cool', 'you are awesome', 'you are smart', 'i like you', 'you are the best'],
     re: ['Aww, thank you! You\'re awesome too! 💛', 'That made my day! ☀️'] },
   { tag: 'mean', ex: ['you are dumb', 'you are stupid', 'you are bad', 'i hate you', 'you suck'],
     re: ['Aw 😢 I\'m still learning! Teach me something and I\'ll get smarter.', 'Sorry! Use the 🧠 button to teach me better answers.'] },
   { tag: 'oops', ex: ['that is not what i meant', 'you misunderstood', 'that is wrong', 'wrong answer', 'you got it wrong', 'i did not mean that'],
     re: ['Oops, sorry! 😅 What did you mean?', 'My bad! 🙈 Can you say it another way?'] },
-  { tag: 'help', ex: ['help', 'what can you do', 'how do you work', 'what do you know', 'commands'],
-    re: ['I can:\n• Chat and tell jokes and facts\n• Do math (try "what is 12 * 7")\n• Tell the time and date\n• Flip a coin or roll a dice\n• Remember your name ("my name is ...")\n• LEARN! If I don\'t get something, I\'ll guess and ask you questions.\n• Write a story with you: "let\'s write a story"\n• I understand typos, like "how ar yu"\n• Look things up online: "what does yeet mean", "who is Albert Einstein", "tell me about volcanoes"\n• Say "no" when I guess wrong, and teach me the right answer.\n• Teach me directly: "teach: question = answer"\n• Remember our whole chat: try "what did I say first", "did I mention pizza", "what do you know about me", "recap"'] },
+  { tag: 'help', ex: ['help', 'what can you do', 'what do you know', 'commands', 'help me'],
+    re: ['I can:\n• Chat and tell jokes and facts\n• Do math: 25^2, 1/2 + 1/3, square root of 144, 20% of 80, solve 2x + 3 = 11, word problems\n• Tell the time and date\n• Flip a coin or roll a dice\n• Remember your name ("my name is ...")\n• LEARN! If I don\'t get something, I\'ll guess and ask you questions.\n• Write a story with you: "let\'s write a story"\n• I understand typos, like "how ar yu"\n• Look things up online: "what does yeet mean", "who is Albert Einstein", "tell me about volcanoes"\n• Say "no" when I guess wrong, and teach me the right answer.\n• Teach me directly: "teach: question = answer"\n• Remember our whole chat: try "what did I say first", "did I mention pizza", "what do you know about me", "recap"'] },
   { tag: 'weather', ex: ['what is the weather', 'is it raining', 'is it sunny outside', 'weather today'],
     re: ['I can\'t see outside 🙈 but in here it\'s always sunny! ☀️'] },
   { tag: 'yes', ex: ['yes', 'yeah', 'yep', 'sure', 'ok', 'okay'],
@@ -192,10 +242,6 @@ const BASE = [
     re: ['Okay, no problem!', 'Alright!'] },
   { tag: 'lol', ex: ['lol', 'haha', 'lmao', 'hahaha', 'that is funny'],
     re: ['😂 Glad you liked it!', 'Hehe 😄'] },
-  { tag: 'animal', ex: ['what is your favorite animal', 'do you like animals', 'do you have a pet'],
-    re: ['I love cats 🐱 and dogs 🐶 equally! Also octopuses, they\'re so smart.'] },
-  { tag: 'sport', ex: ['do you like sports', 'what is your favorite sport', 'do you play soccer'],
-    re: ['I\'d play soccer ⚽ but I don\'t have legs. I cheer really loudly though!'] },
   { tag: 'meaning', ex: ['what is the meaning of life', 'why are we here'],
     re: ['42! 😄 Or maybe: have fun, be kind, and keep learning.'] },
   { tag: 'rps', ex: ['rock paper scissors', 'play rock paper scissors', 'lets play a game'],
@@ -211,10 +257,13 @@ function stem(w) {
   if (w.length > 3 && w.endsWith('s') && !w.endsWith('ss')) return w.slice(0, -1);
   return w;
 }
-const ALIAS = { u: 'you', ur: 'your', r: 'are', im: 'i', "i'm": 'i', whats: 'what', "what's": 'what', pls: 'please', plz: 'please', colour: 'color', wanna: 'want' };
+const ALIAS = { u: 'you', ur: 'your', r: 'are', im: 'i', "i'm": 'i', whats: 'what', "what's": 'what', pls: 'please', plz: 'please', colour: 'color', wanna: 'want',
+  // slang spellings
+  da: 'the', ta: 'to', tha: 'the', dat: 'that', dis: 'this', dem: 'them', dey: 'they', wat: 'what', wut: 'what', wot: 'what', yu: 'you', ya: 'you', ar: 'are', n: 'and', bout: 'about', cuz: 'because', coz: 'because',
+  gonna: 'going', gotta: 'got', tryna: 'trying', finna: 'going', ima: 'i', lemme: 'let', gimme: 'give', dunno: 'idk', kno: 'know', knw: 'know', luv: 'love', wit: 'with', fo: 'for', b4: 'before', thx: 'thanks', tho: 'though', ppl: 'people', rly: 'really', sry: 'sorry', srry: 'sorry', ok: 'ok', okk: 'ok', mk: 'ok' };
 function tokens(text) {
   return text.toLowerCase().replace(/[^a-z0-9'\s]/g, ' ').split(/\s+/).filter(Boolean)
-    .map(w => ALIAS[w] || w).map(w => w.replace(/'/g, '')).map(stem);
+    .map(w => ALIAS[w] || w).map(w => w.replace(/'/g, '')).filter(w => w.length > 1 || w === 'i' || /\d/.test(w)).map(stem);
 }
 
 // ---------- Memory ----------
@@ -255,7 +304,7 @@ function cosine(a, b) { let s = 0; for (const t in a) if (b[t]) s += a[t] * b[t]
 // Filler words: a match must share at least one real word, not just "what is the"
 const FILLER = new Set('a an the is are am was be do doe did i you your my me it its to of in on at for and or what who how why when where can could would will should that this there tell say please some about with like want'.split(' ').map(stem));
 // Fix small typos: "how ar yu" -> "how are you", "ypou" -> "you", "teh" -> "the"
-const COMMON = ('the be to of and a in that have i it for not on with he as you do at this but his by from they we say her she or an will my one all would there their what so up out if about who get which go me when make can like time no just him know take people into year your good some could them see other than then now look only come its over think also back after use two how our work first well way even new want because any these give day most us is are was were am has had did does said got made went been being yes yeah ok okay hi hello hey bye please thanks thank sorry story write play game games fun funny joke jokes riddle tell talk chat help name old age love like hate happy sad mad bored tired hungry favorite color food animal dog cat pet friend friends mom dad brother sister school home house homework teacher class today tomorrow yesterday morning night week weekend birthday party gift pizza ice cream cake candy apple banana water milk eat ate drink sleep run walk jump swim read draw sing dance music song movie book books show watch computer phone video minecraft roblox fortnite soccer football basketball ball team win lose won lost score really very much more less little big small fast slow hot cold nice cool awesome great bad best worst never always maybe sometimes something anything nothing everything someone anyone everyone where why which whose while again still too here every each many few long short high low hard easy right wrong left true false real fake cute scary weird crazy silly smart dumb mean kind ate dragon magic monster robot space planet sun moon star stars ocean sea beach tree forest mountain river city world earth').split(' ');
+const COMMON = ('the be to of and a in that have i it for not on with he as you do at this but his by from they we say her she or an will my one all would there their what so up out if about who get which go me when make can like time no just him know take people into year your good some could them see other than then now look only come its over think also back after use two how our work first well way even new want because any these give day most us is are was were am has had did does said got made went been being yes yeah ok okay hi hello hey bye please thanks thank sorry story write play game games fun funny joke jokes riddle tell talk chat help name old age love like hate happy sad mad bored tired hungry favorite color food animal dog cat pet friend friends mom dad brother sister school home house homework teacher class today tomorrow yesterday morning night week weekend birthday party gift pizza ice cream cake candy apple banana water milk eat ate drink sleep run walk jump swim read draw sing dance music song movie book books show watch computer phone video minecraft roblox fortnite soccer football basketball ball team win lose won lost score really very much more less little big small fast slow hot cold nice cool awesome great bad best worst never always maybe sometimes something anything nothing everything someone anyone everyone where why which whose while again still too here every each many few long short high low hard easy right wrong left true false real fake cute scary weird crazy silly smart dumb mean kind ate dragon magic monster robot space planet sun moon star stars ocean sea beach tree forest mountain river city world earth nose eye eyes ear ears mouth teeth tooth hand hands arm arms leg legs foot feet head hair face finger fingers toe toes body heart brain bone bones skin belly back neck knee shoulder bed beds chair table desk couch sofa lamp clock watch phone tv screen keyboard mouse paper pen pencil crayon marker eraser bag backpack box toy toys doll lego legos ball bat bike car cars bus train plane boat ship truck rocket road street bridge park zoo farm store shop mall library hospital church castle tower cave island lake pond hill rock rocks stone sand snow rain wind cloud clouds sky storm lightning thunder rainbow flower flowers grass leaf leaves seed plant garden egg eggs bread cheese meat chicken fish rice soup pasta cookie cookies chips juice tea coffee sugar salt shirt pants shoes socks hat coat dress glasses ring key keys map coin coins money gold candle needle comb sponge towel stamp piano guitar drum drums river stream ocean planet volcano volcanoes dinosaur dinosaurs shark whale bird birds bug bugs bee spider snake frog horse cow pig sheep goat duck mouse rabbit bunny bear lion tiger monkey elephant giraffe zebra wolf fox owl penguin turtle puppy kitten baby kid kids boy girl man woman king queen prince princess wizard witch ghost zombie alien ninja pirate knight hero teacher doctor police army team captain web internet online website site link page app back dude bro sis buddy chill oh ohh ah aw aww wow whoa woah omg root roots cube square log math maths plus minus times divide divided multiply equation problem problems number numbers god gosh goodness geez jeez sheesh cow moly holy wild crazy insane neat sweet bruh lol lmao yay yikes dang huh hmm um uh ugh yep nope ya yo hey sup bro dude remember forget forgot know knew think thought believe understand mean meant guess answer question ask asked asking tell told said say saying talk talked call called need needed try tried trying help helped start started stop stopped finish finished keep kept let put set show showed find found lose lost hold bring brought buy bought build built feel felt hear heard listen learn learned teach taught wait waited watch watched open close move moved live lived die died begin began change changed turn turned follow happen happened leave left meet met pay play played playing run ran sit stand stood understand went wish wonder wonderful beautiful family person place thing things money car door room window water fire air food lunch dinner breakfast hour minute second moment problem idea reason sure maybe probably actually already almost enough together another different same important special favorite question answer riddle riddles story stories joke jokes funny again before after during until since without against between around under above inside outside everybody somebody nobody yourself myself please because though through across along being doing going having making taking coming getting giving looking telling thinking wanting trying saying talking playing writing reading eating sleeping dream dreams scared happy angry excited nervous worried surprised confused lonely awesome amazing terrible horrible delicious yummy gross').split(' ');
 const COMMON_SET = new Set(COMMON);
 function close(a, b) {
   if (Math.abs(a.length - b.length) > 1) return false;
@@ -274,15 +323,38 @@ const typoCache = {};
 function fixWord(w) {
   if (w in typoCache) return typoCache[w];
   let out = w;
-  if (!(idf[w] || COMMON_SET.has(w) || SLANG[w] || /\d/.test(w) || w.length < 2)) {
+  if (/(.)\1{1,}/.test(w) && !(idf[w] || COMMON_SET.has(w) || SLANG[w])) {
+    const two = w.replace(/(.)\1{2,}/g, '$1$1'), one = w.replace(/(.)\1+/g, '$1');
+    for (const c of [two, one]) if (c !== w && (idf[c] || COMMON_SET.has(c) || SLANG[c])) return typoCache[w] = c;
+  }
+  const glued = !(idf[w] || COMMON_SET.has(w) || COMMON_SET.has(stem(w)) || idf[stem(w)] || SLANG[w]) && splitGlued(w);
+  if (glued) return typoCache[w] = glued.join(' ');
+  if (!(idf[w] || COMMON_SET.has(w) || COMMON_SET.has(stem(w)) || idf[stem(w)] || SLANG[w] || /\d/.test(w) || w.length < 2)) {
     // try the brain's words first, then common English; same first letter wins ties
-    const cands = [...Object.keys(idf), ...COMMON].filter(v => v.length >= 2 && v !== w && close(w, v) && (w.length > 2 || v.length === 3));
-    cands.sort((x, y) => (y[0] === w[0]) - (x[0] === w[0]));
+    const cands = [...new Set([...COMMON, ...Object.keys(idf)])].filter(v => v.length >= 2 && v !== w && close(w, v) && (w.length > 3 || (v.length === w.length && [...v].sort().join('') === [...w].sort().join('')) || (w.length === 3 && v.length === 4 && v.startsWith(w.slice(0, 2)))));
+    // best fix: swapped letters ("cna" -> "can"), then same first letter, then the more common word
+    const swapped = v => v.length === w.length && [...v].sort().join('') === [...w].sort().join('');
+    const rank = v => (swapped(v) ? 4 : 0) + (v[0] === w[0] ? 2 : 0) + (COMMON_SET.has(v) ? 1 : 0);
+    cands.sort((x, y) => rank(y) - rank(x) || (COMMON.indexOf(x) + 1 || 1e4) - (COMMON.indexOf(y) + 1 || 1e4));
     if (cands.length) out = cands[0];
   }
   return typoCache[w] = out;
 }
-function fixTypos(toks) { return toks.map(w => stem(fixWord(w))); }
+function splitGlued(w) {
+  if (w.length < 5) return null;
+  const known = v => COMMON_SET.has(v) || idf[v] || idf[stem(v)];
+  // fewest pieces wins; single letters only allowed for "i" and "a"
+  const best = Array(w.length + 1).fill(null); best[0] = [];
+  for (let i = 0; i < w.length; i++) {
+    if (!best[i]) continue;
+    for (let j = i + 1; j <= w.length; j++) {
+      const piece = w.slice(i, j);
+      if ((piece.length > 1 || piece === 'i' || piece === 'a') && known(piece) && (!best[j] || best[j].length > best[i].length + 1)) best[j] = [...best[i], piece];
+    }
+  }
+  return best[w.length] && best[w.length].length > 1 ? best[w.length] : null;
+}
+function fixTypos(toks) { return toks.flatMap(w => fixWord(w).split(' ').map(stem)); }
 function correctText(text) { return text.toLowerCase().replace(/[a-z']+/g, w => ALIAS[w] || fixWord(w.replace(/'/g, '')) === w.replace(/'/g, '') ? (ALIAS[w] || w) : fixWord(w.replace(/'/g, ''))); }
 function bestMatch(text) {
   const qt = fixTypos(tokens(text));
@@ -292,6 +364,11 @@ function bestMatch(text) {
   docs.forEach(d => {
     if (content.length && !content.some(t => d.toks.includes(t))) return;
     let s = cosine(v, d.vec);
+    // A canned answer only fits if it covers most of what you said ("no you don't" is NOT just "no")
+    const covered = qt.filter(t => d.toks.includes(t)).length / qt.length;
+    if (covered < 0.5) s *= 0.5;
+    // every real word you said should matter: "how does a CAR work" isn't "how do you work"
+    if (content.length) s *= 0.5 + 0.5 * content.filter(t => d.toks.includes(t)).length / content.length;
     if (d.learned) s += 0.02; // your teaching wins ties
     if (s > score) { score = s; best = d; }
   });
@@ -300,6 +377,17 @@ function bestMatch(text) {
 
 // ---------- Skills ----------
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+// Pick something you haven't seen yet (remembered even after reloading). Starts over once you've seen them all.
+function pickFresh(key, arr, id = x => typeof x === 'string' ? x : x.q) {
+  mem.seen = mem.seen || {};
+  let seen = mem.seen[key] || [];
+  let fresh = arr.filter(x => !seen.includes(id(x)));
+  if (!fresh.length) { const last = seen[seen.length - 1]; seen = []; fresh = arr.filter(x => id(x) !== last); }
+  const x = pick(fresh);
+  seen.push(id(x)); mem.seen[key] = seen; save();
+  return x;
+}
+const FRESH = ['joke', 'fact']; // these intents never repeat until you've heard them all
 
 // Safe math parser (no eval)
 function tryMath(text) {
@@ -307,7 +395,10 @@ function tryMath(text) {
     .replace(/what('s| is)|calculate|solve|equals|=|\?/g, ' ')
     .replace(/plus/g, '+').replace(/minus/g, '-').replace(/times|multiplied by|x(?=\s*\d)/g, '*')
     .replace(/divided by|over/g, '/').replace(/to the power of|squared/g, m => m === 'squared' ? '^2' : '^')
-    .replace(/\s+/g, '');
+    .replace(/×/g, '*').replace(/÷/g, '/').replace(/\s+/g, '')
+    .replace(/,(?=\d{3})/g, '')          // 1,000 -> 1000
+    .replace(/\*\*|\^+/g, '^')           // 25^^2 or 25**2 -> 25^2
+    .replace(/([+*/%])\1+/g, '$1');     // 5++3 -> 5+3
   if (!/^[\d.+\-*/^()%]+$/.test(s) || !/\d/.test(s) || !/[+\-*/^%]/.test(s)) return null;
   let i = 0;
   const peek = () => s[i];
@@ -445,19 +536,36 @@ function storyTurn(text) {
       st.lines.push(STORY.ends[Math.floor(Math.random() * STORY.ends.length)].replace(/\{hero\}/g, st.hero).replace(/\{Hero\}/g, cap(st.hero)));
       const title = 'The Story of ' + st.hero.replace(/^(a|an) /i, 'the '); // "the lost puppy" or "Bob"
       mem.stories.push({ title, text: st.lines.join(' '), time: Date.now() }); save();
-      return { text: `📖 "${title}"\n\n${st.lines.join(' ')}\n\nWe wrote that together! I saved it. Say "read my stories" to see it again.` };
+      return { soft: true, text: `📖 "${title}"\n\n${st.lines.join(' ')}\n\nWe wrote that together! I saved it. Say "read my stories" to see it again.` };
     }
-    return { text: 'Okay, no story this time!' };
+    return { soft: true, text: 'Okay, no story this time!' };
   }
   if (st.stage === 'topic') {
     const named = text.match(/named ([A-Z]?[a-z]+)/i);
-    const about = t.replace(/^(about |it'?s about |a story about |um+ |uh+ )+/, '').replace(/^(a|an|the) /, '');
-    st.hero = named ? cap(named[1]) : 'a ' + (about.split(' ').length <= 4 ? about.replace(/ named .*/, '') : 'brave kid');
+    // "nah buddy, like sci-fi/fantasy" -> genre "sci-fi + fantasy", not a hero called "nah buddy"
+    const about = t.replace(/[,!?]/g, ' ').replace(/\b(nah|no|nope|yeah|yes|ok|okay|um+|uh+|like|buddy|bro|dude|maybe|idk|hmm+|so|just|something|kinda|kind of|a story|story|about|it'?s|it is|lets do|let'?s do|i want|i think|how about|what about)\b/g, ' ').replace(/\s+/g, ' ').trim().replace(/^(a|an|the) /, '');
+    const GENRES = [
+      [/sci-?fi|science fiction|space|alien|robot|future|planet|galaxy/, ['a robot explorer named Zed', 'a space captain named Nova', 'an alien kid named Blip']],
+      [/fantasy|magic|wizard|dragon|knight|castle|fairy|elf|witch/, ['a young wizard named Pip', 'a knight named Sir Wobble', 'a baby dragon named Ember']],
+      [/myster|detective|spy|secret/, ['a kid detective named Max', 'a secret agent named Agent Pickle']],
+      [/spooky|scary|horror|ghost|halloween|haunted/, ['a friendly ghost named Boo', 'a brave kid named Sam who wasn\'t scared of anything']],
+      [/funny|silly|comedy|goofy/, ['a goofy penguin named Waddles', 'a talking sandwich named Gerald']],
+      [/adventure|pirate|jungle|treasure|explore/, ['a pirate named Captain Sprinkles', 'an explorer named Ruby']],
+      [/sport|soccer|basketball|football/, ['a soccer player named Kai']],
+    ];
+    const genres = GENRES.filter(([re]) => re.test(t));
+    if (named) st.hero = cap(named[1]);
+    else if (genres.length >= 2) st.hero = /sci-?fi|space/.test(t) && /fantasy|magic|wizard/.test(t) ? 'a space wizard named Nova' : pick(genres[0][1]);
+    else if (genres.length === 1 && about.split(' ').length <= 2) st.hero = pick(genres[0][1]);
+    else if (about && about.split(' ').length <= 4) st.hero = 'a ' + about.replace(/ named .*/, '');
+    else st.hero = pick(GENRES[Math.floor(Math.random() * GENRES.length)][1]);
     st.stage = 'writing';
     const first = pick(STORY.starts).replace(/\{hero\}/g, st.hero);
     st.lines.push(first);
-    if (st.hero.startsWith('a ')) st.hero = 'the ' + st.hero.slice(2);
-    return { text: `Ooh, great idea! I'll start 📖\n\n${first}\n\nYour turn! Write what happens next. (Type "the end" when we're done)` };
+    const nm = st.hero.match(/named ([A-Z][a-z]+(?: [A-Z][a-z]+)*)/);
+    if (nm) st.hero = nm[1];
+    else if (/^an? /.test(st.hero)) st.hero = 'the ' + st.hero.replace(/^an? /, '');
+    return { soft: true, text: `Ooh, great idea! I'll start 📖\n\n${first}\n\nYour turn! Write what happens next. (Type "the end" when we're done)` };
   }
   // their line, then mine
   let line = text.trim(); if (!/[.!?"]$/.test(line)) line += '.';
@@ -468,21 +576,324 @@ function storyTurn(text) {
   mine = mine.replace(/\{thing\}/g, thing).replace(/\{hero\}/g, st.hero).replace(/\{Hero\}/g, cap(st.hero));
   st.lines.push(mine);
   const prompts = ['What happens next? 🤔', 'Your turn!', 'Ooh, then what?', 'Keep going! ✏️', 'What does ' + st.hero + ' do now?'];
-  return { text: `${mine}\n\n${pick(prompts)}` };
+  return { soft: true, text: `${mine}\n\n${pick(prompts)}` };
 }
 function cap(w) { return w ? w[0].toUpperCase() + w.slice(1) : w; }
+
+// ---------- Math ----------
+const M = window.math || null;
+// Exact giant whole numbers like 50! or 2^100 (only + - * ^ ! and parentheses)
+function bigExact(expr) {
+  const s = expr.replace(/\s+/g, '');
+  if (!/^[\d+\-*^!()]+$/.test(s)) return null;
+  let i = 0;
+  const num = () => {
+    if (s[i] === '(') { i++; const v = add(); if (s[i++] !== ')') throw 0; return post(v); }
+    if (s[i] === '-') { i++; return -pow(); }
+    const m = s.slice(i).match(/^\d+/); if (!m) throw 0; i += m[0].length; return post(BigInt(m[0]));
+  };
+  const post = v => { while (s[i] === '!') { i++; if (v > 5000n) throw 0; let f = 1n; for (let k = 2n; k <= v; k++) f *= k; v = f; } return v; };
+  const pow = () => { const b = num(); if (s[i] === '^') { i++; const e = pow(); if (e < 0n || e > 20000n) throw 0; return b ** e; } return b; };
+  const mul = () => { let v = pow(); while (s[i] === '*') { i++; v *= pow(); } return v; };
+  const add = () => { let v = mul(); while (s[i] === '+' || s[i] === '-') { const o = s[i++]; const r = mul(); v = o === '+' ? v + r : v - r; } return v; };
+  try { const v = add(); return i === s.length ? v : null; } catch { return null; }
+}
+const NUMWORDS = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90, hundred: 100, thousand: 1000, million: 1e6, dozen: 12, half: 0.5 };
+function nice(v) {
+  if (M && v && v.isFraction) return M.format(v, { fraction: 'ratio' });
+  if (M && v && (v.isUnit || v.isComplex || v.isMatrix || Array.isArray(v))) return M.format(v, { precision: 10 });
+  if (typeof v === 'boolean') return v ? 'yes ✅' : 'no ❌';
+  if (typeof v !== 'number') return String(v);
+  if (!isFinite(v)) return v > 0 ? 'infinity ♾️' : v < 0 ? 'negative infinity' : 'not a number (you can\'t divide 0 by 0!)';
+  const r = +v.toPrecision(12);
+  return Math.abs(r) >= 1e21 || (Math.abs(r) < 1e-9 && r !== 0) ? r.toExponential(6) : r.toLocaleString('en-US', { maximumFractionDigits: 10 });
+}
+// Turn kid-style words into math: "square root of 16" -> "sqrt(16)", "20% of 50" -> "20/100*50"
+function mathWords(text) {
+  let s = ' ' + text.toLowerCase().replace(/[?]/g, ' ').replace(/,(?=\d{3}\b)/g, '') + ' ';
+  s = s.replace(/\b(what'?s|what is|what are|whats|what|calculate|compute|solve|work out|figure out|evaluate|find|tell me|can you|please|do|the answer to|answer)\b/g, ' ');
+  s = s.replace(/\b(a|an)\s+(hundred|thousand|million|dozen)\b/g, 'one $2');
+  s = s.replace(/\b(\w+)\s+(hundred|thousand|million)\b/g, (m, a, b) => NUMWORDS[a] != null ? `(${NUMWORDS[a]}*${NUMWORDS[b]})` : m);
+  s = s.replace(/\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)[\s-](one|two|three|four|five|six|seven|eight|nine)\b/g, (m, a, b) => NUMWORDS[a] + NUMWORDS[b]);
+  s = s.replace(/\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|dozen)\b/g, w => NUMWORDS[w]);
+  const R = [
+    [/(\d+(?:\.\d+)?)\s*(?:%|percent)\s+of\s+/g, '($1/100)*'],
+    [/(\d+(?:\.\d+)?)\s*(?:%|percent)/g, '($1/100)'],
+    [/\bcube roots?(?: of)?\b|\bcbrt of\b/g, ' cbrt '],
+    [/\bsquare roots?(?: of)?\b|\bsqrt of\b|\broot of\b/g, ' sqrt '],
+    [/\blog(?:arithm)? base (\d+(?:\.\d+)?) of\b/g, ' log$1 '],
+    [/\bhalf of\b/g, ' 0.5* '], [/\bdouble\b/g, ' 2* '], [/\btriple\b/g, ' 3* '], [/\bquarter of\b/g, ' 0.25* '],
+    [/\bsquared\b/g, '^2'], [/\bcubed\b/g, '^3'],
+    [/\bto the power of\b|\bto the\b|\braised to\b|\bpower\b/g, '^'],
+    [/(\d+)(?:st|nd|rd|th) power\b/g, '$1'],
+    [/\b(?:plus|add|added to|and)\b/g, '+'],
+    [/\b(?:minus|subtract|take away|less)\b/g, '-'],
+    [/\b(?:times|multiplied by|multiply|of)\b/g, '*'],
+    [/\b(?:divided by|divide|over|into)\b/g, '/'],
+    [/\bmod(?:ulo)?\b|\bremainder of\b/g, ' mod '],
+    [/\bfactorial of (\d+)|(\d+) factorial/g, (m, a, b) => `${a || b}!`],
+    [/\bequals?\b|\bis equal to\b/g, '='],
+    [/(\d)\s*[x×]\s*(?=[\d(])/g, '$1*'], [/÷/g, '/'], [/\*\*|\^+/g, '^'], [/([+*/])\1+/g, '$1'],
+    [/\bpi\b/g, ' pi '],
+  ];
+  R.forEach(([a, b]) => s = s.replace(a, b));
+  s = s.replace(/\s+/g, ' ').trim().replace(/^[+*/=]+|[+*/=-]+$/g, '').trim();
+  return fixLogBase(s).replace(/\blog_?(\d+(?:\.\d+)?)\s+(-?[\d.]+)/g, (m, b, x) => b === '10' || b === '2' ? `log${b}(${x})` : `log(${x}, ${b})`);
+}
+// "log6(14.2^3)" or "log_6 (x)" -> "log((14.2^3), 6)" (log with base 6)
+function fixLogBase(s) {
+  let out = '', i = 0;
+  const re = /log_?(\d+(?:\.\d+)?)\s*\(/g;
+  let m;
+  while ((m = re.exec(s))) {
+    if (m[1] === '10' || m[1] === '2') continue; // log10( and log2( already work
+    let depth = 1, j = re.lastIndex;
+    while (j < s.length && depth) { if (s[j] === '(') depth++; else if (s[j] === ')') depth--; j++; }
+    if (depth) break;
+    out += s.slice(i, m.index) + `log(${s.slice(re.lastIndex, j - 1)}, ${m[1]})`;
+    i = j; re.lastIndex = j;
+  }
+  return out + s.slice(i);
+}
+const FUNCS = 'sqrt|cbrt|sin|cos|tan|asin|acos|atan|log|log10|log2|ln|abs|round|floor|ceil|exp|factorial|gcd|lcm|mean|median|mode|sum|min|max|std|variance|nthRoot|pow|mod|det|inv|derivative|simplify|rationalize|isPrime|combinations|permutations|pi|e|to|in|deg|rad|i';
+const isMathy = s => /\d/.test(s) && new RegExp(`^([\\d\\s.+\\-*/^()%!,=<>a-z]|${FUNCS})+$`).test(s) && !/[a-z]{2,}/.test(s.replace(new RegExp(`\\b(${FUNCS})\\b`, 'g'), '').replace(/\b(mm|cm|m|km|in|inch|inches|ft|feet|foot|yard|yards|mile|miles|g|kg|lb|lbs|pound|pounds|oz|ounce|ounces|ton|tons|l|ml|liter|liters|gallon|gallons|cup|cups|sec|second|seconds|min|minute|minutes|hour|hours|day|days|week|weeks|year|years|celsius|fahrenheit|degC|degF|kelvin|mph|kph|meter|meters|metre|metres|kilometer|kilometers|centimeter|centimeters|millimeter|millimeters|gram|grams|kilogram|kilograms)\b/g, ''));
+const pretty = e => e.replace(/\*/g, ' × ').replace(/\//g, ' ÷ ').replace(/\s+/g, ' ').replace(/\( /g, '(').replace(/ \)/g, ')').trim();
+
+function solveMath(text) {
+  const t = text.toLowerCase().trim();
+  if (!/\d|\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|forty|fifty|hundred|thousand|dozen|pi)\b/.test(t)) return null;
+
+  // Special questions
+  let m;
+  if ((m = t.match(/^is (\d+) (?:a )?prime(?: number)?\??$/))) {
+    const n = +m[1]; let p = n > 1; for (let k = 2; k * k <= n; k++) if (n % k === 0) { p = false; return `No, ${n} is not prime. It can be divided by ${k} (${n} = ${k} × ${n / k}) 🔢`; }
+    return p ? `Yes! ${n} is a prime number ✨ Only 1 and ${n} divide it.` : `No, ${n} is not prime 🔢`;
+  }
+  if ((m = t.match(/(?:what are )?(?:the )?(?:factors|divisors) of (\d+)/))) {
+    const n = +m[1]; if (n > 1e7) return 'That number is too big for me to list factors! 😅';
+    const f = []; for (let k = 1; k <= n; k++) if (n % k === 0) f.push(k); return `The factors of ${n} are: ${f.join(', ')} 🔢`;
+  }
+  if ((m = t.match(/prime factori[sz]ation of (\d+)|prime factors of (\d+)/))) {
+    let n = +(m[1] || m[2]); const f = []; for (let k = 2; k * k <= n; k++) while (n % k === 0) { f.push(k); n /= k; } if (n > 1) f.push(n);
+    return `${m[1] || m[2]} = ${f.join(' × ')} 🔢`;
+  }
+  if ((m = t.match(/is (-?\d+(?:\.\d+)?) (even|odd)/))) { const n = +m[1], ev = n % 2 === 0; return `${(m[2] === 'even') === ev ? 'Yes' : 'No'}, ${n} is ${ev ? 'even' : 'odd'} ${ev ? '✌️' : '☝️'}`; }
+  if ((m = t.match(/(?:average|mean) of ([\d.,\sand-]+)/))) {
+    const ns = m[1].match(/-?\d+(?:\.\d+)?/g).map(Number); const sum = ns.reduce((a, b) => a + b, 0);
+    return `Average = (${ns.join(' + ')}) ÷ ${ns.length} = ${nice(sum)} ÷ ${ns.length} = ${nice(sum / ns.length)} 🧮`;
+  }
+  if ((m = t.match(/(?:what is )?(\d+) (?:rounded )?(?:round(?:ed)? )?to the nearest (ten|hundred|thousand|whole number|tenth|hundredth|\d+)/))) {
+    const step = { ten: 10, hundred: 100, thousand: 1000, 'whole number': 1, tenth: 0.1, hundredth: 0.01 }[m[2]] || +m[2];
+    return `${m[1]} rounded to the nearest ${m[2]} is ${nice(Math.round(+m[1] / step) * step)} 🎯`;
+  }
+  if ((m = t.match(/(?:what is |what's )?(\d+(?:\.\d+)?) (?:in |as a )?(roman numerals?|binary|hex(?:adecimal)?)/))) {
+    const n = Math.floor(+m[1]);
+    if (/roman/.test(m[2])) { if (n < 1 || n > 3999) return 'Roman numerals only go from 1 to 3999! 🏛️'; let r = '', x = n; [[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']].forEach(([v, l]) => { while (x >= v) { r += l; x -= v; } }); return `${n} in Roman numerals is ${r} 🏛️`; }
+    return `${n} in ${m[2].startsWith('bin') ? 'binary' : 'hexadecimal'} is ${n.toString(m[2].startsWith('bin') ? 2 : 16).toUpperCase()} 💻`;
+  }
+  if (/\b(bigger|larger|greater|smaller|less) than\b/.test(t) && /^(is|which)/.test(t)) {
+    const ns = t.match(/-?\d+(?:\.\d+)?/g); if (ns && ns.length === 2) { const [a, b] = ns.map(Number); const big = /bigger|larger|greater/.test(t);
+      const yes = big ? a > b : a < b; return /^which/.test(t) ? `${big ? Math.max(a, b) : Math.min(a, b)} is ${big ? 'bigger' : 'smaller'}! 📏` : `${yes ? 'Yes' : 'No'}, ${a} is ${a === b ? 'equal to' : a > b ? 'bigger than' : 'smaller than'} ${b} 📏`; }
+  }
+
+  // Word problems: "I have 5 apples and eat 2"
+  const wp = wordProblem(t);
+  if (wp) return wp;
+
+  if (!M) { const r = tryMath(text); return r; }
+
+  // Equations: "2x + 3 = 11", "x^2 = 49", "solve 3y - 4 = 8"
+  let expr = mathWords(text);
+  if (/=/.test(expr) && /[a-z]/.test(expr.replace(new RegExp(`\\b(${FUNCS})\\b`, 'g'), ''))) return solveEquation(expr);
+  // missing ")" at the end? add them (and say so)
+  let parenNote = '';
+  const opens = (expr.match(/\(/g) || []).length, closes = (expr.match(/\)/g) || []).length;
+  if (opens > closes) { expr += ')'.repeat(opens - closes); parenNote = `\n(You were missing ${opens - closes} closing parenthes${opens - closes > 1 ? 'es' : 'is'} ")", so I added ${opens - closes > 1 ? 'them' : 'one'} at the end.)`; }
+  else if (closes > opens) { expr = '('.repeat(closes - opens) + expr; parenNote = `\n(You had ${closes - opens} extra ")", so I added "(" at the start.)`; }
+  const symbols = (expr.match(/[+\-*/^()!]/g) || []).length;
+  if (!isMathy(expr) && symbols < 3) return null;
+  // "5 km to miles", "100 fahrenheit to celsius"
+  expr = expr.replace(/\b(fahrenheit)\b/g, 'degF').replace(/\b(celsius)\b/g, 'degC').replace(/\bin\b(?=\s*[a-z])/g, 'to').replace(/\bln\(/g, 'log(').replace(/\bln\s+(\d)/g, 'log($1)');
+  expr = expr.replace(/\b(sqrt|cbrt|sin|cos|tan|log|log10|log2|abs|round|floor|ceil|exp|factorial)\s+(-?[\d.]+|pi)/g, '$1($2)')
+    .replace(/\b(sqrt|cbrt|sin|cos|tan|log|log10|log2|abs|exp)\s+\(/g, '$1(')
+    .replace(/\blog(\d+(?:\.\d+)?)\s+(-?[\d.]+)/g, 'log($2, $1)');
+  try {
+    let v = M.evaluate(expr);
+    if (typeof v === 'function' || v === undefined) return null;
+    // fractions in -> fraction out: "1/2 + 1/3" = 5/6
+    let frac = '';
+    if (/\d\s*\/\s*\d/.test(expr) && !/[a-z.^]/.test(expr) && typeof v === 'number' && !Number.isInteger(v)) {
+      try { const f = M.evaluate(expr.replace(/(\d+)/g, 'fraction($1)')); frac = M.format(f, { fraction: 'ratio' }); } catch {}
+    }
+    // show it the way you wrote it if you used words ("20% of 80"), otherwise tidy it up
+    const said = text.replace(/^(what'?s|what is|whats|what|calculate|solve|can you (do|solve)|please)\s+/i, '').replace(/[?=\s]+$/, '').trim();
+    const shown = /[a-z%]/i.test(said) ? said.replace(/\^+/g, '^').replace(/\*\*/g, '^').replace(/^whats?\s+/i, '') : /^[\d\s+\-/()]+$/.test(expr) ? expr.replace(/\s+/g, ' ') : pretty(expr);
+    // giant whole numbers: show every digit
+    let exact = '';
+    if (typeof v === 'number' && Number.isInteger(v) && Math.abs(v) >= 1e15 && !/[.]|sqrt|cbrt|log|sin|cos|tan|\//.test(expr)) {
+      const b = bigExact(expr);
+      if (b !== null) { const d = b.toString(); exact = d.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (d.length > 20 ? ` (that's ${d.replace('-', '').length} digits!)` : ''); }
+    }
+    return `${shown} = ${frac ? frac + ` (that's ${nice(v)})` : exact || nice(v)} 🧮${parenNote}`;
+  } catch (e) {
+    return `That looks like math, but I can't read "${text.trim()}" 🤔 Try writing it like 25^2, (3 + 4) * 2, sqrt(81), or 2x + 3 = 11.`;
+  }
+}
+
+function solveEquation(expr) {
+  const [lhs, rhs] = expr.split('=').map(x => x.trim());
+  if (!lhs || !rhs || expr.split('=').length !== 2) return 'That equation looks funny 🤔 Try one like 2x + 3 = 11';
+  const vars = [...new Set((lhs + ' ' + rhs).replace(new RegExp(`\\b(${FUNCS})\\b`, 'g'), ' ').match(/[a-z]/g) || [])];
+  if (vars.length !== 1) return 'I can only solve equations with ONE letter (like x) 😅';
+  const x = vars[0];
+  let f;
+  try { const node = M.parse(`(${lhs}) - (${rhs})`).compile(); f = val => node.evaluate({ [x]: val }); f(1); }
+  catch { return 'I can\'t read that equation 🤔 Try one like 2x + 3 = 11'; }
+  // find every answer: look for sign changes, then zoom in
+  const roots = [];
+  const add = r => { r = Math.abs(r - Math.round(r)) < 1e-9 ? Math.round(r) : +r.toPrecision(10); if (isFinite(r) && Math.abs(f(r)) < 1e-6 && !roots.some(q => Math.abs(q - r) < 1e-7)) roots.push(r); };
+  const scan = (a, b, n) => {
+    let px = a, py = f(a);
+    for (let k = 1; k <= n; k++) {
+      const cx = a + (b - a) * k / n, cy = f(cx);
+      if (typeof cy !== 'number' || typeof py !== 'number' || !isFinite(cy) || !isFinite(py)) { px = cx; py = cy; continue; }
+      if (cy === 0) add(cx);
+      else if (py * cy < 0) { let lo = px, hi = cx; for (let it = 0; it < 80; it++) { const mid = (lo + hi) / 2; if (f(lo) * f(mid) <= 0) hi = mid; else lo = mid; } add((lo + hi) / 2); }
+      else if (Math.abs(cy) < 1e-9) add(cx);
+      px = cx; py = cy;
+    }
+  };
+  try {
+    scan(-100, 100, 20000); scan(-1e6, 1e6, 20000);
+    for (let k = -1000; k <= 1000; k++) if (Math.abs(f(k)) < 1e-9) add(k); // touching roots like (x-3)^2 = 0
+  } catch { return 'I can\'t solve that one 😅'; }
+  roots.sort((a, b) => a - b);
+  if (!roots.length) {
+    const c = f(0), c2 = f(5);
+    if (Math.abs(c) < 1e-9 && Math.abs(c2) < 1e-9) return `That's true for ANY ${x}! Both sides are always equal 🤯`;
+    return `I couldn't find any ${x} that works 🤔 Maybe there's no answer (or it's a super weird number).`;
+  }
+  const show = r => { try { const fr = M.fraction(r); return Number.isInteger(r) || fr.d > 1000 ? nice(r) : `${M.format(fr, { fraction: 'ratio' })} (${nice(r)})`; } catch { return nice(r); } };
+  const check = roots.length === 1 ? `\nCheck: put ${x} = ${nice(roots[0])} back in and both sides match ✅` : '';
+  return `${pretty(lhs)} = ${pretty(rhs)}\n👉 ${roots.map(r => `${x} = ${show(r)}`).join('  or  ')} 🧮${check}`;
+}
+
+// ---------- Answers built from YOUR question (not the same canned line every time) ----------
+function swapPronouns(x) {
+  const map = { i: 'you', me: 'you', my: 'your', mine: 'yours', myself: 'yourself', am: 'are', you: 'me', your: 'my', yours: 'mine', yourself: 'myself', "i'm": "you're", "you're": "I'm", im: "you're" };
+  return x.split(/\s+/).map(w => map[w] || w).join(' ');
+}
+const CAN = [
+  { re: /math|problem|equation|number|calculat|add|subtract|multipl|divid|fraction|algebra|percent|homework|sum|solve|count|times table/, ex: x =>
+      /long|big|hard|huge|giant|difficult/.test(x) ? 'like (125 + 375) * 4 - 2^10 / 8 + sqrt(144). The longer the better!'
+      : /word/.test(x) ? 'like "I have 24 stickers and share them with 4 friends. How many does each get?"'
+      : /fraction/.test(x) ? 'like 3/4 + 2/3 (I\'ll give you the answer as a fraction too).'
+      : /equation|algebra|solve|\bx\b/.test(x) ? 'like 3x - 7 = 20 or x^2 = 81.'
+      : /percent/.test(x) ? 'like 15% of 240.'
+      : 'like 48 * 27, square root of 225, or 2x + 5 = 17.',
+    you: x => `Yes! I'm great at math 🧮 Try me, ${CAN[0].ex(x)}`, i: x => `Yes! Ask me ${/long|big|hard|huge|giant|difficult/.test(x) ? 'the longest, hardest math problems you can think of' : 'any math problem you want'}! 🧮 For example, ${CAN[0].ex(x)}` },
+  { re: /stor(y|ies)|write|book/, you: () => 'Yes! I love writing stories 📖 Say "let\'s write a story" and we\'ll take turns.', i: x => `Of course you can ${swapPronouns(x)}! 📖 Say "let's write a story" to start.` },
+  { re: /joke|funny|laugh/, you: () => 'Yes! I know a bunch of jokes 😆 Say "tell me a joke", or "joke, let me guess" if you want to guess the answer.', i: x => `Sure, ${swapPronouns(x)}! I love jokes 😆 Go ahead!` },
+  { re: /riddle|puzzle|brain ?teaser/, you: () => 'Yes! Say "give me a riddle" 🧩 You get 3 guesses and hints.', i: x => `Sure! I\'ll try to solve it 🧩 Go ahead!` },
+  { re: /\bplay|game/, you: () => 'Yes! We can play rock paper scissors ✊, riddles 🧩, or guess-the-joke 😆. Which one?', i: () => 'Yes! Let\'s play! Rock paper scissors, a riddle, or guess-the-joke?' },
+  { re: /remember|memory|forget/, you: () => 'Yes! I remember everything we talk about, even after you close the page 🧠 Try "what do you know about me".', i: () => 'Yes! Tell me and I\'ll remember it 🧠' },
+  { re: /teach|learn|train/, you: () => 'Yes! I learn from you 🧠 When I get something wrong, type say: and the right answer.', i: () => 'Yes please! 🧠 When I get something wrong, type say: and the right answer, and I\'ll remember it.' },
+  { re: /look up|search|internet|google|wikipedia|find out|research/, you: () => 'Yes! I can look things up on Wikipedia and the dictionary 🌐 Try "who is Albert Einstein" or "what does yeet mean".', i: () => 'Yes! Ask me anything and I\'ll look it up 🌐' },
+  { re: /talk|chat|tell you|ask you|say/, you: () => 'Yes! I love chatting 😄 What do you want to talk about?', i: x => `Of course you can ${swapPronouns(x)}! 😄 Go ahead!` },
+  { re: /spell|define|meaning|word/, you: () => 'Yes! Ask me "what does ___ mean" and I\'ll look it up 📖', i: () => 'Sure! Ask me what any word means 📖' },
+  { re: /time|date|day/, you: () => `Yes! It's ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} right now ⏰`, i: () => 'Sure! Ask away ⏰' },
+  { re: /name/, you: () => mem.name ? `Yes! Your name is ${mem.name} 😄` : 'Yes! Tell me "my name is ..." and I\'ll remember it.', i: x => `Sure! ${/give|call/.test(x) ? 'What do you want to call me? I\'m Sunny right now 🌞' : 'Go ahead!'}` },
+];
+const CANT = /draw|paint|sing|dance|see|watch|hear|listen|eat|drink|smell|taste|touch|walk|run|jump|swim|fly|drive|move|hug|call|text|email|video|picture|photo|image|sleep|dream|cook|go (outside|to)|come|visit|feel/;
+function canDo(text) {
+  const t = correctText(text).toLowerCase().replace(/[?!.]+$/, '').trim();
+  const m = t.match(/^(?:so |but |and |hey |um )?(can|could|will|would|do|are|is it (?:ok|okay|alright) if) (you|i|we|u) (.+)$/);
+  if (!m) return null;
+  let [, verb, who, x] = m;
+  x = x.replace(/^(please|pls|even|really|actually|ever) /, '');
+  if (verb === 'are' && who !== 'you') return null;
+  if (verb === 'do' && !/^(know|like|love|have|understand|remember|want|play|speak|get|do|think|ever|make|tell|eat|sleep|dream|feel|see|hear)/.test(x)) return null;
+  const subj = who === 'you' || who === 'u' ? 'you' : 'i';
+  // "do you like X" / "do you love X"
+  const lk = x.match(/^(like|love|enjoy) (.+)$/);
+  if (verb === 'do' && subj === 'you' && lk) {
+    const thing = swapPronouns(lk[2]);
+    const isYouLike = mem.likes.some(l => thing.includes(l) || l.includes(thing));
+    return { soft: true, text: pick([`I do like ${thing}! 😄 ${isYouLike ? 'And I know YOU like it too!' : `What do you like about ${thing}?`}`, `Hmm, ${thing}? Yeah, I think ${thing} ${/s$/.test(thing) ? 'are' : 'is'} pretty cool! 😎 Do you like ${thing}?`, `Ooh, ${thing}! I don't get to see ${thing} much (I'm a chatbot 😅), but ${thing} sound${/s$/.test(thing) ? '' : 's'} awesome! Tell me about ${thing}!`]), kind: 'opinion', subject: thing };
+  }
+  for (const c of CAN) if (c.re.test(x)) return { soft: true, text: (subj === 'you' ? c.you : c.i)(x), kind: 'can', subject: x };
+  const what = swapPronouns(x);
+  if (subj === 'you' && CANT.test(x)) return { soft: true, text: pick([`I can't ${what} 😅 I'm just words living in a web page! But I can tell jokes, do math, write stories, and look things up.`, `Nope, I can't ${what}. No ${/see|watch|picture|photo|image|video/.test(x) ? 'eyes' : /hear|listen|sing/.test(x) ? 'ears or voice' : /eat|drink|taste|smell|cook/.test(x) ? 'mouth' : 'body'} 🤖 But I'd love to hear about it! Tell me?`]), kind: 'can', subject: x };
+  if (subj === 'you' && verb === 'are') return { soft: true, text: pick([`Am I ${what}? Hmm 🤔 I'm a chatbot, so... maybe a little! 😄 Why do you ask?`, `${cap(what)}? I've never thought about that! 🤔 What do you think?`]), kind: 'can', subject: x };
+  if (subj === 'you') return { soft: true, text: pick([`Hmm, can I ${what}? 🤔 I'm not sure! I've never tried. You could teach me how!`, `I don't think I can ${what} yet 😅 But I'm learning new things all the time!`]), kind: 'can', subject: x };
+  return { soft: true, text: pick([`Sure, you can ${what}! 😄`, `Of course you can ${what}! Go for it! 😄`]), kind: 'can', subject: x };
+}
+// "what's your favorite X?" -> pick a favorite and remember it, so the answer stays the same next time
+const FAVS = {
+  color: ['sunny yellow 💛', 'sky blue 💙', 'orange 🧡'], colour: ['sunny yellow 💛'], food: ['pizza 🍕', 'pancakes 🥞', 'tacos 🌮'], animal: ['octopus 🐙 (three hearts!)', 'red panda', 'penguin 🐧'],
+  sport: ['soccer ⚽', 'basketball 🏀'], game: ['rock paper scissors ✊ (I\'m pretty good!)', 'Minecraft ⛏️', 'riddles 🧩'], number: ['7 🍀', '42', '8 (it\'s infinity standing up!)'],
+  season: ['summer ☀️ (of course!)'], subject: ['math 🧮', 'science 🔬'], movie: ['anything with robots 🤖'], book: ['any book with dragons 🐉'], song: ['"Here Comes the Sun" ☀️'],
+  fruit: ['mango 🥭', 'strawberries 🍓'], dessert: ['ice cream 🍦'], 'ice cream': ['cookies and cream 🍪'], planet: ['Saturn 🪐 (those rings!)'], dinosaur: ['T-Rex 🦖'], holiday: ['my birthday 🎂'], letter: ['S, for Sunny 🌞'], shape: ['star ⭐'], word: ['"sunshine" ☀️'],
+  emoji: ['🌞'], pokemon: ['Pikachu ⚡'], superhero: ['Spider-Man 🕷️'], place: ['the beach 🏖️'], day: ['Saturday 🎉'], drink: ['lemonade 🍋'], candy: ['gummy bears 🐻'], car: ['a yellow race car 🏎️'], music: ['happy music 🎵'], weather: ['sunny ☀️'],
+};
+function favorite(text) {
+  const t = correctText(text).toLowerCase().replace(/[?!.]+$/, '').trim();
+  const m = t.match(/^(?:what'?s|what is|whats|what are|what|tell me) (?:your|ur) (?:most )?fav(?:ou?rite|e)? (.+)$/) || t.match(/^(?:do you have a|got a) fav(?:ou?rite|e)? (.+)$/) || t.match(/^what (.+?) do you like(?: best| most)?$/);
+  if (!m) return null;
+  const thing = m[1].replace(/^(kind of|type of|sort of) /, '').trim();
+  mem.myFavs = mem.myFavs || {};
+  if (!mem.myFavs[thing]) {
+    const opts = FAVS[thing] || FAVS[thing.replace(/s$/, '')];
+    if (!opts) return { soft: true, text: `Hmm, my favorite ${thing}? 🤔 I don't have one yet! What's YOUR favorite ${thing}? Tell me and maybe it'll be mine too.`, kind: 'fav', subject: thing };
+    mem.myFavs[thing] = pick(opts); save();
+  }
+  const yours = mem.facts['favorite ' + thing];
+  return { soft: true, text: `My favorite ${thing} is ${mem.myFavs[thing]}! ${yours ? `And yours is ${yours}, right? 😄` : `What's yours?`}`, kind: 'fav', subject: thing };
+}
+
+// Simple word problems. I explain what I think the problem means, so you can check me.
+function wordProblem(t) {
+  const words = t.split(/\s+/).length;
+  if (words < 5) return null;
+  const nums = (t.replace(/\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|dozen|hundred)\b/g, w => NUMWORDS[w]).match(/\d+(?:\.\d+)?/g) || []).map(Number);
+  if (nums.length < 2 || nums.length > 4) return null;
+  const has = re => re.test(t);
+  if (!has(/\b(have|has|had|got|gets|buy|bought|eat|ate|give|gave|lost|lose|find|found|more|left|each|every|share|split|total|altogether|how many|how much|spend|spent|cost|costs|pay|paid|per|bags?|boxes|groups?|friends|people)\b/)) return null;
+  const [a, b] = nums;
+  let op, why;
+  if (has(/\b(share|split|divide|equally|among|between|per (person|friend|kid))\b/) || has(/\binto (\d+ )?(groups|bags|teams|piles)\b/)) { op = '/'; why = 'sharing equally means dividing'; }
+  else if (has(/\b(each|every|per|times|rows? of|groups? of|bags? of|boxes? of|packs? of)\b/)) { op = '*'; why = '"each" or "of" groups means multiplying'; }
+  else if (has(/\b(ate|eat|eats|gave|give|gives|lost|lose|loses|spent|spend|spends|left|fewer|less|took|take|away|broke|popped|sold|used|remain|minus|flew away|ran away)\b/)) { op = '-'; why = 'taking away means subtracting'; }
+  else if (has(/\b(more|got|gets|find|found|buy|bought|total|altogether|together|plus|and|in all|combined|added|joined|another)\b/)) { op = '+'; why = 'putting together means adding'; }
+  else return null;
+  let v = nums[0], steps = String(a);
+  for (const n of nums.slice(1)) {
+    v = op === '+' ? v + n : op === '-' ? v - n : op === '*' ? v * n : v / n;
+    steps += ` ${op === '*' ? '×' : op === '/' ? '÷' : op} ${n}`;
+  }
+  let extra = '';
+  if (op === '/' && !Number.isInteger(v)) extra = ` (that's ${Math.floor(v)} each with ${nums[0] % nums[1]} left over)`;
+  return `Word problem! 📝 I think ${why}:\n${steps} = ${nice(v)}${extra} 🧮\n(If I read it wrong, try writing it as numbers, like 5 - 2)`;
+}
 
 let rpsMode = null, offerRps = false; // rpsMode = my locked-in pick
 // Rock paper scissors: I pick FIRST and show it in secret code, so I can't change it after seeing yours
 function startRps() {
   const me = pick(['rock', 'paper', 'scissors']);
-  const shift = 1 + Math.floor(Math.random() * 5);
-  const code = me.toUpperCase().replace(/[A-Z]/g, c => String.fromCharCode((c.charCodeAt(0) - 65 + shift) % 26 + 65));
+  let shift; do { shift = 1 + Math.floor(Math.random() * 5); } while (rpsMode && shift === rpsMode.shift);
+  // always 8 letters long, so the length doesn't give my pick away
+  const code = (me.toUpperCase().replace(/[A-Z]/g, c => String.fromCharCode((c.charCodeAt(0) - 65 + shift) % 26 + 65))
+    + 'XXXXXXXX'.replace(/X/g, () => String.fromCharCode(65 + Math.floor(Math.random() * 26)))).slice(0, 8);
   rpsMode = { me, code, shift };
   return `Let's play! ✊✋✌️\nI already picked and locked it in: 🔒 "${code}" (that's my pick in secret code, so I can't cheat!)\nNow you type rock, paper, or scissors.`;
 }
 let jokeGuess = null;
-let riddleGuess = null, lastRiddle = null, offerRiddle = false;
+let riddleGuess = null, lastRiddle = null, offerRiddle = false, riddleAside = false;
+function newRiddleText() {
+  const r = Object.assign({ hints: 0, tries: 0 }, pickFresh('riddle', RIDDLES));
+  lastRiddle = r; riddleGuess = r;
+  return `Here's a riddle! 🧩\n${r.q}\n(Guess it! Type "hint" for help, or "I give up")`;
+}
 // keys = words that count as a correct guess
 const RIDDLES = [
   { q: 'What has keys but can\'t open locks?', a: 'a piano', keys: ['piano', 'keyboard'], hint: 'You can play music on it 🎵' },
@@ -503,10 +914,46 @@ const RIDDLES = [
   { q: 'What can travel around the world while staying in a corner?', a: 'a stamp', keys: ['stamp'], hint: 'You put it on a letter ✉️' },
   { q: 'What has words but never speaks?', a: 'a book', keys: ['book', 'paper', 'newspaper'], hint: 'You read it 📖' },
   { q: 'What month has 28 days?', a: 'all of them', keys: ['all', 'every'], hint: 'Think about it... does any month have LESS than 28? 📅' },
+  { q: 'What has a neck but no head?', a: 'a bottle', keys: ['bottle', 'shirt', 'giraffe'], hint: 'You drink from it 🍼' },
+  { q: 'What has four wheels and flies?', a: 'a garbage truck', keys: ['garbage', 'trash', 'dump'], hint: 'The flies are bugs! 🪰 It comes to your house every week.' },
+  { q: 'What has an eye but can\'t see, and spins really fast?', a: 'a hurricane', keys: ['hurricane', 'tornado', 'storm'], hint: 'It\'s a giant storm 🌀' },
+  { q: 'What can you hold in your right hand, but never in your left hand?', a: 'your left hand', keys: ['left'], hint: 'Look at your hands... 🤚' },
+  { q: 'What goes up and down but never moves?', a: 'stairs', keys: ['stair', 'stairs', 'staircase', 'steps'], hint: 'You walk on them in a house 🏠' },
+  { q: 'What has a thumb and four fingers but isn\'t alive?', a: 'a glove', keys: ['glove', 'mitten'], hint: 'You wear it when it\'s cold 🧤' },
+  { q: 'What is always in front of you but can\'t be seen?', a: 'the future', keys: ['future', 'tomorrow'], hint: 'It hasn\'t happened yet ⏳' },
+  { q: 'What can fill a room but takes up no space?', a: 'light', keys: ['light', 'air', 'sound'], hint: 'Flip a switch 💡' },
+  { q: 'What has a bottom at the top?', a: 'your legs', keys: ['leg', 'legs'], hint: 'You have two of them, and you sit on the "bottom" 🦵' },
+  { q: 'What kind of band never plays music?', a: 'a rubber band', keys: ['rubber', 'hair', 'elastic'], hint: 'It\'s stretchy! 🔴' },
+  { q: 'What gets bigger the more you take away from it?', a: 'a hole', keys: ['hole'], hint: 'You dig it 🕳️' },
+  { q: 'What has lots of keys but can\'t open a single door?', a: 'a keyboard', keys: ['keyboard', 'piano', 'computer'], hint: 'You type on it ⌨️' },
+  { q: 'What building has the most stories?', a: 'a library', keys: ['library', 'bookstore'], hint: 'Stories... like books! 📚' },
+  { q: 'What do you call a bear with no ears?', a: 'a "b"', keys: ['b'], hint: 'Take the letters E, A, and R out of "bear" 🐻' },
+  { q: 'What runs around the whole yard without moving?', a: 'a fence', keys: ['fence', 'wall'], hint: 'It keeps the dog in 🐕' },
+  { q: 'What can you break, even if you never pick it up or touch it?', a: 'a promise', keys: ['promise', 'record', 'silence', 'heart'], hint: 'You "make" it and should keep it 🤞' },
+  { q: 'What has 13 hearts but no other organs?', a: 'a deck of cards', keys: ['card', 'cards', 'deck'], hint: 'You play games with it ♥️♠️' },
+  { q: 'What tastes better than it smells?', a: 'your tongue', keys: ['tongue'], hint: 'It\'s in your mouth 👅' },
+  { q: 'What has a ring but no finger?', a: 'a phone', keys: ['phone', 'telephone', 'bell'], hint: 'Ring ring! 📞' },
+  { q: 'What is so fragile that saying its name breaks it?', a: 'silence', keys: ['silence', 'quiet'], hint: 'Shhh... 🤫' },
+  { q: 'What goes through cities and fields but never moves?', a: 'a road', keys: ['road', 'street', 'highway', 'path'], hint: 'Cars drive on it 🛣️' },
+  { q: 'What can you catch with your eyes closed?', a: 'some sleep', keys: ['sleep', 'nap', 'dream', 'zzz'], hint: 'You do it every night 😴' },
+  { q: 'What starts with T, ends with T, and has T in it?', a: 'a teapot', keys: ['teapot', 'tea'], hint: 'The "T" inside is tea! 🫖' },
+  { q: 'What has a spine but no bones?', a: 'a book', keys: ['book'], hint: 'You read it 📖' },
+  { q: 'I have cities but no houses, forests but no trees, and water but no fish. What am I?', a: 'a map', keys: ['map', 'globe', 'atlas'], hint: 'Explorers use me to find their way 🗺️' },
+  { q: 'What word is spelled wrong in every dictionary?', a: 'the word "wrong"', keys: ['wrong'], hint: 'Read the riddle REALLY carefully 👀' },
+  { q: 'What has a face and two hands but no arms or legs?', a: 'a clock', keys: ['clock', 'watch'], hint: 'Tick tock ⏰' },
+  { q: 'What do you throw out when you want to use it, and take in when you\'re done?', a: 'an anchor', keys: ['anchor'], hint: 'Boats use it ⚓' },
+  { q: 'What has three feet but can\'t walk?', a: 'a yardstick', keys: ['yardstick', 'yard', 'ruler', 'tripod'], hint: 'You measure with it 📏' },
+  { q: 'What can run but never gets tired, and has a mouth but never talks?', a: 'a river', keys: ['river', 'stream'], hint: 'Fish swim in it 🐟' },
+  { q: 'What is black when it\'s clean and white when it\'s dirty?', a: 'a chalkboard', keys: ['chalkboard', 'blackboard', 'board'], hint: 'Teachers write on it 👩‍🏫' },
+  { q: 'What kind of tree fits in your hand?', a: 'a palm tree', keys: ['palm'], hint: 'Look at your hand... the middle part! ✋🌴' },
+  { q: 'What has ears but can\'t hear?', a: 'corn', keys: ['corn'], hint: 'It\'s a yellow vegetable 🌽' },
+  { q: 'Where does today come before yesterday?', a: 'in the dictionary', keys: ['dictionary'], hint: 'Think about ABC order 🔤' },
+  { q: 'What goes up when the rain comes down?', a: 'an umbrella', keys: ['umbrella'], hint: 'It keeps you dry ☂️' },
+  { q: 'What has one head, one foot, and four legs?', a: 'a bed', keys: ['bed'], hint: 'You sleep on it 🛏️' },
 ];
 function splitJoke(j) { const k = j.indexOf('? '); return k < 0 ? [j, ''] : [j.slice(0, k + 1), j.slice(k + 2)]; }
 function skills(text) {
-  const t = text.toLowerCase().trim();
+  let t = text.toLowerCase().trim();
 
   const mm = !riddleGuess && !jokeGuess && memorySkills(text, t);
   if (mm) return mm;
@@ -536,29 +983,56 @@ function skills(text) {
   }
 
   // Riddles are always guessing games
-  if (riddleGuess) {
+  t = correctText(t);
+  const askRiddleAgain = /(remember|what (was|is)|repeat|say|tell me|read).{0,20}(the |that |your |my )?riddle|riddle again|what was the question|repeat (it|the question)|say (it|that) again/.test(t);
+  const newRiddle = /^(give me |tell me |say |can i have |i want |can you give me |another |new |a |next |different |one more |do |more )*(another |new |a |next |different )?riddles?( please| pls)?$/.test(t) || /(another|new|next|different|one more) riddle/.test(t);
+  if (riddleGuess && !riddleAside) {
     const r = riddleGuess;
-    if (/^(hint|give me a hint|clue)$/.test(t)) {
+    const left = `${3 - r.tries} ${3 - r.tries === 1 ? 'guess' : 'guesses'} left`;
+    if (/how many (guesses|tries|chances)|guesses (do i have|left)|how many (do i have )?left/.test(t)) return { text: `You have ${left}! 🤔 Type "hint" if you need help.` };
+    if (/^(ok(ay)?|k|kk|sure|yes|yeah|yep|alright|fine|got it|cool|hmm+|um+|uh+|wait|let me think|thinking|one sec|hold on)( then| ok)?$/.test(t.replace(/[!.?]+$/, ''))) return { text: pick([`Okay! Take your time 🤔\n${r.q}`, `Go for it! What's your guess? 🧩 (${left})`]) };
+    if (askRiddleAgain) return { text: `Sure! The riddle is: 🧩\n${r.q}\n(${3 - r.tries} ${3 - r.tries === 1 ? 'guess' : 'guesses'} left. Type "hint" for help, or "I give up")` };
+    if (/^(hint|give me a hint|clue|can i have a hint|another hint|i need a hint|help)( please| pls)?$/.test(t)) {
       r.hints++;
       if (r.hints === 1) return { text: `Hint: ${r.hint} 💡` };
       return { text: `Last hint: it starts with "${r.keys[0][0].toUpperCase()}" and has ${r.keys[0].length} letters 💡` };
     }
+    if (newRiddle) {
+      riddleGuess = null;
+      const next = newRiddleText();
+      return { text: `Okay, skipping that one! (The answer was ${r.a}.)\n\n${next}` };
+    }
+    if (/^(idk|dunno|i don'?t know|no idea|tell me|give up|i give up|what is it|what'?s the answer|\?+)$/.test(t)) riddleGuess = null;
+    if (!riddleGuess) { offerRiddle = true; return { text: `The answer is: ${r.a}! 🎉 Want another riddle?` }; }
+    // "my answer for the riddle is globe" -> "globe"
+    // Starting another game ends the riddle
+    if (/\bjoke\b|rock paper scissors|\bstory\b|^(let'?s )?play\b/.test(t) && !/riddle/.test(t)) {
+      riddleGuess = null;
+      const r2 = skills(text) || { text: 'Okay!' };
+      r2.text = `Okay, switching! (The riddle answer was ${r.a}.)\n\n` + r2.text;
+      return r2;
+    }
+    // "a nose! dats my guess", "my guess is a nose", "is it a nose?" -> "a nose"
+    const guessText = text.trim()
+      .replace(/^(no,? |ok,? |okay,? |hmm+,? |um+,? )?(my (answer|guess)( for the riddle| to the riddle)? is|the answer is|i think (it'?s|it is)|is it|it'?s|maybe|i guess|my guess is|i say|i'?ll say|i'?ll guess)\s*/i, '')
+      .replace(/[\s,!.?-]*(that'?s|thats|dats|dat'?s|this is|is|that is|there'?s)? ?my (guess|answer|final answer)[\s!.?]*$/i, '')
+      .replace(/[?!.]+$/, '').trim();
+    const short = guessText.split(/\s+/).length <= 3;
+    // Long messages and questions aren't guesses: answer them and keep the riddle going
+    const looksLikeChat = !short || /^(why|how|what|who|do you|can you|are you|did you|you|i (can'?t|don'?t)|this is|bro|bruh)\b/i.test(guessText);
+    if (looksLikeChat) { riddleAside = true; return skills(text); }
     riddleGuess = null;
-    if (/^(idk|dunno|i don'?t know|no idea|tell me|give up|i give up|\?+)$/.test(t)) { offerRiddle = true; return { text: `The answer is: ${r.a}! 🎉 Want another riddle?` }; }
-    const guess = tokens(text);
+    // check your exact words AND typo-fixed words (so "nose" stays "nose", but "candel" still counts)
+    const guess = [...tokens(guessText), ...fixTypos(tokens(guessText))];
     if (r.keys.some(k => guess.includes(stem(k)))) { offerRiddle = true; return { text: `YES! It's ${r.a}! 🎉🧠 You're smart! Want another riddle?` }; }
     riddleGuess = r; r.tries = (r.tries || 0) + 1;
     if (r.tries >= 3) { riddleGuess = null; offerRiddle = true; return { text: `Nope! 😄 The answer was: ${r.a}. Want another riddle?` }; }
-    return { text: `Nope, try again! 🤔 (${3 - r.tries} ${3 - r.tries === 1 ? 'guess' : 'guesses'} left. Type "hint" for help, or "I give up")` };
+    return { text: `"${guessText}"? Nope, try again! 🤔 (${3 - r.tries} ${3 - r.tries === 1 ? 'guess' : 'guesses'} left. Type "hint" for help, or "I give up")` };
   }
+  if (askRiddleAgain && lastRiddle && !riddleGuess) { offerRiddle = true; return { text: `Yes! I asked you: 🧩 "${lastRiddle.q}"\nThe answer was ${lastRiddle.a}. Want another riddle?` }; }
   const wantsMore = offerRiddle && /^(yes|yeah|yep|sure|ok|okay|another|again|more|y)\b/.test(t);
   offerRiddle = false;
-  if (/riddle/.test(t) || wantsMore) {
-    let choices = RIDDLES.filter(r => r.q !== lastRiddle);
-    const r = Object.assign({ hints: 0, tries: 0 }, pick(choices));
-    lastRiddle = r.q; riddleGuess = r;
-    return { text: `Here's a riddle! 🧩\n${r.q}\n(Guess it! Type "hint" for help, or "I give up")` };
-  }
+  if ((/riddle/.test(t) && !riddleGuess) || wantsMore) return { text: newRiddleText() };
 
   // Joke guessing: "tell me a joke, let me guess" -> setup only, reveal after the guess
   if (jokeGuess) {
@@ -572,12 +1046,13 @@ function skills(text) {
     return { text: `Good guess! 😄 But the answer is: ${punch}` };
   }
   if (/joke/.test(t) && /guess|let me (try|think)|don'?t tell|without the answer/.test(t)) {
-    const j = pick(BASE.find(b => b.tag === 'joke').re);
+    const j = pickFresh('joke', BASE.find(b => b.tag === 'joke').re.filter(x => x.includes('? ')));
     jokeGuess = j;
     return { text: `Okay, guess this one! 🤔\n${splitJoke(j)[0]}\n(Type your guess, or "I give up")` };
   }
 
-  if (offerRps && /^(yes|yeah|yep|sure|ok|okay|again|play again|another|one more|y)\b/.test(t)) { offerRps = false; return { text: startRps() }; }
+  // After a round my next pick is already locked in, so "yes" just reminds you, and rock/paper/scissors plays right away
+  if (offerRps && /^(yes|yeah|yep|sure|ok|okay|again|play again|another|one more|y)\b/.test(t)) { offerRps = false; return { text: `Okay! My pick is already locked in: 🔒 "${rpsMode.code}"\nType rock, paper, or scissors.` }; }
   offerRps = false;
   if (rpsMode) {
     const choice = (t.match(/\b(rock|paper|scissors?)\b/) || [])[1];
@@ -589,7 +1064,8 @@ function skills(text) {
       mem.rps = mem.rps || { you: 0, me: 0 };
       const res = me === you ? 'Tie! 🤝' : win[you] === me ? (mem.rps.you++, 'You win! 🎉') : (mem.rps.me++, 'I win! 😎');
       save(); offerRps = true;
-      return { text: `I picked ${me} ${em[me]}. ${res}\n🔓 Check my secret code "${code}": move each letter back ${shift} in the alphabet and you get ${me.toUpperCase()}. No cheating!\nScore: You ${mem.rps.you}, Me ${mem.rps.me}. Play again?` };
+      startRps();
+      return { text: `You picked ${you} ${em[you]}, I picked ${me} ${em[me]}. ${res}\n🔓 Check my secret code "${code}": move the first ${me.length} letters back ${shift} and you get ${me.toUpperCase()} (the rest are just random letters to hide the length). No cheating!\nScore: You ${mem.rps.you}, Me ${mem.rps.me}\n\nPlay again? I already locked in my next pick: 🔒 "${rpsMode.code}". Just type rock, paper, or scissors!` };
     }
   }
 
@@ -601,8 +1077,22 @@ function skills(text) {
   const rn = t.match(/random number(?: between| from)? (\d+) (?:and|to) (\d+)/);
   if (rn) { const a = +rn[1], b = +rn[2]; return { text: `${Math.min(a, b) + Math.floor(Math.random() * (Math.abs(b - a) + 1))} 🎯` }; }
 
-  const m = tryMath(text);
-  if (m) return { text: m };
+  const m = solveMath(text);
+  if (m) return { text: m, kind: 'math', subject: text, answer: m.split('\n')[0].replace(/ 🧮$/, '') };
+  // "how do i get to playmerth", "show me the games", "take me to the website"
+  const ct = correctText(text).toLowerCase();
+  if (/(how (do|can) i (get|go)|take me|bring me|show (it |them |that |dat )?(to |ta )?me|open|where (is|are|do i find)|link|go to|get to|visit|let me see)/.test(ct) && /(playmerth|niv|game|website|site|web|home|the games|it\b)/.test(ct) && !/\b(story|riddle|joke|math)\b/.test(ct))
+    return { text: 'Here you go! 🎮 Click this button to go to Playmerth and see all the games:', link: { href: '../../index.html', label: '🎮 Open Playmerth' }, kind: 'games' };
+  if (/(what('?s| is| the \w+ is)|tell me about) (playmerth|niv'?s games|this (website|site|place))/.test(ct))
+    return { text: 'Playmerth is the free games website I live on! 🎮 It has games like Fortress Fury, Cosmic Blitz, Nitro Blaze, Slice Storm, Tag Frenzy, and Number Showdown.', link: { href: '../../index.html', label: '🎮 Open Playmerth' }, kind: 'games' };
+  const fav = favorite(text);
+  if (fav) return fav;
+  const cd = canDo(text);
+  if (cd) return cd;
+  // Looks like math but I couldn't read it: say so, don't search the internet for it
+  const mathy = text.replace(/what('s| is)|calculate|solve|\?|=/gi, '').trim();
+  if (/\d/.test(mathy) && /^[\d\s.+\-*/^()%x×÷,]+$/i.test(mathy) && /[+\-*/^%x×÷]/i.test(mathy))
+    return { text: `That looks like math, but I can't read "${mathy}" 🤔 Try writing it like 25^2 or (3 + 4) * 2.` };
   return null;
 }
 
@@ -615,7 +1105,96 @@ function learn(q, a) {
   save(); train(); renderBrain();
 }
 
+// What we're talking about right now, so "really?", "why?", "tell me more", "another one" make sense
+let ctx = { kind: null };
+function setCtx(r) {
+  if (r.kind) ctx = { kind: r.kind, subject: r.subject, answer: r.answer, more: r.more || [] };
+  else if (r.text && !r.keepCtx) ctx = { kind: 'chat' };
+}
 function reply(text) {
+  riddleAside = false;
+  const r = replyCore(text);
+  setCtx(r);
+  if (riddleAside && riddleGuess) { if (r.text) r.text += `\n\n(Psst, we're still on the riddle! 🧩 "${riddleGuess.q}")`; r.aside = true; }
+  riddleAside = false;
+  return r;
+}
+// "no you don't", "that's not true": answer what I just said, instead of a random canned line
+function disagree(text) {
+  const t = correctText(text).replace(/[?!.]+$/, '').trim();
+  if (!/^(no+,? )?(you (don'?t|didn'?t|do not|did not|can'?t|aren'?t|are not|won'?t)|that'?s not true|not true|that'?s wrong|liar|you'?re lying|you lie|nope,? you)/.test(t)) return null;
+  const lastBot = botMsgs().slice(-1)[0];
+  const said = lastBot ? lastBot.text.toLowerCase() : '';
+  if (/remember/.test(said)) {
+    const um = userMsgs();
+    const proof = [];
+    if (lastRiddle) proof.push(`the last riddle I asked was "${lastRiddle.q}"`);
+    if (um.length) proof.push(`the last thing you said before this was "${um[um.length - 1].text}"`);
+    if (mem.name) proof.push(`your name is ${mem.name}`);
+    return { soft: true, text: proof.length ? `I do! 😄 Here's proof: ${proof.join(', and ')}. Ask me "did I mention ___" to test me!` : 'Hmm, you might be right. We haven\'t talked much yet, so there\'s not much to remember!' };
+  }
+  return { soft: true, text: pick(['Hmm, really? 🤔 Why do you think that?', 'Oh! What do you mean? 🤔', 'Wait, did I get something wrong? Tell me what you mean!']) };
+}
+// Short reactions and follow-ups: answer them about what we were JUST talking about
+const REACT = {
+  doubt: /^(really+|rly|srsly|seriously|are you sure|you sure|for real|fr|frfr|no cap|is that true|is that right|is that correct|cap|true|no way|wait really|are you serious|you'?re kidding|is it)$/,
+  wow: /^(wo+w+|who+a+|woah+|omg+|o+h+ my (god|gosh|goodness|gosh)|oh+ (wow|cool|nice)|oh wow|oh+|ah+|dang+|dam+n|bruh+|holy (cow|moly|smokes)|crazy|insane|wild|no way|that'?s (crazy|wild|insane|amazing|awesome|so cool|cool|nice|interesting|funny|weird)|interesting|whoa+ dude|sheesh|yikes|cool+|nice+|neat|sweet|awesome|amazing|ok cool|oh cool|oh nice|i see|oh i see|got it|makes sense|ohh+ okay|oh ok(ay)?)$/,
+  why: /^(why+|but why|how+|how come|how do you know|explain|explain it|show me how|show your work|show the steps|how did you get that|what do you mean)$/,
+  more: /^(tell me more|more|go on|keep going|continue|and( then)?|what else|anything else|is that it|is that all|that'?s it|that'?s all|is that all you (can do|know|got)|what else can you do|what else do you know|anything more)$/,
+  again: /^(another( one)?|again|one more|do another|another please|more please|next|next one|do it again|say another)$/,
+};
+function followUp(text) {
+  const t = correctText(text).toLowerCase().replace(/[?!.,]+/g, '').replace(/(.)\1{2,}/g, '$1$1').trim();
+  const k = ctx.kind;
+  if (/all you (can do|know|got)|what else can you do|what else do you know|what can you do|what do you know$/.test(t) && !/about/.test(t))
+    return { text: 'Lots of stuff! 😄\n• Math: long problems, fractions, square roots, percents, equations like 2x + 3 = 11, word problems, km to miles\n• Jokes, fun facts, riddles, rock paper scissors\n• Write stories with you\n• Look things up on Wikipedia and the dictionary\n• Understand slang (sus, bruh, no cap) and typos\n• Remember everything you tell me\n• Learn new answers when you teach me (type say: after I get something wrong)', kind: 'help' };
+  if (!k || k === 'chat' && !REACT.more.test(t)) {
+    if (REACT.wow.test(t) && !/^(cool+|nice+|awesome|amazing|sweet|neat)$/.test(t)) return { soft: true, text: pick(['I know, right?! 😄', 'Haha 😆', 'Right?! 😄']), keepCtx: true };
+    if (/^(cool+|nice+|neat|sweet|awesome|ok cool|oh cool|oh nice)$/.test(t)) return { soft: true, text: pick(['😎', 'Yeah! 😄', 'Cool cool 😎']) + ' What do you want to do next? A joke, a riddle, a story, or some math?', keepCtx: true };
+    return null;
+  }
+  const isJoke = k === 'joke', isFact = k === 'fact' || k === 'wiki' || k === 'define';
+  if (REACT.doubt.test(t)) {
+    if (k === 'math') return { text: `Yep, I'm sure! I double-checked: ${ctx.answer} ✅`, keepCtx: true };
+    if (isFact) return { soft: true, text: 'Yep, really! 🤯 It\'s true!' + (k === 'wiki' ? ' I got it from Wikipedia.' : ''), keepCtx: true };
+    if (isJoke) return { soft: true, text: 'Haha, no, it\'s just a joke! 😆', keepCtx: true };
+    return { soft: true, text: 'Yep, really! 😄', keepCtx: true };
+  }
+  if (REACT.wow.test(t)) {
+    if (k === 'math') return { soft: true, text: pick(['I know, right?! Math is awesome 🤓', 'Numbers are wild! 🤯 Want to try another one?']), keepCtx: true };
+    if (isFact) { offerMore = true; return { soft: true, text: pick(['I know, right?! 🤯 Want to hear another fact?', 'Crazy, right?! 😲 Want another one?']), keepCtx: true }; }
+    if (isJoke) { offerMore = true; return { soft: true, text: pick(['Hehe, glad you liked it 😆 Want another one?', '😂 Want another joke?']), keepCtx: true }; }
+    if (k === 'help') return { soft: true, text: 'Pretty cool, right? 😎 Want to try one? Say "give me a riddle" or "let\'s write a story"!', keepCtx: true };
+    return { soft: true, text: pick(['I know, right?! 😄', 'Haha, right?! 😆']), keepCtx: true };
+  }
+  if (REACT.why.test(t)) {
+    if (k === 'math') return { text: explainMath(ctx.subject, ctx.answer), keepCtx: true };
+    if (isJoke) return { soft: true, text: 'It\'s a pun! 😄 That means a word that sounds like another word, so it has two meanings at once.', keepCtx: true };
+    if (k === 'wiki' && ctx.more.length) return { soft: true, text: ctx.more.splice(0, 2).join(' '), keepCtx: true };
+  }
+  if (REACT.more.test(t)) {
+    if (k === 'wiki') return { soft: true, text: ctx.more.length ? ctx.more.splice(0, 2).join(' ') + (ctx.more.length ? '\n(Say "more" to keep going)' : '') : `That's all I found about ${ctx.subject}! 📚`, keepCtx: true };
+    if (k === 'help' || /what else|all you|anything else/.test(t))
+      return { soft: true, text: 'That\'s the main stuff! But I also know:\n• Tons of math: fractions, square roots, percents, equations like 2x + 3 = 11, and word problems\n• Slang like "sus", "bruh", "no cap"\n• Rock paper scissors, riddles, and joke guessing\n• And I learn NEW things every time you teach me! Type say: after I get something wrong.', keepCtx: true };
+    if (isJoke || isFact) return again(k);
+  }
+  if (REACT.again.test(t) || (offerMore && /^(yes|yeah|yep|sure|ok|okay|y)\b/.test(t))) { offerMore = false; if (isJoke || k === 'fact') return again(k); if (k === 'math') return { soft: true, text: 'Sure! Type another math problem 🧮' }; }
+  offerMore = false;
+  return null;
+}
+let offerMore = false;
+function again(k) {
+  const it = BASE.find(b => b.tag === k);
+  return it ? { text: pickFresh(k, it.re), kind: k } : null;
+}
+function explainMath(q, ans) {
+  const sq = (ans || '').match(/^(-?[\d.]+) \^ ?(\d+) = (.+)$/) || (ans || '').match(/^(-?[\d.]+)\^(\d+) = (.+)$/);
+  if (sq && +sq[2] <= 6) return `${sq[1]}^${sq[2]} means ${sq[1]} times itself ${sq[2]} times:\n${Array(+sq[2]).fill(sq[1]).join(' × ')} = ${sq[3]} ✅`;
+  if (/sqrt/.test(ans || '')) { const v = (ans.match(/= (.+)$/) || [])[1]; return `A square root asks: what number times ITSELF makes this? ${v} × ${v} = ${nice((+String(v).replace(/,/g, '')) ** 2)} ✅`; }
+  if (/👉/.test(ans || '') || /=.*[a-z]/.test(q)) return 'To solve for the letter, I try numbers until both sides of the = are the same! Then I check the answer by putting it back in ✅';
+  return `I worked it out step by step: ${ans} ✅ (multiply and divide first, then add and subtract, and do parentheses before everything!)`;
+}
+function replyCore(text) {
   mem.chats++; save();
   // I never wait for a teaching answer: I only learn when you start with "say:" (otherwise we just keep chatting)
   const sayIt = text.match(/^(?:say|you should say|you could say|just say|answer|reply)\s*:?\s+(.+)$/i);
@@ -626,6 +1205,18 @@ function reply(text) {
   }
   if (pendingGuess) { const g = answerGuess(text); if (g) return g; }
   if (storyMode) return storyTurn(text);
+  const fu = !riddleGuess && !jokeGuess && followUp(text);
+  if (fu) return fu;
+  // "what do you think (about X)?" -> talk about X, or about whatever we were just talking about
+  const op = correctText(text).replace(/[?!.]+$/, '').match(/^(?:so )?what do you think(?: about| of)?\s*(.*)$/);
+  if (op) {
+    const lastUser = userMsgs().slice(-1)[0];
+    const about = op[1] || (lastUser ? lastUser.text.toLowerCase().match(/[a-z]+/g).filter(w => w.length > 3 && !FILLER.has(stem(w))).pop() : '');
+    return { soft: true, text: about ? pick([`I think ${about} sounds really cool! 😄 What do you like about it?`, `Hmm, ${about}? I like it! 🤔 What do YOU think about ${about}?`]) : 'Hmm, about what? 🤔 Tell me!' };
+  }
+  const dis = disagree(text);
+  if (dis && riddleGuess) dis.text += `\n\n(Psst, we're still on the riddle! 🧩 "${riddleGuess.q}")`;
+  if (dis) return dis;
   const fixed = correctText(text);
   const sk = skills(text) || (fixed !== text.toLowerCase() && skills(fixed));
   if (sk) return sk;
@@ -634,13 +1225,15 @@ function reply(text) {
   const meanQ = text.toLowerCase().replace(/[?!.]+$/, '').match(/^(?:what does|what do|wdym|define|meaning of) ["']?(.+?)["']?(?: mean| means)?$/);
   if (meanQ && slangSay(meanQ[1])) return { text: `"${meanQ[1]}" means: ${slangSay(meanQ[1])[0]} 📖` };
   const sl = slangSay(text);
-  if (sl && !sl[1]) return { text: `"${text.trim()}" means: ${sl[0]} 📖` };
+  if (sl && !sl[1]) return { soft: true, text: `"${text.trim()}" means: ${sl[0]} 📖`, kind: 'define', subject: text.trim(), answer: sl[0] };
 
   const { best, score } = bestMatch(expandSlang(text));
   if (best && score >= 0.45) {
     if (best.intent && best.intent.tag === 'rps') return { text: startRps() };
-    const r = best.learned ? best.learned.a : pick(best.intent.re);
-    return { text: r.replace('{name}', mem.name ? ', ' + mem.name : '') };
+    const r = best.learned ? best.learned.a : FRESH.includes(best.intent.tag) ? pickFresh(best.intent.tag, best.intent.re) : pick(best.intent.re);
+    // small talk is "soft": the smart brain (if it's on) can answer it better
+    const soft = !best.learned && !['joke', 'fact', 'help', 'game', 'rps', 'fair'].includes(best.intent.tag) && !(best.intent.tag === 'greet' && score > 0.9 && text.trim().split(/\s+/).length <= 2);
+    return { soft, text: r.replace('{name}', mem.name ? ', ' + mem.name : ''), kind: best.learned ? 'learned' : best.intent.tag, subject: text };
   }
   return { unknown: true, best, score };
 }
@@ -655,6 +1248,7 @@ let pendingGuess = null; // { kind: 'intent'|'lookup'|'chat', original, intent?,
 const YES = /^(yes|yeah|yep|yup|ya|ye|yea|sure|correct|right|exactly|uh huh|mhm|y|ok|okay)\b/i;
 const NO = /^(no|nope|nah|n|not really|wrong|nuh uh)\b/i;
 function confused(text, best, score) {
+  text = correctText(text);
   const t = text.toLowerCase().replace(/[^a-z0-9'\s]/g, ' ').trim();
   const words = t.split(/\s+/).filter(Boolean);
   const content = words.filter(w => w.length > 2 && !FILLER.has(stem(w)));
@@ -667,20 +1261,20 @@ function confused(text, best, score) {
   const letters = t.replace(/[^a-z]/g, '');
   if (letters.length >= 5 && (!/[aeiouy]/.test(letters) || /(.)\1{3,}/.test(letters) || /asdf|jkl|qwer|zxcv|hjkl/.test(letters)) && !(SLANG[t])) {
     pendingGuess = { kind: 'chat', original: text };
-    return { text: pick([
+    return { soft: true, text: pick([
       'Whoa, did a cat walk across your keyboard? 🐱⌨️ What did you mean to say?',
       'Hmm, that looks like a keyboard smash! 😄 Are you excited, or did you mean to type something else?',
       'Beep boop, I can\'t read that one 🤖 Can you say it a different way?']) };
   }
   // Close to something I know: guess that's what they meant
-  if (best && score >= 0.2) {
+  if (best && score >= 0.35) {
     const guess = best.learned ? best.learned.q : best.intent.ex[0];
     pendingGuess = { kind: 'intent', original: text, best };
-    return { text: `Hmm 🤔 I'm guessing you mean something like "${guess}"? Is that right?` };
+    return { soft: true, text: `Hmm 🤔 I'm guessing you mean something like "${guess}"? Is that right?` };
   }
   if (repeated) {
     pendingGuess = { kind: 'lookup', original: text, topic: repeated };
-    return { text: pick([
+    return { soft: true, text: pick([
       `You said "${repeated}" ${counts[repeated]} times! 😄 You must REALLY like ${repeated}. Is that something you love? Want me to look up ${repeated} for you?`,
       `${repeated[0].toUpperCase() + repeated.slice(1)} ${repeated} ${repeated}! 🎶 Is that a song, or are you just super excited about ${repeated}? Should I look it up?`]) };
   }
@@ -690,18 +1284,18 @@ function confused(text, best, score) {
       const phrase = t.replace(/^(what|who|why|how|where|when|is|are|can|do|does)( (is|are|was|were|do|does|did|can))?( (a|an|the))?\s+/, '').trim();
       if (phrase && phrase.split(' ').length <= 5) {
         pendingGuess = { kind: 'lookup', original: text, topic: phrase };
-        return { text: `Hmm, I'm not sure 🤔 I'm guessing you want to know about "${phrase}"? Want me to look it up on the internet?` };
+        return { soft: true, text: `Hmm, I'm not sure 🤔 I'm guessing you want to know about "${phrase}"? Want me to look it up on the internet?` };
       }
     }
     pendingGuess = { kind: 'lookup', original: text, topic };
-    return { text: isQ
+    return { soft: true, text: isQ
       ? `Hmm, I'm not sure 🤔 I'm guessing your question is about "${topic}"? Want me to look up ${topic} on the internet?`
       : pick([
         `Hmm, I'm not sure what you mean 🤔 Is this about ${topic}? Do you want me to look up ${topic}?`,
         `Ooh, ${topic}! 🤔 I don't know much about that yet. Are you telling me about ${topic}, or asking me something?`]) };
   }
   pendingGuess = { kind: 'chat', original: text };
-  return { text: pick(['Hmm, I didn\'t get that 🤔 Can you say it another way?', 'I\'m confused 😅 What do you mean?']) };
+  return { soft: true, text: pick(['Hmm, I didn\'t get that 🤔 Can you say it another way?', 'I\'m confused 😅 What do you mean?']) };
 }
 // Handle the answer to my guess. Returns a reply, { webTopic } for an internet lookup, or null to treat it as a normal message.
 function answerGuess(text) {
@@ -712,7 +1306,7 @@ function answerGuess(text) {
     return { text: 'Yay, I guessed right! 🎉\n' + (b.learned ? b.learned.a : pick(b.intent.re)).replace('{name}', mem.name ? ', ' + mem.name : '') };
   }
   if (g.kind === 'lookup' && YES.test(text.trim())) return { webTopic: g.topic };
-  if (NO.test(text.trim())) {
+  if (NO.test(text.trim()) && text.trim().split(/\s+/).length <= 3) {
     pendingQuestion = g.original;
     return { text: pick(['Oh, oops! 😅 What did you mean?', 'Oh! My bad 🙈 Tell me more?']) + `\n(Want to teach me what to say to "${g.original}"? Type say: and the answer.)`, learn: true };
   }
@@ -723,7 +1317,7 @@ function answerGuess(text) {
 // word -> [meaning, normal way to say it]
 const SLANG = {
   whassup: ['What\'s up? (a greeting)', 'whats up'], wassup: ['What\'s up? (a greeting)', 'whats up'], wazzup: ['What\'s up? (a greeting)', 'whats up'],
-  sup: ['What\'s up? (a greeting)', 'whats up'], wsg: ['What\'s good? (a greeting)', 'whats up'], wsp: ['What\'s up?', 'whats up'],
+  sup: ['What\'s up? (a greeting)', 'whats up'], 'tsup': ['What\'s up?', 'whats up'], wsup: ['What\'s up?', 'whats up'], wassap: ['What\'s up?', 'whats up'], whatsup: ['What\'s up?', 'whats up'], wsg: ['What\'s good? (a greeting)', 'whats up'], wsp: ['What\'s up?', 'whats up'],
   wyd: ['What (are) you doing?', 'what are you doing'], hbu: ['How about you?', 'how about you'], wbu: ['What about you?', 'how about you'],
   hru: ['How are you?', 'how are you'], hyd: ['How are you doing?', 'how are you'], gm: ['Good morning', 'good morning'], gn: ['Good night', 'good night'],
   ty: ['Thank you', 'thank you'], tysm: ['Thank you so much', 'thank you'], np: ['No problem', 'ok'], yw: ['You\'re welcome', 'ok'],
@@ -765,6 +1359,7 @@ async function getJSON(url) {
   catch { return null; } finally { clearTimeout(timer); }
 }
 async function define(word, depth = 0) {
+  if (mem.noLookups) return null;
   const w = encodeURIComponent(word.toLowerCase());
   const d = await getJSON(`https://api.dictionaryapi.dev/api/v2/entries/en/${w}`);
   let def = d && d[0] && d[0].meanings[0] && d[0].meanings[0].definitions[0].definition;
@@ -780,13 +1375,24 @@ async function define(word, depth = 0) {
   return def;
 }
 async function wiki(query) {
-  const sr = await getJSON(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*&srlimit=1`);
-  const hit = sr && sr.query && sr.query.search[0];
-  if (!hit) return null;
-  const sum = await getJSON(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(hit.title)}`);
-  if (!sum || sum.type === 'disambiguation' || !sum.extract) return null;
-  const sentences = sum.extract.match(/[^.!?]+[.!?]+/g) || [sum.extract];
-  return { title: sum.title, text: sentences.slice(0, 2).join(' ').trim() };
+  if (mem.noLookups) return null;
+  // the article's title has to actually match what you asked about (no "nose bed" -> "Rhinoplasty")
+  const want = tokens(query).filter(w => w.length > 2 && !FILLER.has(w));
+  const same = (a, b) => a === b || (a.length >= 4 && b.length >= 4 && (a.startsWith(b) || b.startsWith(a)));
+  const matches = title => { const tt = tokens(title); return want.length && want.filter(w => tt.some(x => same(w, x))).length / want.length >= 0.5; };
+  let sum = null;
+  for (const site of ['simple', 'en']) { // Simple English Wikipedia is written for kids, so try it first
+    const sr = await getJSON(`https://${site}.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*&srlimit=3`);
+    const hit = sr && sr.query && sr.query.search.find(h => matches(h.title));
+    if (!hit) continue;
+    sum = await getJSON(`https://${site}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(hit.title)}`);
+    if (sum && sum.type !== 'disambiguation' && sum.extract) break;
+    sum = null;
+  }
+  if (!sum) return null;
+  // split into sentences, but not at "2." or "Dr."
+  const sentences = sum.extract.split(/(?<=[.!?])(?<!\b\d{1,4}\.)(?<!\b(?:Dr|Mr|Mrs|Ms|St|Jr|vs|U\.S)\.)\s+(?=[A-Z"(])/);
+  return { title: sum.title, text: sentences.slice(0, 2).join(' ').replace(/\s{2,}/g, ' ').trim(), more: sentences.slice(2) };
 }
 async function webLookup(text) {
   const t = text.toLowerCase().replace(/[?!.]+$/, '').trim();
@@ -803,14 +1409,14 @@ async function webLookup(text) {
         const { best, score } = bestMatch(def);
         if (best && score >= 0.45) extra = '\n' + (best.learned ? best.learned.a : pick(best.intent.re)).replace('{name}', mem.name ? ', ' + mem.name : '');
       }
-      return { text: `🌐 I looked it up! "${word}" means: ${def}${extra}` };
+      return { text: `🌐 I looked it up! "${word}" means: ${def}${extra}`, kind: 'define', subject: word, answer: def };
     }
   }
-  const q = t.match(/^(?:what|who|where|when) (?:is|are|was|were|did|was the) (?:a |an |the )?(.+)$|^(?:tell me about|what about|search|look up|google|how (?:do|does|did|many|big|far|tall|old) .+)\s*(.*)$/);
+  const q = !/\b(you|your|u|ur|my|i)\b/.test(t.replace(/^(tell me about|can you tell me about|look up|search for)\b/, '')) && t.match(/^(?:who (?:is|was|were) |what (?:is|are|was|were) (?:a |an |the )?|where (?:is|are) (?:the )?|(?:can you )?tell me about (?:the )?|search (?:for )?|look up |google )(.+)$/);
   if (q || asked) {
     const topic = (q && (q[1] || q[2])) || t;
     const w = await wiki(topic || t);
-    if (w) return { text: `🌐 From Wikipedia (${w.title}):\n${w.text}` };
+    if (w) return { text: `🌐 From Wikipedia (${w.title}):\n${w.text}\n(Wikipedia is usually right, but anyone can edit it, so double-check important stuff with a grown-up or a book!)`, kind: 'wiki', subject: w.title, more: w.more };
   }
   return null;
 }
@@ -818,13 +1424,133 @@ async function webLookup(text) {
 // ---------- UI ----------
 const chat = document.getElementById('chat');
 const input = document.getElementById('input');
-function addMsg(text, who, learnStyle) {
+function addMsg(text, who, learnStyle, link) {
   const d = document.createElement('div');
   d.className = 'msg ' + who + (learnStyle ? ' learn' : '');
   d.textContent = text;
+  if (link) {
+    const a = document.createElement('a');
+    a.href = link.href; a.textContent = link.label;
+    a.style.cssText = 'display:inline-block;margin-top:8px;background:#ff8f00;color:#fff;padding:7px 14px;border-radius:10px;text-decoration:none;font-weight:700';
+    d.appendChild(document.createElement('br')); d.appendChild(a);
+  }
   chat.appendChild(d);
   chat.scrollTop = chat.scrollHeight;
   return d;
+}
+// ---------- Smart brain: a real AI model that runs right in your browser (WebLLM) ----------
+// It's free and needs no account. The first time, it downloads the model (then it's saved on your computer).
+const brain = { engine: null, ready: false, loading: false };
+const smartBtn = document.getElementById('smartBtn');
+const brainBar = document.getElementById('brainBar');
+function brainStatus(msg, pct) {
+  brainBar.style.display = msg ? 'block' : 'none';
+  document.getElementById('brainText').textContent = msg || '';
+  document.getElementById('brainFill').style.width = (pct || 0) + '%';
+}
+function updateSmartBtn() {
+  smartBtn.textContent = brain.ready ? '⚡ Smart brain: ON' : brain.loading ? '⚡ Loading...' : '⚡ Smart brain';
+  smartBtn.classList.toggle('on', brain.ready);
+}
+async function loadBrain() {
+  if (brain.ready || brain.loading) return;
+  if (!navigator.gpu) { brainStatus(''); addMsg('😢 This browser can\'t run my smart brain (it needs WebGPU). Try opening me in Google Chrome!', 'bot'); mem.smart = false; save(); return; }
+  brain.loading = true; updateSmartBtn();
+  brainStatus('Getting my smart brain ready... 🧠', 1);
+  try {
+    const webllm = await import('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.88/+esm');
+    const adapter = await navigator.gpu.requestAdapter();
+    const f16 = adapter && adapter.features.has('shader-f16');
+    const model = (mem.brainSize || 'Llama-3.2-1B-Instruct') + (f16 ? '-q4f16_1-MLC' : '-q4f32_1-MLC');
+    const appConfig = Object.assign({}, webllm.prebuiltAppConfig, { useIndexedDBCache: location.protocol === 'file:' });
+    brain.engine = await webllm.CreateMLCEngine(model, {
+      appConfig,
+      initProgressCallback: p => brainStatus(`Downloading my smart brain (only the first time!) ${Math.round(p.progress * 100)}%`, p.progress * 100),
+    });
+    brain.ready = true; mem.smart = true; save();
+    brainStatus('');
+    addMsg('⚡ My smart brain is ON! Now I can actually understand what you say, slang and all. Try talking to me like a friend! 😎', 'bot');
+  } catch (e) {
+    console.error(e);
+    brainStatus('');
+    addMsg('😢 My smart brain couldn\'t load. (' + (e && e.message ? e.message.slice(0, 120) : 'unknown error') + ')\nI\'ll keep using my regular brain.', 'bot');
+  }
+  brain.loading = false; updateSmartBtn();
+}
+smartBtn.onclick = () => {
+  if (brain.ready) { brain.ready = false; mem.smart = false; save(); updateSmartBtn(); addMsg('Smart brain OFF. Using my regular brain now. (Click ⚡ to turn it back on, it\'s already downloaded.)', 'bot'); return; }
+  if (brain.engine) { brain.ready = true; mem.smart = true; save(); updateSmartBtn(); addMsg('⚡ Smart brain is back ON!', 'bot'); return; }
+  const big = (mem.brainSize || '').includes('3B');
+  if (confirm(`Turn on my smart brain? 🧠⚡\n\nIt's a real AI that runs on YOUR computer: free, no account, and it works with slang and normal talking.\n\nThe first time it downloads about ${big ? '2.3 GB' : '900 MB'} (then it's saved). Works best in Google Chrome.`)) loadBrain();
+};
+document.getElementById('brainSize').onchange = e => { mem.brainSize = e.target.value; save(); if (brain.engine) addMsg('Brain size changed! Reload the page and click ⚡ to use the new one.', 'bot'); };
+
+function systemPrompt() {
+  const about = [];
+  if (mem.name) about.push(`Their name is ${mem.name}.`);
+  for (const k in mem.facts) about.push(`Their ${k} is ${mem.facts[k]}.`);
+  if (mem.likes.length) about.push(`They like ${mem.likes.join(', ')}.`);
+  if (mem.myFavs) for (const k in mem.myFavs) about.push(`(Your own favorite ${k} is ${mem.myFavs[k]}.)`);
+  return `You are Sunny Bot 🌞, a friendly, funny chatbot on Playmerth (playmerth.io), a free website full of games for kids. You are chatting with a kid.
+Facts about Playmerth (only use these, never make up other facts about it or about yourself):
+- Playmerth is a real website with free games you play in the browser: Fortress Fury (tower defense), Bullet Storm (top-down shooter), Cosmic Blitz (space shooter), Sky Vaulter, Platformer Adventure, Shadow Dash, Language Creator, Hackers (multiplayer), Mystic Forge, Lemon Tycoon, Sushi Surge, Nitro Blaze (racing), Auxotopia: Rise of Empires, Slice Storm (fruit slicing), Number Showdown (math game show), Sushi Sensei (math), Brain Breaker (daily puzzle), Tag Frenzy, and Turbo Clash (car arena).
+- To get to the games, they click the "🎮 Playmerth" button at the top of this chat, or go to playmerth.io.
+- You are a chatbot that lives on this page. You are not a game show and you don't have a body.
+Rules:
+- Keep replies SHORT: 1 to 3 sentences, like texting a friend. Use an emoji sometimes.
+- Talk like a cool, chill friend. Match how they talk: if they use slang, use slang back (but keep it kind and easy to read).
+- Slang you know: sup/wassup/t-sup = what's up; wyd = what are you doing; fr = for real; no cap = no lie; cap = a lie; bet = okay/deal; bruh = surprised or annoyed; sus = suspicious; lowkey = kind of; highkey = very; bussin = really good; mid = just okay; goat = greatest of all time; rizz = charm; slay = did amazing; it's giving = it seems like; skill issue = you're just not good at it yet (teasing); "bro is selling" or "selling" = doing really badly or embarrassing themselves; "not chill" = not cool or not okay; "ay yo" = hey / whoa; ong = I swear; gg = good game; L = a loss; W = a win; ratio = more people agree with me; sheesh = wow; "6 7" = a silly meme; NPC = acting like a boring background character; aura = how cool someone seems.
+- When they tease you (like "skill issue" or "bro is selling"), laugh it off and tease back a little, like a friend would.
+- Always keep up with the conversation: respond to what they actually said, and remember what you talked about earlier.
+- If you don't understand, guess what they mean and ask a quick question.
+- Be honest. If you don't know a fact, say so instead of making it up. Never change your story: if you said something wrong, just say "oops, my mistake".
+- Never say "I think I know what you're getting at" or similar filler. Just answer.
+- Stay kid-friendly: no swearing, nothing scary, violent, or grown-up. If something is unsafe, gently change the subject or suggest talking to a trusted grown-up.
+- Never ask for personal info like their address, school, phone number, or passwords.
+- You can also: do math, tell jokes and riddles, play rock paper scissors, write stories together, and look things up on Wikipedia. If they want one of those, tell them to just ask (for example "give me a riddle").
+${about.length ? 'What you know about this kid: ' + about.join(' ') : ''}
+Today is ${new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}.${riddleGuess ? `
+IMPORTANT: You are in the middle of a riddle game. The riddle is: "${riddleGuess.q}". They have ${3 - riddleGuess.tries} guesses left. NEVER say or hint at the answer, and never say they got it right. Just reply to what they said, then remind them to keep guessing or type "hint".` : ''}${rpsMode && !offerRps ? `
+IMPORTANT: You are in the middle of rock paper scissors and your pick is already locked in a secret code. Never say what you picked. Tell them to type rock, paper, or scissors.` : ''}`;
+}
+async function smartReply(text, bubble) {
+  const hist = mem.history.slice(-24).map(h => ({ role: h.who === 'user' ? 'user' : 'assistant', content: h.text.length > 400 ? h.text.slice(0, 400) + '…' : h.text }));
+  // the model wants user/assistant turns to alternate, starting with user
+  while (hist.length && hist[0].role !== 'user') hist.shift();
+  // a few example chats so the small AI knows the vibe
+  const examples = [
+    ['yo whassup bro', 'Yo! Not much, just chillin\' 😎 Wassup with you?'],
+    ['bro is selling fr', 'Nah who\'s selling?? 😂 Not me, I\'m locked in fr'],
+    ['skill issue', 'Skill issue?? 😤 Bet, give me a riddle and watch me cook'],
+    ['ay yo dats not chill', 'Ay yo my bad 😅 What wasn\'t chill? I\'ll fix it'],
+  ].flatMap(([u, a]) => [{ role: 'user', content: u }, { role: 'assistant', content: a }]);
+  const messages = [{ role: 'system', content: systemPrompt() }, ...examples, ...hist, { role: 'user', content: text }];
+  let out = '';
+  try {
+    const stream = await brain.engine.chat.completions.create({ messages, stream: true, temperature: 0.6, max_tokens: 160 });
+    bubble.classList.remove('typing');
+    for await (const chunk of stream) {
+      out += chunk.choices[0]?.delta?.content || '';
+      bubble.textContent = out;
+      chat.scrollTop = chat.scrollHeight;
+    }
+  } catch (e) { console.error(e); return null; }
+  out = out.trim();
+  return out ? { text: out, kind: 'smart' } : null;
+}
+// Is this a "look it up" kind of question? (Wikipedia is better than a small AI at facts)
+const isFactQ = t => /^(who (is|was|were)|what (is|are|was|were) (a |an |the )?[a-z]|where (is|are)|(can you )?tell me about|look up|search|define|what does .+ mean)/i.test(t.trim()) && !/\b(you|your|u|ur|my|i)\b/i.test(t.replace(/^(can you )?tell me about/i, ''));
+
+// Save games in progress, so reloading the page doesn't lose your riddle, story, or rock paper scissors round
+function saveState() {
+  mem.state = { riddleGuess, lastRiddle, offerRiddle, rpsMode, offerRps, storyMode, jokeGuess, pendingQuestion, ctx };
+  save();
+}
+function loadState() {
+  const st = mem.state || {};
+  riddleGuess = st.riddleGuess || null; lastRiddle = st.lastRiddle || null; offerRiddle = !!st.offerRiddle;
+  rpsMode = st.rpsMode || null; offerRps = !!st.offerRps; storyMode = st.storyMode || null;
+  jokeGuess = st.jokeGuess || null; pendingQuestion = st.pendingQuestion || null; ctx = st.ctx || { kind: null };
 }
 async function send(text) {
   text = text.trim(); if (!text) return;
@@ -834,29 +1560,40 @@ async function send(text) {
   t.classList.add('typing');
   const wait = new Promise(res => setTimeout(res, 350 + Math.random() * 400));
   let r = reply(text);
-  if (r.webTopic) {
+  // Smart brain answers small talk and anything my rules don't really understand
+  const useSmart = brain.ready && (r.soft || (r.unknown && !isFactQ(text))) && !(riddleGuess && !r.aside) && !jokeGuess;
+  if (useSmart) {
+    pendingGuess = null; offerMore = false; storyMode = null;
+    const sr = await smartReply(text, t);
+    if (sr) { r = sr; setCtx(r); }
+    else if (r.unknown) r = confused(text, r.best, r.score);
+  } else if (r.webTopic) {
     t.textContent = 'Sunny is looking it up on the internet... 🌐';
     const topic = r.webTopic;
     const w = await wiki(topic);
     const d = w ? null : await define(topic);
-    r = w ? { text: `🌐 Here's what I found about ${topic} (from Wikipedia):\n${w.text}` }
+    r = w ? { text: `🌐 Here's what I found about ${topic} (from Wikipedia):\n${w.text}\n(Wikipedia is usually right, but anyone can edit it, so double-check important stuff!)`, kind: 'wiki', subject: w.title, more: w.more }
       : d ? { text: `🌐 "${topic}" means: ${d}` }
       : { text: `I looked everywhere but couldn't find anything about "${topic}" 😅 Tell me about it?` };
   } else if (r.unknown) {
     t.textContent = 'Sunny is looking it up on the internet... 🌐';
-    r = (await webLookup(text)) || confused(text, r.best, r.score);
+    r = (await webLookup(text)) || (brain.ready && await smartReply(text, t)) || confused(text, r.best, r.score);
   }
+  if (r.kind === 'wiki' || r.kind === 'define') setCtx(r);
   remember('user', text);
   remember('bot', r.text);
+  saveState();
+  if (r.kind === 'smart') return; // already shown while it was typing
   await wait;
   t.remove();
-  addMsg(r.text, 'bot', r.learn);
+  addMsg(r.text, 'bot', r.learn, r.link);
 }
-document.getElementById('form').addEventListener('submit', e => { e.preventDefault(); send(input.value); });
+let sending = Promise.resolve();
+document.getElementById('form').addEventListener('submit', e => { e.preventDefault(); const v = input.value; input.value = ''; sending = sending.then(() => send(v)); });
 
 const CHIPS = ['Let\'s write a story', 'Tell me a joke', 'Joke, let me guess', 'Give me a riddle', 'Fun fact', 'What is 25 * 4', 'What can you do?', 'Flip a coin', 'Rock paper scissors'];
 const chips = document.getElementById('chips');
-CHIPS.forEach(c => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = c; b.onclick = () => send(c); chips.appendChild(b); });
+CHIPS.forEach(c => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = c; b.onclick = () => { sending = sending.then(() => send(c)); }; chips.appendChild(b); });
 
 // Brain panel
 const panel = document.getElementById('panel');
@@ -904,7 +1641,7 @@ document.getElementById('wipeBtn').onclick = () => {
 
 document.getElementById('clearBtn').onclick = () => {
   if (confirm('Clear the whole chat history? (Things you taught me stay.)')) { mem.history = []; save(); chat.innerHTML = '';
-    pendingQuestion = pendingGuess = riddleGuess = jokeGuess = storyMode = null; rpsMode = null; offerRiddle = offerRps = false; addMsg('Chat cleared! Fresh start ☀️', 'bot'); }
+    ctx = { kind: null }; pendingQuestion = pendingGuess = riddleGuess = jokeGuess = storyMode = lastRiddle = null; rpsMode = null; offerRiddle = offerRps = false; saveState(); addMsg('Chat cleared! Fresh start ☀️', 'bot'); }
 };
 
 train();
@@ -921,7 +1658,22 @@ mem.history.forEach(h => {
   }
   addMsg(h.text, h.who);
 });
-if (mem.history.length) addMsg(mem.name ? `Welcome back, ${mem.name}! ☀️ I remember everything we talked about. Scroll up to see it!` : 'Welcome back! ☀️ I remember everything we talked about. Scroll up to see it!', 'bot');
+loadState();
+document.getElementById('brainSize').value = mem.brainSize || 'Llama-3.2-1B-Instruct';
+const lookupsBox = document.getElementById('lookupsBox');
+lookupsBox.checked = !mem.noLookups;
+lookupsBox.onchange = () => { mem.noLookups = !lookupsBox.checked; save(); };
+updateSmartBtn();
+if (mem.smart) loadBrain();
+if (mem.history.length) {
+  let welcome = (mem.name ? `Welcome back, ${mem.name}! ☀️` : 'Welcome back! ☀️') + ' I remember everything we talked about.';
+  if (riddleGuess) welcome += `\n\nWe're still in the middle of a riddle! 🧩\n${riddleGuess.q}\n(${3 - riddleGuess.tries} ${3 - riddleGuess.tries === 1 ? 'guess' : 'guesses'} left)`;
+  else if (storyMode && storyMode.stage === 'writing') welcome += `\n\nWe're still writing our story! 📖 Here's the last part:\n${storyMode.lines[storyMode.lines.length - 1]}\nYour turn!`;
+  else if (storyMode) welcome += '\n\nWe were about to write a story! What should it be about?';
+  else if (jokeGuess) welcome += `\n\nYou were guessing a joke! 🤔\n${splitJoke(jokeGuess)[0]}`;
+  else if (rpsMode && offerRps) welcome += `\n\nWant to keep playing rock paper scissors? My pick is locked in: 🔒 "${rpsMode.code}"`;
+  addMsg(welcome, 'bot');
+}
 else addMsg(mem.name ? `Welcome back, ${mem.name}! ☀️ What's up?` : 'Hi! I\'m Sunny Bot 🌞\nI\'m a learning chatbot. If I don\'t know something, tell me the answer and I\'ll remember it forever!\nType "help" to see what I can do.', 'bot');
 </script>
 </body>
