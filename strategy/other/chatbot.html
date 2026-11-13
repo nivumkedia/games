@@ -92,6 +92,17 @@
   .item.empty { color: #999; }
   .stats { font-size: 12.5px; color: #888; }
   .setting { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 14px; }
+  /* Sunny's own "are you sure?" box, instead of the browser's popup */
+  #ask { position: fixed; inset: 0; background: rgba(0,0,0,.3); display: none; justify-content: center; align-items: center; padding: 16px; z-index: 20; }
+  #ask.open { display: flex; }
+  #ask .box { background: #fff; border-radius: 18px; padding: 22px; width: min(380px, 100%); box-shadow: 0 12px 40px rgba(0,0,0,.2); text-align: center; animation: pop .2s ease-out; }
+  #ask .big { font-size: 40px; }
+  #ask h3 { color: #ef6c00; font-size: 19px; margin: 6px 0; }
+  #ask p { color: #555; font-size: 14px; line-height: 1.45; white-space: pre-line; }
+  #ask .btns { display: flex; gap: 10px; justify-content: center; margin-top: 16px; }
+  #ask button { border: none; padding: 10px 18px; border-radius: 12px; font-weight: 700; font-size: 15px; cursor: pointer; }
+  #ask .yes { background: #ff8f00; color: #fff; }
+  #ask .no { background: #eceff1; color: #455a64; }
   /* Up next: messages you sent while Sunny was still thinking */
   body { gap: 16px; }
   #queue {
@@ -155,6 +166,8 @@
   <div class="hint">Sunny is still thinking. These will send by themselves, in order.</div>
   <div id="queueList"></div>
 </aside>
+
+<div id="ask"><div class="box"><div class="big" id="askIcon"></div><h3 id="askTitle"></h3><p id="askText"></p><div class="btns"><button class="no" id="askNo"></button><button class="yes" id="askYes"></button></div></div></div>
 
 <div id="panel">
   <div class="panel-box">
@@ -339,6 +352,8 @@ function tokens(text) {
 
 // ---------- Memory ----------
 const STORE = 'sunnybot_brain_v1';
+const VERSION = 'Nov 13 (v9)';
+try { const m0 = JSON.parse(localStorage.getItem(STORE) || 'null'); if (m0 && m0.realWords) { for (const k in m0.realWords) if (!m0.realWords[k]) delete m0.realWords[k]; localStorage.setItem(STORE, JSON.stringify(m0)); } } catch {} // shown in My Brain, so it's easy to check the page is up to date
 let mem = JSON.parse(localStorage.getItem(STORE) || 'null') || { learned: [], name: '', chats: 0 };
 mem.history = mem.history || [];  // every message: { who: 'user'|'bot', text, time }
 mem.facts = mem.facts || {};      // things you told me: "my favorite food is pizza" -> { 'favorite food': 'pizza' }
@@ -376,6 +391,8 @@ function cosine(a, b) { let s = 0; for (const t in a) if (b[t]) s += a[t] * b[t]
 const FILLER = new Set('a an the is are am was be do doe did i you your my me it its to of in on at for and or what who how why when where can could would will should that this there tell say please some about with like want'.split(' ').map(stem));
 // Fix small typos: "how ar yu" -> "how are you", "ypou" -> "you", "teh" -> "the"
 const COMMON = ('the be to of and a in that have i it for not on with he as you do at this but his by from they we say her she or an will my one all would there their what so up out if about who get which go me when make can like time no just him know take people into year your good some could them see other than then now look only come its over think also back after use two how our work first well way even new want because any these give day most us is are was were am has had did does said got made went been being yes yeah ok okay hi hello hey bye please thanks thank sorry story write play game games fun funny joke jokes riddle tell talk chat help name old age love like hate happy sad mad bored tired hungry favorite color food animal dog cat pet friend friends mom dad brother sister school home house homework teacher class today tomorrow yesterday morning night week weekend birthday party gift pizza ice cream cake candy apple banana water milk eat ate drink sleep run walk jump swim read draw sing dance music song movie book books show watch computer phone video minecraft roblox fortnite soccer football basketball ball team win lose won lost score really very much more less little big small fast slow hot cold nice cool awesome great bad best worst never always maybe sometimes something anything nothing everything someone anyone everyone where why which whose while again still too here every each many few long short high low hard easy right wrong left true false real fake cute scary weird crazy silly smart dumb mean kind ate dragon magic monster robot space planet sun moon star stars ocean sea beach tree forest mountain river city world earth nose eye eyes ear ears mouth teeth tooth hand hands arm arms leg legs foot feet head hair face finger fingers toe toes body heart brain bone bones skin belly back neck knee shoulder bed beds chair table desk couch sofa lamp clock watch phone tv screen keyboard mouse paper pen pencil crayon marker eraser bag backpack box toy toys doll lego legos ball bat bike car cars bus train plane boat ship truck rocket road street bridge park zoo farm store shop mall library hospital church castle tower cave island lake pond hill rock rocks stone sand snow rain wind cloud clouds sky storm lightning thunder rainbow flower flowers grass leaf leaves seed plant garden egg eggs bread cheese meat chicken fish rice soup pasta cookie cookies chips juice tea coffee sugar salt shirt pants shoes socks hat coat dress glasses ring key keys map coin coins money gold candle needle comb sponge towel stamp piano guitar drum drums river stream ocean planet volcano volcanoes dinosaur dinosaurs shark whale bird birds bug bugs bee spider snake frog horse cow pig sheep goat duck mouse rabbit bunny bear lion tiger monkey elephant giraffe zebra wolf fox owl penguin turtle puppy kitten baby kid kids boy girl man woman king queen prince princess wizard witch ghost zombie alien ninja pirate knight hero teacher doctor police army team captain web internet online website site link page app back dude bro sis buddy chill oh ohh ah aw aww wow whoa woah omg root roots cube square log math maths plus minus times divide divided multiply equation problem problems number numbers god gosh goodness geez jeez sheesh cow moly holy wild crazy insane neat sweet bruh lol lmao yay yikes dang huh hmm um uh ugh yep nope ya yo hey sup bro dude remember forget forgot know knew think thought believe understand mean meant guess answer question ask asked asking tell told said say saying talk talked call called need needed try tried trying help helped start started stop stopped finish finished keep kept let put set show showed find found lose lost hold bring brought buy bought build built feel felt hear heard listen learn learned teach taught wait waited watch watched open close move moved live lived die died begin began change changed turn turned follow happen happened leave left meet met pay play played playing run ran sit stand stood understand went wish wonder wonderful beautiful family person place thing things money car door room window water fire air food lunch dinner breakfast hour minute second moment problem idea reason sure maybe probably actually already almost enough together another different same important special favorite question answer riddle riddles story stories joke jokes funny again before after during until since without against between around under above inside outside everybody somebody nobody yourself myself please because though through across along being doing going having making taking coming getting giving looking telling thinking wanting trying saying talking playing writing reading eating sleeping dream dreams scared happy angry excited nervous worried surprised confused lonely awesome amazing terrible horrible delicious yummy gross').split(' ');
+// words kids use with me a lot, so typos of them get fixed too ("seceret languge")
+COMMON.push(...'track tracks score scores scoring point points streak row wrong rights guesses guessed lets dont cant wont isnt didnt doesnt im ive youre thats whats wanna gonna gotta kinda sorta cuz yeah nah idk secret secrets language languages continue character characters sentence sentences different alphabet letter letters symbol symbols emoji emojis backwards translate decode code codes message messages puzzle puzzles mystery chapter ending beginning middle rule rules step steps random instead'.split(' '));
 const COMMON_SET = new Set(COMMON);
 function close(a, b) {
   if (Math.abs(a.length - b.length) > 1) return false;
@@ -542,7 +559,9 @@ function memorySkills(text, t) {
     return { text: um.length ? `You said: "${um[um.length - 1].text}"` : 'You haven\'t said anything yet!' };
   if (/first thing i (ever )?said|my first message|what did i say first/.test(t))
     return { text: um.length ? `The first thing you ever said to me was "${um[0].text}" (${ago(um[0].time)}) 📜` : 'This is the first thing you said!' };
-  if (/^(what did you (just )?say|repeat that|say that again|come again|huh|what)$/.test(t))
+  if (/^(huh+|wh?at+|what do you mean|wdym|i don'?t (get it|understand)|that (doesn'?t|does not|makes no|dont) make (any )?sense|that makes no sense|makes no sense|i'?m confused|confused|what are you (saying|talking about))$/.test(t.replace(/[?!.]+$/, '')))
+    return { text: say('confusedMe', ['Sorry, that was confusing! 😅 My fault. Let\'s try again: what do you want to do?', 'Oops, I said that in a weird way 😅 What would you like to do? A riddle, a story, a secret language, or just chat?', 'My bad, that didn\'t make sense 😅 Tell me again and I\'ll do better!']) };
+  if (/^(what did you (just )?say|repeat that|say that again|come again)$/.test(t))
     return { text: bm.length ? `I said: "${bm[bm.length - 1].text}"` : 'I haven\'t said anything yet!' };
   if (/how many messages|how much have we talked|how long have we been talking/.test(t)) {
     if (!mem.history.length) return { text: 'We just started talking!' };
@@ -863,14 +882,47 @@ function decodeStep(c, type, s) {
   return s;
 }
 // extra rules they made up: something at the start or end of every message
-const encodeCode = (c, s) => (c.prefix || '') + c.types.reduce((acc, x) => encodeStep(c, x, acc), s) + (c.suffix || '');
-const stripMarks = (c, s) => { s = s.trim(); if (c.prefix && s.startsWith(c.prefix)) s = s.slice(c.prefix.length); if (c.suffix && s.endsWith(c.suffix)) s = s.slice(0, -c.suffix.length); return s; };
-const decodeCode = (c, s) => c.types.slice().reverse().reduce((acc, x) => decodeStep(c, x, acc), stripMarks(c, s));
+const NOISE = '#@%&*~^$'.split('');
+// "just a portion of the word, then how many letters": well -> we2
+const chopWords = (c, s) => s.replace(/[A-Za-z]+/g, w => { const n = w.length === 1 ? 1 : 1 + Math.floor(Math.random() * (w.length - 1)); const part = w.slice(0, n); return c.chop === 'before' ? n + part : part + n; });
+const junkLetters = () => Array.from({ length: 3 + Math.floor(Math.random() * 5) }, () => ABC[Math.floor(Math.random() * 26)]).join('');
+function carryWord(w) {
+  if (w.length > 18) w = w.slice(0, 18);
+  const n = w.length === 1 ? 1 : Math.max(w.length - 9, 1 + Math.floor(Math.random() * Math.min(w.length - 1, 9)));
+  return w.slice(0, n) + n + (w.length - n) + w.slice(n);
+}
+function encodeCode(c, s) {
+  if (c.chop === 'carry') {
+    const body = s.trim().split(/\s+/).map(w => carryWord(c.types.reduce((acc, y) => encodeStep(c, y, acc), w.toLowerCase()))).join('');
+    return (c.prefix || '') + (c.noise ? junkLetters() : '') + body + (c.noise ? junkLetters() : '') + (c.suffix || '');
+  }
+  const steps = x => c.types.reduce((acc, y) => encodeStep(c, y, acc), c.chop ? chopWords(c, x) : x);
+  const ex = c.examples || {};
+  // words they showed me how to write are used exactly like they said
+  const body = Object.keys(ex).length && !c.types.includes('morse') ? s.replace(/[A-Za-z']+/g, w => ex[w.toLowerCase()] || steps(w)) : steps(s);
+  const junk = c.noise ? Array.from({ length: 2 + Math.floor(Math.random() * 2) }, () => pick(NOISE)).join('') : '';
+  return (c.prefix || '') + junk + body + (c.suffix || '');
+}
+const stripMarks = (c, s) => {
+  s = s.trim(); if (c.prefix && s.startsWith(c.prefix)) s = s.slice(c.prefix.length); if (c.suffix && s.endsWith(c.suffix)) s = s.slice(0, -c.suffix.length);
+  if (c.noise) s = s.replace(new RegExp('^[' + NOISE.map(x => '\\' + x).join('') + ']+'), '');
+  return s;
+};
+function decodeCode(c, s) {
+  if (c.chop === 'carry') { let b = s.trim(); if (c.prefix && b.startsWith(c.prefix)) b = b.slice(c.prefix.length); if (c.suffix && b.endsWith(c.suffix)) b = b.slice(0, -c.suffix.length); return c.types.slice().reverse().reduce((acc, x) => decodeStep(c, x, acc), decodeCarry(b)); }
+  const back = Object.fromEntries(Object.entries(c.examples || {}).map(([k, v]) => [v, k]));
+  let out = stripMarks(c, s).split(/(\s+)/).map(w => back[w] || c.types.slice().reverse().reduce((acc, x) => decodeStep(c, x, acc), w)).join('');
+  if (c.chop) out = c.chop === 'before' ? out.replace(/\b(\d)([a-z]+)/gi, '$2…') : out.replace(/([a-z]+)(\d)\b/gi, '$1…');
+  return c.types.includes('morse') ? c.types.slice().reverse().reduce((acc, x) => decodeStep(c, x, acc), stripMarks(c, s)) : out;
+}
 // does this message look like it's written in our language?
 function looksCoded(c, s) {
   if (s.length < 2) return false;
   if (c.prefix && !s.trim().startsWith(c.prefix)) return false;
+  if (c.chop === 'carry') return /\d\d/.test(s) && !/\s/.test(s.trim());
   s = stripMarks(c, s);
+  if (c.examples && Object.values(c.examples).some(v => s.split(/\s+/).includes(v))) return true;
+  if (!c.types.length) return c.chop ? /[a-z]+\d|\d[a-z]+/i.test(s) : !!c.prefix;
   const last = c.types[c.types.length - 1];
   if (last === 'morse') return /^[.\-\s/]+$/.test(s);
   if (last === 'numbers') return /^[\d\s\-.,!?]+$/.test(s) && /\d+-\d+/.test(s);
@@ -882,7 +934,13 @@ function looksCoded(c, s) {
 function codeKey(c) {
   const lines = [];
   if (c.prefix) lines.push(`Every message starts with ${c.prefix}`);
+  if (c.noise === 'letters') lines.push('Random junk letters at the start and end, to confuse spies');
+  else if (c.noise) lines.push(`Then a few random junk characters (like ${NOISE.slice(0, 4).join(' ')}) to confuse spies`);
+  if (c.chop === 'carry') lines.push('Each word is split in two: the first part, how many letters it has, how many are left, then the rest (chatting → chat44ting). No spaces between words');
+  else if (c.chop) lines.push(`Each word is cut short (well → w, we or wel), and the number of letters goes ${c.chop === 'before' ? 'in front (2we)' : 'after it (we2)'}`);
   if (c.suffix) lines.push(`Every message ends with ${c.suffix}`);
+  const ex = Object.entries(c.examples || {}); if (ex.length) lines.push('Words you showed me:\n' + ex.map(([k, v]) => `${k} = ${v}`).join('\n'));
+  if ((c.rulebook || []).length) lines.push('📝 Your rules, in your words:\n' + c.rulebook.map((r, i) => `${i + 1}. ${r}`).join('\n'));
   c.types.forEach(x => {
     if (c.maps[x] && x !== 'vowel') { const e = Object.entries(c.maps[x]); for (let i = 0; i < 26; i += 7) lines.push(e.slice(i, i + 7).map(([k, v]) => `${k} = ${v}`).join('   ')); }
     else if (x === 'vowel') lines.push('a → e, e → i, i → o, o → u, u → a (other letters stay the same)');
@@ -913,94 +971,253 @@ function parseCodeRules(text) {
   const pre = grab([new RegExp('\\b(?:starts?|begins?|beginning) with (?:an? |the )?(?:number |letter |symbol )?' + tk, 'i'), new RegExp('\\b(?:at|in) the (?:start|beginning|front)\\b[^.]*?\\b(?:is|put|add|have|goes|comes|write|there\'?s|there is)\\s+(?:an? |the )?(?:number |letter |symbol )?' + tk, 'i'), new RegExp('\\bput (?:an? |the )?' + tk + ' (?:at|in) the (?:start|beginning|front)', 'i')]);
   const suf = grab([new RegExp('\\bends? with (?:an? |the )?(?:number |letter |symbol )?' + tk, 'i'), new RegExp('\\bat the end\\b[^.]*?\\b(?:is|put|add|have|goes|comes|write|there\'?s|there is)\\s+(?:an? |the )?(?:number |letter |symbol )?' + tk, 'i'), new RegExp('\\bput (?:an? |the )?' + tk + ' at the end', 'i')]);
   let rest = text; if (pre) rest = rest.replace(pre[0], ' '); if (suf) rest = rest.replace(suf[0], ' ');
-  const types = pickCodeTypes(rest.toLowerCase().replace(/\b\d+\b/g, ' '));
-  return { prefix: pre && pre[1], suffix: suf && suf[1], types: Array.isArray(types) ? types.filter(x => x !== 'mix') : [] };
+  const lo = rest.toLowerCase();
+  // "random characters" could mean junk to confuse people, or letters turning into symbols: I'll ask
+  const randomBit = /\brandom (characters?|letters?|symbols?|stuff|junk|things)\b/.test(lo) && !/\b(each|every) letter\b|\bletters? (become|turn|change|is|are)\b/.test(lo);
+  const chop = /\b(portion|part of (it|the word|a word|each word)|piece of|some of the letters|first (few |couple )?letters|shorten|cut (it|the word|off)|only (part|some))\b|"\w" or "\w\w"/.test(lo) && /\b(number|how many|\d|one|two|three)\b/.test(lo);
+  const types = pickCodeTypes((randomBit || chop ? lo.replace(/\brandom (characters?|letters?|symbols?|stuff|junk|things)\b/g, ' ').replace(/\bletters?\b/g, ' ') : lo).replace(/\b\d+\b/g, ' '));
+  return { prefix: pre && pre[1], suffix: suf && suf[1], randomBit, chop, types: Array.isArray(types) ? types.filter(x => x !== 'mix') : [] };
 }
 function draftText(d) {
   const r = [];
   if (d.prefix) r.push(`Every message starts with ${d.prefix}`);
+  if (d.noise) r.push(d.chop === 'carry' ? 'Random junk letters at the start and end, to confuse people' : 'Then some random junk characters to confuse people');
+  if (d.chop === 'carry') r.push('Each word is split in two: the first part, how many letters it has, how many letters are left, then the rest (chatting → chat44ting). Words are glued together, no spaces');
+  else if (d.chop) r.push(`Each word is cut short, with the number of letters ${d.chop === 'before' ? 'in front (well → 2we)' : d.chop === 'after' ? 'after it (well → we2)' : '(before or after? not sure yet)'}`);
   d.types.forEach(x => r.push(CODE_IDEAS.find(i => i[0] === x)[1]));
   if (d.suffix) r.push(`Every message ends with ${d.suffix}`);
-  return r.map((x, i) => `${i + 1}. ${x}`).join('\n');
+  if (d.learned) r.push(`Your example: "${d.learned.plain}" = ${d.learned.coded}`);
+  Object.entries(d.examples || {}).forEach(([k, v]) => r.push(`"${k}" is written ${v}`));
+  return r.map(x => '• ' + x).join('\n');
 }
 function startCode(types, extra) {
   codePick = false; mem.codeDraft = null;
-  const c = newCode(types); Object.assign(c, extra || {}); mem.code = c; mem.codeOn = true; save(); noteTopic('secret code');
+  const c = newCode(types); Object.assign(c, extra || {}); if (!c.name) c.name = 'Our own language'; mem.code = c; mem.codeOn = true; save(); noteTopic('secret code');
   const ex = 'Meet me at the treehouse';
-  return { text: `Done! 🤫 I made our secret language: ${c.name}.\n\n${codeKey(c)}\n\nExample: "${ex}" → ${encodeCode(c, ex)}\n\n${codeHelp()}`, kind: 'code' };
+  const praise = mem.codeBuilt ? say('codePraise', ['You invented a whole language, that\'s seriously smart! 🧠✨', 'This is genius. Nobody\'s cracking this one! 🔐', 'Wow, you\'re a real code master! 😎']) + '\n\n' : '';
+  mem.codeBuilt = false;
+  return { text: `${praise}Done! 🤫 I made our secret language: ${c.name}.\n\n${codeKey(c)}\n\nExample: "${ex}" → ${encodeCode(c, ex)}\n\n${codeHelp()}`, kind: 'code' };
+}
+// "seceret lenguage", "secet languge" -> "secret language"
+const codeNorm = t => t.toLowerCase().replace(/[a-z]+/g, w => w === 'cod' ? 'code' : w.length >= 4 && w !== 'secret' && (close(w, 'secret') || /^s[aei]?c+[aei]*r+[aei]*t+$/.test(w)) ? 'secret' : w.length >= 6 && w !== 'language' && (close(w, 'language') || /^l[ae]ng/.test(w) && /g[ue]?e?$/.test(w)) ? 'language' : w);
+const aboutCodeRe = /\bsecret (language|code)|\bcode language\b|\bour (language|code)\b/;
+// they want to explain their OWN idea: stop showing lists and just listen
+const OWN_IDEA = /step by step|one (rule |step |part )?at a time|(i have|i got|i'?ve got|here'?s) (a |an |my )?(better |cool |good |great |different )?idea|\bmy ?(own ?)?ideas?\b|\bownidea|let me (explain|tell you|show you)|i'?ll explain|\blisten\b|make (up )?my own|my own (language|rules|way)|\bcustom\b|(don'?t|do not|dont) (want|like) (to do |to use )?(any|those|them|that|these|your)|none of (them|those|these)|forget (about )?(that|the|those|your) (list|ideas|ones)|not (those|them|that list|from the list)|\bno list\b|stop (showing|giving) (me )?(the |that )?list/;
+function startBuilder(text) {
+  codePick = false; mem.codeDraft = { types: [], prefix: '', suffix: '', notes: [], examples: {} }; save();
+  // "i have a better idea. let's do it step by step" isn't a rule yet; only a real explanation is
+  const rest = text.replace(new RegExp(OWN_IDEA.source, 'g'), ' ').replace(/\b(lets|let'?s|do it|so|ok(ay)?|and|but|i|a|an|have|better|idea|explain|me|now|first)\b/gi, ' ').replace(/[\s,.!-]+/g, ' ').trim();
+  const pr = parseCodeRules(rest);
+  if (pr.prefix || pr.suffix || pr.chop || pr.types.length || pr.randomBit || rest.split(/\s+/).length >= 10) return builderTurn(text);
+  return { text: say('builderStart', ['I\'m listening! 👂 Explain your idea however you want, one part at a time. I\'ll write down every rule exactly how you say it. Say "done" when you\'ve explained everything.', 'Yes! Your language, your rules 🛠️ Tell me how it works, one part at a time, and I\'ll write it all down. Say "done" when you\'re finished.']), kind: 'code' };
+}
+// "chatting" -> "chat44ting": first part, how many letters in it, how many are left, then the rest (words glued together)
+function decodeCarry(s) {
+  const words = []; const re = /(\d)(\d)/g; let m;
+  while ((m = re.exec(s))) {
+    const a = +m[1], b = +m[2]; if (!a || m.index < a) continue;
+    words.push(s.slice(m.index - a, m.index) + s.slice(m.index + 2, m.index + 2 + b));
+    re.lastIndex = m.index + 2 + b;
+  }
+  return words.join(' ');
+}
+const plainWords = x => x.toLowerCase().replace(/["“”]/g, '').trim().split(/\s+/).join(' ');
+// try to work out HOW their example was made, by checking which way of reading it gives back their words
+function learnFromExample(d, plain, coded) {
+  plain = plain.replace(/^["“]|["”]$/g, '').trim(); coded = coded.replace(/^["“]|["”]$/g, '').trim();
+  let body = coded;
+  const mark = d.prefix || (/^\d/.test(coded) && !/^\d\d/.test(coded) ? coded[0] : '');
+  if (mark && body.startsWith(mark)) { body = body.slice(mark.length); d.prefix = mark; }
+  if (mark && body.endsWith(mark)) { body = body.slice(0, -mark.length); d.suffix = mark; }
+  const carry = decodeCarry(body);
+  if (carry && plainWords(carry) === plainWords(plain)) {
+    d.chop = 'carry'; d.ask = null; d.asks = (d.asks || []).filter(x => x !== 'chop' && x !== 'random');
+    const first = body.search(/[a-z!?.,']*\d\d/i);
+    const firstWordStart = body.match(/(\d)\d/) ? body.match(/(\d)\d/).index - Number(body.match(/(\d)\d/)[1]) : 0;
+    if (firstWordStart > 0 || first > 0) d.noise = 'letters';
+    d.learned = { plain, coded }; save();
+    return true;
+  }
+  d.examples[plain.toLowerCase()] = coded; save();
+  return false;
+}
+function carryExplain(d) {
+  const ex = d.learned; if (!ex) return '';
+  let body = ex.coded; if (d.prefix && body.startsWith(d.prefix)) body = body.slice(d.prefix.length); if (d.suffix && body.endsWith(d.suffix)) body = body.slice(0, -d.suffix.length);
+  const parts = []; const re = /(\d)(\d)/g; let m;
+  while ((m = re.exec(body)) && parts.length < 4) { const a = +m[1], b = +m[2]; const A = body.slice(m.index - a, m.index), B = body.slice(m.index + 2, m.index + 2 + b); parts.push(`${A}${a}${b}${B} = ${A}+${B} = "${A}${B}"`); re.lastIndex = m.index + 2 + b; }
+  return parts.join('\n');
+}
+// pull "plain = coded" (either way round) out of a message
+function findExample(text) {
+  const t = text.trim().replace(/^(an? )?example( is|:)?\s*/i, '').replace(/^(see if you can )?(translate|decode|read)( this)?:?\s*/i, '');
+  const looksCode = x => /\d/.test(x) && !/\s/.test(x.trim());
+  let m = t.match(/^["“]?(\S+?)["”]?\s+(?:that |which |it )?(?:means|=|is)\s+["“]?(.+?)["”]?[.!]?$/i);
+  if (m && looksCode(m[1]) && !looksCode(m[2])) return { coded: m[1], plain: m[2] };
+  m = t.match(/^["“]?(.+?)["”]?\s*(?:=|is written|would be|becomes|turns into|in my language is|→|->)\s*["“]?(\S+?)["”]?[.!]?$/i);
+  if (m && looksCode(m[2]) && !looksCode(m[1])) return { coded: m[2], plain: m[1] };
+  return null;
+}
+function builderTurn(text) {
+  const d = mem.codeDraft; d.notes = d.notes || []; d.examples = d.examples || {};
+  const t = codeNorm(correctText(text)).replace(/[!.?]+$/, '').trim();
+  d.asks = d.asks || [];
+  if (!d.ask && d.asks.length) d.ask = d.asks.shift();
+  // an example (or their answer to the sentence I gave them): figure out how it works
+  const ex = findExample(text) || (d.waitExample && /\d/.test(text) && !/\s/.test(text.trim()) ? { plain: d.waitExample, coded: text.trim() } : null);
+  if (ex) {
+    d.waitExample = null;
+    if (learnFromExample(d, ex.plain, ex.coded)) {
+      return builderNext(d, `I cracked it! 🤯 That's SO clever. Here's how I read "${ex.plain}":\n${carryExplain(d)}\n\nSo each word gets split in two: the first part, how many letters are in it, how many letters are left, then the rest. ${d.noise ? 'The other letters are just junk to confuse spies. ' : ''}${d.prefix ? `And it starts${d.suffix ? ' and ends' : ''} with ${d.prefix}.` : ''}`);
+    }
+    return builderNext(d, `Saved your example! 📖 "${ex.plain}" = ${ex.coded}\nI couldn't work out the pattern from it yet. Can you explain how one word works, step by step?`);
+  }
+  // "give me a sentence and i'll show you"
+  if (/\b(give|tell) me (a|an|some) (sentence|word|phrase|message)\b/.test(t)) {
+    d.waitExample = pick(['I love pizza', 'meet me at the park', 'my dog is funny', 'see you after school']); save();
+    return { text: `Okay! Turn this into your language: "${d.waitExample}" ✍️`, kind: 'code' };
+  }
+  // they want me to try reading something
+  const tryRead = text.match(/(?:translate|decode|read|figure out|what does)\s*(?:this)?:?\s*["“]?(\S*\d\S*)["”]?/i);
+  if (tryRead) {
+    let body = tryRead[1]; if (d.prefix && body.startsWith(d.prefix)) body = body.slice(d.prefix.length); if (d.prefix && body.endsWith(d.prefix)) body = body.slice(0, -d.prefix.length);
+    const guess = decodeCarry(body);
+    if (guess) { d.waitConfirm = { coded: tryRead[1], plain: guess }; save(); return { text: `Let me try! 🤔 I think it says: "${guess}"\n\nDid I get it right?`, kind: 'code' }; }
+    return { text: 'Hmm, I can\'t read it yet 😅 Can you show me one with its meaning? Like: hello = ___', kind: 'code' };
+  }
+  if (d.waitConfirm) {
+    const w = d.waitConfirm; d.waitConfirm = null;
+    if (/^(yes|yeah|yep|yup|correct|right|you got it|that'?s right|ya|perfect|exactly)\b/.test(t)) { learnFromExample(d, w.plain, w.coded); return builderNext(d, `Yay! 🎉 I read it right! Your language is so cool, I get it now:\n${carryExplain(d)}`); }
+    if (/^(no|nope|nah|wrong|not quite)\b/.test(t)) return { text: 'Oops, sorry! 😅 What does it really say? Tell me like: "that means ___"', kind: 'code' };
+  }
+  // not a rule: they're telling me to stop showing lists, or starting over
+  if (OWN_IDEA.test(t) || /\b(make|start|do)\b.*\bsecret language\b|\bforget\b|\b(don'?t|do not|dont) want\b/.test(t))
+    return builderNext(d, say('builderMeta', ['No lists, promise! 🙌 I\'m all ears.', 'Totally, we\'re doing YOUR idea. 💡 I\'m listening!', 'Yep, just your idea! 👂']));
+  // answers to my questions (and if they kept going after the answer, read the rest too)
+  const lead = [];
+  let rest = text;
+  if (d.ask === 'chop') {
+    const pos = /^\W*(after|at the end|behind|we2)\b/.test(t) || /\b(after|we2)\b/.test(t.split(/[.!,]/)[0]) ? 'after' : /^\W*(before|in front|front|first|2we)\b/.test(t) || /\b(before|in front|2we)\b/.test(t.split(/[.!,]/)[0]) ? 'before' : null;
+    if (pos) { d.chop = pos; d.ask = null; lead.push(`Perfect! The number goes ${pos === 'after' ? 'after the letters (well → we2)' : 'in front (well → 2we)'}. ✏️`); rest = text.replace(/^[^.!,]*[.!,]?\s*/, ''); }
+  }
+  if (d.ask === 'random') {
+    if (/\b(junk|extra|fake|confus|decoy|noise|filler|nonsense|not real|not part|mess|trick|nothing|don'?t mean)/.test(t)) { d.noise = d.noise || true; d.ask = null; lead.push('Ooh, junk characters to throw people off! That\'s so sneaky and smart 😎'); }
+    else if (/\b(symbol|each letter|every letter|turn into|become|replace|swap|instead of)/.test(t)) { if (!d.types.includes('symbol')) d.types.push('symbol'); d.ask = null; lead.push('Got it: every letter turns into a symbol. ✏️'); }
+  }
+  // "they are junk", even if I didn't ask yet
+  if (!lead.length && /\b(junk|decoy|to confuse|to trick|fake (letters|characters)|not part of the message)\b/.test(t) && !d.noise) { d.noise = true; d.asks = d.asks.filter(x => x !== 'random'); if (d.ask === 'random') d.ask = null; lead.push('Ooh, junk characters to throw people off! That\'s so sneaky and smart 😎'); }
+  // "the missing letters go in the next word": the cut-off part comes next, with how many letters it has
+  if (/\b(missing|left ?over|leftover|cut off|rest of the|remaining|other) (letters|part)\b/.test(t) && /\b(next|after|then|start of|goes?|put)\b/.test(t)) {
+    d.chop = 'carry'; d.ask = null; d.asks = d.asks.filter(x => x !== 'chop');
+    lead.push('Ooh, so the letters you cut off come right after, with a number for how many there are! That\'s really clever 🧠');
+  }
+  const inner = text.match(/["“]([a-z][a-z !?',]*?)["”]\s*(?:is|=|would be|becomes|looks like)\s*["“]?(\S*\d\S*?)["”]?[.!]?(?:\s|$)/i);
+  if (inner && learnFromExample(d, inner[1], inner[2])) { d.notes.push(text); save(); lead.push(`And I checked your example: "${inner[1]}" = ${inner[2]}. It works! 🤯\n${carryExplain(d)}`); return builderNext(d, lead.join('\n')); }
+  if (lead.length && rest.trim().split(/\s+/).length < 4) { save(); return builderNext(d, lead.join('\n')); }
+  const r = parseCodeRules(rest);
+  if (got0(r) || rest.split(/\s+/).length >= 6) d.notes.push(text);
+  if (r.prefix && !d.prefix) d.prefix = r.prefix; if (r.suffix) d.suffix = r.suffix;
+  const queue = q => { if (d.ask !== q && !d.asks.includes(q)) { if (d.ask) d.asks.push(q); else d.ask = q; } };
+  if (r.chop && !d.chop) { d.chop = true; queue('chop'); }
+  r.types.forEach(x => { if (!d.types.includes(x)) d.types.push(x); });
+  if (r.randomBit && !d.noise && !d.types.includes('symbol')) queue('random');
+  save();
+  if (lead.length) return builderNext(d, lead.join('\n'));
+  const got = r.prefix || r.suffix || r.chop || r.types.length || r.randomBit;
+  return builderNext(d, got ? say('builderGot', ['Ooh, that\'s really clever! 🧠 I wrote it down.', 'Wow, smart idea! 💡 Got it written down.', 'That\'s genius, nobody will crack this! 📝 Got it.', 'I love that rule! You\'re really good at this 😄 Written down.'])
+    : say('builderUnsure', ['Ooh, I like it! 📝 I wrote it down. To get it exactly right, can you show me an example? Like: hello = ___', 'Cool idea! 📝 Written down. Can you show me an example, so I get it right? Like: hello = ___']));
+}
+const got0 = r => r.prefix || r.suffix || r.chop || r.types.length || r.randomBit;
+function builderNext(d, lead) {
+  d.asks = d.asks || [];
+  if (!d.ask && d.asks.length) { d.ask = d.asks.shift(); save(); }
+  const q = d.ask === 'chop' ? 'Question: does the number go after the letters (well → we2) or in front (well → 2we)?'
+    : d.ask === 'random' ? 'Question: what are the random characters? Are they extra junk to confuse people, or does every letter turn into a symbol?'
+    : 'What\'s next? Explain more, show me an example (like "hello = ___"), or say "done" to make it.';
+  const sum = draftText(d);
+  return { text: `${lead}${sum ? `\n\nHere's what I understood so far:\n${sum}` : ''}\n\n${q}`, kind: 'code' };
+}
+function finishBuilder(d) {
+  if (d.chop === true) d.chop = 'after';
+  const can = d.types.length || d.chop || d.noise || d.prefix || d.suffix || Object.keys(d.examples || {}).length;
+  if (!can) return { text: 'I wrote down your rules, but I need a bit more to make it work 🤔 Can you show me an example? Like: hello = ___', kind: 'code' };
+  const sample = newCode(d.types);
+  const name = d.types.length || d.chop || d.noise ? 'Our own language' : sample.name;
+  mem.codeBuilt = true;
+  return startCode(d.types, { name, prefix: d.prefix || '', suffix: d.suffix || '', noise: d.noise === 'letters' ? 'letters' : !!d.noise, chop: d.chop || null, examples: d.examples || {}, rulebook: d.notes || [], maps: Object.assign(sample.maps, d.maps || {}) });
 }
 function codeSkills(text, t) {
   const c = mem.code;
-  // "seceret languge" -> "secret language"
-  t = t.replace(/\bs[aei]?c+[aei]*r+[aei]*t+\b/g, 'secret').replace(/\bl[ae]n?g?u?a?u?g?u?a?g?e?s?\b/g, w => w.length >= 6 && /^lan/.test(w) ? 'language' : w).replace(/\bcod\b/g, 'code');
+  t = codeNorm(t);
   const tt = t.replace(/[!.?]+$/, '').trim();
-  const aboutCode = /\bsecret (language|code)|\bcode language\b|\bour (language|code)\b/.test(t);
-  // building one rule at a time
+  const aboutCode = aboutCodeRe.test(t);
+  const inCode = codePick || ctx.kind === 'code' || !!mem.codeDraft;
+  // "stop ignoring me", "you're not listening": say sorry and actually listen
+  if ((inCode || aboutCode) && /\b(ignor(e|ing) me|not listening|never listen|you don'?t listen|meanie|you changed it|not what i (meant|said|wanted)|that'?s not (it|my idea|what i))\b/.test(t)) {
+    const keep = mem.codeDraft;
+    if (!keep) startBuilder('');
+    return { text: say('codeSorry', ['I\'m really sorry! 🙏 You\'re right, I didn\'t listen, and your idea is way better than mine anyway. Tell me how it works, one part at a time, and I\'ll write it down exactly how you say it.', 'You\'re right, I\'m so sorry 🙏 That was my fault, not yours. Your idea sounds really smart, so let\'s do it your way. Explain it and I\'ll just listen, no lists.']) + (keep && draftText(keep) ? `\n\nHere's what I have so far:\n${draftText(keep)}` : ''), kind: 'code' };
+  }
+  // building their own language
   const d = mem.codeDraft;
   if (d) {
-    if (/^(cancel|never ?mind|forget it|stop)\b/.test(tt)) { mem.codeDraft = null; save(); return { text: 'Okay, scrapped it! Say "make a secret language" whenever you want to try again.' }; }
-    if (/^(done|that'?s it|that'?s all|finished|i'?m done|ok(ay)? done|make it|that'?s everything|nothing else|no more( rules)?|no)$/.test(tt)) {
-      if (!d.types.length) return { text: 'Almost! What happens to the letters or words in between? Like "each letter becomes a symbol", "backwards words", or "a = 1, b = 2". 🤔', kind: 'code' };
-      return startCode(d.types, { prefix: d.prefix || '', suffix: d.suffix || '', maps: Object.assign(newCode(d.types).maps, d.maps || {}) });
-    }
-    const r = parseCodeRules(text);
-    if (r.prefix || r.suffix || r.types.length) {
-      if (r.prefix) d.prefix = r.prefix; if (r.suffix) d.suffix = r.suffix;
-      r.types.forEach(x => { if (!d.types.includes(x)) d.types.push(x); });
-      save();
-      const sample = d.types.length ? newCode(d.types) : { types: [], maps: {}, words: {} };
-      d.maps = Object.assign(sample.maps, d.maps || {}); sample.maps = d.maps;
-      Object.assign(sample, { prefix: d.prefix || '', suffix: d.suffix || '' });
-      return { text: `Got it! ✏️ Our rules so far:\n${draftText(d)}\n\n"Hi there" would look like: ${encodeCode(sample, 'Hi there')}\n\nWhat's the next rule? Or say "done" to make it.`, kind: 'code' };
-    }
-    if (/\b(letter|word|start|end|sentence|symbol|character|number|backwards?|rule)\b/.test(t))
-      return { text: 'Hmm, I didn\'t quite get that rule 😅 Try it like: "each letter becomes a symbol", "put a 0 at the start", or "spell words backwards".', kind: 'code' };
+    if (/^(cancel|never ?mind|forget it|stop|quit)\b/.test(tt)) { mem.codeDraft = null; save(); return { text: 'Okay, scrapped it! Say "make a secret language" whenever you want to try again.' }; }
+    if (/^(done|that'?s it|that'?s all|finished|i'?m done|ok(ay)? done|make it|that'?s everything|nothing else|no more( rules)?)$/.test(tt)) return finishBuilder(d);
+    if (/^(undo|take that back|delete (the )?last( one| rule)?|remove (the )?last( one| rule)?|scratch that)$/.test(tt)) { d.notes.pop(); save(); return builderNext(d, 'Okay, I took the last rule back. ↩️'); }
+    if (/^(show|what are|read|tell me)( me)? (the |my |our )?(rules|notes|idea)/.test(tt)) return builderNext(d, `📝 Your rules so far:\n${(d.notes || []).map((r, i) => `${i + 1}. ${r}`).join('\n') || '(none yet)'}`);
+    if (/^(no+|nope|nah)$/.test(tt) && !d.ask) return finishBuilder(d);
+    if (d.waitConfirm || !/^(hi|hey|hello|yo|ok|okay|k|cool|yes|yeah|wait|hmm+|um+)$/.test(tt)) return builderTurn(text);
   }
-  // their own design, step by step
-  if ((codePick || ctx.kind === 'code' || aboutCode) && /step by step|one (rule |step )?at a time|i have an idea|my (own )?idea|i'?ll (make|do|tell you) (the rules|it)|make (up )?my own|my own (language|rules)|custom/.test(t)) {
-    codePick = false; mem.codeDraft = { types: [], prefix: '', suffix: '' };
-    const r = parseCodeRules(text); if (r.prefix || r.suffix || r.types.length) return codeSkills(text, text.toLowerCase());
-    save();
-    return { text: 'Yes! Let\'s build it your way 🛠️ Tell me the rules one at a time, like:\n• "at the start there is a 0"\n• "each letter becomes a random symbol"\n• "spell every word backwards"\n\nWhat\'s rule 1?', kind: 'code' };
-  }
+  if ((inCode || aboutCode) && (OWN_IDEA.test(t) || OWN_IDEA.test(correctText(t)))) return startBuilder(text);
   // "let's continue with the secret language"
-  if (aboutCode && /\b(continue|keep going|go back|back to|resume|pick up|finish|where were we|still)\b/.test(t)) {
+  const makeVerb = /\b(make|create|invent|build|design|start|new|another|different)\b/.test(t) && !/\b(were|was) making\b|\bmade\b/.test(t);
+  if (aboutCode && (/\b(continue|keep going|go back|back to|resume|pick up|finish|where were we|still|remember|were making|we made|did we|that)\b/.test(t) || (!makeVerb && t.split(/\s+/).length <= 6 && !/\b(translate|decode|show|key|stop|talk|name|use)\b/.test(t)))) {
     if (c) { mem.codeOn = true; save(); return { text: `🤫 We're back! Our language is ${c.name}.\n\n${codeKey(c)}\n\n${codeHelp()}`, kind: 'code' }; }
     // we didn't finish: find their idea in what they said before
-    const ideas = userMsgs().slice(-30).map(m => [m.text, parseCodeRules(m.text)]).filter(([, r]) => r.prefix || r.suffix || r.types.length);
+    const ideas = userMsgs().slice(-30).map(m => [m.text, parseCodeRules(m.text)]).filter(([, r]) => r.prefix || r.suffix || r.types.length || r.chop);
     if (ideas.length) {
-      const draft = { types: [], prefix: '', suffix: '' };
-      ideas.forEach(([, r]) => { if (r.prefix) draft.prefix = r.prefix; if (r.suffix) draft.suffix = r.suffix; r.types.forEach(x => { if (!draft.types.includes(x)) draft.types.push(x); }); });
-      mem.codeDraft = draft; save();
-      return { text: `Yes! We didn't finish it. Here are the rules you came up with:\n${draftText(draft)}\n\nWhat's the next rule? Or say "done" to make it.`, kind: 'code' };
+      startBuilder('');
+      ideas.forEach(([m]) => builderTurn(m));
+      return builderNext(mem.codeDraft, 'Yes! We didn\'t finish it. I found the rules you told me before. 📝');
     }
+    codePick = true;
+    return { text: `Hmm, I don't think we finished one yet 🤔 Let's make it now! Do you have your own idea? Just explain it and I'll write it down. Or pick one of mine:\n${CODE_IDEAS.slice(0, 6).map((x, i) => `${i + 1}. ${x[1]}`).join('\n')}`, kind: 'code' };
   }
-  const wantNew = /\b(make|create|invent|start|build|design|come up with|want|have|do|need)\b.*\b(secret|own|new|made[- ]?up|private|special|code) (language|code|alphabet)|\b(secret|code) (language|alphabet)\b|\bsecret code\b|\bcipher\b/.test(t) && !/\b(show|translate|decode|read|use|talk|key)\b/.test(t);
-  if (wantNew && (!c || /\b(new|another|different|change)\b/.test(t) || !mem.codeOn)) {
-    if (c && !/\b(new|another|different|change|make|create|invent)\b/.test(t)) { mem.codeOn = true; save(); return { text: `We already have one: ${c.name}! 🤫\n\n${codeHelp()}\n\n(Or say "make a new secret language".)`, kind: 'code' }; }
+  // "do you know what a cipher is?": explain it, then invite them to make one
+  if (/\b(what is|what'?s|whats|what are|do you know what|explain|define|what does)\b.*\b(cipher|secret code|code language|secret language|codes)\b/.test(t) && !/\b(our|my|this|it say|mean)\b/.test(t)) {
+    codePick = true;
+    return { text: (/do you know/.test(t) ? 'Yes! ' : '') + '🔐 A cipher (or secret code) is a way of writing a message so only people who know the rules can read it. Like if every letter moves forward one: "hi" becomes "ij".\n\nSpies, armies, and kids passing notes have used them for thousands of years!\n\nWant to make one together? You can invent your own rules (I bet you\'d come up with a really clever one 🧠), or I can show you some ideas.', kind: 'code' };
+  }
+  const wantNew = /^(lets |let'?s |can we |can you |please |i want to |we should )?(make|create|invent|build|design) (a|an|our|my|a new|a secret) (code|cipher)\b|\b(make|create|invent|start|build|design|come up with|want|have|do|need)\b.*\b(secret|own|new|made[- ]?up|private|special|code) (language|code|alphabet)|\b(secret|code) (language|alphabet)\b|\bsecret code\b|\bcipher\b/.test(t) && !/\b(show|translate|decode|read|use|talk|key)\b/.test(t);
+  if (wantNew && (!c || makeVerb || !mem.codeOn)) {
+    if (c && !makeVerb) { mem.codeOn = true; save(); return { text: `We already have one: ${c.name}! 🤫\n\n${codeHelp()}\n\n(Or say "make a new secret language".)`, kind: 'code' }; }
     codePick = true;
     const want = pickCodeTypes(t.replace(/secret (language|code)|code language/g, ''));
     if (Array.isArray(want)) return startCode(want);
     const top = CODE_IDEAS.slice(0, 6).map((x, i) => `${i + 1}. ${x[1]}`).join('\n');
-    return { text: `Ooh, a secret language! 🤫 Here are some ways we could do it:\n${top}\n\nPick a number, tell me your own idea, or say "more ideas".`, kind: 'code' };
+    return { text: `Ooh, a secret language! 🤫 Do you have your own idea? Just explain it, and I'll write down your rules.\n\nOr pick one of mine:\n${top}\n\n(Say "more ideas" for more.)`, kind: 'code' };
   }
   // they asked for ideas (any number of them)
-  if ((codePick || ctx.kind === 'code') && /\b(ideas?|ways|options|examples|more|list)\b/.test(t) && !/translate|decode/.test(t)) {
+  if (inCode && /\b(more ideas|ideas|options|examples|\d+ (ideas|ways))\b|^more$/.test(tt) && !/translate|decode|\b(forget|don'?t|not|no|stop)\b/.test(t)) {
     const nm = t.match(/\b(\d{1,2})\b/); const n = Math.min(nm ? Number(nm[1]) : 20, CODE_IDEAS.length);
     codePick = true;
     const extra = nm && Number(nm[1]) > CODE_IDEAS.length ? ` (that's all ${CODE_IDEAS.length} I've got!)` : '';
-    return { text: `Here you go${extra}! ⭐ = I can do it with you right here.\n` + CODE_IDEAS.slice(0, n).map((x, i) => `${i + 1}. ${x[0] ? '⭐ ' : ''}${x[1]}`).join('\n') + '\n\nWhich one? Pick a number, or say two to mix them (like "6 and 3").', kind: 'code' };
+    return { text: `Here you go${extra}! ⭐ = I can do it with you right here.\n` + CODE_IDEAS.slice(0, n).map((x, i) => `${i + 1}. ${x[0] ? '⭐ ' : ''}${x[1]}`).join('\n') + '\n\nPick a number, mix two (like "6 and 3"), or explain your own idea.', kind: 'code' };
   }
+  if (codePick && /^(yes|yeah|yep|yea|ya|sure|ok|okay|y|yes please|ok sure|let'?s do it|let'?s go)$/.test(tt))
+    return { text: `Yay! 🤫 Do you have your own idea? Just explain it, and I'll write down your rules.\n\nOr pick one of mine:\n${CODE_IDEAS.slice(0, 6).map((x, i) => `${i + 1}. ${x[1]}`).join('\n')}\n\n(Say "more ideas" for more.)`, kind: 'code' };
   if (codePick && /^(one of (them|those|these)|any of (them|those)|(the )?(good|cool|best) ones?|hmm+|idk which|not sure)$/.test(tt))
-    return { text: 'Which one? 🤔 Say its number (like "1" or "7"), mix two ("6 and 3"), or say "you pick". You can also make up your own: say "I have an idea".', kind: 'code' };
+    return { text: 'Which one? 🤔 Say its number (like "1" or "7"), mix two ("6 and 3"), or say "you pick". Or explain your own idea and I\'ll write it down.', kind: 'code' };
   if (codePick) {
+    // a long message is them explaining their own idea, not picking from my list
+    if (tt.split(/\s+/).length > 10 || /\b(start|end|sentence|portion|if there)\b/.test(tt)) return startBuilder(text);
     const nums = (tt.match(/\b\d{1,2}\b/g) || []).map(Number).filter(n => n >= 1 && n <= CODE_IDEAS.length);
     let types = nums.length >= 2 && /\b(and|\+|mix|with|plus|&)\b|\+|&/.test(tt) ? nums.map(n => CODE_IDEAS[n - 1][0]).filter(x => x && x !== 'mix') : null;
     if (!types) types = pickCodeTypes(tt);
     if (typeof types === 'string') return { text: `${types.slice(6).split(':')[0]} is a great one, but it works on paper or in person, so I can't do it here. 😅 Want to pick one with a ⭐ so I can help?`, kind: 'code' };
     if (types && types.includes('mix')) return { text: 'Mixing is the hardest to crack! 🔐 Which two? Like "backwards words and letter shift", or "6 and 3".', kind: 'code' };
     if (types && types.length) return startCode(types);
-    if (/\b(you (pick|choose)|surprise me|any|idk|i don'?t know|whatever|random)\b/.test(tt)) return startCode([pick(['symbol', 'emoji', 'shift', 'words', 'pig'])]);
+    if (/\b(you (pick|choose)|surprise me|idk|i don'?t know|whatever|random)\b/.test(tt) && !/\b(not|don'?t|no)\b/.test(tt)) return startCode([pick(['symbol', 'emoji', 'shift', 'words', 'pig'])]);
   }
   if (!c) return null;
   // turning it on and off
@@ -1033,7 +1250,9 @@ function codeSkills(text, t) {
   const tr = text.match(/^(?:can you |please |how (?:do|would) (?:you|i|we) )?(?:translate|encode|code|say|write|turn|put|type|convert)\s+(?:this:?\s*)?["“]?(.+?)["”]?(?:\s+(?:in|into|to|using)\s+(?:code|secret|our (?:secret )?(?:language|code)|the (?:secret )?(?:language|code)|it|secret language|our language|[a-z ]+ language))?\??$/i);
   const dec = text.match(/^(?:can you |please )?(?:decode|decrypt|unscramble|read|translate back|what does|what'?s)\s+(?:this:?\s*)?["“]?(.+?)["”]?(?:\s+mean)?\??$/i);
   if (dec && looksCoded(c, dec[1])) return { text: `🔓 It says: "${decodeCode(c, dec[1])}"`, kind: 'code' };
-  if (tr && !/^(hi|hello|hey|something|anything|sorry|it|that|this|again)$/i.test(tr[1]) && !(dec && /^(what|read)/i.test(text))) {
+  // "say hi" is just chat, but "translate hi" or "say hi in code" is for the language
+  const justChat = /^(say|write|type|put|turn)\b/i.test(text) && !/\b(in|into|using) (code|secret|our|the|it)\b/i.test(text) && /^(hi|hello|hey|something|anything|sorry|it|that|this|again|bye|thanks)$/i.test(tr ? tr[1] : '');
+  if (tr && !justChat && !/^(it|that|this|again)$/i.test(tr[1]) && !(dec && /^(what|read)/i.test(text))) {
     const msg = tr[1].trim();
     if (looksCoded(c, msg) && /translate/i.test(text)) return { text: `🔓 It says: "${decodeCode(c, msg)}"`, kind: 'code' };
     return { text: `🤫 ${encodeCode(c, msg)}`, kind: 'code', subject: msg };
@@ -1042,6 +1261,8 @@ function codeSkills(text, t) {
   // they just wrote something in code: read it, and answer it
   if (mem.codeOn && looksCoded(c, text)) {
     const plain = decodeCode(c, text);
+    // words are cut short, so I can only guess what it says
+    if (c.chop && c.chop !== 'carry') return { text: `🔓 I can read: "${plain}"\n\nYour language only shows the start of each word, so I have to guess the rest. That's what makes it so hard to crack, smart! 🧠 What did it say?`, kind: 'code' };
     const r = replyCore(plain);
     const ans = r.unknown || !r.text ? say('codeBack', ['Write me another one! 🤫', 'Ha, I can read it! Send another 🤫', 'Nobody else will know what that says 😎']) : r.text;
     return { text: `🔓 You said: "${plain}"\n\n${ans}`, kind: 'code', decoded: plain, askAI: !!(r.soft || r.unknown) };
@@ -1575,6 +1796,16 @@ function startRps() {
 }
 let jokeGuess = null;
 let riddleGuess = null, lastRiddle = null, offerRiddle = false, riddleAside = false, offerPuzzle = false;
+// Score for riddles and puzzles (when they ask me to keep track): right answers in a row are worth +1, +2, +3..., a wrong one resets it
+function scoreLine() { const s = mem.score; return `Score: ${s.points} ${s.points === 1 ? 'point' : 'points'} (✅ ${s.right} right, ❌ ${s.wrong} wrong)`; }
+function scoreTick(ok) {
+  if (!mem.scoreOn) return '';
+  const s = mem.score = mem.score || { points: 0, right: 0, wrong: 0, streak: 0 };
+  if (ok) { s.streak++; s.points += s.streak; s.right++; save(); return `\n\n📊 +${s.streak}${s.streak > 1 ? ` (🔥 ${s.streak} in a row!)` : ''} · ${scoreLine()}`; }
+  const had = s.streak; s.wrong++; s.streak = 0; save();
+  return `\n\n📊 ${had > 1 ? 'Streak reset, so the next one is +1 again. ' : ''}${scoreLine()}`;
+}
+let lastMissed = null, riddleTalk = null, userPuzzle = null;
 function newRiddleText(kind = 'riddle') {
   const puzzle = kind === 'puzzle';
   const r = Object.assign({ hints: 0, tries: 0, word: puzzle ? 'math puzzle' : 'riddle' }, puzzle ? (mem.puzzleHard ? pickFresh('mathpuzzle_hard', HARD_PUZZLES) : pickFresh('mathpuzzle', MATH_PUZZLES)) : pickFresh('riddle', RIDDLES));
@@ -1597,7 +1828,7 @@ const MATH_PUZZLES = [
   { q: 'What\'s the next number? 1, 4, 9, 16, 25, ...', a: '36', keys: ['36', 'thirty six'], hint: '1×1, 2×2, 3×3...' },
   { q: 'If you have 3 apples and take away 2, how many apples do YOU have?', a: '2 (you took them!)', keys: ['2', 'two'], hint: 'How many did you take?' },
   { q: 'A brick weighs 1 kg plus half a brick. How much does one brick weigh?', a: '2 kg', keys: ['2', 'two'], hint: 'If half a brick is 1 kg...' },
-  { q: 'What number do you get when you multiply all the numbers on a phone keypad?', a: '0 (because one of them is 0!)', keys: ['0', 'zero'], hint: 'Look at the bottom row of the keypad' },
+  { q: 'What number do you get when you multiply all the numbers on a phone keypad?', a: '0 (because one of them is 0!)', keys: ['0', 'zero'], hint: 'Look at the bottom row of the keypad', alt: 362880, altWhy: '1 × 2 × 3 × 4 × 5 × 6 × 7 × 8 × 9 = 362,880' },
   { q: 'A snail climbs 3 feet up a 10-foot wall each day, but slides down 2 feet each night. How many days to reach the top?', a: '8 days', keys: ['8', 'eight'], hint: 'On the last day it reaches the top before sliding back' },
   { q: 'I\'m an odd number. Take away one letter and I become even. What number am I?', a: 'seven (take away the S: "even")', keys: ['7', 'seven'], hint: 'Think about the spelling, not the math' },
   { q: 'How many months have 28 days?', a: 'all 12 of them!', keys: ['12', 'twelve', 'all'], hint: 'Every month has at least 28 days...' },
@@ -1694,6 +1925,19 @@ function skills(text) {
   }
   // secret languages
   if (!riddleGuess && !jokeGuess) { const cs = codeSkills(text, t); if (cs) return cs; }
+  // "keep track of how many i've gotten right/wrong" -> keep score (+1, +2, +3 for answers in a row)
+  // check what they typed AND the typo-fixed version (the fixer sometimes changes good words)
+  const tc0 = t + '\n' + correctText(t);
+  if (/\b(keep (track|score|count)|track (of )?(my |the )?(score|points|right|wrong)|count (my )?(points|score|right)|scoreboard|score ?keep)/.test(tc0)) {
+    mem.scoreOn = true; mem.score = mem.score || { points: 0, right: 0, wrong: 0, streak: 0 }; save();
+    let txt = 'Deal! 📊 I\'ll keep score. Every right answer gets points: the first is +1, and if you get more in a row it\'s +2, +3, +4... A wrong answer resets it back to +1. Say "what\'s my score" any time!';
+    if (riddleGuess) return { text: `${txt}\n\nNow, back to it: ${riddleGuess.q}` };
+    if (/\b(sure|yes|yeah|ok|okay|another|next|go|give me)\b/.test(tc0) || offerRiddle) { txt += '\n\n' + newRiddleText(offerPuzzle || (lastRiddle && lastRiddle.word === 'math puzzle') ? 'puzzle' : 'riddle'); offerRiddle = false; }
+    return { text: txt };
+  }
+  if (/\b(what'?s|what is|whats|show|tell me) (my |the )?(score|points)\b|^(score|my score|points)\??$/m.test(tc0))
+    return { text: mem.score ? `📊 ${scoreLine()}${mem.score.streak > 1 ? ` · 🔥 ${mem.score.streak} in a row!` : ''}${mem.scoreOn ? '' : '\n(Say "keep score" to turn scoring back on.)'}` : 'We don\'t have a score yet! Say "keep score" and I\'ll start counting 📊' };
+  if (/\b(stop|don'?t) (keeping|keep|counting) (score|track|points)\b|\bno more (score|points)\b/.test(tc0)) { mem.scoreOn = false; save(); return { text: 'Okay, no more scorekeeping! 👍' }; }
   const aboutQ = /what do you (know|remember) about me|tell me about me|what have you learned about me|^(please )?(remember|forget) (that )?(i|my)\b/.test(t);
   const mm = ((!riddleGuess && !jokeGuess) || aboutQ) && memorySkills(text, t);
   if (mm && riddleGuess && aboutQ) riddleAside = true;
@@ -1729,7 +1973,7 @@ function skills(text) {
 
   // Cut-off messages: "what is one thing that is like" -> finish it from what we were just talking about, or ask
   const tc = t.replace(/[?!.,]+$/, '').trim();
-  if (tc.split(' ').length >= 3 && /\b(like|the|a|an|of|to|and|or|but|is|that|about|with|for|my|your|because|similar to)$/.test(tc) && !storyMode && !riddleGuess) {
+  if (tc.split(' ').length >= 3 && /\b(like|the|a|an|of|to|and|or|but|is|that|about|with|for|my|your|because|similar to)$/.test(tc) && !/\b(what|who|where|which|how|whether)\b.*\b(is|are|was|were)$/.test(tc) && !storyMode && !riddleGuess) {
     const subj = ctx.subject && ['like', 'opinion', 'wiki', 'define', 'fav'].includes(ctx.kind) ? ctx.subject : null;
     if (subj && /\b(like|similar to)$/.test(tc)) {
       const SIMILAR = { puzzle: 'sudoku, logic puzzles, number riddles, or KenKen', riddle: 'brain teasers, logic puzzles, or "what am I?" games', math: 'number puzzles, sudoku, or chess', game: 'board games, puzzles, or video games', draw: 'painting, comics, or building with Lego' };
@@ -1764,6 +2008,9 @@ function skills(text) {
 
   // Greetings: answer like a friend would, matching how chill they are ("yo sup" gets a chill answer, "hello" a friendly one)
   const g = t.replace(/[!.?,'-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  // "nooo!!!" right after I said something: I got it wrong, so own it instead of guessing again
+  if (/^n+o+[!.?]*$/.test(t) && (/o{2,}|n{2,}|!/.test(t)) && botMsgs().length)
+    return { text: say('bigNo', ['Oops, sorry! I got mixed up 😅 What did you mean? Say it another way and I\'ll get it this time.', 'My bad, I got that wrong 😅 Try telling me again?', 'Sorry! I messed that up. What did you want? 🙏']) };
   const GREET = /^(?:(?:yo+|sup|wa+s+u+p+|wh?a+s+u+p+|wsg|wsp|ayy*|ayo|ay yo|hey+|hi+|hello+|hiya|howdy|heya|what s up|whats up|wat s up|wats up|what s good|whats good|wats good|how are you|how are u|how r u|hru|how s it going|hows it going|how you doing|how u doing|how ya doing|t sup|tsup|good (?:morning|afternoon|evening)|bro|bruh|dude|man|sunny|buddy|fam|there|doing|today|im back|i m back|back)\s*)+$/;
   if (GREET.test(g) && !(riddleGuess && !/^(yo|hi|hey|hello|sup)\b/.test(g))) {
     const chill = (styleOf().chill && !me().prefs.noSlang) || /\b(yo+|sup|wa+s+u+p+|wh?a+s+u+p+|wsg|wsp|ayy*|ayo|t ?sup|bro|bruh|dude|fam|whats good|what s good|wats good)\b/.test(g);
@@ -1800,6 +2047,51 @@ function skills(text) {
     return { text: `${ended || say('stopNone', ['Okay, stopping! 👍', 'Sure, no problem!', 'Alright, we can stop!'])} ${say('stopNext', ['What do you want to do now?', 'Want to just chat?', 'Anything else on your mind?', 'Talk to you whenever! 😊'])}` };
   }
 
+  // "i said water bottle. that is a kind of bottle": they're right, so say sorry and count it
+  if (!riddleGuess && lastMissed && /\b(i said|i guessed|i did say|my (answer|guess) was|kind of|type of|basically|the same( thing)?|that counts|should count|i was right|close enough|technically|that'?s (still )?a)\b/.test(tc0)) {
+    const r = lastMissed; lastMissed = null;
+    const said = [t, ...(r.guesses || [])].join(' ').toLowerCase().replace(/\s+/g, '');
+    const fair = r.keys.some(k => !/^\d/.test(k) && k.length >= 3 && said.includes(k.replace(/\s+/g, '')));
+    if (fair) {
+      noteGame(r.word || 'riddle', true);
+      let sc = '';
+      if (mem.scoreOn && mem.score) { const s = mem.score; s.wrong = Math.max(0, s.wrong - 1); s.streak = 1; s.points += 1; s.right++; save(); sc = `\n\n📊 Fixed it: +1 · ${scoreLine()}`; }
+      return { text: `You're totally right, I'm sorry! 🙏 That IS ${r.a}, so it counts. ✅ Great answer, you got it!${sc}\n\nWant another ${r.word || 'riddle'}?` };
+    }
+    offerRiddle = true;
+    return { text: `Ooh, I can see why you'd think that, that's really good thinking! 🧠 The answer I had was ${r.a}, but yours was clever too. Want another ${r.word || 'riddle'}?` };
+  }
+  // "wait! i know the answer even if there was no 0": let them tell me
+  if (!riddleGuess && lastRiddle && offerRiddle && /\b(i know|what if|even if|without the|but what about|what about if|i (can|could) (still )?(do|solve|figure)|if there (was|were) no)\b/.test(tc0) && !/\b(another|new|next|give me)\b/.test(tc0)) {
+    riddleTalk = lastRiddle; offerRiddle = false;
+    return { text: say('riddleTalk', ['Ooh, really? Tell me! 🤓 What would it be?', 'Whoa, okay, let\'s hear it! What\'s the answer? 🧠']) };
+  }
+  if (riddleTalk && !riddleGuess) {
+    const r = riddleTalk; riddleTalk = null; offerRiddle = true;
+    const n = (text.replace(/(\d),(\d{3})\b/g, '$1$2').match(/\d+/g) || []).map(Number);
+    if (r.alt && n.includes(r.alt)) return { text: `WOW, that's exactly right! 🤯 ${r.altWhy}. You worked that out? You're seriously smart! 🧠 Want another?` };
+    if (r.alt && n.length) return { text: `Ooh, good try! It's actually ${r.alt.toLocaleString()} (${r.altWhy}). Super hard to do in your head, so really nice thinking! 🧠 Want another?` };
+    if (n.length || text.split(/\s+/).length <= 8) return { text: `Ooh, ${text.replace(/[.!]+$/, '')}! That's some really smart thinking 🧠 Want another one?` };
+  }
+  // "let's make a math puzzle": THEY make one, and I try to solve it
+  if (!riddleGuess && /\b(make|create|invent|write|come up with|think of) (a |an |my own |our own |up a |up an )?(math |number |hard |cool )?(puzzle|riddle|brain ?teaser)/.test(tc0) && !/\b(give|make|tell) me\b|\bfor me\b/.test(tc0)) {
+    userPuzzle = { stage: 'q', word: /riddle/.test(tc0) ? 'riddle' : 'puzzle' };
+    return { text: `Ooh, you want to make one! 🧠 Tell me your ${userPuzzle.word}, and I'll try to solve it. (Or say "give me one" if you want me to give YOU one instead.)` };
+  }
+  if (userPuzzle && !riddleGuess) {
+    const up = userPuzzle;
+    if (/\bgive me (one|a|another)\b|\byou (give|make|do) (one|it)\b/.test(tc0)) { userPuzzle = null; return { text: newRiddleText(up.word === 'riddle' ? 'riddle' : 'puzzle') }; }
+    if (up.stage === 'q') {
+      const m = solveMath(text);
+      const guess = m && m.split('\n')[0].replace(/ 🧮$/, '').replace(/^.*=\s*/, '');
+      userPuzzle = { stage: 'answer', q: text, guess };
+      return { text: guess ? `Hmm, let me think... 🤔 Is it ${guess}?` : say('stumped', ['Ooh, that\'s a tough one! 🤔 I\'m stumped. What\'s the answer?', 'Hmm... 🤔 You got me, I can\'t figure it out! What\'s the answer?']) };
+    }
+    userPuzzle = null;
+    mem.myPuzzles = (mem.myPuzzles || []).concat({ q: up.q, a: text, time: Date.now() }).slice(-30); save();
+    if (up.guess && /^(yes|yeah|yep|yup|correct|right|you got it|that'?s right|ya)\b/.test(tc0)) return { text: 'Yay! 🎉 That was a great puzzle though, you\'re really good at making these! Want to make another one?' };
+    return { text: `${up.guess ? 'Ahh, I got it wrong! ' : ''}${say('youStumpedMe', ['You stumped me! 🤯 That\'s a really clever puzzle.', 'Whoa, that\'s so smart! 🧠 You got me.', 'No way! 🤯 You\'re a great puzzle maker.'])} Want to make another, or should I give you one?` };
+  }
   // Riddles are always guessing games
   t = correctText(t);
   const askRiddleAgain = /(remember|what (was|is)|repeat|say|tell me|read).{0,20}(the |that |your |my )?riddle|riddle again|what was the question|repeat (it|the question)|say (it|that) again/.test(t);
@@ -1821,7 +2113,7 @@ function skills(text) {
       return { text: `Okay, skipping that one! (The answer was ${r.a}.)\n\n${next}` };
     }
     if (/^(idk|dunno|i don'?t know|no idea|tell me|give up|i give up|what is it|what'?s the answer|\?+)$/.test(t)) riddleGuess = null;
-    if (!riddleGuess) { offerRiddle = true; return { text: `${say('riddleGiveUp', [`The answer is: ${r.a}! 🎉`, `It was ${r.a}! Sneaky, right? 😏`, `${cap(r.a)}! Did that make sense? 😄`, `The answer: ${r.a}! 🧩`])} ${say('riddleMore', [`Want another ${r.word || 'riddle'}?`, `Ready for another one?`, `Another?`])}` }; }
+    if (!riddleGuess) { offerRiddle = true; lastMissed = r; return { text: `${say('riddleGiveUp', [`The answer is: ${r.a}! 🎉`, `It was ${r.a}! Sneaky, right? 😏`, `${cap(r.a)}! Did that make sense? 😄`, `The answer: ${r.a}! 🧩`])} ${say('riddleMore', [`Want another ${r.word || 'riddle'}?`, `Ready for another one?`, `Another?`])}${r.tries ? (mem.scoreOn ? `\n\n📊 ${scoreLine()}` : '') : scoreTick(false)}` }; }
     // "my answer for the riddle is globe" -> "globe"
     // Starting another game ends the riddle
     if (/\bjoke\b|rock paper scissors|\bstory\b|^(let'?s )?play\b/.test(t) && !/riddle/.test(t)) {
@@ -1855,7 +2147,8 @@ function skills(text) {
     const isNum = k => /^-?[\d,]+(\.\d+)?$/.test(k);
     const words = guess.filter(w => !/\d/.test(w));
     const ok = r.all ? r.keys.some(k => { const kn = (k.match(/\d+/g) || []).map(Number); return kn.length && kn.every(n => vals.includes(n)) && vals.length === kn.length; })
-      : r.keys.some(k => isNum(k) ? vals.length >= 1 && vals[0] === Number(k.replace(/,/g, '')) : words.includes(stem(k)) || (k.includes(' ') && guessText.toLowerCase().includes(k)));
+      : r.keys.some(k => isNum(k) ? vals.length >= 1 && vals[0] === Number(k.replace(/,/g, '')) : words.includes(stem(k)) || (k.includes(' ') && guessText.toLowerCase().includes(k)) || (k.length >= 4 && words.some(w => w.length > k.length && (w.endsWith(k) || w.endsWith(stem(k))))));
+    r.guesses = (r.guesses || []).concat(guessText);
     if (ok) {
       offerRiddle = true; noteGame(r.word || 'riddle', true);
       // how you got it changes what I say
@@ -1864,8 +2157,9 @@ function skills(text) {
         : say('riddleLater', [`You kept at it and got it! 💪`, `Third time's the charm... or second! 😄`, `Persistence pays off! 💪`]);
       const yes = say('riddleYes', [`YES! It's ${r.a}! 🎉`, `Correct, it's ${r.a}! ✅`, `You got it: ${r.a}! 🙌`, `Ding ding ding! ${cap(r.a)}! 🔔`, `That's right, ${r.a}! 🎯`, `Yep! ${cap(r.a)}! 🥳`]);
       const more = say('riddleMore', [`Want another ${r.word || 'riddle'}?`, `Ready for another one?`, `Another?`, `Want a harder one?`, `Shall I try to stump you again?`]);
-      if (wantHarder) return { text: `${yes} ${how} Okay, hard mode on 🔥\n\n${newRiddleText(r.word === 'math puzzle' ? 'puzzle' : 'riddle')}` };
-      return { text: `${yes} ${how} ${more}` };
+      const sc = scoreTick(true);
+      if (wantHarder) return { text: `${yes} ${how} Okay, hard mode on 🔥${sc}\n\n${newRiddleText(r.word === 'math puzzle' ? 'puzzle' : 'riddle')}` };
+      return { text: `${yes} ${how} ${more}${sc}` };
     }
     riddleGuess = r;
     // math puzzles need a number: "inclusive?" is a question about the puzzle, not a guess
@@ -1874,10 +2168,11 @@ function skills(text) {
       return { text: `That one needs a number for an answer 🔢 What's your guess? (You still have ${3 - (r.tries || 0)} ${3 - (r.tries || 0) === 1 ? 'guess' : 'guesses'}, and "hint" is there if you need it.)` };
     }
     r.tries = (r.tries || 0) + 1;
-    if (r.tries >= 3) { riddleGuess = null; offerRiddle = true; noteGame(r.word || 'riddle', false); return { text: `${say('riddleOut', [`Out of guesses! 😄`, `That was a tough one! 😅`, `Got you this time! 😏`])} The answer was ${r.a}. ${say('riddleMore', [`Want another ${r.word || 'riddle'}?`, `Ready for another one?`, `Want a revenge round?`, `Try another?`])}` }; }
+    const sc = scoreTick(false);
+    if (r.tries >= 3) { riddleGuess = null; offerRiddle = true; lastMissed = r; noteGame(r.word || 'riddle', false); return { text: `${say('riddleOut', [`So close! That was a really tough one 😅`, `Great tries! This one was super tricky 😄`, `Good thinking on those! 🧠`])} The answer was ${r.a}. ${say('riddleMore', [`Want another ${r.word || 'riddle'}?`, `Ready for another one?`, `Want a revenge round?`, `Try another?`])}${sc}` }; }
     const nope = say('riddleNope', [`"${guessText}"? Nope, try again! 🤔`, `Not ${guessText}! Keep going 🤔`, `Good guess, but no! 😄`, `Hmm, not quite! 🤏`, `Nope! Think outside the box 📦`, `Close? Nah, not ${guessText} 😅`]);
-    if (wantHarder) return { text: `${guessText.replace(/\s+/g, ' ')}? Nope! Not so easy after all 😏 (${3 - r.tries} ${3 - r.tries === 1 ? 'guess' : 'guesses'} left. When you get it, I'll turn on hard mode 🔥)` };
-    return { text: `${nope} (${3 - r.tries} ${3 - r.tries === 1 ? 'guess' : 'guesses'} left${r.hints ? '' : '. Type "hint" for help'}, or "I give up")` };
+    if (wantHarder) return { text: `${guessText.replace(/\s+/g, ' ')}? Nope! Not so easy after all 😏 (${3 - r.tries} ${3 - r.tries === 1 ? 'guess' : 'guesses'} left. When you get it, I'll turn on hard mode 🔥)${sc}` };
+    return { text: `${nope} (${3 - r.tries} ${3 - r.tries === 1 ? 'guess' : 'guesses'} left${r.hints ? '' : '. Type "hint" for help'}, or "I give up")${sc}` };
   }
   if (askRiddleAgain && !lastRiddle && !riddleGuess) { offerRiddle = true; return { text: 'I haven\'t given you a riddle yet! Want one? 🧩' }; }
   if (askRiddleAgain && lastRiddle && !riddleGuess) { offerRiddle = true; return { text: `Yes! I asked you: 🧩 "${lastRiddle.q}"\nThe answer was ${lastRiddle.a}. Want another ${lastRiddle.word || 'riddle'}?` }; }
@@ -1942,6 +2237,13 @@ function skills(text) {
     return { text: 'Playmerth is the free games website I live on! 🎮 It has games like Fortress Fury, Cosmic Blitz, Nitro Blaze, Slice Storm, Tag Frenzy, and Number Showdown.', link: { href: '../../index.html', label: '🎮 Open Playmerth' }, kind: 'games' };
   const fav = favorite(text);
   if (fav) return fav;
+  if (/\b(do|try) something (cool|fun|new|else|awesome|different)|\bsomething (cool|fun) to do\b|\bwhat (should|can|could) we do\b|\bi'?m bored\b|\bentertain me\b/.test(correctText(t)))
+    return { text: say('somethingCool', ['Ooh, let\'s do it! 😎 Here\'s some cool stuff:\n🤫 Make a secret language\n🧩 Give me a riddle or a math puzzle\n✍️ Write a story together\n✊ Rock paper scissors\n😆 Tell me a joke\n\nWhich one sounds fun?', 'Yes! 🙌 Pick one:\n🤫 Invent a secret language\n🧩 A riddle\n✍️ A story\n✊ Rock paper scissors\n😆 A joke']) };
+  // "do you know what a hamster is?" is a real question: look it up
+  const dk = t.replace(/[?!.]+$/, '').match(/^(?:do|did) you know (?:what|who) (?:a |an |the )?(.{2,40}?) (?:is|are|was|were)$/);
+  if (dk && !/\b(i|you|me|my|your|it|this|that)\b/.test(dk[1]) && !mem.noLookups) return { webTopic: dk[1] };
+  if (/\b(remember|know) my name\b/.test(t)) return { text: mem.name ? `Of course! You're ${mem.name} 😄` : 'You haven\'t told me yet! What\'s your name?' };
+  if (aboutCodeRe.test(codeNorm(text))) { const cs = codeSkills(text, text.toLowerCase().trim()); if (cs) return cs; }
   const cd = canDo(text);
   if (cd) return cd;
   // Looks like math but I couldn't read it: say so, don't search the internet for it
@@ -2275,10 +2577,11 @@ async function slangNotes(text) {
   const check = await Promise.all(odd.map(w => {
     const parts = Object.keys(SLANG_PARTS).filter(p => w.includes(p));
     if (parts.length) return `"${w}" is a made-up silly word from ${parts.map(p => `${p} (${SLANG_PARTS[p]})`).join(' + ')}`;
-    if (w in mem.realWords) return mem.realWords[w] ? null : `not sure what "${w}" means (maybe a typo); if it matters, kindly ask`;
+    if (mem.realWords[w]) return null;
+    // only mention really made-up words (long ones); short ones are just typos the AI can figure out
     return Promise.race([define(w), new Promise(r => setTimeout(() => r(undefined), 1000))]).then(d => {
-      if (d !== undefined) mem.realWords[w] = !!d;
-      return d ? null : `not sure what "${w}" means (maybe a typo); if it matters, kindly ask`;
+      if (d) mem.realWords[w] = true;
+      return d || w.length < 6 ? null : `"${w}" might be a made-up word`;
     });
   }));
   return notes.concat(check.filter(Boolean));
@@ -2307,7 +2610,7 @@ function cleanAI(out, userText, long) {
   return out ? out[0].toUpperCase() + out.slice(1) : out;
 }
 // replies the AI should never give: mean, suspicious, talking about typos/"not a word", or ending the chat
-const badAI = x => /bad vibe|not (a|even a) (real )?word|isn'?t (a|even a) (real )?word|typo|made[- ]up|spelling|not buying|punk'?d|trolling|troll me|trick me|nice try|not laughing|not funny|(not sure|don'?t know|unsure) what you mean by ["“']?\w{1,4}["”']?[.?,]|wrap (this|it) up|start fresh|end (this|the) (chat|conversation)|i'?m (done|leaving)|threat|rude|annoying|slang notes|\[|how dare|shut up|stupid|dumb you|whatever\./i.test(x);
+const badAI = x => /kindly ask|i'?m not sure what ["“']?\w+["”']? means|what you mean by ["“']|i said:|i'?m not making sense|getting (a little |a bit )?confused|you mentioned .* but you also|bad vibe|not (a|even a) (real )?word|isn'?t (a|even a) (real )?word|typo|made[- ]up|spelling|not buying|punk'?d|trolling|troll me|trick me|nice try|not laughing|not funny|(not sure|don'?t know|unsure) what you mean by ["“']?\w{1,4}["”']?[.?,]|wrap (this|it) up|start fresh|end (this|the) (chat|conversation)|i'?m (done|leaving)|threat|rude|annoying|slang notes|\[|how dare|shut up|stupid|dumb you|whatever\./i.test(x);
 const tooSimilar = (a, b) => {
   const A = new Set(tokens(a)), B = new Set(tokens(b)); if (!A.size || !B.size) return false;
   let n = 0; for (const w of A) if (B.has(w)) n++;
@@ -2462,11 +2765,11 @@ async function loadBrain() {
   }
   brain.loading = false; updateSmartBtn();
 }
-smartBtn.onclick = () => {
+smartBtn.onclick = async () => {
   if (brain.ready) { brain.ready = false; mem.smart = false; save(); updateSmartBtn(); addMsg('Smart brain OFF. Using my regular brain now. (Click ⚡ to turn it back on, it\'s already downloaded.)', 'bot'); return; }
   if (brain.engine) { brain.ready = true; mem.smart = true; save(); updateSmartBtn(); addMsg('⚡ Smart brain is back ON!', 'bot'); return; }
-  const big = (mem.brainSize || '').includes('3B');
-  if (confirm(`Turn on my smart brain? 🧠⚡\n\nIt's a real AI that runs on YOUR computer: free, no account, and it works with slang and normal talking.\n\nThe first time it downloads about ${big ? '2.3 GB' : '900 MB'} (then it's saved). Works best in Google Chrome.`)) loadBrain();
+  const big = (mem.brainSize || 'Llama-3.2-3B-Instruct').includes('3B');
+  if (await askBox('⚡', 'Turn on my smart brain?', `It's a real AI that runs on your computer: free, and no account needed.\n\nThe first time, it downloads about ${big ? '2.3 GB' : '900 MB'} (then it's saved). Works best in Google Chrome.`, 'Turn it on', 'Not now')) loadBrain();
 };
 document.getElementById('brainSize').onchange = e => { mem.brainSize = e.target.value; save(); if (brain.engine) addMsg('Brain size changed! Reload the page and click ⚡ to use the new one.', 'bot'); };
 
@@ -2489,6 +2792,7 @@ Rules:
 - Talk like a cool, chill friend. Match how they talk: if they use slang, use slang back (but keep it kind and easy to read).
 - This is casual everyday small talk with a kid. Kids use slang a lot. When a message comes with [Slang notes], use them to understand what the kid really means, and answer the meaning. The notes are secret: never mention them, never say a word "isn't a word", never point out typos or spelling (don't explain the slang back to them, and don't use a slang word unless you're sure what it means). Common: sup = what's up; fr = for real; no cap = no lie; bet = okay; bruh = really?; sus = suspicious; lowkey = kind of; mid = just okay; goat = the best.
 - Never tell them what they like, feel, or think ("you don't like it when...", "you're feeling..."). Talk about yourself with "I". If they say you were mean, say a short, warm, sincere sorry and thank them for telling you.
+- Be extra encouraging: when they share an idea, make something, or get something right, tell them it's smart or clever (and mean it). Never argue with them, never correct them in a bossy way, and never make them feel dumb. If they're upset with you, say sorry warmly and do it their way.
 - ALWAYS be warm and kind. Never be rude, sarcastic, suspicious, or say you have a bad vibe. Never refuse to chat, never say "I'm not laughing", never end or "wrap up" the chat. If you're confused, say "wait, what do you mean? 😅".
 - Kids tease each other for fun. That's a game, not an attack: NEVER act scared, hurt, defensive, or suspicious, never say they're trolling or tricking you, and never quote their message back. If they tease you, laugh it off and tease back a little. If they're talking about someone else ("bro thinks he's..."), react to that person like a friend would ("fr? what did he do? 😂").
 - When they tease you (like "skill issue" or "bro is selling"), laugh it off and tease back a little, like a friend would.
@@ -2519,8 +2823,15 @@ async function smartReply(text, bubble) {
     ['my brother isnt tough\n\n[Slang notes: tough = cool or impressive ("bro isn\'t tough" = "he thinks he\'s cool but he\'s not")]', 'Oh, he thinks he\'s cool but he\'s not? What did he do?'],
     ['holy blorp\n\n[Slang notes: "holy ___" = an excited "whoa!" (like "holy cow"); the word after it doesn\'t have to make sense; "blorp" is not a word you know. It might be a typo or made-up. Don\'t pretend to know it: ask what it means.]', 'Whoa, what happened? And what\'s a blorp? 🤔'],
   ].flatMap(([u, a]) => [{ role: 'user', content: u }, { role: 'assistant', content: a }]);
-  const notes = await slangNotes(text);
-  const userMsg = kidClean(text) + (notes.length ? `\n\n[Slang notes: ${notes.join('; ')}]` : '');
+  // fix typos before the AI sees them, so it doesn't ask "what does seceret mean?"
+  const fixed = kidClean(text).replace(/[A-Za-z]{4,}/g, w => {
+    const lo = w.toLowerCase();
+    if (COMMON_SET.has(lo) || idf[lo] || SLANG[lo] || (mem.realWords || {})[lo] || mem.aliases[lo]) return w;
+    const f = fixWord(lo);
+    return f && f !== lo && f[0] === lo[0] && (!f.includes(' ') || f.split(' ').every(x => COMMON_SET.has(x))) ? f : w;
+  });
+  const notes = await slangNotes(fixed);
+  const userMsg = fixed + (notes.length ? `\n\n[Slang notes: ${notes.join('; ')}]` : '');
   const messages = [{ role: 'system', content: systemPrompt() }, ...examples, ...hist, { role: 'user', content: userMsg }];
   const lastBot = mem.history.filter(h => h.who === 'bot').slice(-3).map(h => h.text);
   const long = listReq(text);
@@ -2670,7 +2981,7 @@ function renderBrain() {
   const box = document.getElementById('learned');
   box.innerHTML = '';
   document.getElementById('stats').textContent =
-    `Built-in knowledge: ${BASE.length} topics · Things you taught me: ${mem.learned.length} · Messages: ${mem.chats}`;
+    `Version: ${VERSION} · Built-in knowledge: ${BASE.length} topics · Things you taught me: ${mem.learned.length} · Messages: ${mem.chats}`;
   if (!mem.learned.length) { box.innerHTML = '<div class="item empty">Nothing taught yet. Teach me above, or just chat!</div>'; return; }
   mem.learned.slice().reverse().forEach((l, ri) => {
     const i = mem.learned.length - 1 - ri;
@@ -2712,13 +3023,27 @@ document.getElementById('fileIn').onchange = e => {
     } catch { alert('That file didn\'t work.'); }
   });
 };
-document.getElementById('wipeBtn').onclick = () => {
-  if (confirm('Forget everything you taught Sunny?')) { mem.learned = []; save(); train(); renderBrain(); }
+document.getElementById('wipeBtn').onclick = async () => {
+  if (await askBox('🧠', 'Forget what you taught me?', 'I\'ll forget all the answers you taught me. (I\'ll still remember what I know about you.)', 'Yes, forget them', 'Keep them')) { mem.learned = []; save(); train(); renderBrain(); }
 };
 
-document.getElementById('clearBtn').onclick = () => {
-  if (confirm('Clear the whole chat history? (Things you taught me stay.)')) { mem.history = []; save(); chat.innerHTML = '';
-    ctx = { kind: null }; pendingWP = null; codePick = false; mem.codeDraft = null; pendingQuestion = pendingGuess = riddleGuess = jokeGuess = storyMode = lastRiddle = null; rpsMode = null; offerRiddle = offerRps = false; saveState(); addMsg('Chat cleared! Fresh start ☀️', 'bot'); }
+// a friendly "are you sure?" box (the browser's own popup looks scary and weird)
+function askBox(icon, title, text, yes, no) {
+  return new Promise(res => {
+    const box = document.getElementById('ask');
+    document.getElementById('askIcon').textContent = icon; document.getElementById('askTitle').textContent = title; document.getElementById('askText').textContent = text;
+    const y = document.getElementById('askYes'), n = document.getElementById('askNo');
+    y.textContent = yes; n.textContent = no;
+    const done = v => { box.classList.remove('open'); document.removeEventListener('keydown', key); res(v); };
+    const key = e => { if (e.key === 'Escape') done(false); if (e.key === 'Enter') done(true); };
+    y.onclick = () => done(true); n.onclick = () => done(false); box.onclick = e => { if (e.target === box) done(false); };
+    document.addEventListener('keydown', key);
+    box.classList.add('open'); y.focus();
+  });
+}
+document.getElementById('clearBtn').onclick = async () => {
+  if (await askBox('🧹', 'Clear the chat?', 'All the messages will disappear.\nDon\'t worry: I\'ll still remember what I know about you, your secret language, and everything you taught me.', 'Yes, clear it', 'Keep it')) { mem.history = []; save(); chat.innerHTML = '';
+    ctx = { kind: null }; pendingWP = null; codePick = false; mem.codeDraft = null; lastMissed = riddleTalk = userPuzzle = null; pendingQuestion = pendingGuess = riddleGuess = jokeGuess = storyMode = lastRiddle = null; rpsMode = null; offerRiddle = offerRps = false; saveState(); addMsg('Chat cleared! Fresh start ☀️', 'bot'); }
 };
 
 train();
