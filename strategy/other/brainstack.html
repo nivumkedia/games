@@ -1,0 +1,1476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Brainstack</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #ffffff; font-family: 'Arial Rounded MT Bold', 'Nunito', system-ui, sans-serif; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  /* ---------- your homepage ---------- */
+  #home {
+    position: fixed; inset: 0; display: none; background: #1b2136; color: #e8ecf8;
+    padding: 48px 56px; box-sizing: border-box;
+  }
+  #home h1 { margin: 0 0 6px; font-size: 40px; letter-spacing: 1px; }
+  #home .sub { margin: 0 0 32px; color: #8f9bc0; font-size: 18px; }
+  #home h2 { margin: 0 0 16px; font-size: 24px; color: #c9d2ee; }
+  #inProgress { display: flex; flex-wrap: wrap; gap: 20px; }
+  .empty {
+    border: 3px dashed #3a4466; border-radius: 18px; padding: 34px 40px; color: #7d89ad; font-size: 20px;
+  }
+  #inProgress .card {
+    font: inherit; text-align: left; cursor: pointer; border: none; border-radius: 18px;
+    background: #ffffff; color: #1b2136; padding: 22px 28px; min-width: 240px;
+    display: flex; flex-direction: column; gap: 6px;
+    box-shadow: 1px 2px 0 #b8c0d8, 2px 4px 0 #b8c0d8, 3px 6px 0 #b8c0d8, 8px 14px 18px rgba(0,0,0,0.4);
+    transition: transform .12s ease;
+  }
+  #inProgress .card:hover { transform: translate(-2px, -3px); }
+  #inProgress .card .name { font-size: 26px; }
+  #inProgress .card .lvl { font-size: 17px; color: #6b7894; }
+  #inProgress .card .go { font-size: 17px; color: #2eb85c; margin-top: 6px; }
+  #browse:active { transform: translate(4px, 8px);
+    box-shadow: 1px 2px 0 #a81d29, 2px 4px 0 #a81d29, 4px 8px 12px rgba(0,0,0,0.45); }
+  /* ---------- browse puzzles ---------- */
+  #browseScreen {
+    position: fixed; inset: 0; display: none; background: #1b2136; color: #e8ecf8;
+    padding: 48px 56px; box-sizing: border-box; overflow-y: auto;
+  }
+  #browseScreen h1 { margin: 0 0 6px; font-size: 40px; letter-spacing: 1px; }
+  #browseScreen .sub { margin: 0 0 32px; color: #8f9bc0; font-size: 18px; }
+  #browseList { display: flex; flex-wrap: wrap; gap: 24px; }
+  .gameCard {
+    font: inherit; text-align: left; cursor: pointer; border: none; border-radius: 20px; width: 280px;
+    background: #ffffff; color: #1b2136; padding: 0 0 20px; overflow: hidden;
+    box-shadow: 1px 2px 0 #b8c0d8, 2px 4px 0 #b8c0d8, 3px 6px 0 #b8c0d8, 8px 14px 18px rgba(0,0,0,0.4);
+    transition: transform .12s ease;
+  }
+  .gameCard:hover { transform: translate(-2px, -3px); }
+  .gameCard .art { background: #f4f6fb; font-size: 40px; padding: 30px 0; text-align: center; letter-spacing: 0.06em; }
+  .gameCard .art .gg { color: #2eb85c; } .gameCard .art .xx { color: #9aa0ab; }
+  .gameCard .name { display: block; font-size: 26px; margin: 16px 22px 4px; }
+  .gameCard .info { display: block; font-size: 16px; color: #6b7894; margin: 0 22px; }
+  .gameCard .go { display: block; font-size: 17px; color: #2eb85c; margin: 12px 22px 0; }
+  #browseBack {
+    position: absolute; left: 40px; bottom: 48px; font: inherit; font-size: 22px; color: #c9d2ee;
+    background: #2a3352; border: none; border-radius: 12px; padding: 12px 24px; cursor: pointer;
+    box-shadow: 0 5px 0 #141a2b;
+  }
+  #browseBack:active { transform: translateY(4px); box-shadow: 0 1px 0 #141a2b; }
+  #browse {
+    position: absolute; left: 40px; bottom: 48px;
+    font: inherit; font-size: 28px; letter-spacing: 1px; color: #fff;
+    padding: 18px 42px; border: none; border-radius: 14px; background: #e0313f;
+    text-shadow: 0 2px 0 rgba(0,0,0,0.25);
+    /* thick 3D side going down-right, like the puzzle pieces */
+    box-shadow: 1px 2px 0 #a81d29, 2px 4px 0 #a81d29, 3px 6px 0 #a81d29, 4px 8px 0 #a81d29,
+                5px 10px 0 #a81d29, 6px 12px 0 #a81d29, 10px 20px 22px rgba(0,0,0,0.45);
+    cursor: pointer; transition: transform .1s, box-shadow .1s;
+  }
+  /* ---------- Inequal ---------- */
+  #inequal {
+    position: fixed; inset: 0; display: none; background: #ffffff;
+    align-items: center; justify-content: center;
+  }
+  #inequal .eq { font-size: min(16vw, 170px); color: #1b2136; letter-spacing: 0.06em; white-space: nowrap; }
+  #inequal { flex-direction: column; user-select: none; -webkit-user-select: none; }
+  #inequal.won .g { cursor: default; }
+  #inequal .x { transition: color .4s ease; }
+  #inequal.won .x { color: #2eb85c; }
+  #inequal .winmsg {
+    font-size: min(7vw, 64px); color: #2eb85c; margin-top: 0.4em; height: 1.2em;
+    opacity: 0; transform: scale(0.4); transition: opacity .3s ease, transform .45s cubic-bezier(.3,1.6,.5,1);
+  }
+  #inequal.won .winmsg { opacity: 1; transform: scale(1); }
+  #inequal .g { color: #2eb85c; cursor: grab; display: inline-block; user-select: none; -webkit-user-select: none; touch-action: none;
+                transition: transform .18s ease, text-shadow .18s; }
+  #inequal .g.sel { transform: translateY(-0.12em) scale(1.08); text-shadow: 0 0.08em 0 #1d8c47; }
+  #inequal .g.drag { transition: none; cursor: grabbing; z-index: 2; position: relative; }
+  #inequal .g.over { text-shadow: 0 0 0.15em rgba(46,184,92,0.6); }
+  #inequal .x { color: #9aa0ab; }
+  #toHome, #restart, #undo {
+    position: absolute; top: 24px; font: inherit; font-size: 20px; color: #6b7894;
+    background: #f1f3f8; border: none; border-radius: 12px; padding: 10px 18px; cursor: pointer;
+    box-shadow: 0 4px 0 #d5d9e4; transition: transform .1s, box-shadow .1s, opacity .3s;
+  }
+  #restart { right: 28px; }
+  #undo { right: 172px; }
+  #undo.empty { opacity: 0.4; cursor: default; }
+  #inequal.won #undo { opacity: 0; pointer-events: none; }
+  #toHome { left: 28px; }
+  #toHome:hover, #restart:hover, #undo:not(.empty):hover { color: #1b2136; }
+  #toHome:active, #restart:active, #undo:not(.empty):active { transform: translateY(3px); box-shadow: 0 1px 0 #d5d9e4; }
+  #inequal.won #restart { opacity: 0; pointer-events: none; }
+  #lvlBar { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 14px; }
+  #lvlText { text-align: center; min-width: 220px; }
+  #lvlNum { font-size: 15px; font-weight: 800; letter-spacing: 0.18em; color: #9aa0ab; }
+  #lvlName { font-size: 26px; font-weight: 800; color: #1b2136; white-space: nowrap; }
+  #lvlPrev, #lvlNext { font: inherit; font-size: 18px; color: #6b7894; background: #f1f3f8; border: none; border-radius: 50%; width: 44px; height: 44px;
+    cursor: pointer; box-shadow: 0 4px 0 #d5d9e4; transition: transform .1s, box-shadow .1s, opacity .3s; }
+  #lvlPrev:hover, #lvlNext:hover { color: #1b2136; }
+  #lvlPrev:active, #lvlNext:active { transform: translateY(3px); box-shadow: 0 1px 0 #d5d9e4; }
+  #lvlPrev.off, #lvlNext.off, #inequal.won #lvlPrev, #inequal.won #lvlNext { opacity: 0; pointer-events: none; }
+  /* orange digit: can be moved into any gap in any number */
+  #inequal .d { display: inline-block; }
+  #inequal .o { color: #ff8c1a; cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none;
+                transition: transform .18s ease, text-shadow .18s; position: relative; }
+  /* underlines are drawn as small rounded bars per digit (same as overlines) */
+  #inequal .gu .d { position: relative; }
+  #inequal .o.u::after, #inequal .o.ovu::after, #inequal .gu .d::after { content: ''; position: absolute; left: 0.02em; right: 0.08em; bottom: 0.04em;
+    height: 0.07em; border-radius: 0.03em; background: #ff8c1a; }
+  #inequal .gu .d::after, #inequal.won .o.u::after, #inequal.won .o.ovu::after { background: currentColor; }
+  #inequal .o.hole { cursor: default; }
+  /* purple = orange piece with a line (underline / overline); plain orange stays orange */
+  #inequal .o.u, #inequal .o.ov { color: #8b5cf6; }
+  #inequal .o.u.sel, #inequal .o.ov.sel { text-shadow: 0 0.08em 0 #5b34c4; }
+  #inequal.won .o.u, #inequal.won .o.ov { color: #2eb85c; }
+  .slot.p { background: rgba(139,92,246,0.28); }
+  .slot.p.hot { background: rgba(139,92,246,0.85); }
+  #inequal.previewing .slot.p:not(.fill) { background: transparent; }
+  #inequal .d.ghost.p { color: rgba(139,92,246,0.5); }
+  /* overline drawn per digit so two overlined digits side by side don't join into one bar */
+  #inequal .o.ov::before { content: ''; position: absolute; left: 0.02em; right: 0.08em; top: 0.05em; height: 0.07em; background: currentColor; border-radius: 0.03em; }
+  /* red number: click it to pick a different number */
+  #inequal .red { color: #e5484d; cursor: pointer; transition: color .4s ease, transform .18s ease; display: inline-block; }
+  #inequal .red:hover { transform: translateY(-0.05em); }
+  #inequal .red.open { text-shadow: 0 0.06em 0 #b3262b; }
+  #inequal.won .red { color: #2eb85c; cursor: default; }
+  /* red underline: click the digit to pick a different digit (the rest of the number keeps its own color) */
+  #inequal .eq .d.ru { position: relative; cursor: pointer; color: #e5484d; } /* the digit itself is red too */
+  #inequal.won .eq .d.ru { color: #2eb85c; }
+  #inequal .d.ru::after { content: ''; position: absolute; left: 0.02em; right: 0.08em; bottom: 0.04em; height: 0.07em; border-radius: 0.03em; background: #e5484d; }
+  #inequal .d.ru.open { text-shadow: 0 0.06em 0 rgba(179,38,43,0.6); }
+  /* multi red underline: digits linked by a double red line change together */
+  #inequal .d.rg { position: relative; cursor: pointer; }
+  #inequal .d.rg::after { content: ''; position: absolute; left: 0.02em; right: 0.08em; bottom: 0.09em; height: 0.05em; border-radius: 0.03em;
+    background: #e5484d; box-shadow: 0 0.09em 0 #e5484d; }
+  #inequal .eq > span:has(.rg:hover) .rg, #inequal .eq > span:has(.rg.open) .rg { text-shadow: 0 0.06em 0 rgba(179,38,43,0.6); }
+  #inequal.won .d.rg { cursor: default; }
+  #inequal.won .d.rg::after { background: currentColor; box-shadow: 0 0.09em 0 currentColor; }
+  #inequal.won .d.ru { cursor: default; }
+  #inequal.won .d.ru::after { background: currentColor; }
+  #redPop { position: fixed; display: flex; gap: 12px; transform: translateX(-50%); z-index: 5; animation: popIn .18s ease-out; }
+  #redPop button { font: inherit; font-size: 34px; font-weight: 800; color: #e5484d; background: #fff; border: 3px solid #e5484d; border-radius: 16px;
+    padding: 6px 18px; cursor: pointer; box-shadow: 0 4px 0 #f2b8ba; transition: transform .1s; }
+  #redPop button b { color: #e5484d; font-weight: 800; }
+  #redPop button i { font-style: normal; color: #9aa0ab; }
+  #redPop button:hover { background: #fdeced; transform: translateY(-2px); }
+  @keyframes popIn { from { opacity: 0; transform: translateX(-50%) translateY(-10px) scale(0.9); } }
+  /* a number with a green underline is all green; only the underlined digit moves */
+  #inequal .x:has(.gu) > .d:not(.o) { color: #2eb85c; }
+  #inequal .d.zero { position: absolute; top: 0; color: rgba(154,160,171,0.55); pointer-events: none; }
+  #inequal .o.sel { transform: translateY(-0.12em) scale(1.08); text-shadow: 0 0.08em 0 #c46400; }
+  #inequal .o.drag { transition: none; cursor: grabbing; z-index: 3; }
+  #inequal.won .o { color: #2eb85c; cursor: default; }
+  .slot { position: fixed; border-radius: 6px; background: rgba(255,140,26,0.28); z-index: 2; cursor: pointer; }
+  .slot.hot { background: rgba(255,140,26,0.85); }
+  /* preview: while you hover a gap, the digit shows up there faded so you can see the new number before you drop it */
+  #inequal.previewing .slot { background: transparent; }
+  /* box around an underlined 0 that can be filled in (stays visible while dragging) */
+  /* digits you can drop onto glow softly (the drop area itself is invisible) */
+  .slot.fill, #inequal.previewing .slot.fill { background: transparent; }
+  /* digits you can drop onto get a small purple dot underneath (drawn by the invisible drop area) */
+  .slot.fill::after { content: ''; position: absolute; left: 50%; top: 100%; width: var(--dot); height: var(--dot);
+    margin: calc(var(--dot) * 0.67) 0 0 calc(var(--dot) / -2); border-radius: 50%; background: #8b5cf6; }
+  @keyframes dotIn { from { transform: scale(0); } }
+  #inequal .d.ghost { position: absolute; top: 0; color: rgba(255,140,26,0.5); animation: ghostIn .16s ease-out; pointer-events: none; }
+  #inequal .eq > span { position: relative; }
+  #inequal .eq .d:not(.drag) { transition: transform .15s ease; }
+  @keyframes ghostIn { from { opacity: 0; transform: translateY(-0.15em) scale(0.7); } }
+  /* progress through the whole game; you rank up at the stars */
+  #prog { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: min(80vw, 900px); display: flex; align-items: center; gap: 18px; }
+  #progRank { font-size: 15px; font-weight: 800; color: #6b7894; white-space: nowrap; min-width: 170px; text-align: right; }
+  #progRank b { color: #e6a800; }
+  #progTrack { position: relative; flex: 1; height: 14px; background: #eef0f5; border-radius: 7px; }
+  #progFill { height: 100%; width: 0; border-radius: 7px; background: linear-gradient(90deg, #2eb85c, #1eb6e8); transition: width .7s cubic-bezier(.3,1.2,.5,1); }
+  .pmark { position: absolute; top: 50%; width: 50px; height: 50px; margin: -30px 0 0 -25px; transition: transform .4s, filter .4s, opacity .4s;
+    filter: grayscale(1); opacity: 0.45; }
+  .pmark.got { filter: none; opacity: 1; transform: scale(1.15); }
+  #progRank { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+  #progRank .rpic { margin-top: -6px; }
+  #rankUp { position: absolute; top: 11%; left: 50%; transform: translateX(-50%) scale(0.4); opacity: 0; z-index: 20; pointer-events: none; text-align: center;
+    background: #fff8e1; border: 4px solid #ffc312; border-radius: 22px; padding: 8px 30px 12px; box-shadow: 0 8px 0 #f0d58a;
+    transition: opacity .3s, transform .45s cubic-bezier(.3,1.6,.5,1); }
+  #rankUp.show { opacity: 1; transform: translateX(-50%) scale(1); }
+  #rankUp .t0 { display: flex; justify-content: center; margin: 6px 0 4px; }
+  #rankUp .t1 { font-size: 32px; font-weight: 800; color: #e6a800; letter-spacing: 0.05em; }
+  #rankUp .t2 { font-size: 22px; font-weight: 800; color: #1b2136; }
+  #levelSwap { position: fixed; inset: 0; width: 100vw; height: 100vh; display: none; z-index: 10; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="home">
+  <h1>Your Homepage</h1>
+  <p class="sub">Pick up where you left off.</p>
+  <h2>Puzzles in progress</h2>
+  <div id="inProgress"><div class="empty">No puzzles in progress yet</div></div>
+  <button id="browse">BROWSE</button>
+</div>
+<div id="browseScreen">
+  <h1>Browse Puzzles</h1>
+  <p class="sub">Pick a puzzle to play.</p>
+  <div id="browseList"></div>
+  <button id="browseBack">◀ Back</button>
+</div>
+<div id="inequal">
+  <canvas id="confetti" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></canvas>
+  <button id="toHome" title="Back to your homepage">◀ Home</button>
+  <button id="undo" title="Take back your last switch">⟲ Undo</button>
+  <button id="restart" title="Restart this level">↻ Restart</button>
+  <div id="lvlBar"><button id="lvlPrev" title="Go back a level">◀</button><div id="lvlText"><div id="lvlNum"></div><div id="lvlName"></div></div><button id="lvlNext" title="Go forward to a level you have reached">▶</button></div>
+  <div class="eq"></div>
+  <div class="winmsg">You win!</div>
+  <div id="prog"><div id="progRank"></div><div id="progTrack"><div id="progFill"></div></div></div>
+  <div id="rankUp"></div>
+</div>
+<canvas id="levelSwap"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const FONT = "'Arial Rounded MT Bold', 'Nunito', system-ui, sans-serif";
+
+// darker look
+const BOARD_COLOR = [27, 33, 54]; // smooth dark navy board
+const BTN_COLOR = '#1d8c47', BTN_SIDE = '#0f5129';
+const TITLE_COLORS = ['#ff4757', '#ff8c1a', '#ffc312', '#2ed573', '#1eb6e8', '#4a69ff', '#a55eea', '#ff4fa3', '#ff4757', '#ff8c1a'];
+const EQ_COLORS = ['#c84a5c', '#cf8433', '#c7ad35', '#3fa866', '#359fc2', '#5d6fd6', '#8e5cc8', '#c65b9c'];
+
+const EQUATIONS = [
+  '7² + 3x = 52', '∑ n = 210', '√144 = 12', 'π ≈ 3.14159', 'x² − 5x + 6 = 0', 'a² + b² = c²',
+  'f(x) = 3x − 7', '12 × 12 = 144', '∫ x dx = x²/2', '45 ÷ 9 = 5', '6! = 720', 'log₂ 8 = 3',
+  'sin²θ + cos²θ = 1', 'y = mx + b', '(a + b)²', '2¹⁰ = 1024', '3x + 4 = 19', '0.75 = ¾',
+  '9 × 8 = 72', '1, 1, 2, 3, 5, 8', 'e ≈ 2.718', '√2 ≈ 1.414', '17 + 26 = 43', '100 − 37 = 63',
+  '5³ = 125', 'x = 4', '∞', '42', '1,024', '−18', '256', '3.7', '81', '360°', '7', '13', '99',
+  '2x − 9 = 11', 'A = πr²', '¼ + ½ = ¾', '64 ÷ 8 = 8', '11 × 11 = 121', '%', '15% of 80 = 12',
+];
+
+let W, H, dpr, u, cols, rows, ox, oy, pieces = [], bakeCanvas = null, btnRect = null, fontSize;
+let phase = 'intro', t0 = performance.now(), lockTime = 0, leaveTime = 0, hoverPlay = false, particles = [];
+const T_START = 0.35;   // plain white screen first
+const T_END = 2.6;      // every piece locks in at this exact moment
+
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = a => a[Math.floor(Math.random() * a.length)];
+function shade(hex, f) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.min(255, Math.round((n >> 16) * f)), g = Math.min(255, Math.round(((n >> 8) & 255) * f)), b = Math.min(255, Math.round((n & 255) * f));
+  return `rgb(${r},${g},${b})`;
+}
+
+// ---------- jigsaw edges ----------
+function edge(p, x0, y0, x1, y1, bump, tc, sz) {
+  if (!bump) { p.lineTo(x1, y1); return; }
+  const L = Math.hypot(x1 - x0, y1 - y0), dx = (x1 - x0) / L, dy = (y1 - y0) / L;
+  const nx = dy, ny = -dx; // outward normal (clockwise path)
+  const k = sz / 0.24;
+  const P = (t, n) => [x0 + dx * t * L + nx * n * L * bump, y0 + dy * t * L + ny * n * L * bump];
+  p.lineTo(...P(tc - 0.15 * k, 0));
+  p.bezierCurveTo(...P(tc - 0.10 * k, 0.03 * k), ...P(tc - 0.22 * k, 0.24 * k), ...P(tc, 0.24 * k));
+  p.bezierCurveTo(...P(tc + 0.22 * k, 0.24 * k), ...P(tc + 0.10 * k, 0.03 * k), ...P(tc + 0.15 * k, 0));
+  p.lineTo(x1, y1);
+}
+function randEdge(border) {
+  return { b: border ? 0 : (Math.random() < 0.5 ? 1 : -1), t: rand(0.4, 0.6), sz: rand(0.17, 0.26) };
+}
+
+// ---------- 3D text ----------
+function drawExtrudedText(g, text, x, y, size, colors, depth, alpha = 1) {
+  g.save();
+  g.globalAlpha = alpha;
+  g.font = `900 ${size}px ${FONT}`;
+  g.textBaseline = 'middle';
+  const chars = [...text], spacing = size * 0.02;
+  const widths = chars.map(ch => g.measureText(ch).width);
+  const total = widths.reduce((a, b) => a + b, 0) + spacing * (chars.length - 1);
+  let cx = x - total / 2;
+  chars.forEach((ch, i) => {
+    const col = colors[i % colors.length];
+    for (let k = depth; k > 0; k--) {
+      g.fillStyle = shade(col, 0.35 + 0.2 * (1 - k / depth));
+      g.fillText(ch, cx + k * 0.5, y + k * 0.8);
+    }
+    const grad = g.createLinearGradient(0, y - size / 2, 0, y + size / 2);
+    grad.addColorStop(0, shade(col, 1.2)); grad.addColorStop(1, shade(col, 0.85));
+    g.fillStyle = grad;
+    g.fillText(ch, cx, y);
+    g.lineWidth = Math.max(0.8, size * 0.012);
+    g.strokeStyle = 'rgba(255,255,255,0.45)';
+    g.strokeText(ch, cx, y);
+    cx += widths[i] + spacing;
+  });
+  g.restore();
+  return total;
+}
+function textWidth(g, text, size) {
+  g.font = `900 ${size}px ${FONT}`;
+  return g.measureText(text).width + size * 0.02 * ([...text].length - 1);
+}
+
+// ---------- layout + build ----------
+function layout() {
+  W = Math.max(320, window.innerWidth || 0); H = Math.max(320, window.innerHeight || 0);
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+  pieces = []; bakeCanvas = null;
+
+  const titleW = Math.min(W * 0.9, 1150);
+  const measured = textWidth(ctx, 'BRAINSTACK', 100) * 1.04;
+  fontSize = Math.min(100 * titleW / measured, H * 0.2);
+  // old pieces were ~fontSize*0.62 wide; new base unit is ~1/3 of that, merged pieces are up to 2-3x
+  u = Math.max(16, Math.min(34, Math.round(fontSize * 0.62 / 3)));
+  cols = Math.ceil(W / u) + 1; rows = Math.ceil(H / u) + 1;
+  ox = (W - cols * u) / 2; oy = (H - rows * u) / 2;
+
+  const titleH = fontSize * 1.15, btnHpx = Math.max(50, fontSize * 0.6), gap = fontSize * 0.45;
+  const top = (H - (titleH + gap + btnHpx)) / 2;
+  const titleCY = top + titleH / 2;
+  const tw = textWidth(ctx, 'BRAINSTACK', fontSize);
+  const titleRect = { x: W / 2 - tw / 2 - u, y: titleCY - fontSize * 0.6, w: tw + 2 * u, h: fontSize * 1.25 };
+
+  // play button snapped to the grid
+  const bwPx = Math.max(150, btnHpx * 2.9);
+  const bc0 = Math.round((W / 2 - bwPx / 2 - ox) / u), bc1 = Math.round((W / 2 + bwPx / 2 - ox) / u);
+  const br0 = Math.round((top + titleH + gap - oy) / u), br1 = br0 + Math.max(2, Math.round(btnHpx / u));
+  btnRect = { c0: bc0, c1: bc1, r0: br0, r1: br1, x: ox + bc0 * u, y: oy + br0 * u, w: (bc1 - bc0) * u, h: (br1 - br0) * u };
+
+  // ----- texture with everything printed on it -----
+  const M = 2 * u;
+  const tex = document.createElement('canvas');
+  tex.width = Math.round((W + 2 * M) * dpr); tex.height = Math.round((H + 2 * M) * dpr);
+  const g = tex.getContext('2d');
+  g.scale(dpr, dpr); g.translate(M, M);
+
+  // background numbers & equations, spread over the pieces
+  const taken = [
+    { x: titleRect.x - u, y: titleRect.y - u * 0.5, w: titleRect.w + 2 * u, h: titleRect.h + u },
+    { x: btnRect.x - u, y: btnRect.y - u, w: btnRect.w + 2 * u, h: btnRect.h + 2 * u },
+  ];
+  const hits = r => taken.some(o => r.x < o.x + o.w && r.x + r.w > o.x && r.y < o.y + o.h && r.y + r.h > o.y);
+  for (let tries = 0; tries < 2500; tries++) {
+    const text = pick(EQUATIONS);
+    const size = Math.random() < 0.15 ? rand(u * 2.2, u * 3.4) : rand(u * 0.8, u * 2.0);
+    const w = textWidth(g, text, size), h = size * 1.05;
+    const r = { x: rand(-w * 0.3, W - w * 0.7), y: rand(-h * 0.3, H - h * 0.7), w, h };
+    const padded = { x: r.x - size * 0.25, y: r.y - size * 0.15, w: r.w + size * 0.5, h: r.h + size * 0.3 };
+    if (hits(padded)) continue;
+    taken.push(padded);
+    const multi = Math.random() < 0.3;
+    const colsEq = multi ? EQ_COLORS.slice().sort(() => Math.random() - 0.5) : [pick(EQ_COLORS)];
+    drawExtrudedText(g, text, r.x + w / 2, r.y + h / 2, size, colsEq, 0, 0.75);
+  }
+
+  // title
+  // title is 3D from the start (no pop-out when the pieces snap)
+  g.save();
+  g.shadowColor = 'rgba(0,0,0,0.6)'; g.shadowBlur = fontSize * 0.1; g.shadowOffsetX = fontSize * 0.05; g.shadowOffsetY = fontSize * 0.09;
+  drawExtrudedText(g, 'BRAINSTACK', W / 2 + fontSize * 0.04, titleCY + fontSize * 0.07, fontSize, ['#000000'], 0, 0.6);
+  g.restore();
+  drawExtrudedText(g, 'BRAINSTACK', W / 2, titleCY, fontSize, TITLE_COLORS, Math.round(fontSize * 0.12));
+
+  // play button label
+  {
+    const bcx = btnRect.x + btnRect.w / 2, bcy = btnRect.y + btnRect.h / 2 + 2;
+    const fs = btnRect.h * 0.5, tri = fs * 0.62, gapT = fs * 0.28;
+    const tw2 = textWidth(g, 'PLAY', fs);
+    const left = bcx - (tw2 + gapT + tri) / 2;
+    drawExtrudedText(g, 'PLAY', left + tw2 / 2, bcy, fs, ['#ffffff'], 0);
+    const tx = left + tw2 + gapT;
+    const triPath = (o1, o2) => { g.beginPath(); g.moveTo(tx + o1, bcy - tri / 2 + o2); g.lineTo(tx + tri * 0.9 + o1, bcy + o2); g.lineTo(tx + o1, bcy + tri / 2 + o2); g.closePath(); };
+    g.fillStyle = '#ffffff'; triPath(0, 0); g.fill();
+  }
+
+  // ----- jigsaw grid with merged blocks (different sizes) -----
+  const hE = [], vE = [];
+  for (let r = 0; r <= rows; r++) { hE[r] = []; for (let c = 0; c < cols; c++) hE[r][c] = randEdge(r === 0 || r === rows); }
+  for (let r = 0; r < rows; r++) { vE[r] = []; for (let c = 0; c <= cols; c++) vE[r][c] = randEdge(c === 0 || c === cols); }
+
+  for (let c = bc0; c < bc1; c++) { hE[br0][c].b = 0; hE[br1][c].b = 0; }
+  for (let r = br0; r < br1; r++) { vE[r][bc0].b = 0; vE[r][bc1].b = 0; }
+  const inBtn = (r, c) => r >= br0 && r < br1 && c >= bc0 && c < bc1;
+  const owner = Array.from({ length: rows }, () => new Array(cols).fill(-1));
+  const SHAPES = [[2, 2], [2, 2], [2, 1], [1, 2], [2, 1], [1, 2], [1, 1], [1, 1], [3, 1], [1, 3], [3, 2], [2, 3]];
+  const blocks = [];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    if (owner[r][c] !== -1) continue;
+    const region = inBtn(r, c);
+    let chosen = [1, 1];
+    for (let a = 0; a < 4; a++) {
+      const [w, h] = pick(SHAPES);
+      let ok = r + h <= rows && c + w <= cols;
+      for (let rr = r; ok && rr < r + h; rr++) for (let cc = c; ok && cc < c + w; cc++)
+        if (owner[rr][cc] !== -1 || inBtn(rr, cc) !== region) ok = false;
+      if (ok) { chosen = [w, h]; break; }
+    }
+    const [w, h] = chosen, id = blocks.length;
+    for (let rr = r; rr < r + h; rr++) for (let cc = c; cc < c + w; cc++) owner[rr][cc] = id;
+    blocks.push({ r0: r, c0: c, w, h, btn: region });
+  }
+
+  // ----- build a sprite for every piece -----
+  for (const bl of blocks) {
+    const bw = bl.w * u, bh = bl.h * u, m = Math.ceil(u * 0.32);
+    const cx = ox + bl.c0 * u + bw / 2, cy = oy + bl.r0 * u + bh / 2;
+    const X = c => (c - bl.c0) * u - bw / 2, Y = r => (r - bl.r0) * u - bh / 2;
+    const path = new Path2D();
+    const { r0, c0, w, h } = bl;
+    path.moveTo(X(c0), Y(r0));
+    for (let c = c0; c < c0 + w; c++) { const e = hE[r0][c]; edge(path, X(c), Y(r0), X(c + 1), Y(r0), -e.b, e.t, e.sz); }
+    for (let r = r0; r < r0 + h; r++) { const e = vE[r][c0 + w]; edge(path, X(c0 + w), Y(r), X(c0 + w), Y(r + 1), e.b, e.t, e.sz); }
+    for (let c = c0 + w - 1; c >= c0; c--) { const e = hE[r0 + h][c]; edge(path, X(c + 1), Y(r0 + h), X(c), Y(r0 + h), e.b, 1 - e.t, e.sz); }
+    for (let r = r0 + h - 1; r >= r0; r--) { const e = vE[r][c0]; edge(path, X(c0), Y(r + 1), X(c0), Y(r), -e.b, 1 - e.t, e.sz); }
+    path.closePath();
+
+    const v = rand(-0.04, 0.04);
+    const color = bl.btn ? BTN_COLOR : '#' + BOARD_COLOR.map(c => Math.max(0, Math.min(255, Math.round(c * (1 + v)))).toString(16).padStart(2, '0')).join('');
+    const fw = bw + 2 * m, fh = bh + 2 * m;
+    const face = document.createElement('canvas');
+    face.width = Math.ceil(fw * dpr); face.height = Math.ceil(fh * dpr);
+    const fg = face.getContext('2d');
+    fg.scale(dpr, dpr); fg.translate(fw / 2, fh / 2);
+    fg.fillStyle = color; fg.fill(path);
+    fg.save(); fg.clip(path);
+    fg.drawImage(tex, (cx - fw / 2 + M) * dpr, (cy - fh / 2 + M) * dpr, fw * dpr, fh * dpr, -fw / 2, -fh / 2, fw, fh);
+    fg.restore();
+    fg.lineWidth = 0.8; fg.strokeStyle = 'rgba(0,0,0,0.28)'; fg.stroke(path);
+
+    const side = document.createElement('canvas');
+    side.width = Math.ceil(fw * dpr); side.height = Math.ceil(fh * dpr);
+    const sg = side.getContext('2d');
+    sg.scale(dpr, dpr); sg.translate(fw / 2, fh / 2); sg.fillStyle = bl.btn ? BTN_SIDE : shade(color, 0.5); sg.fill(path);
+
+    pieces.push({
+      face, side, path, cx, cy, bw, bh, fw, fh, btn: bl.btn,
+      s0: rand(3.5, 7), rot0: rand(-1.1, 1.1), tilt0: rand(-1.0, 1.0),
+      start: rand(T_START, T_START + 1.1), dx: rand(-60, 60), dy: rand(-60, 60), lift: 0,
+    });
+  }
+}
+
+// ---------- drawing ----------
+function drawPiece(g, p, x, y, sc, rot, tilt, depthMul, pass, alpha = 1) {
+  const squash = Math.max(0.2, Math.abs(Math.cos(tilt)));
+  const depth = u * 0.16 * depthMul * sc;
+  const ex = 0.4 * depth + Math.sin(tilt) * p.bw * 0.25 * sc, ey = 0.8 * depth;
+  const cs = Math.cos(rot), sn = Math.sin(rot), sx = sc * squash, sy = sc;
+  g.globalAlpha = alpha;
+  g.imageSmoothingQuality = 'high';
+  const put = (img, px, py) => {
+    g.setTransform(dpr * cs * sx, dpr * sn * sx, -dpr * sn * sy, dpr * cs * sy, dpr * px, dpr * py);
+    g.drawImage(img, -p.fw / 2, -p.fh / 2, p.fw, p.fh);
+  };
+  if (pass !== 'face') { put(p.side, x + ex, y + ey); put(p.side, x + ex * 0.66, y + ey * 0.66); put(p.side, x + ex * 0.33, y + ey * 0.33); }
+  if (pass !== 'side') put(p.face, x, y);
+  g.globalAlpha = 1;
+}
+
+function bake() {
+  bakeCanvas = document.createElement('canvas');
+  bakeCanvas.width = canvas.width; bakeCanvas.height = canvas.height;
+  const g = bakeCanvas.getContext('2d');
+  g.fillStyle = '#10131c'; g.fillRect(0, 0, bakeCanvas.width, bakeCanvas.height);
+  for (const p of pieces) drawPiece(g, p, p.cx, p.cy, 1, 0, 0, 1, 'face');
+  flashCanvas = document.createElement('canvas');
+  flashCanvas.width = canvas.width; flashCanvas.height = canvas.height;
+  const fg = flashCanvas.getContext('2d');
+  fg.lineWidth = 2; fg.strokeStyle = 'rgba(200,225,255,0.9)';
+  for (const p of pieces) { fg.setTransform(dpr, 0, 0, dpr, dpr * p.cx, dpr * p.cy); fg.stroke(p.path); }
+}
+let flashCanvas = null;
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const t = (now - t0) / 1000;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+  if (phase === 'intro' && t >= T_END) { phase = 'locked'; lockTime = t; bake(); }
+
+  const CX = W / 2, CY = H / 2;
+  if (phase === 'intro') {
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const draws = [];
+    for (const p of pieces) {
+      if (t < p.start) continue;
+      const k = Math.min(1, (t - p.start) / (T_END - p.start));
+      const HOVER = 1.1, SNAP = 0.82;
+      let sc, e;
+      if (k < SNAP) { const q = k / SNAP; sc = HOVER + (p.s0 - HOVER) * Math.pow(1 - q, 2.2); e = 0.92 * (1 - (1 - q) * (1 - q)); }
+      else { const q = (k - SNAP) / (1 - SNAP); sc = HOVER - (HOVER - 1) * q * q * q; e = 0.92 + 0.08 * q * q; }
+      const x = CX + (p.cx - CX) * sc + p.dx * (1 - e), y = CY + (p.cy - CY) * sc + p.dy * (1 - e);
+      const rad = (Math.max(p.fw, p.fh) * 0.75 + u * 0.3) * sc;
+      if (x + rad < 0 || x - rad > W || y + rad < 0 || y - rad > H) continue;
+      draws.push({ p, x, y, sc, rot: p.rot0 * (1 - e), tilt: p.tilt0 * (1 - e), a: Math.min(1, k * 3) });
+    }
+    draws.sort((a, b) => a.sc - b.sc); // big (close to you) pieces drawn on top
+    for (const d of draws) drawPiece(ctx, d.p, d.x, d.y, d.sc, d.rot, d.tilt, 1, null, d.a);
+  } else if (phase === 'locked') {
+    const lt = t - lockTime;
+    const squash = 1 + 0.02 * Math.exp(-lt * 14) * Math.abs(Math.cos(lt * 30)); // punch-in on impact, never shows the edges
+    const jolt = 0;
+    ctx.setTransform(squash, 0, 0, squash, (1 - squash) * canvas.width / 2, (1 - squash) * canvas.height / 2 + jolt * dpr);
+    ctx.drawImage(bakeCanvas, 0, 0);
+    if (lt < 0.35) { ctx.globalAlpha = Math.pow(1 - lt / 0.35, 2); ctx.drawImage(flashCanvas, 0, 0); ctx.globalAlpha = 1; }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    // button rises out of the board (and a bit more on hover)
+    const live = [];
+    for (const p of pieces) if (p.btn) { p.lift += ((hoverPlay ? 1 : 0) - p.lift) * Math.min(1, dt * 10); if (p.lift > 0.01) live.push({ p, dm: p.lift * 2.4 }); }
+    for (const pass of ['side', 'face']) for (const d of live) {
+      const extra = u * 0.16 * d.dm;
+      drawPiece(ctx, d.p, d.p.cx - 0.4 * extra, d.p.cy - 0.8 * extra, 1, 0, 0, d.dm, pass);
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (lt < 0.12) { ctx.fillStyle = `rgba(255,255,255,${0.3 * (1 - lt / 0.12)})`; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+  } else if (phase === 'leaving') {
+    const lt = t - leaveTime, k = Math.min(1, lt / 0.85);
+    ctx.fillStyle = '#1b2136'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const draws = [];
+    for (const p of pieces) {
+      const kk = Math.max(0, Math.min(1, (k - p.leaveDelay) / (1 - p.leaveDelay)));
+      const sc = 1 + (p.s0 - 1) * kk * kk;
+      const x = CX + (p.cx - CX) * sc, y = CY + (p.cy - CY) * sc;
+      const rad = Math.max(p.fw, p.fh) * 0.75 * sc;
+      if (x + rad < 0 || x - rad > W || y + rad < 0 || y - rad > H) continue;
+      draws.push({ p, x, y, sc, rot: p.rot0 * kk, tilt: p.tilt0 * kk, a: 1 - kk * kk });
+    }
+    draws.sort((a, b) => a.sc - b.sc);
+    for (const d of draws) drawPiece(ctx, d.p, d.x, d.y, d.sc, d.rot, d.tilt, 1, null, d.a);
+    if (k >= 1) { phase = 'home'; showHome(); }
+  }
+
+  // confetti
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const q = particles[i];
+    q.age += dt; if (q.age > q.life) { particles.splice(i, 1); continue; }
+    q.x += q.vx * dt; q.y += q.vy * dt; q.vy += 650 * dt; q.vx *= 0.98; q.rot += dt * 6;
+    ctx.save();
+    ctx.globalAlpha = 1 - q.age / q.life;
+    ctx.translate(q.x, q.y); ctx.rotate(q.rot);
+    ctx.fillStyle = q.col; ctx.fillRect(-q.size / 2, -q.size / 2, q.size, q.size);
+    ctx.restore();
+  }
+
+  if (phase !== 'home') requestAnimationFrame(frame);
+}
+
+// ---------- input ----------
+function overPlay(e) {
+  if (!btnRect || phase !== 'locked') return false;
+  return e.clientX > btnRect.x && e.clientX < btnRect.x + btnRect.w && e.clientY > btnRect.y && e.clientY < btnRect.y + btnRect.h;
+}
+canvas.addEventListener('mousemove', e => { hoverPlay = overPlay(e); canvas.style.cursor = hoverPlay ? 'pointer' : 'default'; });
+canvas.addEventListener('click', e => {
+  if (!overPlay(e)) return;
+  phase = 'leaving'; leaveTime = (performance.now() - t0) / 1000;
+  canvas.style.cursor = 'default'; hoverPlay = false;
+  for (const p of pieces) p.leaveDelay = rand(0, 0.35);
+});
+
+function startIntro() {
+  document.getElementById('home').style.display = 'none';
+  phase = 'intro'; particles = []; hoverPlay = false;
+  layout();
+  t0 = performance.now(); last = t0;
+  requestAnimationFrame(frame);
+}
+
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (phase === 'home' || phase === 'leaving') return;
+    const wasLocked = phase === 'locked';
+    layout();
+    if (wasLocked) { lockTime = (performance.now() - t0) / 1000 - 5; bake(); }
+  }, 200);
+});
+
+// ---------- Inequal: switching green numbers (click one then the other, or drag one onto the other) ----------
+(function () {
+  const greens = () => [...document.querySelectorAll('#inequal .g')];
+  let selected = null, drag = null;
+
+  let history = []; // earlier arrangements of this level, for Undo
+  function updateUndo() { document.getElementById('undo').classList.toggle('empty', history.length === 0); }
+  function swap(a, b, isUndo) {
+    if (!isUndo) { history.push(snap()); updateUndo(); }
+    for (const el of [a, b]) { el.style.transition = 'none'; el.style.transform = ''; }
+    const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+    const ta = a.innerHTML; a.innerHTML = b.innerHTML; b.innerHTML = ta;
+    // slide each number in from where the other one was
+    for (const [el, from, to] of [[a, rb, ra], [b, ra, rb]]) {
+      el.style.transition = 'none';
+      el.style.transform = `translateX(${from.left - to.left}px)`;
+      el.offsetWidth;
+      el.style.transition = 'transform .28s cubic-bezier(.3,1.4,.5,1)';
+      el.style.transform = '';
+    }
+    setTimeout(() => greens().forEach(el => { el.style.transition = ''; }), 300);
+    save();
+    checkWin();
+  }
+  // g: true = green (can be switched)
+  const LEVELS = [
+    [{ t: '3', g: 1 }, { t: '−' }, { t: '4', g: 1 }, { t: '=' }, { t: '1' }],
+    [{ t: '12', g: 1 }, { t: '−' }, { t: '7' }, { t: '=' }, { t: '19', g: 1 }],
+    [{ t: '20' }, { t: '−' }, { t: '4' }, { t: '+' }, { t: '7', g: 1 }, { t: '−' }, { t: '9', g: 1 }, { t: '=' }, { t: '18' }],
+    // needs 2 switches: both 8s must end up in + spots, both 3s in − spots → 13 + 8 − 3 + 17 − 3 + 8 + 6 = 46 (only answer)
+    [{ t: '13' }, { t: '+' }, { t: '3', g: 1 }, { t: '−' }, { t: '8', g: 1 }, { t: '+' }, { t: '17' }, { t: '−' }, { t: '8', g: 1 },
+     { t: '+' }, { t: '3', g: 1 }, { t: '+' }, { t: '6' }, { t: '=' }, { t: '46' }],
+    // switch green #1 with #4 and #2 with #3 → 9 + 12 + 14 + 12 − 7 + 8 − 7 = 41 (only answer; no single switch works)
+    [{ t: '9' }, { t: '+' }, { t: '7', g: 1 }, { t: '+' }, { t: '14' }, { t: '+' }, { t: '7', g: 1 }, { t: '−' }, { t: '12', g: 1 },
+     { t: '+' }, { t: '8' }, { t: '−' }, { t: '12', g: 1 }, { t: '=' }, { t: '41' }],
+    // 6 numbers + answer; signs can be green too (signs switch with signs, numbers with numbers)
+    // answer: switch 6↔4 and the green −/+ → 11 − 4 + 6 + 5 + 12 − 10 = 20 (one switch alone never works)
+    [{ t: '11' }, { t: '−' }, { t: '6', g: 1 }, { t: '+' }, { t: '4', g: 1 }, { t: '−', g: 1 }, { t: '5' }, { t: '+' }, { t: '12' },
+     { t: '+', g: 1 }, { t: '10' }, { t: '=' }, { t: '20' }],
+    // the = sign is green too: it can switch with a sign, which moves where the two sides split
+    // answer: switch 2↔14 and the green + with = → 6 + 14 − 15 + 8 = 11 + 2 (one switch alone never works)
+    [{ t: '6' }, { t: '+' }, { t: '2', g: 1 }, { t: '−' }, { t: '15' }, { t: '+' }, { t: '8' }, { t: '+', g: 1 }, { t: '11' },
+     { t: '=', g: 1 }, { t: '14', g: 1 }],
+    // multiplication arrives (easy): switch 12↔6 → 2 × 6 = 12
+    [{ t: '2' }, { t: '×' }, { t: '12', g: 1 }, { t: '=' }, { t: '6', g: 1 }],
+    // medium multiplication (× is worked out before + and −): switch 9↔2 → 6 + 7 × 2 − 9 = 11
+    [{ t: '6', g: 1 }, { t: '+' }, { t: '7' }, { t: '×' }, { t: '9', g: 1 }, { t: '−' }, { t: '2', g: 1 }, { t: '=' }, { t: '11' }],
+    // hard multiplication: all three green numbers move and the green × switches with − → 8 × 11 − 5 − 12 × 3 = 47 (only answer)
+    [{ t: '8' }, { t: '×' }, { t: '5', g: 1 }, { t: '×', g: 1 }, { t: '12', g: 1 }, { t: '−' }, { t: '11', g: 1 }, { t: '−', g: 1 }, { t: '3' },
+     { t: '=' }, { t: '47' }],
+    // all three operations: all three green numbers move and the green − switches with × → 8 + 9 × 5 + 4 − 11 = 46 (only answer)
+    [{ t: '5', g: 1 }, { t: '+' }, { t: '9' }, { t: '−', g: 1 }, { t: '11', g: 1 }, { t: '+' }, { t: '4' }, { t: '×', g: 1 }, { t: '8', g: 1 },
+     { t: '=' }, { t: '46' }],
+    // division arrives (no ×): switch 7↔2 → 11 + 12 ÷ 2 − 7 = 10 (only answer)
+    [{ t: '11', g: 1 }, { t: '+' }, { t: '12' }, { t: '÷' }, { t: '7', g: 1 }, { t: '−' }, { t: '2', g: 1 }, { t: '=' }, { t: '10' }],
+    // × and ÷ together: switch 10↔8 and the green − with × → 5 + 12 × 8 ÷ 4 − 10 = 19 (only answer)
+    [{ t: '5' }, { t: '+' }, { t: '12' }, { t: '−', g: 1 }, { t: '10', g: 1 }, { t: '÷' }, { t: '4', g: 1 }, { t: '×', g: 1 }, { t: '8', g: 1 },
+     { t: '=' }, { t: '19' }],
+    // orange digits arrive ("2*3" = the 3 is orange): move the 3 to the end of 22 → 223 + 2 = 225
+    [{ t: '22' }, { t: '+' }, { t: '2*3' }, { t: '=' }, { t: '225' }],
+    // 5 numbers + the answer, all green, and every one has to move → 3 × 3 − 8 ÷ 2 + 7 = 12 (only answer; one switch never works)
+    [{ t: '7', g: 1 }, { t: '×' }, { t: '8', g: 1 }, { t: '−' }, { t: '12', g: 1 }, { t: '÷' }, { t: '3', g: 1 }, { t: '+' }, { t: '3', g: 1 },
+     { t: '=' }, { t: '2', g: 1 }],
+    // 2 orange digits, both at the end of numbers: the 8 goes onto the 3, the 1 in front of the 7 → 38 + 1 − 22 = 17 (only answer; needs both)
+    [{ t: '3*1' }, { t: '+' }, { t: '1*8' }, { t: '−' }, { t: '22' }, { t: '=' }, { t: '7' }],
+    // 3 orange digits: the 2 goes in front of the 5, a 6 in front of the 3, the other 6 in front of the 1 → 99 + 25 − 63 = 61 (only answer; needs all three)
+    [{ t: '99' }, { t: '+' }, { t: '*65' }, { t: '−' }, { t: '*23' }, { t: '=' }, { t: '1*6' }],
+    // an orange sign: drop it inside a number to split it, or in front of one to make it negative
+    // move the orange − in front of the 10 (the 2 and 3 join up) → 13 − 23 = −10 (only answer)
+    [{ t: '13' }, { t: '−' }, { t: '2' }, { t: '*−' }, { t: '3' }, { t: '=' }, { t: '10' }],
+    // 4 orange digits: the 2, 9, 3, 3 → 9 after the 1, 3 in front of the 8, 3 in front of the 5, 2 after the 9 → 19 + 38 + 35 = 92 (needs all four)
+    [{ t: '*21' }, { t: '+' }, { t: '8*9' }, { t: '+' }, { t: '5*3' }, { t: '=' }, { t: '9*3' }],
+    // 3 oranges, big numbers: 3 → end of 26, 6 → in front of 68, 7 → in front of 49 → 263 − 668 + 749 = 344 (needs all three)
+    [{ t: '2*76' }, { t: '−' }, { t: '68*3' }, { t: '+' }, { t: '4*69' }, { t: '=' }, { t: '344' }],
+    // orange signs break numbers apart so 3 orange digits can be put together into a brand-new number:
+    // → 13 + 162 × 3 − 4 = 495 (the + moves into 3162, the 1 2 3 join back to 13; only answer)
+    [{ t: '1' }, { t: '*+' }, { t: '*23' }, { t: '×' }, { t: '*63' }, { t: '*−' }, { t: '4' }, { t: '=' }, { t: '495*1' }],
+    // 2 oranges + 2 greens: switch 79↔63, 8 → after the 7, 6 → in front of the 2 → 78 + 63 − 79 = 62 (needs all three moves)
+    [{ t: '*87' }, { t: '+' }, { t: '79', g: 1 }, { t: '−' }, { t: '63', g: 1 }, { t: '=' }, { t: '2*6' }],
+    // "_8" = orange underline: moving it leaves a 0 behind → 210 − 72 + 440 = 578 (only answer; needs both)
+    [{ t: '21_8' }, { t: '−' }, { t: '72' }, { t: '+' }, { t: '4_4' }, { t: '=' }, { t: '57' }],
+    // "[2]" = green underline: switch just that digit → switch the 2 and 5 → 45 + 35 − 58 = 22
+    [{ t: '4[2]' }, { t: '+' }, { t: '35' }, { t: '−' }, { t: '58' }, { t: '=' }, { t: '[5]2' }],
+    // green underline ↔ green number: the 3 switches with 47 → 57 + 87 + 3 = 147
+    [{ t: '57' }, { t: '+' }, { t: '87' }, { t: '+' }, { t: '47', g: 1 }, { t: '=' }, { t: '1[3]' }],
+    // orange underline + green numbers: 8 → in front of the 3 (789 → 709), then switch 83↔23 → 709 + 23 − 83 = 649
+    [{ t: '7_89' }, { t: '+' }, { t: '3', g: 1 }, { t: '−' }, { t: '23', g: 1 }, { t: '=' }, { t: '649' }],
+    // orange digit + green underlines: switch 8↔5, 6 → in front of the 2 → 54 − 18 + 62 = 98
+    [{ t: '[8]4' }, { t: '−' }, { t: '18' }, { t: '+' }, { t: '2' }, { t: '=' }, { t: '9*6[5]' }],
+    // green underlines + orange underline: switch 3↔4, the underlined 3 → after the 53 → 56 + 71 + 406 = 533
+    [{ t: '56' }, { t: '+' }, { t: '71' }, { t: '+' }, { t: '[3]_36' }, { t: '=' }, { t: '5[4]' }],
+    // green underline, orange underline, green number: 1 → in front of 99 (11 → 10), switch [4]↔10 → 91 + 104 + 4 = 199
+    [{ t: '91' }, { t: '+' }, { t: '[4]4' }, { t: '+' }, { t: '1_1', g: 1 }, { t: '=' }, { t: '99' }],
+    // green underlines, orange underline, orange digit: 5 → end of 63, underlined 8 → end of 60, switch 3↔5 → 608 + 59 − 32 = 635
+    [{ t: '*56_8' }, { t: '+' }, { t: '[3]9' }, { t: '−' }, { t: '[5]2' }, { t: '=' }, { t: '63' }],
+    // all four: underlined 7 → end of 7, orange 4 → between them, switch [5]↔70 → 40 + 702 + 5 = 747
+    [{ t: '40' }, { t: '+' }, { t: '[5]2*4' }, { t: '+' }, { t: '7_7', g: 1 }, { t: '=' }, { t: '7' }],
+    // everything: switch green + and ×, switch green 7 with [5], underlined 4 → after the 1 (14, leaves 309),
+    // orange 1 → front of 309 (1309), orange + → 130|9 (14 and 44 join into 1444) → 5 × 130 + 9 + 785 = 1444
+    [{ t: '7', g: 1 }, { t: '+', g: 1 }, { t: '3_49' }, { t: '×', g: 1 }, { t: '[5]85' }, { t: '=' }, { t: '1' }, { t: '*+' }, { t: '*144' }],
+    // red number: pick 19 → 48 − 19 + 27 = 56
+    [{ t: '48' }, { t: '−' }, { t: '13', r: ['19', '26', '31'] }, { t: '+' }, { t: '27' }, { t: '=' }, { t: '56' }],
+    // orange overlines: 1 → onto the 3 (40), 6 → onto the 0 (46) → 8 + 38 = 46
+    [{ t: '8!1' }, { t: '+' }, { t: '3!68' }, { t: '=' }, { t: '30' }],
+    // overline + underline: 4 → onto the 0 of 40 (leaves 440), 3 → onto that 0 (443); 35 → 05 → 5 → 76 + 362 + 5 = 443
+    [{ t: '76' }, { t: '+' }, { t: '362' }, { t: '+' }, { t: '%35' }, { t: '=' }, { t: '40%4' }],
+    // more red numbers → 77 + 62 − 43 = 96
+    [{ t: '66', r: ['64', '77', '74'] }, { t: '+' }, { t: '67', r: ['70', '62', '66'] }, { t: '−' }, { t: '42', r: ['56', '43', '46'] }, { t: '=' }, { t: '96' }],
+    // 2 → onto the 3 (59), 9 → onto the 5 (14), 8 → onto the 1 (94); 825 → 85 → 5 → 89 + 5 = 94
+    [{ t: '89' }, { t: '+' }, { t: '%8!25' }, { t: '=' }, { t: '3!9' }],
+    // red 16 → 17, red 72 → 70, 4 → onto the 6 (10), 8 → onto the 1 (90) → 17 + 70 + 3 = 90
+    [{ t: '16', r: ['17', '29', '30'] }, { t: '+' }, { t: '72', r: ['70', '74', '79'] }, { t: '+' }, { t: '%83' }, { t: '=' }, { t: '6!4' }],
+    // red underlines (each digit has its own choices) → 42 + 640 + 31 = 713
+    [{ t: '42' }, { t: '+' }, { t: '6$10', ru: [['1', '3', '4', '8']] }, { t: '+' }, { t: '3$8', ru: [['0', '1', '7', '8']] }, { t: '=' },
+     { t: '71$5', ru: [['3', '4', '5', '6']] }],
+    // red number with red underlines inside: 598 → 663, then 6 → 1 and 3 → 0 → 610 − 66 = 544
+    [{ t: '5$9$8', r: ['591', '663', '891'], ru: [['1', '3', '7', '9'], ['0', '5', '7', '8']] }, { t: '−' }, { t: '66' }, { t: '=' }, { t: '544' }],
+    // two red underlines in one gray number: 2595 → 1590 → 1590 + 327 = 1917
+    [{ t: '$259$5', ru: [['1', '2', '4', '7'], ['0', '4', '5', '9']] }, { t: '+' }, { t: '327' }, { t: '=' }, { t: '1917' }],
+    // red underline + red number with red underlines (RUiN): 242 → 849, 8 → 1, 4 → 1 (119), 50 → 51 → 119 − 68 = 51
+    [{ t: '$2$42', r: ['105', '391', '849'], ru: [['1', '2', '5', '7'], ['0', '1', '4', '7']] }, { t: '−' }, { t: '68' }, { t: '=' },
+     { t: '5$0', ru: [['0', '1', '6', '7']] }],
+    // lots of red underlines: 6→2, 0→2, 5→3, 7→4, 5→8 → 24 + 424 + 33 = 481
+    [{ t: '$64', ru: [['2', '6', '7', '9']] }, { t: '+' }, { t: '4$04', ru: [['0', '2', '5', '6']] }, { t: '+' }, { t: '3$5', ru: [['1', '3', '4', '5']] },
+     { t: '=' }, { t: '$7$51', ru: [['2', '4', '6', '7'], ['0', '5', '8', '9']] }],
+    // several red underlines in one number (M-RUN) + red underlines: 9 → 8, 4 → 9, 5 → 6, 0 → 8 → 607 + 80 − 39 = 648
+    [{ t: '607' }, { t: '+' }, { t: '$90', ru: [['4', '7', '8', '9']] }, { t: '−' }, { t: '3$4', ru: [['1', '4', '5', '9']] }, { t: '=' },
+     { t: '$54$0', ru: [['2', '3', '5', '6'], ['0', '1', '8', '9']] }],
+    // red number with a red underline (RUiN) + M-RUN: 166 → 573, 7 → 8; 593 → 490 → 583 − 93 = 490
+    [{ t: '1$66', r: ['573', '722', '880'], ru: [['0', '6', '7', '8']] }, { t: '−' }, { t: '93' }, { t: '=' },
+     { t: '$59$3', ru: [['4', '5', '7', '8'], ['0', '1', '3', '4']] }],
+    // RU, RUiN and M-RUN: 685 → 328, 2 → 4 (348); 60 → 61; 782 → 287 → 348 − 61 = 287
+    [{ t: '6$85', r: ['228', '278', '328'], ru: [['4', '5', '6', '8']] }, { t: '−' }, { t: '6$0', ru: [['0', '1', '4', '7']] }, { t: '=' },
+     { t: '$78$2', ru: [['2', '3', '7', '9'], ['0', '2', '3', '7']] }],
+    // R, RU, RUiN, M-RUN: 219 → 346, 6 → 4 (344); 31 → 51; 83 → 33; 260 → 362 → 344 + 51 − 33 = 362
+    [{ t: '21$9', r: ['346', '429', '441'], ru: [['1', '4', '7', '9']] }, { t: '+' }, { t: '31', r: ['20', '51', '53'] }, { t: '−' },
+     { t: '$83', ru: [['3', '4', '5', '8']] }, { t: '=' }, { t: '$26$0', ru: [['2', '3', '5', '6'], ['0', '2', '3', '8']] }],
+    // several red underlines inside a red number (M-RURN): 1926 → 8840, then 8 → 2, 8 → 5, 4 → 0 → 2500 + 186 = 2686
+    [{ t: '$1$9$26', r: ['5930', '7858', '8840'], ru: [['1', '2', '6', '8'], ['5', '6', '8', '9'], ['0', '2', '3', '8']] }, { t: '+' }, { t: '186' }, { t: '=' },
+     { t: '2686' }],
+  ];
+  const NAMES = ['First Spark', 'Flip Flop', 'Gray Zone', 'Twin Trouble', 'Mirror Match', 'Sign Shifter', 'Plus Quake', 'Swap Storm',
+    'Minus Maze', 'Times Tornado', 'Order of Chaos', 'Divide & Conquer', 'Sign Slinger', 'Orange Drop', 'Green Machine', 'Tail Twins',
+    'Triple Splash', 'Below Zero', 'Quad Squad', 'Big League', 'Number Forge', 'Citrus Clash', 'Ghost Zeros', 'Undercover Digits',
+    'Piece Thief', 'Zero Hero', 'Split Second', 'Double Agent', 'Triple Threat', 'Hyper Mix', 'Quad Fusion', 'Everything Everywhere',
+    'Red Alert', 'Over the Top', 'Double Decker', 'Red Rush', 'Sky High', 'Mega Mix', 'Red Pen', 'Code Breaker', 'Twin Edits', 'Red Inception', 'Red Storm', 'Linked Up',
+    'Chain Reaction', 'Triple Red', 'Red Overload', 'Final Boss'];
+  // ----- progress bar: how far through the whole game you are; reach a star to rank up -----
+  const RANKS = [[1, 'Counter', '123'], [7, 'Adder', '+'], [14, 'Multiplier', '×'], [23, 'Equation Solver', '='], [33, 'Algebra Ace', 'x²'],
+    [39, 'Mathlete', '🏅'], [44, 'Math Wizard', '🧙'], [Infinity, 'Infinity', '∞']]; // the last one is for finishing every level
+  // each rank is a math object: abacus, calculator, times grid, balance scale, chalkboard, medal, wizard hat, crown
+  const RANK_LOOK = [
+    ['#2eb85c', 'abacus'], ['#1eb6e8', 'calc'], ['#ff8c1a', 'grid'], ['#8b5cf6', 'scale'], ['#e5484d', 'board'], ['#14b8a6', 'medal'], ['#4a69ff', 'wizard'], ['#ffc312', 'crown']];
+  function rankPic(k, size) {
+    const [col, thing] = RANK_LOOK[k], D = '#2a3352';
+    let g = '';
+    if (thing === 'abacus') {
+      g = `<rect x="10" y="12" width="80" height="76" rx="6" fill="none" stroke="#a0662b" stroke-width="7"/>`;
+      [32, 50, 68].forEach((y, r) => {
+        g += `<line x1="14" y1="${y}" x2="86" y2="${y}" stroke="#8a95a8" stroke-width="2.5"/>`;
+        [0, 1, 2, 3].forEach(i => { const x = (r === 1 ? 26 : r === 2 ? 22 : 30) + i * 13 + (i >= 2 ? (r + 1) * 6 : 0);
+          g += `<ellipse cx="${x}" cy="${y}" rx="6.5" ry="7" fill="${['#2eb85c', '#ff8c1a', '#e5484d'][r]}"/>`; });
+      });
+    } else if (thing === 'calc') {
+      g = `<rect x="20" y="6" width="60" height="88" rx="9" fill="${col}"/><rect x="28" y="14" width="44" height="18" rx="3" fill="#e8fff1"/>
+        <text x="68" y="29" text-anchor="end" font-size="14" font-weight="800" fill="${D}">1+1</text>`;
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++)
+        g += `<rect x="${28 + c * 16}" y="${40 + r * 16}" width="12" height="12" rx="3" fill="${r === 2 && c === 2 ? '#ff8c1a' : '#fff'}"/>`;
+      g += `<text x="70" y="82" text-anchor="middle" font-size="12" font-weight="900" fill="#fff">+</text>`;
+    } else if (thing === 'grid') {
+      g = `<rect x="10" y="10" width="80" height="80" rx="6" fill="#fff" stroke="${col}" stroke-width="4"/>`;
+      for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) {
+        const v = (r + 1) * (c + 1), x = 14 + c * 18.5, y = 14 + r * 18.5;
+        g += `<rect x="${x}" y="${y}" width="17" height="17" rx="2" fill="${r === 0 || c === 0 ? col : '#fff1e0'}"/>
+          <text x="${x + 8.5}" y="${y + 13}" text-anchor="middle" font-size="11" font-weight="800" fill="${r === 0 || c === 0 ? '#fff' : D}">${v}</text>`;
+      }
+    } else if (thing === 'scale') {
+      g = `<rect x="47" y="20" width="6" height="64" fill="${D}"/><rect x="30" y="82" width="40" height="8" rx="4" fill="${D}"/>
+        <rect x="12" y="22" width="76" height="5" rx="2.5" fill="${col}"/><circle cx="50" cy="20" r="6" fill="${col}"/>
+        <path d="M14 27 L6 54 M14 27 L28 54 M86 27 L72 54 M86 27 L94 54" stroke="#8a95a8" stroke-width="2"/>
+        <path d="M2 54 h30 a15 9 0 0 1 -30 0 z M68 54 h30 a15 9 0 0 1 -30 0 z" fill="${col}"/>
+        <rect x="9" y="40" width="16" height="14" rx="2" fill="#ffc312"/><circle cx="83" cy="47" r="7" fill="#2eb85c"/>`;
+    } else if (thing === 'board') {
+      g = `<rect x="6" y="12" width="88" height="64" rx="4" fill="#1f5c45" stroke="#a0662b" stroke-width="6"/>
+        <text x="46" y="56" text-anchor="middle" font-size="30" font-weight="700" font-style="italic" fill="#fff" font-family="Georgia,serif">x</text>
+        <text x="62" y="40" text-anchor="middle" font-size="17" font-weight="700" fill="#ffc312">2</text>
+        <rect x="64" y="70" width="14" height="5" rx="2" fill="#fff"/><path d="M28 76 L20 94 M72 76 L80 94" stroke="#a0662b" stroke-width="5" stroke-linecap="round"/>`;
+    } else if (thing === 'medal') {
+      g = `<path d="M30 4 L50 46 L70 4 L58 4 L50 24 L42 4 Z" fill="#e5484d"/><path d="M42 4 L50 24 L58 4 Z" fill="#1eb6e8"/>
+        <circle cx="50" cy="66" r="28" fill="#ffc312" stroke="#e6a800" stroke-width="4"/><circle cx="50" cy="66" r="19" fill="none" stroke="#e6a800" stroke-width="2.5"/>
+        <text x="50" y="75" text-anchor="middle" font-size="24" font-weight="900" fill="#b07800">1</text>`;
+    } else if (thing === 'wizard') {
+      g = `<path d="M18 80 L54 4 L82 80 Z" fill="${col}"/><path d="M54 4 Q66 10 64 22" fill="none" stroke="${col}" stroke-width="6" stroke-linecap="round"/>
+        <rect x="6" y="76" width="88" height="12" rx="6" fill="#2a3352"/>
+        <path d="M46 40 l3 7 7 1 -5 5 1 7 -6 -3 -6 3 1 -7 -5 -5 7 -1 z" fill="#ffc312"/><circle cx="38" cy="64" r="3" fill="#ffc312"/><circle cx="64" cy="56" r="3.5" fill="#ffc312"/>`;
+    } else {
+      g = `<path d="M10 76 L6 22 L30 46 L50 10 L70 46 L94 22 L90 76 Z" fill="${col}" stroke="#e6a800" stroke-width="3" stroke-linejoin="round"/>
+        <rect x="10" y="74" width="80" height="14" rx="4" fill="#ff8c1a"/><circle cx="6" cy="20" r="5" fill="#e5484d"/><circle cx="50" cy="8" r="6" fill="#1eb6e8"/><circle cx="94" cy="20" r="5" fill="#2eb85c"/>
+        <text x="50" y="66" text-anchor="middle" font-size="30" font-weight="900" fill="#fff">∞</text>`;
+    }
+    return `<svg viewBox="0 0 100 100" width="${size}" height="${size}" style="display:block;overflow:visible">${g}</svg>`;
+  } // for finishing every level
+  let shownRank = -1, rankTimer = null;
+  function rankAt(p) { // p = levels finished
+    if (p >= LEVELS.length) return RANKS.length - 1;
+    let r = 0; RANKS.forEach(([lv], k) => { if (p + 1 >= lv) r = k; }); return r;
+  }
+  function updateProgress(p, celebrate) {
+    const track = document.getElementById('progTrack');
+    if (!track.querySelector('.pmark')) { // stars where you rank up
+      RANKS.slice(1).forEach(([lv, name], k) => { // each rank's character sits where you reach it
+        const m = document.createElement('div');
+        m.className = 'pmark'; m.innerHTML = rankPic(k + 1, 50); m.title = name;
+        m.style.left = ((lv === Infinity ? LEVELS.length : lv - 1) / LEVELS.length * 100) + '%';
+        track.appendChild(m);
+      });
+    }
+    document.getElementById('progFill').style.width = (p / LEVELS.length * 100) + '%';
+    const r = rankAt(p);
+    track.querySelectorAll('.pmark').forEach((m, k) => m.classList.toggle('got', r >= k + 1));
+    const [, name] = RANKS[r];
+    document.getElementById('progRank').innerHTML = `<span class="rpic">${rankPic(r, 40)}</span> Rank ${r + 1} · <b>${name}</b>`;
+    if (celebrate && shownRank >= 0 && r > shownRank) { // you reached a star: level up!
+      const box = document.getElementById('rankUp');
+      box.innerHTML = `<div class="t0">${rankPic(r, 66)}</div><div class="t1">LEVEL UP!</div><div class="t2">Rank ${r + 1} · ${name}</div>`;
+      box.classList.add('show');
+      clearTimeout(rankTimer); rankTimer = setTimeout(() => box.classList.remove('show'), 2200);
+    }
+    shownRank = r;
+  }
+  let best = 0; // the furthest level reached, so you can go back and forward again
+  let level = 0, won = false, stopConfetti = false, nextTimer = null, swapAbort = false;
+  let dsel = null, ddrag = null, slots = [];
+  const root = document.getElementById('inequal');
+  // "*−" is an orange sign (it can be moved into a number)
+  const kind = t => { const c = t.replace(/[*^]/g, ''); return c.length === 1 && '+−×÷='.includes(c) ? 'op' : 'num'; };
+  // numbers are written as one span per digit; "*" before a digit marks it orange
+  // a number is written as pieces: "5" gray digit, "*5" orange digit, "_5" orange underlined digit (leaves a 0 behind),
+  // "[5]" green underlined part (switches with other green numbers / green underlines)
+  // "~0" is the orange-underlined 0 an underlined digit leaves behind; another underlined digit can fill it
+  // "!5" orange overline digit (drop it on a digit to add), "%5" overline + underline (adds, and leaves a 0 behind)
+  const units = t => t.match(/\[[^\]]*\]|[*_~!%&$#]?./g) || [];
+  function digitsHTML(t) {
+    return units(t).map(u => u[0] === '[' ? `<span class="g gu" data-k="num">${[...u.slice(1, -1)].map(c => `<span class="d">${c}</span>`).join('')}</span>`
+      : u[0] === '*' ? `<span class="d o">${u[1]}</span>`
+      : u[0] === '_' ? `<span class="d o u">${u[1]}</span>`
+      : u[0] === '~' ? `<span class="d o u hole">0</span>`
+      : u[0] === '$' ? `<span class="d ru">${u[1]}</span>`
+      : u[0] === '#' ? `<span class="d rg">${u[1]}</span>`
+      : u[0] === '&' ? `<span class="d o u away">${u[1]}</span>`
+      : u[0] === '!' ? `<span class="d o ov">${u[1]}</span>`
+      : u[0] === '%' ? `<span class="d o ov ovu">${u[1]}</span>`
+      : `<span class="d">${u}</span>`).join('');
+  }
+  function renderLevel(i, toks) {
+    level = i; won = false; selected = null; drag = null; dsel = null; ddrag = null; hideSlots(); closeRed();
+    root.classList.remove('won');
+    best = Math.max(best, i);
+    document.getElementById('lvlNum').textContent = `LEVEL ${i + 1} OF ${LEVELS.length}`;
+    document.getElementById('lvlName').textContent = NAMES[i] || 'Mystery Level';
+    updateProgress(i, false);
+    document.getElementById('lvlPrev').classList.toggle('off', i === 0);
+    document.getElementById('lvlNext').classList.toggle('off', i >= best);
+    const eq = root.querySelector('.eq');
+    // toks can carry "^" in front of a green piece (so green stays with its piece when numbers split or join)
+    const def = LEVELS[i], marked = toks && toks.some(t => t[0] === '^');
+    const list = toks ? toks.map(t => t.replace(/^\^/, '')) : def.map(k => k.t);
+    const green = marked ? toks.map(t => t[0] === '^') : list.map((t, n) => !!(def[n] && def[n].g));
+    eq.innerHTML = list.map((t, n) => {
+      const cls = green[n] ? 'g' : def[n] && def[n].r ? 'x red' : 'x', k = kind(t);
+      const inner = k === 'num' ? digitsHTML(t) : t[0] === '*' ? `<span class="d o">${t.slice(1)}</span>` : t;
+      return `<span class="${cls}" data-k="${k}">${inner}</span>`;
+    }).join(' ');
+    // shrink long equations so they fit on the screen
+    eq.style.fontSize = '';
+    const maxW = innerWidth * 0.9, w = eq.scrollWidth;
+    if (w > maxW) eq.style.fontSize = parseFloat(getComputedStyle(eq).fontSize) * maxW / w + 'px';
+  }
+  // ----- auto save (kept in this browser) -----
+  const SAVE_KEY = 'brainstack.inequal';
+  const spans = () => [...root.querySelectorAll('.eq > span')];
+  const serialize = () => spans().map(el => el.dataset.k === 'num'
+    ? [...el.children].map(c => c.classList.contains('gu') ? '[' + c.textContent + ']'
+        : (c.classList.contains('ru') ? '$' : c.classList.contains('rg') ? '#' : c.classList.contains('hole') ? '~' : c.classList.contains('ovu') ? '%' : c.classList.contains('ov') ? '!' : c.classList.contains('away') ? '&' : c.classList.contains('u') ? '_' : c.classList.contains('o') ? '*' : '') + c.textContent).join('')
+    : (el.querySelector('.o') ? '*' : '') + el.textContent);
+  const snap = () => { const sp = spans(); return serialize().map((t, k) => (sp[k].classList.contains('g') ? '^' : '') + t); };
+  function save(data) {
+    data = data || { level, tokens: snap() };
+    if (!data.done) data.best = best = Math.max(best, data.level);
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) {}
+  }
+  function loadSave() { try { return JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { return null; } }
+  function startAt(i, tokens) {
+    root.style.display = 'flex';
+    const sv = loadSave();
+    best = Math.max(i, sv ? (sv.done ? LEVELS.length - 1 : Math.max(sv.best || 0, sv.level || 0)) : 0);
+    // put back the moves you had made (only if they still fit this level)
+    const def = LEVELS[i];
+    const chars = list => [...list.join('').replace(/[*^_~&!%$#\[\]0]/g, '')].sort().join('');
+    const movableSign = def.some(k => k.t[0] === '*' && kind(k.t) === 'op'); // numbers can split/join on these levels
+    const free = def.some(k => k.r || k.ru || k.rg || /[!%]/.test(k.t)); // numbers change on these levels, so only check the shape
+    const fits = tokens && (movableSign || (tokens.length === def.length && tokens.every((t, n) => kind(t) === kind(def[n].t))))
+      && (free || chars(tokens) === chars(def.map(k => k.t))); // same numbers & signs, just moved around
+    renderLevel(i, fits ? tokens : null);
+    history = []; updateUndo();
+    save();
+  }
+  window.inequalStart = i => startAt(i);
+  // go back a level, or forward again up to the furthest level you've reached
+  ['lvlPrev', 'lvlNext'].forEach((id, k) => {
+    const b = document.getElementById(id);
+    b.addEventListener('pointerdown', e => e.stopPropagation());
+    b.addEventListener('click', () => {
+      const n = level + (k ? 1 : -1);
+      if (won || n < 0 || n > best || n >= LEVELS.length) return;
+      startAt(n);
+    });
+  });
+  // restart: put this level's numbers back where they started
+  document.getElementById('restart').addEventListener('click', () => { if (!won) startAt(level); });
+  document.getElementById('restart').addEventListener('pointerdown', e => e.stopPropagation());
+  // take back the last switch (slides the two pieces back)
+  document.getElementById('undo').addEventListener('pointerdown', e => e.stopPropagation());
+  document.getElementById('undo').addEventListener('click', () => {
+    if (won || !history.length) return;
+    const prev = history.pop(), sp = spans(), cur = snap();
+    clearSel();
+    const diff = cur.map((e, k) => k).filter(k => cur[k] !== prev[k]);
+    if (prev.length === cur.length && diff.length === 2 && prev[diff[0]] === cur[diff[1]] && prev[diff[1]] === cur[diff[0]]) swap(sp[diff[0]], sp[diff[1]], true);
+    else { renderLevel(level, prev); save(); }
+    updateUndo();
+  });
+  // back to your homepage (progress is already saved)
+  document.getElementById('toHome').addEventListener('pointerdown', e => e.stopPropagation());
+  document.getElementById('toHome').addEventListener('click', () => {
+    clearTimeout(nextTimer); stopConfetti = true; swapAbort = true;
+    root.style.display = 'none';
+    phase = 'home'; showHome();
+  });
+  window.inequalResume = () => { const d = loadSave(); startAt(d && !d.done ? Math.min(d.level, LEVELS.length - 1) : 0, d && !d.done ? d.tokens : null); };
+  window.inequalSaved = () => { const d = loadSave(); return d && !d.done ? { level: d.level + 1, of: LEVELS.length } : null; };
+  window.inequalInfo = () => { const d = loadSave(); return { levels: LEVELS.length, done: !!(d && d.done), level: d && !d.done ? d.level + 1 : 0 }; };
+  function checkWin() {
+    // read the equation as it is now, e.g. "4 − 3 = 1"
+    const [lhs, rhs] = document.querySelector('#inequal .eq').textContent.replace(/−/g, '-').replace(/×/g, '*').replace(/÷/g, '/').split('=');
+    const calc = side => { side = side.replace(/\b0+(\d)/g, '$1'); try { return Function('return (' + side + ')')(); } catch (e) { return NaN; } };
+    if (Math.abs(calc(lhs) - calc(rhs)) < 1e-9) {
+      won = true; clearSel(); root.classList.add('won'); setTimeout(confetti, 300);
+      // save straight away so a refresh during the celebration still moves you on
+      save(level + 1 < LEVELS.length ? { level: level + 1, tokens: null } : { done: true });
+      updateProgress(level + 1, true);
+      if (level + 1 < LEVELS.length) nextTimer = setTimeout(() => nextLevel(level + 1), 2300); // 2 s after "You win!"
+    }
+  }
+
+  // ----- level switch: puzzle lines appear, pieces rearrange and secretly change pictures -----
+  function snapshot(showWin) {
+    const W = innerWidth, H = innerHeight, d = Math.min(devicePixelRatio || 1, 2);
+    const c = document.createElement('canvas'); c.width = W * d; c.height = H * d;
+    const g = c.getContext('2d'); g.scale(d, d);
+    g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+    const items = [];
+    for (const el of spans()) {
+      const col = (showWin || el.classList.contains('g')) ? '#2eb85c' : '#9aa0ab';
+      if (el.dataset.k === 'num') for (const c of el.children) items.push({ el: c, col: showWin ? col : getComputedStyle(c).color });
+      else items.push({ el, col });
+    }
+    if (showWin) items.push({ el: root.querySelector('.winmsg'), col: '#2eb85c' });
+    for (const { el, col } of items) {
+      const cs = getComputedStyle(el), r = el.getBoundingClientRect();
+      g.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      const m = g.measureText('0');
+      const fA = m.fontBoundingBoxAscent || parseFloat(cs.fontSize) * 0.8, fD = m.fontBoundingBoxDescent || parseFloat(cs.fontSize) * 0.2;
+      const base = r.top + (r.height - (fA + fD)) / 2 + fA;
+      const ls = parseFloat(cs.letterSpacing) || 0;
+      g.fillStyle = col;
+      let x = r.left;
+      for (const ch of el.textContent) { g.fillText(ch, x, base); x += g.measureText(ch).width + ls; }
+    }
+    const conf = document.getElementById('confetti');
+    if (showWin && conf.width) g.drawImage(conf, 0, 0, W, H);
+    return c;
+  }
+
+  function nextLevel(n) {
+    const W = innerWidth, H = innerHeight, d = Math.min(devicePixelRatio || 1, 2);
+    const imgA = snapshot(true);
+    stopConfetti = true;
+    renderLevel(n);
+    history = []; updateUndo();
+    const imgB = snapshot(false);
+
+    // jigsaw grid
+    const cols = Math.max(3, Math.round(W / 150)), rows = Math.max(3, Math.round(H / 150));
+    const cw = W / cols, ch = H / rows;
+    const hE = [], vE = [];
+    for (let r = 0; r <= rows; r++) { hE[r] = []; for (let c = 0; c < cols; c++) hE[r][c] = randEdge(r === 0 || r === rows); }
+    for (let r = 0; r < rows; r++) { vE[r] = []; for (let c = 0; c <= cols; c++) vE[r][c] = randEdge(c === 0 || c === cols); }
+    const cells = [];
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      const p = new Path2D(); // in local coords, cell center at 0,0
+      const X = k => (k - c - 0.5) * cw, Y = k => (k - r - 0.5) * ch;
+      p.moveTo(X(c), Y(r));
+      let e = hE[r][c]; edge(p, X(c), Y(r), X(c + 1), Y(r), -e.b, e.t, e.sz);
+      e = vE[r][c + 1]; edge(p, X(c + 1), Y(r), X(c + 1), Y(r + 1), e.b, e.t, e.sz);
+      e = hE[r + 1][c]; edge(p, X(c + 1), Y(r + 1), X(c), Y(r + 1), e.b, 1 - e.t, e.sz);
+      e = vE[r][c]; edge(p, X(c), Y(r + 1), X(c), Y(r), -e.b, 1 - e.t, e.sz);
+      p.closePath();
+      cells.push({ path: p, cx: (c + 0.5) * cw, cy: (r + 0.5) * ch });
+    }
+    // every piece flies to a different spot (shuffle with no piece staying put)
+    const order = cells.map((_, i) => i);
+    do { for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; } }
+    while (order.some((v, i) => v === i));
+    const pieces = cells.map((cell, i) => ({ from: cell, to: cells[order[i]], delay: Math.random() * 0.35, spin: (Math.random() - 0.5) * 0.8 }));
+
+    const cv = document.getElementById('levelSwap'), g = cv.getContext('2d');
+    cv.width = W * d; cv.height = H * d; cv.style.display = 'block';
+    const LINES_IN = 0.45, MOVE = 1.3, LINES_OUT = 0.5;
+    const ease = x => x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+    const t0 = performance.now();
+    swapAbort = false;
+
+    function drawCell(img, cell, x, y, rot, sc, lineAlpha, shadow) {
+      g.setTransform(d * sc * Math.cos(rot), d * sc * Math.sin(rot), -d * sc * Math.sin(rot), d * sc * Math.cos(rot), d * x, d * y);
+      if (shadow) { g.save(); g.shadowColor = 'rgba(27,33,54,0.25)'; g.shadowBlur = 18 * shadow; g.shadowOffsetY = 8 * shadow; g.fillStyle = '#fff'; g.fill(cell.path); g.restore(); }
+      g.save(); g.clip(cell.path);
+      g.drawImage(img, -cell.cx, -cell.cy, W, H);
+      g.restore();
+      if (lineAlpha > 0) { g.lineWidth = 2 / sc; g.strokeStyle = `rgba(150,158,175,${lineAlpha})`; g.stroke(cell.path); }
+    }
+    (function frame(now) {
+      if (swapAbort) { cv.style.display = 'none'; return; }
+      const t = (now - t0) / 1000;
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
+      if (t < LINES_IN) {
+        g.drawImage(imgA, 0, 0);
+        for (const c of cells) drawCell(imgA, c, c.cx, c.cy, 0, 1, t / LINES_IN, 0);
+      } else if (t < LINES_IN + MOVE) {
+        const list = pieces.map(p => {
+          const k = Math.max(0, Math.min(1, (t - LINES_IN - p.delay) / (MOVE - 0.35)));
+          return { p, k, lift: Math.sin(Math.PI * k) };
+        }).sort((a, b) => a.lift - b.lift);
+        for (const { p, k, lift } of list) {
+          const e = ease(k);
+          const x = p.from.cx + (p.to.cx - p.from.cx) * e, y = p.from.cy + (p.to.cy - p.from.cy) * e;
+          const secret = k >= 0.5; // halfway there, the piece quietly becomes its new spot's Level-2 piece
+          drawCell(secret ? imgB : imgA, secret ? p.to : p.from, x, y, p.spin * lift, 1 + 0.12 * lift, 1, lift);
+        }
+      } else {
+        const k = Math.min(1, (t - LINES_IN - MOVE) / LINES_OUT);
+        g.drawImage(imgB, 0, 0);
+        for (const c of cells) drawCell(imgB, c, c.cx, c.cy, 0, 1, 1 - k, 0);
+        if (k >= 1) { cv.style.display = 'none'; return; }
+      }
+      requestAnimationFrame(frame);
+    })(t0);
+  }
+  function confetti() {
+    const cv = document.getElementById('confetti'), cx = cv.getContext('2d');
+    const d = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = innerWidth * d; cv.height = innerHeight * d; cx.scale(d, d);
+    const cols = ['#ff4757', '#ff8c1a', '#ffc312', '#2ed573', '#1eb6e8', '#4a69ff', '#a55eea', '#ff4fa3'];
+    const bits = [];
+    for (let i = 0; i < 220; i++) {
+      const side = i % 2 ? 1 : -1;
+      bits.push({ x: side > 0 ? -10 : innerWidth + 10, y: innerHeight * (0.55 + Math.random() * 0.4),
+        vx: side * (300 + Math.random() * 700), vy: -(600 + Math.random() * 700),
+        r: Math.random() * 6, vr: (Math.random() - 0.5) * 12, w: 6 + Math.random() * 7, h: 4 + Math.random() * 5,
+        c: cols[i % cols.length] });
+    }
+    let last = performance.now(), age = 0;
+    stopConfetti = false;
+    (function step(now) {
+      const dt = Math.min(0.04, (now - last) / 1000); last = now; age += dt;
+      cx.clearRect(0, 0, innerWidth, innerHeight);
+      for (const b of bits) {
+        b.vy += 900 * dt; b.vx *= 0.99; b.vy *= 0.995;
+        b.x += b.vx * dt; b.y += b.vy * dt; b.r += b.vr * dt;
+        cx.save(); cx.translate(b.x, b.y); cx.rotate(b.r);
+        cx.scale(1, Math.cos(b.r * 1.7));
+        cx.fillStyle = b.c; cx.fillRect(-b.w / 2, -b.h / 2, b.w, b.h);
+        cx.restore();
+      }
+      if (age < 5 && !stopConfetti) requestAnimationFrame(step); else cx.clearRect(0, 0, innerWidth, innerHeight);
+    })(last);
+  }
+  function clearSel() { if (selected) selected.classList.remove('sel'); selected = null; }
+
+  // ----- orange digits -----
+  let preview = null;
+  function clearPreview() {
+    if (!preview) return;
+    preview.el.remove();
+    preview.moved.forEach(d => { d.style.transform = ''; });
+    if (preview.hole) preview.hole.style.opacity = '';
+    preview = null; root.classList.remove('previewing');
+  }
+  // show what the number would look like: a faded digit sitting in the gap.
+  // The digits only slide apart (nothing else on the screen moves), so dragging stays steady.
+  function setPreview(o, slot) {
+    if ((preview ? preview.slot : null) === slot) return;
+    clearPreview();
+    if (!slot) return;
+    const tok = spans()[+slot.dataset.t], p = +slot.dataset.p, sign = o.parentElement.dataset.k === 'op';
+    const all = [...tok.children].filter(d => !d.classList.contains('zero') && !d.classList.contains('ghost'));
+    if (slot.dataset.fill) { // the digit drops right into the 0 (or, for an overline, shows the new digit after adding)
+      const h = all[p], g = document.createElement('span');
+      g.className = 'd ghost' + (o.matches('.u, .ov') ? ' p' : ''); g.textContent = slot.dataset.add ? String((+h.textContent + +o.textContent) % 10) : o.textContent; g.style.left = h.offsetLeft + 'px';
+      h.style.opacity = '0.15'; tok.appendChild(g);
+      preview = { el: g, slot, moved: [], hole: h }; root.classList.add('previewing'); return;
+    }
+    const w = o.offsetWidth * (sign ? 1.8 : 1), tr = tok.getBoundingClientRect(), sr = slot.getBoundingClientRect();
+    const moved = [];
+    all.forEach((d, k) => { if (d === o) return; d.style.transform = `translateX(${(k < p ? -w : w) / 2}px)`; moved.push(d); });
+    const g = document.createElement('span');
+    g.className = 'd ghost' + (o.matches('.u, .ov') ? ' p' : ''); g.textContent = o.textContent;
+    g.style.left = ((sr.left + sr.right) / 2 - tr.left - o.offsetWidth / 2) + 'px';
+    tok.appendChild(g);
+    preview = { el: g, slot, moved };
+    root.classList.add('previewing');
+  }
+  let zeroMark = null;
+  function hideSlots() { clearPreview(); slots.forEach(s => s.remove()); slots = []; root.querySelectorAll('.d.target').forEach(d => d.classList.remove('target')); if (zeroMark) { zeroMark.remove(); zeroMark = null; } }
+  function clearDsel() { if (dsel) dsel.classList.remove('sel'); dsel = null; hideSlots(); }
+  const where = d => { const tok = d.parentElement; return [spans().indexOf(tok), [...tok.children].indexOf(d)]; };
+  function showSlots(o) {
+    hideSlots();
+    const src = o.parentElement;
+    if (src.dataset.k === 'op') { showSignSlots(o); return; }
+    if (o.classList.contains('ov')) { showAddSlots(o); return; }
+    // an underlined digit leaves a 0 only when it leaves its own home spot; once it's away it just moves
+    const under = o.classList.contains('u'), home = under && !o.classList.contains('away');
+    if (home) { // show the 0 it will leave behind
+      const z = document.createElement('span');
+      z.className = 'd zero'; z.textContent = '0'; z.style.left = o.offsetLeft + 'px';
+      src.appendChild(z); zeroMark = z;
+    }
+    if (!home && src.children.length === 1) return; // a number can't be left empty
+    spans().forEach((tok, ti) => {
+      if (tok.dataset.k !== 'num') return;
+      const ds = [...tok.children].filter(d => !d.classList.contains('zero')), r = tok.getBoundingClientRect(), oi = ds.indexOf(o);
+      const w = Math.max(8, r.height * 0.09);
+      for (let p = 0; p <= ds.length; p++) {
+        if (!home && tok === src && (p === oi || p === oi + 1)) continue; // no change
+        const x = p === 0 ? ds[0].getBoundingClientRect().left - w * 0.6
+          : p === ds.length ? ds[p - 1].getBoundingClientRect().right + w * 0.6
+          : (ds[p - 1].getBoundingClientRect().right + ds[p].getBoundingClientRect().left) / 2;
+        const el = document.createElement('div');
+        el.className = 'slot';
+        Object.assign(el.style, { left: (x - w / 2) + 'px', top: (r.top + r.height * 0.12) + 'px', width: w + 'px', height: (r.height * 0.76) + 'px' });
+        el.dataset.t = ti; el.dataset.p = p;
+        root.appendChild(el); slots.push(el);
+      }
+      if (under) ds.forEach((d, p) => { // an underlined 0 left behind can be filled back in
+        if (!d.classList.contains('hole')) return;
+        const b = d.getBoundingClientRect(), el = document.createElement('div');
+        el.className = 'slot fill';
+        Object.assign(el.style, { left: (b.left - 6) + 'px', top: (b.top + b.height * 0.1) + 'px', width: (b.width + 12) + 'px', height: (b.height * 0.85) + 'px' });
+        el.dataset.t = ti; el.dataset.p = p; el.dataset.fill = 1; el.style.setProperty('--dot', (b.height * 0.113) + 'px');
+        root.appendChild(el); slots.push(el);
+      });
+    });
+    if (under) slots.forEach(el => el.classList.add('p'));
+  }
+  // ----- orange overline: drop it on a digit (in any number) to add to that digit; 10 or more carries to the next place -----
+  function showAddSlots(o) {
+    const src = o.parentElement, keep = o.classList.contains('ovu');
+    if (keep) { // overline + underline leaves a 0 behind
+      const z = document.createElement('span');
+      z.className = 'd zero'; z.textContent = '0'; z.style.left = o.offsetLeft + 'px';
+      src.appendChild(z); zeroMark = z;
+    } else if (src.children.length === 1) return; // a number can't be left empty
+    spans().forEach((tok, ti) => {
+      if (tok.dataset.k !== 'num' || tok.classList.contains('red')) return;
+      const ds = [...tok.children].filter(d => !d.classList.contains('zero') && !d.classList.contains('ghost'));
+      ds.forEach((d, p) => {
+        if (d === o || d.classList.contains('ov') || d.classList.contains('gu')) return;
+        // a carry can't go into another overline digit or a green underline
+        const line = ds.filter(x => x !== o || keep), q = line.indexOf(d);
+        for (let i = q, sum = +d.textContent + +o.textContent; sum >= 10; ) {
+          i--; if (i < 0) break;
+          const x = line[i];
+          if (x !== o && (x.classList.contains('ov') || x.classList.contains('gu'))) return;
+          sum = (x === o ? 0 : +x.textContent) + 1;
+        }
+        const b = d.getBoundingClientRect(), el = document.createElement('div');
+        el.className = 'slot fill';
+        Object.assign(el.style, { left: (b.left - 6) + 'px', top: (b.top + b.height * 0.1) + 'px', width: (b.width + 12) + 'px', height: (b.height * 0.85) + 'px' });
+        el.dataset.t = ti; el.dataset.p = p; el.dataset.add = 1; el.style.setProperty('--dot', (b.height * 0.113) + 'px');
+        root.appendChild(el); slots.push(el);
+      });
+    });
+    slots.forEach(el => el.classList.add('p'));
+  }
+  function addDigit(o, ti, p) {
+    const [si, oi] = where(o), arrs = parseToks(), ch = o.textContent;
+    if (o.classList.contains('ovu')) arrs[si][oi] = '~0';
+    else { arrs[si].splice(oi, 1); if (ti === si && p > oi) p--; }
+    const a = arrs[ti];
+    let i = p, carry = +ch;
+    while (carry) {
+      if (i < 0) { a.unshift(String(carry)); p++; break; }
+      const u = a[i], pre = u.length > 1 && u[0] !== '~' ? u[0] : '', sum = +u[u.length - 1] + carry;
+      a[i] = pre + (sum % 10); carry = Math.floor(sum / 10); i--;
+    }
+    commitDigits(arrs, [[si, oi]], [[ti, p]]);
+  }
+  // ----- red numbers: click to pick a different number -----
+  let redEl = null;
+  function closeRed() {
+    const pop = document.getElementById('redPop');
+    if (pop) pop.remove();
+    if (redEl) redEl.classList.remove('open');
+    redEl = null;
+  }
+  // el = a red number, or a red-underlined digit (ru) inside any number
+  function openRed(el) {
+    if (redEl === el) { closeRed(); return; }
+    closeRed();
+    const isRu = el.classList.contains('ru'), isGroup = el.classList.contains('rg'), tok = isRu || isGroup ? el.closest('.eq > span') : el;
+    const n = spans().indexOf(tok), def = LEVELS[level][n];
+    const k = isRu ? [...tok.querySelectorAll('.ru')].indexOf(el) : isGroup ? -2 : -1;
+    const group = [...tok.querySelectorAll('.rg')], cur = isGroup ? group.map(d => d.textContent).join('') : el.textContent;
+    const opts = isRu ? def.ru[k] : isGroup ? def.rg : [def.t.replace(/[$#]/g, ''), ...def.r];
+    const pop = document.createElement('div'), r = el.getBoundingClientRect();
+    pop.id = 'redPop';
+    opts.filter(v => v !== cur).forEach(v => {
+      const b = document.createElement('button');
+      // a linked group shows the whole new number, with the changing digits in red
+      if (isGroup) { let c = 0; b.innerHTML = [...tok.children].map(d => d.classList.contains('rg') ? `<b>${v[c++]}</b>` : `<i>${d.textContent}</i>`).join(''); }
+      else b.textContent = v;
+      b.dataset.v = v; b.dataset.n = n; b.dataset.k = k;
+      pop.appendChild(b);
+    });
+    pop.style.left = (r.left + r.width / 2) + 'px'; pop.style.top = (r.bottom + 10) + 'px';
+    root.appendChild(pop);
+    redEl = el; el.classList.add('open');
+  }
+  function pickRed(btn) {
+    const n = +btn.dataset.n, k = +btn.dataset.k, v = btn.dataset.v, toks = snap();
+    history.push(toks.slice()); updateUndo();
+    closeRed();
+    const g = toks[n][0] === '^' ? '^' : '', us = units(toks[n].replace(/^\^/, ''));
+    if (k >= 0) { // change just the red-underlined digit
+      let c = -1;
+      toks[n] = g + us.map(u => u[0] === '$' && ++c === k ? '$' + v : u).join('');
+    } else if (k === -2) { // change every digit of the linked group together
+      let c = 0;
+      toks[n] = g + us.map(u => u[0] === '#' ? '#' + v[c++] : u).join('');
+    } else { // change the whole number; red underlines stay in the same places
+      toks[n] = g + [...v].map((ch, i) => (us[i] && /^[$#]/.test(us[i]) ? us[i][0] : '') + ch).join('');
+    }
+    renderLevel(level, toks);
+    const el = k >= 0 ? spans()[n].querySelectorAll('.ru')[k] : spans()[n];
+    if (k === -2) spans()[n].querySelectorAll('.rg').forEach(d => d.animate([{ transform: 'scale(1.25)' }, { transform: 'scale(1)' }], { duration: 260, easing: 'cubic-bezier(.3,1.6,.5,1)' }));
+    el.animate([{ transform: 'scale(1.25)' }, { transform: 'scale(1)' }], { duration: 260, easing: 'cubic-bezier(.3,1.6,.5,1)' });
+    save(); checkWin();
+  }
+  // ----- orange signs: drop one inside a number to split it, or in front of a number to make it negative -----
+  const MARK = {};
+  function signMove(si, ti, p) {
+    const toks = snap(), seq = [];
+    toks.forEach((t, k) => {
+      if (k === ti) { const ds = parseToks()[k], g = t[0] === '^' ? '^' : ''; if (p > 0) seq.push(g + ds.slice(0, p).join('')); seq.push(toks[si]); seq.push(g + ds.slice(p).join('')); }
+      else if (k === si) seq.push(MARK);
+      else seq.push(t);
+    });
+    // where the sign was, the two numbers on each side join up into one
+    const i = seq.indexOf(MARK), isNum = x => x !== MARK && kind(x) === 'num';
+    if (i > 0 && i < seq.length - 1 && isNum(seq[i - 1]) && isNum(seq[i + 1])) {
+      const [a, b] = [seq[i - 1], seq[i + 1]], g = a[0] === '^' || b[0] === '^' ? '^' : '';
+      seq.splice(i - 1, 3, g + a.replace(/^\^/, '') + b.replace(/^\^/, ''));
+    } else seq.splice(i, 1);
+    // only allow it if it still reads as a real equation
+    const bare = t => t.replace(/[*^_~&!%$#\[\]]/g, ''), plain = seq.map(bare);
+    if (plain.some((t, k) => kind(t) === 'num' && t.length > 1 && t[0] === '0')) return null;
+    if (plain.some((t, k) => kind(t) === 'op' && t !== '−' && (k === 0 || kind(plain[k - 1]) === 'op'))) return null;
+    const sides = plain.join(' ').replace(/−/g, '-').replace(/×/g, '*').replace(/÷/g, '/').split('=');
+    if (sides.length !== 2) return null;
+    try { if (!sides.every(x => isFinite(Function('return (' + x + ')')()))) return null; } catch (e) { return null; }
+    return plain.join() === serialize().map(bare).join() ? null : seq;
+  }
+  function showSignSlots(o) {
+    const src = o.parentElement, si = spans().indexOf(src);
+    spans().forEach((tok, ti) => {
+      if (tok.dataset.k !== 'num') return;
+      const ds = [...tok.children], r = tok.getBoundingClientRect(), w = Math.max(8, r.height * 0.09);
+      for (let p = 0; p < ds.length; p++) {
+        if (p === 0 && !(o.textContent === '−' && (ti === 0 || spans()[ti - 1].dataset.k === 'op'))) continue;
+        if (!signMove(si, ti, p)) continue;
+        const x = p === 0 ? ds[0].getBoundingClientRect().left - w * 0.6 : (ds[p - 1].getBoundingClientRect().right + ds[p].getBoundingClientRect().left) / 2;
+        const el = document.createElement('div');
+        el.className = 'slot';
+        Object.assign(el.style, { left: (x - w / 2) + 'px', top: (r.top + r.height * 0.12) + 'px', width: w + 'px', height: (r.height * 0.76) + 'px' });
+        el.dataset.t = ti; el.dataset.p = p;
+        root.appendChild(el); slots.push(el);
+      }
+    });
+  }
+  function moveSign(o, ti, p) {
+    const seq = signMove(spans().indexOf(o.parentElement), ti, p);
+    if (!seq) return;
+    history.push(snap()); updateUndo();
+    const b = o.getBoundingClientRect();
+    renderLevel(level, seq);
+    const el = root.querySelector('.eq > [data-k="op"] .o'), now = el.getBoundingClientRect();
+    el.style.transition = 'none';
+    el.style.transform = `translate(${b.left - now.left}px, ${b.top - now.top}px)`;
+    el.offsetWidth;
+    el.style.transition = 'transform .32s cubic-bezier(.3,1.3,.5,1)';
+    el.style.transform = '';
+    save(); checkWin();
+  }
+  function parseToks() { return serialize().map(t => kind(t) === 'num' ? units(t) : [t]); }
+  function commitDigits(arrs, from, to) {
+    history.push(snap()); updateUndo();
+    const rects = from.map(([ti, p]) => spans()[ti].children[p].getBoundingClientRect());
+    const fl = spans().map(el => el.classList.contains('g'));
+    // zeros at the start of a number disappear on their own
+    const cut = arrs.map(a => { let c = 0; while (a.length > 1 && /^[*_~!%&$#]?0$/.test(a[0])) { a.shift(); c++; } return c; });
+    renderLevel(level, arrs.map((a, k) => (fl[k] ? '^' : '') + a.join('')));
+    to.forEach(([ti, p], k) => {
+      p -= cut[ti];
+      const el = p >= 0 && spans()[ti].children[p];
+      if (!el) return;
+      const now = el.getBoundingClientRect(), b = rects[k];
+      el.style.transition = 'none';
+      el.style.transform = `translate(${b.left - now.left}px, ${b.top - now.top}px)`;
+      el.offsetWidth;
+      el.style.transition = 'transform .32s cubic-bezier(.3,1.3,.5,1)';
+      el.style.transform = '';
+    });
+    save(); checkWin();
+  }
+  function moveDigit(o, ti, p, fill) {
+    if (o.parentElement.dataset.k === 'op') { moveSign(o, ti, p); return; }
+    if (o.classList.contains('ov')) { addDigit(o, ti, p); return; }
+    const [si, oi] = where(o), arrs = parseToks();
+    let ch;
+    if (o.classList.contains('u')) {
+      // underlined: leaving its home spot leaves an underlined 0 there; filling a 0 makes that its new home
+      const d = o.textContent;
+      if (o.classList.contains('away')) { arrs[si].splice(oi, 1); if (ti === si && p > oi) p--; }
+      else arrs[si][oi] = '~0';
+      ch = (fill ? '_' : '&') + d;
+    } else { ch = arrs[si].splice(oi, 1)[0]; if (ti === si && p > oi) p--; }
+    if (fill) arrs[ti][p] = ch; else arrs[ti].splice(p, 0, ch);
+    commitDigits(arrs, [[si, oi]], [[ti, p]]);
+  }
+
+  // the gap under the pointer (slots stay where they were drawn, even while a preview shifts the numbers)
+  function targetAt(x, y) {
+    if (preview) {
+      const r = preview.slot.getBoundingClientRect(), cx = (r.left + r.right) / 2;
+      if (Math.abs(x - cx) < r.height * 0.3 && y > r.top - r.height * 0.5 && y < r.bottom + r.height * 0.5) return preview.slot;
+    }
+    let best = null, bd = Infinity;
+    for (const s of slots) {
+      const r = s.getBoundingClientRect(), cx = (r.left + r.right) / 2, dist = Math.abs(x - cx);
+      if (y > r.top - r.height * 0.4 && y < r.bottom + r.height * 0.4 && dist < bd && dist < r.height * 0.35) { bd = dist; best = s; }
+    }
+    return best;
+  }
+
+  document.getElementById('inequal').addEventListener('pointerdown', e => {
+    if (!won) {
+      const opt = e.target.closest('#redPop button');
+      if (opt) { pickRed(opt); return; }
+      const red = e.target.closest('.ru, .rg') || e.target.closest('.red');
+      if (red) { clearSel(); clearDsel(); openRed(red); return; }
+      closeRed();
+      const o = e.target.closest('.o:not(.hole)'), slot = e.target.closest('.slot');
+      if (o) { e.preventDefault(); clearSel(); ddrag = { o, x: e.clientX, y: e.clientY, moved: false }; o.setPointerCapture(e.pointerId); return; }
+      if (dsel && slot) { const o2 = dsel; clearDsel(); moveDigit(o2, +slot.dataset.t, +slot.dataset.p, !!slot.dataset.fill); return; }
+      if (dsel) clearDsel();
+    }
+    const el = e.target.closest('.g');
+    if (!el || won) { clearSel(); return; }
+    drag = { el, x: e.clientX, y: e.clientY, moved: false };
+    el.setPointerCapture(e.pointerId);
+  });
+  document.getElementById('inequal').addEventListener('pointermove', e => {
+    if (ddrag) {
+      const dx = e.clientX - ddrag.x, dy = e.clientY - ddrag.y;
+      if (!ddrag.moved && Math.hypot(dx, dy) > 6) { ddrag.moved = true; clearDsel(); ddrag.o.classList.add('drag'); showSlots(ddrag.o); }
+      if (!ddrag.moved) return;
+      ddrag.o.style.transform = `translate(${dx}px, ${dy}px) scale(1.1)`;
+      setPreview(ddrag.o, targetAt(e.clientX, e.clientY));
+      return;
+    }
+    if (dsel && !drag) { setPreview(dsel, targetAt(e.clientX, e.clientY)); return; }
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!drag.moved && Math.hypot(dx, dy) > 6) { drag.moved = true; clearSel(); drag.el.classList.add('drag'); }
+    if (!drag.moved) return;
+    drag.el.style.transform = `translate(${dx}px, ${dy}px) scale(1.08)`;
+    greens().forEach(g => {
+      if (g === drag.el || g.dataset.k !== drag.el.dataset.k) return;
+      const r = g.getBoundingClientRect();
+      g.classList.toggle('over', e.clientX > r.left && e.clientX < r.right && e.clientY > r.top && e.clientY < r.bottom);
+    });
+  });
+  document.getElementById('inequal').addEventListener('pointerup', e => {
+    if (ddrag) {
+      const o = ddrag.o;
+      if (ddrag.moved) {
+        const hot = preview && preview.slot;
+        o.style.transform = '';
+        hideSlots();                       // takes the preview away before the real move
+        o.classList.remove('drag');
+        if (hot) moveDigit(o, +hot.dataset.t, +hot.dataset.p, !!hot.dataset.fill);
+      } else if (dsel === o) clearDsel();
+      else { clearDsel(); dsel = o; o.classList.add('sel'); showSlots(o); }
+      ddrag = null;
+      return;
+    }
+    if (!drag) return;
+    const el = drag.el;
+    if (drag.moved) {
+      const target = greens().find(g => g.classList.contains('over'));
+      greens().forEach(g => g.classList.remove('over'));
+      el.classList.remove('drag');
+      el.style.transform = '';
+      if (target) swap(el, target);
+    } else if (selected && selected !== el && selected.dataset.k === el.dataset.k) {
+      const other = selected; clearSel(); swap(other, el);
+    } else if (selected === el) {
+      clearSel();
+    } else {
+      clearSel();
+      selected = el; el.classList.add('sel');
+    }
+    drag = null;
+  });
+})();
+
+function showBrowse() {
+  const info = window.inequalInfo();
+  const status = info.done ? 'Completed ✓ · Play again ▶' : info.level ? `Level ${info.level} of ${info.levels} · Continue ▶` : 'Play ▶';
+  document.getElementById('browseList').innerHTML = `
+    <button class="gameCard" id="playInequal">
+      <div class="art"><span class="gg">3</span> <span class="xx">−</span> <span class="gg">4</span> <span class="xx">= 1</span></div>
+      <span class="name">Inequal</span>
+      <span class="info">${info.levels} levels</span>
+      <span class="go">${status}</span>
+    </button>`;
+  document.getElementById('playInequal').onclick = () => {
+    document.getElementById('browseScreen').style.display = 'none';
+    window.inequalResume();
+  };
+  document.getElementById('home').style.display = 'none';
+  document.getElementById('browseScreen').style.display = 'block';
+}
+document.getElementById('browse').addEventListener('click', showBrowse);
+document.getElementById('browseBack').addEventListener('click', () => {
+  document.getElementById('browseScreen').style.display = 'none';
+  showHome();
+});
+
+function showHome() {
+  const box = document.getElementById('inProgress'), saved = window.inequalSaved();
+  box.innerHTML = saved
+    ? `<button class="card" id="resumeInequal"><span class="name">Inequal</span><span class="lvl">Level ${saved.level} of ${saved.of}</span><span class="go">Continue ▶</span></button>`
+    : '<div class="empty">No puzzles in progress yet</div>';
+  if (saved) document.getElementById('resumeInequal').onclick = () => {
+    document.getElementById('home').style.display = 'none';
+    window.inequalResume();
+  };
+  document.getElementById('home').style.display = 'block';
+}
+
+// Inequal (open the page with #inequal to jump straight to level 1, #inequal-2 for level 2)
+const ineqMatch = location.hash.match(/^#inequal(?:-(\d+))?$/);
+if (location.hash === '#reset') { // #reset wipes saved progress and starts from the very beginning
+  localStorage.removeItem('brainstack.inequal');
+  history.replaceState(null, '', location.pathname);
+  startIntro();
+} else if (ineqMatch) {
+  if (ineqMatch[1]) inequalStart(Number(ineqMatch[1]) - 1); else inequalResume(); // #inequal picks up where you left off
+} else {
+  startIntro();
+}
+</script>
+</body>
+</html>
