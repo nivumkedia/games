@@ -1386,7 +1386,7 @@ def _tracer(frame, event, arg):
         return _line_tracer
     return None
 def _begin_run():
-    _rs["sync"] = bool(_run_sync) and _can_run_sync()
+    _rs["sync"] = bool(_run_sync) and _can_run_sync() and not getattr(js, "forceNoJSPI", False)
     _rs["active"] = True
     _rs["last"] = _time.time()
     sys.modules.pop("turtle", None)
@@ -1407,6 +1407,9 @@ def _kid_sleep(secs):
         _orig_sleep(secs)
 _time.sleep = _kid_sleep
 
+def _is_null(r):
+    return r is None or type(r).__name__ in ("JsNull", "JsUndefined")
+
 _test_inputs = None
 def _input(prompt=""):
     if _test_inputs is not None:
@@ -1418,7 +1421,7 @@ def _input(prompt=""):
     if _rs["active"] and _rs["sync"]:
         r = _run_sync(js.askInput(prompt))
         _rs["last"] = _time.time()
-        if r is None:
+        if _is_null(r):
             raise ProgramStopped("Stopped")
         return str(r)
     r = js.prompt(prompt or "Input:")
@@ -1429,6 +1432,126 @@ def _input(prompt=""):
     js.consoleWrite(r + "\\n", "in")
     return r
 builtins.input = _input
+
+# ---- Inline input() without JSPI (Safari / iPad) ----
+# Rewrites the program so input() is awaited: functions that (directly or
+# indirectly) ask for input become async, and calls to them get awaited.
+# If the program does anything this can't handle safely, returns None and the
+# old pop-up input is used instead.
+import ast as _ast, inspect as _inspect
+
+async def _kid_ainput(prompt=""):
+    prompt = str(prompt)
+    sys.stdout.write(prompt); sys.stdout.flush()
+    r = await js.askInput(prompt)
+    _rs["last"] = _time.time()
+    if _is_null(r):
+        raise ProgramStopped("Stopped")
+    return str(r)
+
+def _kid_asyncify(src):
+    try:
+        tree = _ast.parse(src, "<exec>")
+    except SyntaxError:
+        return None
+    FUNCS = (_ast.FunctionDef, _ast.AsyncFunctionDef)
+    defs = [n for n in _ast.walk(tree) if isinstance(n, FUNCS)]
+    if any(d.name == "input" for d in defs):
+        return None
+    def callee(call):
+        f = call.func
+        if isinstance(f, _ast.Name): return f.id
+        if isinstance(f, _ast.Attribute): return f.attr
+        return None
+    def own_calls(fn):
+        # calls inside fn, not counting nested defs / lambdas / classes
+        out, stack = [], list(_ast.iter_child_nodes(fn))
+        while stack:
+            n = stack.pop()
+            if isinstance(n, FUNCS + (_ast.Lambda, _ast.ClassDef)):
+                continue
+            if isinstance(n, _ast.Call):
+                out.append(callee(n))
+            stack.extend(_ast.iter_child_nodes(n))
+        return out
+    calls = {id(d): own_calls(d) for d in defs}
+    if not any(isinstance(n, _ast.Call) and callee(n) == "input" and isinstance(n.func, _ast.Name) for n in _ast.walk(tree)):
+        return None
+    need = {"input"}
+    changed = True
+    while changed:
+        changed = False
+        for d in defs:
+            if d.name not in need and any(c in need for c in calls[id(d)]):
+                need.add(d.name); changed = True
+    need_defs = [d for d in defs if d.name in need]
+    for d in need_defs:
+        if d.decorator_list or (d.name.startswith("__") and d.name.endswith("__")):
+            return None
+        for n in _ast.walk(d):
+            if isinstance(n, (_ast.Yield, _ast.YieldFrom)) and n not in []:
+                return None
+    # every use of an async name must be a plain call in a place where await works
+    parents = {}
+    for n in _ast.walk(tree):
+        for c in _ast.iter_child_nodes(n):
+            parents[id(c)] = n
+    def ok_context(node):
+        n = parents.get(id(node))
+        while n is not None:
+            if isinstance(n, (_ast.Lambda, _ast.GeneratorExp, _ast.ClassDef)):
+                return False
+            if isinstance(n, _ast.FunctionDef):
+                return n.name in need
+            if isinstance(n, _ast.AsyncFunctionDef):
+                return True
+            n = parents.get(id(n))
+        return True
+    for n in _ast.walk(tree):
+        name = n.id if isinstance(n, _ast.Name) else n.attr if isinstance(n, _ast.Attribute) else None
+        if name not in need:
+            continue
+        par = parents.get(id(n))
+        if isinstance(n, _ast.Name) and not isinstance(n.ctx, _ast.Load):
+            if name == "input": return None
+            continue
+        if not (isinstance(par, _ast.Call) and par.func is n):
+            if isinstance(n, _ast.Attribute) and not isinstance(n.ctx, _ast.Load):
+                continue
+            return None
+        if not ok_context(par):
+            return None
+    class T(_ast.NodeTransformer):
+        def visit_FunctionDef(self, node):
+            self.generic_visit(node)
+            if node.name not in need:
+                return node
+            new = _ast.AsyncFunctionDef(**{f: getattr(node, f) for f in node._fields})
+            return _ast.copy_location(new, node)
+        def visit_Call(self, node):
+            self.generic_visit(node)
+            name = callee(node)
+            if name not in need:
+                return node
+            if name == "input" and isinstance(node.func, _ast.Name):
+                node.func = _ast.copy_location(_ast.Name("_kid_ainput", _ast.Load()), node.func)
+            return _ast.copy_location(_ast.Await(node), node)
+    tree = _ast.fix_missing_locations(T().visit(tree))
+    try:
+        return compile(tree, "<exec>", "exec", flags=_ast.PyCF_ALLOW_TOP_LEVEL_AWAIT)
+    except SyntaxError:
+        return None
+
+async def _kid_run_async(src, ns):
+    code = _kid_asyncify(src)
+    if code is None:
+        return False
+    ns["_kid_ainput"] = _kid_ainput
+    r = eval(code, ns)
+    if _inspect.iscoroutine(r):
+        await r
+    return True
+
 def _run_test(src, inputs):
     global _test_inputs
     import io, contextlib
@@ -1490,9 +1613,18 @@ def _setup_mpl():
 function cleanTraceback(msg) {
   const lines = msg.split("\n");
   const i = lines.findIndex(l => /File "(<exec>|\/home\/pyodide\/)/.test(l));
-  if (i > 0) return ["Traceback (most recent call last):", ...lines.slice(i)].join("\n")
+  if (i < 1) return msg;
+  // hide the helper frame used for inline input in Safari / iPad
+  const src = lines.slice(i), rest = [];
+  for (let k = 0; k < src.length; k++) {
+    if (/in _kid_run_async$/.test(src[k])) {
+      while (k + 1 < src.length && /^\s{4,}\S/.test(src[k + 1])) k++;
+      continue;
+    }
+    rest.push(src[k]);
+  }
+  return ["Traceback (most recent call last):", ...rest].join("\n")
     .replace(/File "<exec>"/g, `File "${state.active}"`).replace(/\/home\/pyodide\//g, "");
-  return msg;
 }
 
 async function prepare(code) {
@@ -1562,7 +1694,15 @@ async function runCode() {
     const ns = py.globals.get("dict")();
     ns.set("__name__", "__main__");
     await py.runPythonAsync("_begin_run()");
-    try { await py.runPythonAsync(code, { globals: ns, filename: "<exec>" }); }
+    try {
+      let done = false;
+      if (!py.runPython("_rs['sync']")) {
+        // No JSPI (Safari / iPad): try the rewritten version so input() uses the inline box
+        const runAsync = py.globals.get("_kid_run_async");
+        try { done = await runAsync(code, ns); } finally { runAsync.destroy(); }
+      }
+      if (!done) await py.runPythonAsync(code, { globals: ns, filename: "<exec>" });
+    }
     finally { py.runPython("_end_run()"); }
     if (lastNs) lastNs.destroy();
     lastNs = ns;
