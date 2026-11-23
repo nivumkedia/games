@@ -12,6 +12,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/comment/comment.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"></script>
 <script src="https://cdn.jsdelivr.net/pyodide/v0.28.3/full/pyodide.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <style>
   :root {
     --bg: #f4f7fb; --panel: #ffffff; --border: #dde3ec; --text: #1f2933;
@@ -156,6 +157,39 @@
   #presentSplash button { font-size: 24px; font-weight: 700; padding: 16px 54px; border-radius: 999px; background: var(--green); color: #fff; border: none; box-shadow: 0 10px 24px rgba(22,163,74,.35); transition: transform .12s; }
   #presentSplash button:hover { transform: scale(1.05); background: var(--green); }
   #presentSplash p { color: var(--muted); margin: 18px 0 0; font-size: 15px; }
+
+  /* ---------- share / QR ---------- */
+  #shareModal { position: fixed; inset: 0; background: rgba(15,30,60,.45); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  #shareModal[hidden] { display: none; }
+  #shareModal .sheet { background: #fff; border-radius: 18px; box-shadow: 0 30px 80px rgba(15,30,60,.3); width: min(760px, 100%); max-height: 100%; overflow: auto; display: flex; gap: 24px; padding: 24px; }
+  #shareModal .controls { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
+  #shareModal h2 { margin: 0 0 4px; font-size: 20px; }
+  #shareModal label { font-weight: 600; font-size: 13px; color: var(--muted); }
+  #shareModal input[type=text] { font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; width: 100%; }
+  #shareModal .check { display: flex; align-items: center; gap: 8px; font-weight: 500; color: var(--text); font-size: 14px; }
+  #shareModal .warn { background: #fff7e6; border: 1px solid #f5d08a; color: #7a4b00; border-radius: 10px; padding: 9px 12px; font-size: 13px; }
+  #shareModal .warn.bad { background: #fdecec; border-color: #f3b4b4; color: #8a1c1c; }
+  #shareModal .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; padding-top: 6px; }
+  #printCard { width: 280px; flex: 0 0 280px; text-align: center; border: 2px dashed var(--border); border-radius: 16px; padding: 18px 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  #printCard .pc-title { font-size: 22px; font-weight: 800; color: #1e293b; margin-bottom: 10px; word-break: break-word; }
+  #qrBox { width: 220px; height: 220px; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; }
+  #qrBox svg, #qrBox img { width: 100%; height: 100%; }
+  #printCard .pc-scan { font-size: 15px; font-weight: 600; margin-top: 10px; }
+  #printCard .pc-small { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  @media (max-width: 700px) { #shareModal .sheet { flex-direction: column-reverse; align-items: center; } }
+  @media print {
+    @page { margin: 18mm; }
+    body.printing-qr > *:not(#shareModal) { display: none !important; }
+    body.printing-qr { background: #fff; height: auto; display: block; }
+    body.printing-qr #shareModal { position: static; background: none; padding: 0; display: block; }
+    body.printing-qr #shareModal .sheet { box-shadow: none; display: block; padding: 0; width: auto; overflow: visible; }
+    body.printing-qr #shareModal .controls { display: none; }
+    body.printing-qr #printCard { width: auto; border: 3px dashed #999; margin: 0 auto; max-width: 130mm; padding: 14mm 10mm; }
+    body.printing-qr #printCard .pc-title { font-size: 30pt; }
+    body.printing-qr #qrBox { width: 100mm; height: 100mm; }
+    body.printing-qr #printCard .pc-scan { font-size: 18pt; }
+    body.printing-qr #printCard .pc-small { font-size: 10pt; }
+  }
 </style>
 </head>
 <body>
@@ -169,11 +203,38 @@
   </select>
   <button id="openBtn" title="Open a .py file">📂 Open</button>
   <button id="saveBtn" title="Download this file">💾 Download</button>
+  <button id="shareBtn" title="Make a link and a printable QR code for this program">🔗 Share / QR</button>
   <button id="presentBtn" title="Show just the output, big and clean">🎬 Present</button>
   <button id="stopBtn" class="stop" hidden>■ Stop</button>
   <button id="runBtn" class="primary" disabled>▶ Run</button>
   <input type="file" id="fileInput" accept=".py,.txt" hidden>
 </header>
+
+<div id="shareModal" hidden>
+  <div class="sheet">
+    <div class="controls">
+      <h2>🔗 Share this program</h2>
+      <div>Scanning the QR code (or opening the link) opens the editor with this exact program loaded — on any phone, tablet or computer.</div>
+      <label for="shareTitle">Title on the card</label>
+      <input type="text" id="shareTitle" maxlength="60">
+      <label class="check"><input type="checkbox" id="sharePresent" checked> Open in 🎬 Present mode (just the Run screen)</label>
+      <label for="shareBase">Online editor address</label>
+      <input type="text" id="shareBase" spellcheck="false">
+      <div class="warn" id="shareWarn" hidden></div>
+      <div class="row">
+        <button class="primary" id="sharePrint">🖨️ Print QR</button>
+        <button id="shareCopy">📋 Copy link</button>
+        <button id="shareClose">Close</button>
+      </div>
+    </div>
+    <div id="printCard">
+      <div class="pc-title" id="pcTitle"></div>
+      <div id="qrBox"></div>
+      <div class="pc-scan">📱 Scan me to play!</div>
+      <div class="pc-small">Made with Python 🐍</div>
+    </div>
+  </div>
+</div>
 
 <main>
   <aside class="learn" id="learn" hidden>
@@ -2649,8 +2710,9 @@ if (firstVisit) loadLesson(LESSONS[0].example + "\n");
 function prettyName(f) {
   return f.replace(/\.py$/, "").replace(/[_\-]+/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 }
+const sharedTitles = {};
 function updatePresentTitle() {
-  const t = TS.title || prettyName(state.active);
+  const t = TS.title || sharedTitles[state.active] || prettyName(state.active);
   document.getElementById("presentTitle").textContent = t;
   document.getElementById("splashTitle").textContent = t;
 }
@@ -2677,18 +2739,111 @@ function exitPresent() {
 }
 document.getElementById("presentBtn").onclick = enterPresent;
 document.getElementById("pExit").onclick = exitPresent;
-document.getElementById("pRun").onclick = () => runCode();
-document.getElementById("splashRun").onclick = () => runCode();
+function runWhenReady() {
+  if (py) return runCode();
+  const b = document.getElementById("splashRun");
+  b.textContent = "⏳ Loading Python…";
+  const wait = setInterval(() => { if (py) { clearInterval(wait); b.textContent = "▶ Run"; runCode(); } }, 200);
+}
+document.getElementById("pRun").onclick = runWhenReady;
+document.getElementById("splashRun").onclick = runWhenReady;
 document.addEventListener("keydown", e => {
   if (!presenting) return;
   const inField = /INPUT|TEXTAREA/.test(document.activeElement?.tagName);
   if (e.key === "Escape" && !TS.keys.down.has("Escape") && !inField) { e.preventDefault(); exitPresent(); }
-  else if (e.key === "Enter" && document.getElementById("presentSplash").classList.contains("show")) { e.preventDefault(); runCode(); }
+  else if (e.key === "Enter" && document.getElementById("presentSplash").classList.contains("show")) { e.preventDefault(); runWhenReady(); }
 });
 document.addEventListener("fullscreenchange", () => setTimeout(() => TS.fit(), 50));
 
+// ---------- share / QR ----------
+const SHARE_BASE_KEY = "pyeditor.shareBase";
+const DEFAULT_ONLINE = "https://nivumkedia.github.io/games/strategy/other/python-editor.html";
+const isOnline = /^https?:$/.test(location.protocol);
+const b64url = bytes => { let bin = ""; for (const b of bytes) bin += String.fromCharCode(b); return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
+const unb64url = str => { const bin = atob(str.replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(bin, c => c.charCodeAt(0)); };
+async function packCode(text) {
+  const stream = new Blob([text]).stream().pipeThrough(new CompressionStream("deflate-raw"));
+  return b64url(new Uint8Array(await new Response(stream).arrayBuffer()));
+}
+async function unpackCode(str) {
+  const stream = new Blob([unb64url(str)]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  return await new Response(stream).text();
+}
+function shareBase() {
+  return (document.getElementById("shareBase").value.trim() || DEFAULT_ONLINE).split("#")[0];
+}
+let shareLink = "";
+async function updateShare() {
+  const warn = document.getElementById("shareWarn"), box = document.getElementById("qrBox");
+  const title = document.getElementById("shareTitle").value.trim() || prettyName(state.active);
+  document.getElementById("pcTitle").textContent = title;
+  const params = new URLSearchParams({ n: state.active, t: title });
+  if (document.getElementById("sharePresent").checked) params.set("present", "1");
+  params.set("p", await packCode(editor.getValue()));
+  shareLink = shareBase() + "#" + params.toString();
+  const notes = [];
+  if (!isOnline) notes.push("⚠️ Right now this editor is a file on this computer, so other devices can't open it. The QR code points to the <b>online address</b> above — it only works once the editor is uploaded there (e.g. GitHub Pages).");
+  try {
+    const qr = qrcode(0, "L"); qr.addData(shareLink, "Byte"); qr.make();
+    box.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+    if (qr.getModuleCount() > 117) notes.push("🔎 This program is quite long, so the QR code is very detailed. Print it big so phones can scan it.");
+    warn.className = "warn";
+  } catch {
+    box.textContent = "Too big for a QR code 😕";
+    notes.unshift(`❌ This program is too long to fit in a QR code (${shareLink.length} characters in the link; about 2,900 fit). You can still copy the link, or make the program shorter.`);
+    warn.className = "warn bad";
+  }
+  warn.hidden = !notes.length; warn.innerHTML = notes.join("<br><br>");
+}
+function openShare() {
+  document.getElementById("shareTitle").value = TS.title || prettyName(state.active);
+  document.getElementById("shareBase").value = isOnline ? location.origin + location.pathname : (localStorage.getItem(SHARE_BASE_KEY) || DEFAULT_ONLINE);
+  document.getElementById("shareModal").hidden = false;
+  updateShare();
+}
+const closeShare = () => { document.getElementById("shareModal").hidden = true; };
+document.getElementById("shareBtn").onclick = openShare;
+document.getElementById("shareClose").onclick = closeShare;
+document.getElementById("shareModal").onclick = e => { if (e.target.id === "shareModal") closeShare(); };
+document.getElementById("shareTitle").oninput = updateShare;
+document.getElementById("sharePresent").onchange = updateShare;
+document.getElementById("shareBase").oninput = () => { localStorage.setItem(SHARE_BASE_KEY, document.getElementById("shareBase").value.trim()); updateShare(); };
+document.getElementById("shareCopy").onclick = async () => {
+  try { await navigator.clipboard.writeText(shareLink); document.getElementById("shareCopy").textContent = "✅ Copied!"; }
+  catch { prompt("Copy this link:", shareLink); }
+  setTimeout(() => document.getElementById("shareCopy").textContent = "📋 Copy link", 1500);
+};
+document.getElementById("sharePrint").onclick = () => {
+  document.body.classList.add("printing-qr");
+  window.print();
+  setTimeout(() => document.body.classList.remove("printing-qr"), 500);
+};
+window.addEventListener("afterprint", () => document.body.classList.remove("printing-qr"));
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !document.getElementById("shareModal").hidden) closeShare(); });
+
+// Opening a shared link: load the program into its own tab
+async function loadShared() {
+  if (!location.hash.includes("p=")) return;
+  const params = new URLSearchParams(location.hash.slice(1));
+  history.replaceState(null, "", location.pathname + location.search);
+  let code;
+  try { code = await unpackCode(params.get("p")); } catch { return alert("Sorry, that share link is broken."); }
+  let name = cleanName(params.get("n")) || "shared.py";
+  if (state.files[name] !== undefined && state.files[name] !== code) {
+    const base = name.replace(/\.py$/, ""); let i = 2;
+    while (state.files[`${base}-${i}.py`] !== undefined && state.files[`${base}-${i}.py`] !== code) i++;
+    name = `${base}-${i}.py`;
+  }
+  state.files[name] = code;
+  setLearnOpen(false);
+  switchTo(name);
+  if (params.get("t")) sharedTitles[name] = params.get("t");
+  if (params.get("present") === "1") enterPresent();
+}
+
 boot();
-editor.focus();
+loadShared().then(() => { if (!presenting) editor.focus(); });
+window.addEventListener("hashchange", loadShared);
 </script>
 </body>
 </html>
