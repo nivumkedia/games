@@ -1,0 +1,2193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cat Naps</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+    --panel: #ffffff;
+    --border: #f1d9bf;
+    --text: #4a3020;
+    --dim: #a88a70;
+    --accent: #ff9f43;
+    --accent-dark: #e07b1a;
+    --frame: #6b4a33;
+    --bad: #ff5c5c;
+    --good: #4caf50;
+    --font: ui-rounded, 'SF Pro Rounded', 'Arial Rounded MT Bold', 'Nunito', 'Segoe UI', sans-serif;
+}
+
+body {
+    color: var(--text);
+    font-family: var(--font);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 14px 12px 28px;
+    user-select: none;
+    -webkit-user-select: none;
+    background:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='%23f3c99a' fill-opacity='0.28'%3E%3Cellipse cx='30' cy='36' rx='9' ry='8'/%3E%3Ccircle cx='19' cy='24' r='4'/%3E%3Ccircle cx='27' cy='19' r='4'/%3E%3Ccircle cx='36' cy='19' r='4'/%3E%3Ccircle cx='43' cy='25' r='4'/%3E%3Cellipse cx='88' cy='96' rx='9' ry='8'/%3E%3Ccircle cx='77' cy='84' r='4'/%3E%3Ccircle cx='85' cy='79' r='4'/%3E%3Ccircle cx='94' cy='79' r='4'/%3E%3Ccircle cx='101' cy='85' r='4'/%3E%3C/g%3E%3C/svg%3E"),
+        linear-gradient(180deg, #fff3e2 0%, #ffe9d6 55%, #fde2d8 100%);
+    background-attachment: fixed;
+}
+
+/* ---------- Top bar ---------- */
+.corner-btn {
+    position: fixed;
+    top: 14px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--panel);
+    border: 2px solid var(--border);
+    color: var(--accent-dark);
+    font-weight: 900;
+    font-size: 19px;
+    font-family: var(--font);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 0 var(--border), 0 8px 18px rgba(224, 123, 26, 0.15);
+    transition: transform 0.15s;
+    z-index: 10;
+}
+.corner-btn:hover { transform: translateY(-2px); }
+.back-btn { left: 14px; }
+.htp-btn { right: 14px; }
+
+.title-row { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
+.title-row svg { width: 54px; height: 54px; filter: drop-shadow(0 3px 4px rgba(107, 74, 51, 0.25)); }
+h1 {
+    font-size: clamp(30px, 6.5vw, 46px);
+    font-weight: 900;
+    letter-spacing: 1.5px;
+    color: #ff8a1f;
+    text-shadow: 0 3px 0 #c9661a, 0 6px 14px rgba(201, 102, 26, 0.25);
+}
+.subtitle { color: var(--dim); font-size: 14px; font-weight: 700; margin: 4px 0 12px; text-align: center; }
+
+/* ---------- Levels ---------- */
+.levels { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; justify-content: center; }
+.level-btn {
+    position: relative;
+    background: var(--panel);
+    border: 2px solid var(--border);
+    color: var(--text);
+    border-radius: 14px;
+    padding: 7px 14px;
+    font-size: 15px;
+    font-weight: 800;
+    font-family: var(--font);
+    cursor: pointer;
+    box-shadow: 0 3px 0 var(--border);
+    transition: transform 0.12s;
+}
+.level-btn:hover { transform: translateY(-2px); }
+.level-btn.active {
+    background: linear-gradient(180deg, #ffb35c, #ff8a1f);
+    border-color: #e07b1a;
+    color: #fff;
+    box-shadow: 0 3px 0 #c9661a;
+}
+.level-btn .check {
+    position: absolute;
+    top: -7px;
+    right: -7px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--good);
+    color: #fff;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #fff;
+}
+
+/* ---------- Stats ---------- */
+.stats {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--dim);
+    margin-bottom: 12px;
+    background: rgba(255, 255, 255, 0.75);
+    border: 2px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 18px;
+}
+.stats b { color: var(--text); }
+.hearts { display: flex; gap: 3px; font-size: 20px; }
+.hearts span { display: inline-block; transition: transform 0.2s; }
+.hearts span.lost { filter: grayscale(1); opacity: 0.35; transform: scale(0.85); }
+.hearts span.breaking { animation: heartbreak 0.6s; }
+@keyframes heartbreak {
+    0% { transform: scale(1); }
+    30% { transform: scale(1.5) rotate(-12deg); }
+    100% { transform: scale(0.85); }
+}
+
+/* ---------- Board ---------- */
+.board-frame {
+    padding: 10px;
+    border-radius: 22px;
+    background: linear-gradient(160deg, #8b6246, #5e3f2b);
+    box-shadow: 0 6px 0 #4a2f1f, 0 18px 36px rgba(74, 47, 31, 0.35), inset 0 2px 0 rgba(255, 255, 255, 0.2);
+}
+.board {
+    display: grid;
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--frame);
+    touch-action: none;
+    border: 3px solid #3b2416;
+}
+.board.shake { animation: shake 0.35s; }
+
+.cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    position: relative;
+    border: 0 solid #3b2416;
+    overflow: visible;
+}
+.cell::before {
+    /* soft shine so each square looks like a little cushion */
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(150deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 55%, rgba(0, 0, 0, 0.05) 100%);
+    pointer-events: none;
+}
+.cell::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-right: 1px solid rgba(59, 36, 22, 0.14);
+    border-bottom: 1px solid rgba(59, 36, 22, 0.14);
+    pointer-events: none;
+}
+.cell:hover { filter: brightness(1.05); }
+.cell .xmark { width: 36%; height: 36%; opacity: 0.55; animation: fadein 0.15s; }
+.cell .cat-wrap { position: relative; width: 82%; height: 82%; z-index: 1; }
+.cell .cat-wrap svg { width: 100%; height: 100%; filter: drop-shadow(0 2px 2px rgba(59, 36, 22, 0.3)); }
+.cell .cat-wrap.pop { animation: pop 0.35s cubic-bezier(.3, 1.6, .5, 1); }
+.cell.clash .cat-wrap svg { filter: drop-shadow(0 0 3px var(--bad)) drop-shadow(0 0 3px var(--bad)); }
+.cell.hint-cat .cat-wrap svg { filter: drop-shadow(0 0 3px var(--good)) drop-shadow(0 0 2px var(--good)); }
+.cell.oops { animation: flash 0.6s; }
+.cell.target { animation: glow 1.1s ease-in-out infinite; z-index: 2; }
+.cell.dim { filter: saturate(0.55) brightness(0.96); }
+
+.zzz {
+    position: absolute;
+    top: 4%;
+    right: 2%;
+    font-weight: 900;
+    color: #6f7fd8;
+    pointer-events: none;
+    z-index: 3;
+    opacity: 0;
+    animation: zzz 3s ease-in-out infinite;
+}
+
+@keyframes pop { from { transform: scale(0.2) rotate(-15deg); } to { transform: scale(1) rotate(0); } }
+@keyframes fadein { from { opacity: 0; transform: scale(0.5); } }
+@keyframes flash { 0%, 100% { box-shadow: none; } 25%, 60% { box-shadow: inset 0 0 0 100px rgba(255, 92, 92, 0.55); } }
+@keyframes glow { 0%, 100% { box-shadow: inset 0 0 0 3px #fff, 0 0 0 0 rgba(255, 138, 31, 0.8); } 50% { box-shadow: inset 0 0 0 4px #ff8a1f, 0 0 14px 4px rgba(255, 138, 31, 0.8); } }
+@keyframes zzz {
+    0% { opacity: 0; transform: translate(0, 0) scale(0.6); }
+    25% { opacity: 1; }
+    80% { opacity: 0.8; }
+    100% { opacity: 0; transform: translate(6px, -16px) scale(1.1); }
+}
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-7px); }
+    60% { transform: translateX(7px); }
+}
+
+/* ---------- Tools ---------- */
+.tools { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; justify-content: center; align-items: center; }
+.tool-btn {
+    background: linear-gradient(180deg, #ffb35c, #ff8a1f);
+    color: #fff;
+    border: none;
+    border-radius: 14px;
+    padding: 10px 18px;
+    font-size: 15px;
+    font-weight: 900;
+    font-family: var(--font);
+    cursor: pointer;
+    box-shadow: 0 4px 0 #c9661a;
+    transition: transform 0.1s;
+}
+.tool-btn:hover { transform: translateY(-1px); }
+.tool-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #c9661a; }
+.tool-btn.soft { background: var(--panel); color: var(--accent-dark); border: 2px solid var(--border); box-shadow: 0 4px 0 var(--border); }
+.tool-btn.soft.on { background: #e9f8e4; border-color: #9fd88f; color: #3d8a2c; box-shadow: 0 4px 0 #9fd88f; }
+.tool-btn:disabled { opacity: 0.4; cursor: default; }
+
+.mode-toggle { display: flex; border: 2px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: 0 4px 0 var(--border); }
+.mode-toggle button {
+    background: var(--panel);
+    border: none;
+    padding: 9px 14px;
+    font-size: 15px;
+    font-weight: 900;
+    font-family: var(--font);
+    color: var(--dim);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.mode-toggle button svg { width: 20px; height: 20px; }
+.mode-toggle button.active { background: linear-gradient(180deg, #ffb35c, #ff8a1f); color: #fff; }
+
+/* ---------- Overlays ---------- */
+.overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(255, 240, 225, 0.82);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+    padding: 16px;
+}
+.overlay.show { display: flex; }
+.card {
+    background: var(--panel);
+    border: 3px solid #ffc58a;
+    border-radius: 26px;
+    padding: 24px 26px;
+    width: min(440px, 100%);
+    text-align: center;
+    box-shadow: 0 6px 0 #ffc58a, 0 20px 50px rgba(224, 123, 26, 0.3);
+    animation: cardin 0.3s cubic-bezier(.3, 1.5, .5, 1);
+}
+@keyframes cardin { from { transform: scale(0.85); opacity: 0; } }
+.card h2 { color: var(--accent-dark); font-size: 27px; font-weight: 900; margin-bottom: 8px; }
+.card p { color: var(--text); font-size: 16px; font-weight: 600; line-height: 1.5; margin-bottom: 12px; }
+.card .big svg { width: 96px; height: 96px; }
+.card .row { display: flex; gap: 10px; justify-content: center; margin-top: 8px; }
+
+/* Tutorial */
+.tut-art { display: flex; justify-content: center; align-items: center; min-height: 120px; margin: 6px 0 14px; }
+.tut-art .board-frame { padding: 7px; border-radius: 16px; }
+.tut-art .board { border-radius: 9px; }
+.tut-dots { display: flex; gap: 6px; justify-content: center; margin-bottom: 12px; }
+.tut-dots span { width: 9px; height: 9px; border-radius: 50%; background: var(--border); transition: all 0.2s; }
+.tut-dots span.on { background: var(--accent); width: 22px; border-radius: 5px; }
+.tut-skip { background: none; border: none; color: var(--dim); font-family: var(--font); font-weight: 800; font-size: 14px; cursor: pointer; margin-top: 10px; }
+.tut-skip:hover { color: var(--accent-dark); }
+.tut-note { font-size: 14px !important; color: var(--dim) !important; }
+.glow-line { box-shadow: inset 0 0 0 3px #ff8a1f !important; }
+
+.home-btn { left: 66px; }
+
+/* ---------- My cat + score chip ---------- */
+.me-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.85);
+    border: 2px solid var(--border);
+    border-radius: 18px;
+    padding: 4px 14px 4px 6px;
+    margin-bottom: 10px;
+    box-shadow: 0 3px 0 var(--border);
+}
+.me-chip .me-art { width: 52px; height: 52px; }
+.me-chip .me-art svg, .home-cat svg, .up-art svg { width: 100%; height: 100%; overflow: visible; }
+.me-name { font-weight: 900; font-size: 15px; color: var(--accent-dark); }
+.me-score { font-weight: 900; font-size: 14px; color: var(--text); }
+.bar { width: 150px; height: 9px; border-radius: 6px; background: #f3e2cf; overflow: hidden; margin-top: 3px; }
+.bar > div { height: 100%; background: linear-gradient(90deg, #ffb35c, #ff6fa0); border-radius: 6px; transition: width 1.2s cubic-bezier(.2, .8, .3, 1); }
+
+/* ---------- Win card score ---------- */
+.score-lines { text-align: left; margin: 4px auto 10px; max-width: 320px; font-weight: 800; font-size: 15px; }
+.score-lines em { display: block; font-style: normal; font-weight: 700; font-size: 12px; color: var(--dim); }
+.score-lines .sub { border-top: 2px dashed var(--border); margin-top: 4px; padding-top: 6px; }
+.score-lines .mult-head { color: #d6457a; margin-top: 4px; }
+.score-lines .mpart { font-size: 12.5px; font-weight: 700; color: var(--dim); padding: 0 0 0 12px; }
+#win-overlay .card { max-height: calc(100vh - 32px); overflow-y: auto; }
+.score-lines div { display: flex; justify-content: space-between; padding: 2px 0; }
+.score-lines .minus { color: var(--bad); }
+.score-lines .total { border-top: 2px dashed var(--border); margin-top: 4px; padding-top: 6px; color: var(--accent-dark); font-size: 18px; }
+.upgrade-box {
+    background: linear-gradient(135deg, #fff4c2, #ffe0f0);
+    border: 2px solid #ffcf5c;
+    border-radius: 18px;
+    padding: 10px 12px 12px;
+    margin: 6px 0 12px;
+    animation: cardin 0.5s cubic-bezier(.3, 1.6, .5, 1);
+}
+.upgrade-box .up-art { width: 120px; height: 120px; margin: 4px auto; animation: wiggle 1.2s ease-in-out infinite; }
+.upgrade-box b { color: #d6457a; }
+@keyframes wiggle { 0%, 100% { transform: rotate(-6deg) scale(1); } 50% { transform: rotate(6deg) scale(1.08); } }
+
+/* ---------- Home page ---------- */
+#home {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background:
+        radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 45%),
+        linear-gradient(180deg, #ffe7c9 0%, #ffd6d6 60%, #e8d6ff 100%);
+    transition: opacity 0.45s, transform 0.45s;
+}
+#home.hide { opacity: 0; transform: scale(1.08); pointer-events: none; }
+.home-float {
+    position: absolute;
+    bottom: -90px;
+    width: 60px;
+    height: 60px;
+    opacity: 0.55;
+    animation: floatup linear infinite;
+    pointer-events: none;
+}
+@keyframes floatup {
+    0% { transform: translate(0, 0) rotate(-10deg); }
+    50% { transform: translate(30px, -60vh) rotate(10deg); }
+    100% { transform: translate(-10px, -125vh) rotate(-10deg); }
+}
+.home-title { display: flex; gap: 2px; margin-bottom: 4px; z-index: 1; }
+.home-title span {
+    font-size: clamp(44px, 11vw, 84px);
+    font-weight: 900;
+    color: #ff8a1f;
+    text-shadow: 0 5px 0 #c9661a, 0 10px 20px rgba(201, 102, 26, 0.3);
+    display: inline-block;
+    animation: letter 1.8s ease-in-out infinite;
+}
+.home-title span.gap { width: 0.35em; }
+@keyframes letter { 0%, 100% { transform: translateY(0); } 25% { transform: translateY(-14px) rotate(-4deg); } 50% { transform: translateY(0); } }
+.home-tag { color: #a0705a; font-weight: 800; font-size: 17px; margin-bottom: 14px; z-index: 1; text-align: center; padding: 0 16px; }
+#home { overflow-y: auto; }
+.home-pillow {
+    width: 240px;
+    height: 54px;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at 50% 35%, #c4ccff, #8f9be8);
+    box-shadow: 0 10px 20px rgba(80, 90, 170, 0.3);
+    margin-top: -42px;
+}
+.home-cat { width: 190px; height: 190px; position: relative; z-index: 2; animation: breathe 3s ease-in-out infinite; transform-origin: 50% 90%; }
+@keyframes breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.04, 0.96); } }
+.home-zzz { position: absolute; top: 0; right: -10px; z-index: 3; }
+.home-zzz span { position: absolute; font-weight: 900; color: #6f7fd8; opacity: 0; animation: zzz 3s ease-in-out infinite; }
+.home-rank { margin-top: 14px; text-align: center; z-index: 1; }
+.home-rank .me-name { font-size: 20px; }
+.home-rank .bar { width: 220px; height: 12px; margin: 6px auto 4px; }
+.home-rank small { color: #a0705a; font-weight: 800; }
+.start-btn {
+    margin-top: 22px;
+    z-index: 1;
+    font-size: 26px !important;
+    padding: 16px 52px !important;
+    border-radius: 22px !important;
+    animation: pulse 1.6s ease-in-out infinite;
+}
+@keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+.home-links { margin-top: 18px; display: flex; gap: 10px; z-index: 1; }
+
+/* ---------- Setup page ---------- */
+#setup {
+    position: fixed;
+    inset: 0;
+    z-index: 39;
+    overflow-y: auto;
+    background: linear-gradient(180deg, #ffe7c9 0%, #ffe0e6 60%, #ece0ff 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 18px 12px 120px;
+    transition: opacity 0.35s;
+}
+#setup.hide { opacity: 0; pointer-events: none; visibility: hidden; }
+#setup h2 { font-size: clamp(28px, 6vw, 40px); font-weight: 900; color: #ff8a1f; text-shadow: 0 3px 0 #c9661a; margin: 4px 0 2px; }
+#setup .sub { color: #a0705a; font-weight: 800; margin-bottom: 14px; text-align: center; }
+.setup-card {
+    width: min(620px, 100%);
+    background: rgba(255, 255, 255, 0.92);
+    border: 3px solid #ffc58a;
+    border-radius: 24px;
+    padding: 6px 18px 12px;
+    box-shadow: 0 6px 0 #ffc58a, 0 18px 40px rgba(224, 123, 26, 0.2);
+}
+.opt { padding: 12px 0; border-bottom: 2px dashed #f5e3cf; }
+.opt:last-child { border-bottom: none; }
+.opt-label { font-weight: 900; font-size: 16px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.opt-label small { color: var(--dim); font-weight: 700; font-size: 13px; text-align: right; }
+.chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.chip {
+    position: relative;
+    background: #fff;
+    border: 2px solid var(--border);
+    color: var(--text);
+    border-radius: 13px;
+    padding: 7px 13px;
+    font-size: 15px;
+    font-weight: 800;
+    font-family: var(--font);
+    cursor: pointer;
+    box-shadow: 0 3px 0 var(--border);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: transform 0.12s;
+}
+.chip:hover { transform: translateY(-2px); }
+.chip.active { background: linear-gradient(180deg, #ffb35c, #ff8a1f); border-color: #e07b1a; color: #fff; box-shadow: 0 3px 0 #c9661a; }
+.chip .mini { width: 26px; height: 26px; }
+.chip .swatch { display: flex; gap: 2px; }
+.chip .swatch i { width: 10px; height: 18px; border-radius: 3px; display: block; border: 1px solid rgba(0, 0, 0, 0.12); }
+.chip .check {
+    position: absolute; top: -7px; right: -7px; width: 18px; height: 18px; border-radius: 50%;
+    background: var(--good); color: #fff; font-size: 11px; display: flex; align-items: center; justify-content: center; border: 2px solid #fff;
+}
+.preset-row .chip { flex: 1 1 120px; flex-direction: column; gap: 2px; padding: 9px 8px; }
+.preset-row .chip span { font-size: 12px; font-weight: 700; opacity: 0.8; }
+.setup-bar {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.9);
+    border-top: 2px solid var(--border);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    flex-wrap: wrap;
+}
+.mult { font-weight: 900; font-size: 16px; color: #d6457a; background: #ffe6f0; border: 2px solid #ffb3cf; border-radius: 12px; padding: 7px 12px; }
+.play-info { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-weight: 800; color: var(--dim); flex-wrap: wrap; justify-content: center; }
+.play-info b { color: var(--text); }
+.play-info .tool-btn { padding: 6px 12px; font-size: 14px; }
+
+/* ---------- Cat room: your cat lives here ---------- */
+.room {
+    position: relative;
+    width: min(580px, 92vw);
+    height: 190px;
+    border-radius: 22px;
+    overflow: hidden;
+    border: 3px solid #f1d9bf;
+    box-shadow: 0 5px 0 #f1d9bf, 0 14px 30px rgba(224, 123, 26, 0.18);
+    background:
+        radial-gradient(ellipse 30% 12% at 50% 92%, rgba(255, 159, 178, 0.35), transparent 70%),
+        linear-gradient(180deg, #fff9ef 0%, #fff1dc 64%, #f2cfa6 64%, #e9bf92 100%);
+    z-index: 1;
+    cursor: pointer;
+}
+.room.small { height: 150px; margin-top: 18px; }
+.room .window {
+    position: absolute; top: 14px; left: 50%; width: 74px; height: 56px; margin-left: -37px;
+    border: 5px solid #c99a6e; border-radius: 10px;
+    background: linear-gradient(180deg, #bfe6ff, #e6f6ff);
+}
+.room .window::after { content: ''; position: absolute; inset: 0; border-left: 4px solid #c99a6e; left: 50%; }
+.room .bed {
+    position: absolute; bottom: 4px; left: 8px; width: 120px; height: 34px; border-radius: 50%;
+    background: radial-gradient(ellipse at 50% 30%, #d4daff, #8f9be8);
+    box-shadow: inset 0 -6px 0 rgba(60, 70, 150, 0.25);
+}
+.room.small .bed { width: 100px; height: 28px; }
+.room .post { position: absolute; bottom: 4px; right: 14px; width: 46px; height: 118px; }
+.room.small .post { height: 96px; }
+.room .post .pole { position: absolute; left: 14px; bottom: 10px; width: 18px; top: 16px; background: repeating-linear-gradient(0deg, #d9b58c 0 5px, #c49a6c 5px 8px); border-radius: 4px; }
+.room .post .top { position: absolute; top: 0; left: 0; right: 0; height: 18px; border-radius: 8px; background: #b98ee8; }
+.room .post .base { position: absolute; bottom: 0; left: -4px; right: -4px; height: 12px; border-radius: 6px; background: #b98ee8; }
+.room-label { position: absolute; top: 8px; left: 12px; font-weight: 900; font-size: 13px; color: #b08a6a; z-index: 3; pointer-events: none; }
+
+.toy { position: absolute; bottom: 6px; width: 30px; height: 30px; transition: left 1s cubic-bezier(.2, .8, .3, 1); z-index: 3; }
+.toy .spin { width: 100%; height: 100%; transition: transform 1s cubic-bezier(.2, .8, .3, 1); }
+.toy svg { width: 100%; height: 100%; overflow: visible; }
+.toy.bounce .spin { animation: tbounce 1s ease-out; }
+.toy.wiggle .spin { animation: twiggle 0.3s ease-in-out infinite; }
+@keyframes tbounce { 0% { translate: 0 0; } 25% { translate: 0 -46px; } 50% { translate: 0 0; } 70% { translate: 0 -18px; } 85%, 100% { translate: 0 0; } }
+@keyframes twiggle { 0%, 100% { rotate: -14deg; } 50% { rotate: 14deg; } }
+.laser {
+    position: absolute; bottom: 10px; width: 12px; height: 12px; border-radius: 50%;
+    background: #ff2b2b; box-shadow: 0 0 10px 4px rgba(255, 43, 43, 0.6);
+    transition: left 0.35s ease-out, bottom 0.35s ease-out; opacity: 0; z-index: 4; margin-left: -6px;
+}
+.laser.on { opacity: 1; }
+
+.rcat { position: absolute; bottom: 2px; transition-property: left; transition-timing-function: linear; z-index: 2; }
+.rcat .flip { width: 100%; height: 100%; }
+.rcat.left .flip { transform: scaleX(-1); }
+.rcat svg { width: 100%; height: 100%; overflow: visible; }
+.rcat .whole, .rcat .head, .rcat .leg, .rcat .body, .rcat .tail {
+    transform-box: fill-box;
+    transition: transform 0.5s ease, opacity 0.35s;
+}
+.rcat .leg { transform-origin: 50% 0; }
+.rcat .body { transform-origin: 0% 100%; }
+.rcat .whole { transform-origin: 50% 100%; }
+.rcat .head { transform-origin: 50% 85%; animation: headtilt 5s ease-in-out infinite; }
+.rcat .tail { transform-origin: 100% 100%; animation: wag 1.8s ease-in-out infinite; }
+@keyframes wag { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(12deg); } }
+@keyframes headtilt { 0%, 70%, 100% { transform: rotate(0); } 80% { transform: rotate(-8deg); } 90% { transform: rotate(5deg); } }
+@keyframes legA { 0%, 100% { transform: rotate(24deg); } 50% { transform: rotate(-24deg); } }
+@keyframes legB { 0%, 100% { transform: rotate(-24deg); } 50% { transform: rotate(24deg); } }
+@keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes breathe2 { 0%, 100% { transform: scale(1, 0.85); } 50% { transform: scale(1.03, 0.92); } }
+@keyframes pounce { 0% { transform: translateY(5px) scaleY(0.9); } 35% { transform: translateY(5px) scaleY(0.88); } 65% { transform: translate(14px, -34px) rotate(-8deg); } 100% { transform: translate(0, 0); } }
+@keyframes bat { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-80deg); } }
+@keyframes scratch { 0%, 100% { transform: rotate(-150deg); } 50% { transform: rotate(-120deg); } }
+@keyframes lick { 0%, 100% { transform: translate(4px, 10px) rotate(14deg); } 50% { transform: translate(4px, 13px) rotate(18deg); } }
+
+.rcat.walk .leg.a { animation: legA 0.45s linear infinite; }
+.rcat.walk .leg.b { animation: legB 0.45s linear infinite; }
+.rcat.walk .whole { animation: bob 0.45s linear infinite; }
+.rcat.run .leg.a { animation-duration: 0.22s; }
+.rcat.run .leg.b { animation-duration: 0.22s; }
+.rcat.run .whole { animation-duration: 0.22s; }
+
+.rcat.sit .body { transform: rotate(-24deg); }
+.rcat.sit .leg.back { opacity: 0; }
+.rcat.sit .head { transform: translate(-6px, -8px); }
+
+.rcat.sleep .whole { transform: translateY(10px); }
+.rcat.sleep .leg { opacity: 0; }
+.rcat.sleep .body { animation: breathe2 3s ease-in-out infinite; transform-origin: 50% 100%; }
+.rcat.sleep .head { transform: translate(-20px, 24px) rotate(-14deg); animation: none; }
+.rcat.sleep .tail { transform: rotate(-95deg); animation: none; }
+
+.rcat.stretch .body { transform: rotate(12deg); }
+.rcat.stretch .leg.front { transform: rotate(-62deg); }
+.rcat.stretch .head { transform: translate(6px, 20px); animation: none; }
+.rcat.stretch .tail { transform: rotate(35deg); animation: none; }
+
+.rcat.crouch .whole { transform: translateY(5px) scaleY(0.9); }
+.rcat.pounce .whole { animation: pounce 0.75s ease-in-out; }
+.rcat.pounce .leg.front { transform: rotate(-40deg); }
+.rcat.bat .leg.front.a { animation: bat 0.35s ease-in-out infinite; }
+.rcat.scratch .whole { transform: rotate(-30deg); }
+.rcat.scratch .leg.front { animation: scratch 0.3s ease-in-out infinite; }
+.rcat.scratch .leg.front.b { animation-delay: -0.15s; }
+.rcat.groom .leg.front.a { transform: rotate(-80deg); }
+.rcat.groom .head { animation: lick 0.6s ease-in-out infinite; }
+
+.rcat .zzz2 { position: absolute; top: -6px; left: 40%; font-weight: 900; color: #6f7fd8; display: none; }
+.rcat.sleep .zzz2 { display: block; }
+.rcat .zzz2 span { position: absolute; opacity: 0; animation: zzz 3s ease-in-out infinite; }
+.rcat .bubble {
+    position: absolute; top: -26px; left: 50%; transform: translateX(-50%) scale(0); transform-origin: 50% 100%;
+    background: #fff; border: 2px solid var(--border); border-radius: 12px; padding: 2px 9px;
+    font-weight: 900; font-size: 14px; white-space: nowrap; color: var(--accent-dark);
+    transition: transform 0.2s cubic-bezier(.3, 1.6, .5, 1);
+}
+.rcat .bubble.show { transform: translateX(-50%) scale(1); }
+.cat-facts { font-size: 13px; font-weight: 800; color: #a0705a; margin-top: 4px; text-align: center; }
+
+.falling {
+    position: fixed;
+    top: -70px;
+    width: 46px;
+    height: 46px;
+    pointer-events: none;
+    z-index: 30;
+    animation: fall linear forwards;
+}
+@keyframes fall { to { transform: translateY(118vh) rotate(400deg); } }
+</style>
+</head>
+<body>
+
+<button class="corner-btn back-btn" id="back-to-didis" title="Back to Didi's Games">←</button>
+<button class="corner-btn home-btn" id="home-btn" title="Home">🏠</button>
+<button class="corner-btn htp-btn" id="htp-btn" title="Tutorial">?</button>
+
+<div id="home">
+    <div id="home-floats"></div>
+    <div class="home-title" id="home-title"></div>
+    <div class="home-tag">Help every sleepy cat find the perfect nap spot!</div>
+    <div class="room" id="home-room"></div>
+    <div class="home-rank">
+        <div class="me-name" id="home-name"></div>
+        <div class="bar"><div id="home-bar"></div></div>
+        <small id="home-next"></small>
+        <div class="cat-facts" id="home-facts"></div>
+    </div>
+    <button class="tool-btn start-btn" id="start-btn">▶ START</button>
+    <div class="home-links">
+        <button class="tool-btn soft" id="home-tut">📖 How to Play</button>
+        <button class="tool-btn soft" id="home-back">← Didi's Games</button>
+    </div>
+</div>
+
+<div class="title-row">
+    <span id="logo"></span>
+    <h1>CAT NAPS</h1>
+</div>
+<div class="subtitle">One sleepy cat in every row, column and colour. No cuddling!</div>
+
+<div id="setup" class="hide">
+    <h2>Game Setup</h2>
+    <div class="sub">Pick how you want to play. Harder settings earn more points!</div>
+    <div class="setup-card" id="setup-card"></div>
+    <div class="setup-bar">
+        <button class="tool-btn soft" id="setup-back">← Home</button>
+        <span class="mult" id="setup-mult"></span>
+        <button class="tool-btn" id="setup-play" style="font-size:20px;padding:12px 30px">🐾 Let's Play!</button>
+    </div>
+</div>
+
+<div class="me-chip" title="Every 1,000 points your cat gets an upgrade!">
+    <div class="me-art" id="me-art"></div>
+    <div>
+        <div class="me-name" id="me-name"></div>
+        <div class="me-score">⭐ <span id="me-score">0</span></div>
+        <div class="bar"><div id="me-bar"></div></div>
+    </div>
+</div>
+
+<div class="play-info">
+    <span id="play-info"></span>
+    <button class="tool-btn soft" id="open-setup">⚙️ Setup</button>
+</div>
+
+<div class="stats">
+    <span class="hearts" id="hearts"></span>
+    <span>⏱ <b id="time">0:00</b></span>
+    <span>🐱 <b id="cats">0/6</b></span>
+</div>
+
+<div class="board-frame"><div class="board" id="board"></div></div>
+
+<div class="tools">
+    <div class="mode-toggle">
+        <button id="tool-x" class="active" title="Tap or drag to put X's where cats can't go"></button>
+        <button id="tool-cat" title="Tap a square to put a cat there"></button>
+    </div>
+    <button class="tool-btn soft" id="hint-btn">💡 Hint</button>
+    <button class="tool-btn soft" id="clear-btn">🧽 Clear X's</button>
+    <button class="tool-btn" id="new-btn">🔄 New Puzzle</button>
+</div>
+
+<div class="room small" id="game-room"></div>
+
+<div class="overlay" id="win-overlay">
+    <div class="card">
+        <div class="big" id="win-art"></div>
+        <h2>All cats napping!</h2>
+        <p id="win-text"></p>
+        <div class="score-lines" id="score-lines"></div>
+        <div id="upgrade-slot"></div>
+        <div class="row">
+            <button class="tool-btn soft" id="win-again">🔄 Another</button>
+            <button class="tool-btn" id="win-next">Next Level ➜</button>
+        </div>
+    </div>
+</div>
+
+<div class="overlay" id="lose-overlay">
+    <div class="card">
+        <div class="big" id="lose-art"></div>
+        <h2 id="lose-title">Out of hearts!</h2>
+        <p id="lose-text">The cats woke up grumpy. Want to try again?</p>
+        <div class="row">
+            <button class="tool-btn soft" id="retry-btn">🔁 Same Puzzle</button>
+            <button class="tool-btn" id="lose-new">🔄 New Puzzle</button>
+        </div>
+    </div>
+</div>
+
+<div class="overlay" id="tut-overlay">
+    <div class="card">
+        <div class="tut-dots" id="tut-dots"></div>
+        <h2 id="tut-title"></h2>
+        <div class="tut-art" id="tut-art"></div>
+        <p id="tut-text"></p>
+        <div class="row" id="tut-buttons"></div>
+        <button class="tut-skip" id="tut-skip">Skip tutorial</button>
+    </div>
+</div>
+
+<script>
+// ================= Art =================
+const REGION_COLORS = ['#ffc2c2', '#ffd9a3', '#fff09a', '#c6efae', '#aee3f5', '#c4ccff', '#e0c2ff', '#ffc2e6', '#a8e8d6', '#e6d3bf', '#f7f7c4', '#9fd0ff', '#ffb59a', '#d6f5a8'];
+const FURS = [
+    { fur: '#ffad5c', dark: '#e0802c', stripes: true },   // ginger tabby
+    { fur: '#c9c9d6', dark: '#9a9aae', stripes: true },   // grey tabby
+    { fur: '#fff6e8', dark: '#f0d9b8', stripes: false },  // cream
+    { fur: '#9c7659', dark: '#74543d', stripes: true },   // brown tabby
+    { fur: '#5a5266', dark: '#3d3747', stripes: false },  // black-ish
+    { fur: '#ffd27a', dark: '#e8ad3c', stripes: false },  // golden
+];
+const LINE = '#3b2416';
+
+function catSVG(f, awake = false) {
+    const stroke = f.fur === '#5a5266' ? '#231c2b' : LINE;
+    const eye = f.fur === '#5a5266' ? '#fff3c4' : LINE;
+    const eyes = awake
+        ? `<ellipse cx="37" cy="56" rx="5" ry="6.5" fill="${eye}"/><ellipse cx="63" cy="56" rx="5" ry="6.5" fill="${eye}"/>
+           <circle cx="39" cy="53.5" r="1.8" fill="#fff"/><circle cx="65" cy="53.5" r="1.8" fill="#fff"/>`
+        : `<path d="M30 56 q7 6 14 0" stroke="${eye}" stroke-width="4" fill="none" stroke-linecap="round"/>
+           <path d="M56 56 q7 6 14 0" stroke="${eye}" stroke-width="4" fill="none" stroke-linecap="round"/>`;
+    const stripes = f.stripes
+        ? `<path d="M44 33 l2 8 M50 31 v10 M56 33 l-2 8" stroke="${f.dark}" stroke-width="3.5" stroke-linecap="round"/>
+           <path d="M16 58 h8 M17 66 h7 M84 58 h-8 M83 66 h-7" stroke="${f.dark}" stroke-width="3" stroke-linecap="round"/>`
+        : '';
+    return `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <path d="M17 46 L22 10 L46 30 Z" fill="${f.fur}" stroke="${stroke}" stroke-width="4" stroke-linejoin="round"/>
+        <path d="M83 46 L78 10 L54 30 Z" fill="${f.fur}" stroke="${stroke}" stroke-width="4" stroke-linejoin="round"/>
+        <path d="M25 35 L27 19 L38 29 Z" fill="#ffb3c1"/>
+        <path d="M75 35 L73 19 L62 29 Z" fill="#ffb3c1"/>
+        <ellipse cx="50" cy="59" rx="37" ry="31" fill="${f.fur}" stroke="${stroke}" stroke-width="4"/>
+        ${stripes}
+        <ellipse cx="50" cy="74" rx="15" ry="10" fill="#fff" opacity="0.55"/>
+        ${eyes}
+        <circle cx="27" cy="68" r="5.5" fill="#ff9fb2" opacity="0.65"/>
+        <circle cx="73" cy="68" r="5.5" fill="#ff9fb2" opacity="0.65"/>
+        <path d="M45.5 65 h9 l-4.5 5 z" fill="#ff8fa3" stroke="${stroke}" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="M50 70 q-4 5 -8.5 2.5 M50 70 q4 5 8.5 2.5" stroke="${stroke}" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+        <path d="M8 62 l14 2 M9 71 l13 -2 M92 62 l-14 2 M91 71 l-13 -2" stroke="${stroke}" stroke-width="1.8" stroke-linecap="round" opacity="0.6"/>
+    </svg>`;
+}
+
+const X_SVG = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><path d="M18 18 L82 82 M82 18 L18 82" stroke="currentColor" stroke-width="16" stroke-linecap="round"/></svg>`;
+const PAW_SVG = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" fill="${LINE}">
+    <ellipse cx="50" cy="66" rx="22" ry="19"/>
+    <ellipse cx="22" cy="42" rx="10" ry="12"/><ellipse cx="40" cy="25" rx="10" ry="12"/>
+    <ellipse cx="60" cy="25" rx="10" ry="12"/><ellipse cx="78" cy="42" rx="10" ry="12"/></svg>`;
+
+// ================= Levels =================
+const LEVELS = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14]; // board size (and cats needed) for Level 1–10
+const SAVE_KEY = 'catnaps_progress';
+const TUT_KEY = 'catnaps_tutorial_done';
+let progress = {};
+try { progress = JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; } catch (e) {}
+
+// ---------- Game setup options ----------
+const SETTINGS_KEY = 'catnaps_settings';
+const DEFAULTS = { difficulty: 'easy', level: 1, hearts: 3, time: 0, hints: -1, starters: 1, helper: true, fur: 'mix', theme: 'pastel' };
+let settings = { ...DEFAULTS };
+try { settings = { ...DEFAULTS, ...(JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}) }; } catch (e) {}
+function saveSettings() { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
+let level = Math.min(Math.max(settings.level, 1), LEVELS.length);
+let difficulty = settings.difficulty;
+const THEMES = {
+    pastel: REGION_COLORS,
+    candy: ['#ffb3c7', '#ffd1a1', '#fff59e', '#c3f7a8', '#a8f0ff', '#c9b8ff', '#ffb8f0', '#ffe3b8', '#b8ffe0', '#f0c8a0', '#ff9ec2', '#9ee6ff', '#e2ff9e', '#ffc89e'],
+    ocean: ['#9fd3ff', '#a8f0e0', '#ffe9b0', '#c3d0ff', '#b5f5c8', '#d8c3ff', '#ffd0c0', '#8fe3f0', '#e3f2ff', '#cfe6a0', '#7fc4e8', '#f2e2c4', '#b0b8f0', '#9ff0c8'],
+    forest: ['#c8e6a0', '#f0d9a8', '#a8d8b0', '#ffe08a', '#d8c0a0', '#b8e0e8', '#f0c0a0', '#e6f2b0', '#a0c890', '#f8e8c8', '#d0e890', '#c8a878', '#90d0b0', '#f0e0a0'],
+};
+
+// ================= Game state =================
+let N = LEVELS[level - 1];
+let regions = [];   // regions[r][c] = region id
+let solution = [];  // solution[r] = column of the cat in row r
+let state = [];     // 0 empty, 1 X mark, 2 cat
+let hintCells = new Set();
+let givens = new Set(); // cats placed for free at the start (can't be removed)
+let hearts = 3, seconds = 0, timer = null, over = false;
+let tool = 'x';
+
+const rnd = n => Math.floor(Math.random() * n);
+function shuffle(a) {
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = rnd(i + 1);
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+}
+
+// ================= Puzzle generation =================
+function randomPlacement() {
+    const cols = [], used = new Array(N).fill(false);
+    function go(r) {
+        if (r === N) return true;
+        for (const c of shuffle([...Array(N).keys()])) {
+            if (used[c] || (r > 0 && Math.abs(cols[r - 1] - c) <= 1)) continue;
+            used[c] = true; cols[r] = c;
+            if (go(r + 1)) return true;
+            used[c] = false;
+        }
+        return false;
+    }
+    go(0);
+    return cols;
+}
+
+function growRegions(cols) {
+    const reg = [...Array(N)].map(() => new Array(N).fill(-1));
+    const frontier = [];
+    cols.forEach((c, r) => { reg[r][c] = r; frontier.push([r, c]); });
+    let left = N * N - N;
+    while (left > 0) {
+        const i = rnd(frontier.length);
+        const [r, c] = frontier[i];
+        const opts = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+            .map(([dr, dc]) => [r + dr, c + dc])
+            .filter(([a, b]) => a >= 0 && b >= 0 && a < N && b < N && reg[a][b] === -1);
+        if (!opts.length) { frontier.splice(i, 1); continue; }
+        const [a, b] = opts[rnd(opts.length)];
+        reg[a][b] = reg[r][c];
+        frontier.push([a, b]);
+        left--;
+    }
+    return reg;
+}
+
+function findSolutions(reg, limit) {
+    // Solve colour-by-colour, smallest colour first (fewest choices = fastest).
+    const cellsOf = [...Array(N)].map(() => []);
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) cellsOf[reg[r][c]].push([r, c]);
+    const order = cellsOf.map((cells, id) => id).sort((a, b) => cellsOf[a].length - cellsOf[b].length);
+    const rowUsed = new Array(N).fill(false), colUsed = new Array(N).fill(false);
+    const taken = [...Array(N)].map(() => new Array(N).fill(false));
+    const cols = new Array(N).fill(-1);
+    const out = [];
+    const touches = (r, c) => {
+        for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+            const a = r + dr, b = c + dc;
+            if (a >= 0 && b >= 0 && a < N && b < N && taken[a][b]) return true;
+        }
+        return false;
+    };
+    function go(k) {
+        if (out.length >= limit) return;
+        if (k === N) { out.push(cols.slice()); return; }
+        // pick the unfinished colour with the fewest open squares
+        let bestId = -1, bestOpts = null;
+        for (let i = k; i < N; i++) {
+            const id = order[i];
+            const opts = cellsOf[id].filter(([r, c]) => !rowUsed[r] && !colUsed[c] && !touches(r, c));
+            if (!bestOpts || opts.length < bestOpts.length) { bestOpts = opts; bestId = i; if (!opts.length) return; }
+        }
+        [order[k], order[bestId]] = [order[bestId], order[k]];
+        for (const [r, c] of bestOpts) {
+            rowUsed[r] = colUsed[c] = taken[r][c] = true; cols[r] = c;
+            go(k + 1);
+            rowUsed[r] = colUsed[c] = taken[r][c] = false; cols[r] = -1;
+            if (out.length >= limit) break;
+        }
+        [order[k], order[bestId]] = [order[bestId], order[k]];
+    }
+    go(0);
+    return out;
+}
+
+function stillConnected(reg, id, rr, cc) {
+    const cells = [];
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++)
+        if (reg[r][c] === id && !(r === rr && c === cc)) cells.push(r * N + c);
+    if (!cells.length) return false;
+    const set = new Set(cells), seen = new Set([cells[0]]), stack = [cells[0]];
+    while (stack.length) {
+        const v = stack.pop(), r = Math.floor(v / N), c = v % N;
+        for (const [a, b] of [[r + 1, c], [r - 1, c], [r, c + 1], [r, c - 1]]) {
+            const k = a * N + b;
+            if (a >= 0 && b >= 0 && a < N && b < N && set.has(k) && !seen.has(k)) { seen.add(k); stack.push(k); }
+        }
+    }
+    return seen.size === cells.length;
+}
+
+// Make random colour areas, then keep nudging squares between areas until
+// only one answer is left.
+function makeUnique() {
+    for (let attempt = 0; attempt < 300; attempt++) {
+        const cols = randomPlacement();
+        const reg = growRegions(cols);
+        for (let it = 0; it < 500; it++) {
+            const alt = findSolutions(reg, 2).find(s => s.some((c, r) => c !== cols[r]));
+            if (!alt) return { cols, reg };
+            let moved = false;
+            for (const r of shuffle([...Array(N).keys()].filter(r => alt[r] !== cols[r]))) {
+                const c = alt[r], id = reg[r][c];
+                if (!stillConnected(reg, id, r, c)) continue;
+                const nb = [[r + 1, c], [r - 1, c], [r, c + 1], [r, c - 1]]
+                    .filter(([a, b]) => a >= 0 && b >= 0 && a < N && b < N && reg[a][b] !== id);
+                if (!nb.length) continue;
+                const [a, b] = nb[rnd(nb.length)];
+                reg[r][c] = reg[a][b];
+                moved = true;
+                break;
+            }
+            if (!moved) break;
+        }
+    }
+    const cols = randomPlacement();
+    return { cols, reg: growRegions(cols) };
+}
+
+// How many cats can be found using only the easy tricks:
+// "this row/column/colour has just one free square" and
+// "this colour fits in one row/column, so the rest of that row/column is out".
+// Fewer cats found = a harder puzzle.
+function easyCatsFound(reg) {
+    const free = [...Array(N)].map(() => new Array(N).fill(true));
+    const done = [...Array(N)].map(() => new Array(N).fill(false));
+    let found = 0;
+    const groups = [];
+    for (let k = 0; k < N; k++) {
+        groups.push([...Array(N).keys()].map(j => [k, j]));
+        groups.push([...Array(N).keys()].map(i => [i, k]));
+    }
+    const byReg = {};
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) (byReg[reg[i][j]] = byReg[reg[i][j]] || []).push([i, j]);
+    const regGroups = Object.values(byReg);
+    groups.push(...regGroups);
+
+    const place = (r, c) => {
+        found++;
+        done[r][c] = true;
+        for (let i = 0; i < N; i++) for (let j = 0; j < N; j++)
+            if (i === r || j === c || reg[i][j] === reg[r][c] || (Math.abs(i - r) <= 1 && Math.abs(j - c) <= 1)) free[i][j] = false;
+    };
+    let changed = true;
+    while (changed) {
+        changed = false;
+        for (const g of groups) {
+            if (g.some(([i, j]) => done[i][j])) continue;
+            const f = g.filter(([i, j]) => free[i][j]);
+            if (f.length === 1) { place(f[0][0], f[0][1]); changed = true; break; }
+        }
+        if (changed) continue;
+        for (const g of regGroups) {
+            if (g.some(([i, j]) => done[i][j])) continue;
+            const f = g.filter(([i, j]) => free[i][j]);
+            if (!f.length) continue;
+            const id = reg[f[0][0]][f[0][1]];
+            if (f.every(x => x[0] === f[0][0])) {
+                for (let j = 0; j < N; j++) if (free[f[0][0]][j] && reg[f[0][0]][j] !== id) { free[f[0][0]][j] = false; changed = true; }
+            }
+            if (f.every(x => x[1] === f[0][1])) {
+                for (let i = 0; i < N; i++) if (free[i][f[0][1]] && reg[i][f[0][1]] !== id) { free[i][f[0][1]] = false; changed = true; }
+            }
+            if (changed) break;
+        }
+    }
+    return found;
+}
+
+// Picks a puzzle for the current level. Uses only the functions above, so it
+// can also run inside a background worker (see newGame).
+function pickPuzzle() {
+    // Try puzzles for a short time and keep the best fit for the difficulty.
+    // "Easy tricks found" = how many cats the simple tricks can find on their own.
+    if (difficulty === 'normal') return makeUnique();
+    const wantEasy = difficulty === 'easy';
+    // Big boards take seconds per puzzle, so they search less.
+    const budget = N >= 12 ? 0 : N >= 11 ? 400 : ({ easy: 1200, hard: 600, expert: 1500 }[difficulty] || 600);
+    const goodEnough = wantEasy ? N : (difficulty === 'hard' ? 1 : 0);
+    const start = Date.now();
+    let pick = null, best = wantEasy ? -1 : Infinity;
+    while (!pick || Date.now() - start < budget) {
+        const p = makeUnique();
+        const found = easyCatsFound(p.reg);
+        if (wantEasy ? found > best : found < best) { best = found; pick = p; }
+        if (wantEasy ? best >= goodEnough : best <= goodEnough) break;
+    }
+    return pick;
+}
+
+function usePuzzle(pick) {
+    solution = pick.cols;
+    regions = pick.reg;
+    // Starter cats: already napping when the puzzle begins.
+    givens = new Set();
+    shuffle([...Array(N).keys()]).slice(0, settings.starters).forEach(r => givens.add(r * N + solution[r]));
+}
+
+// Run puzzle-making in a background worker so big boards don't freeze the page.
+let worker = null;
+try {
+    const src = [shuffle, randomPlacement, growRegions, findSolutions, stillConnected, makeUnique, easyCatsFound, pickPuzzle]
+        .map(f => f.toString()).join('\n');
+    const code = `let N, difficulty;
+const rnd = n => Math.floor(Math.random() * n);
+${src}
+onmessage = e => { N = e.data.N; difficulty = e.data.difficulty; postMessage({ id: e.data.id, pick: pickPuzzle() }); };`;
+    worker = new Worker(URL.createObjectURL(new Blob([code], { type: 'text/javascript' })));
+} catch (e) { worker = null; }
+
+// ================= Board drawing (shared by game + tutorial) =================
+function makeBoard(el, n, reg, size, palette = REGION_COLORS) {
+    el.innerHTML = '';
+    el.style.gridTemplateColumns = `repeat(${n}, ${size}px)`;
+    const cells = [];
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.dataset.r = r; cell.dataset.c = c; cell.dataset.s = '0';
+        cell.style.width = cell.style.height = size + 'px';
+        cell.style.backgroundColor = palette[reg[r][c] % palette.length];
+        const w = size >= 40 ? 3 : 2;
+        if (c < n - 1 && reg[r][c + 1] !== reg[r][c]) cell.style.borderRightWidth = w + 'px';
+        if (r < n - 1 && reg[r + 1][c] !== reg[r][c]) cell.style.borderBottomWidth = w + 'px';
+        el.appendChild(cell);
+        cells.push(cell);
+    }
+    return cells;
+}
+
+function setCell(cell, value, size, animate) {
+    if (cell.dataset.s === String(value)) return;
+    cell.dataset.s = value;
+    cell.innerHTML = '';
+    if (value === 1) {
+        const p = document.createElement('div');
+        p.className = 'xmark';
+        p.style.color = LINE;
+        p.innerHTML = X_SVG;
+        cell.appendChild(p);
+    } else if (value === 2) {
+        const r = +cell.dataset.r, c = +cell.dataset.c;
+        const wrap = document.createElement('div');
+        wrap.className = 'cat-wrap' + (animate ? ' pop' : '');
+        const furIdx = cell.closest('#board') && settings.fur !== 'mix' ? +settings.fur : (r * 7 + c * 3) % FURS.length;
+        wrap.innerHTML = catSVG(FURS[furIdx]);
+        cell.appendChild(wrap);
+        if (size >= 34) {
+            const z = document.createElement('span');
+            z.className = 'zzz';
+            z.textContent = 'z';
+            z.style.fontSize = Math.max(10, Math.floor(size * 0.26)) + 'px';
+            z.style.animationDelay = (-(r * 0.7 + c * 0.45) % 3) + 's';
+            cell.appendChild(z);
+        }
+    }
+}
+
+// ================= Game board =================
+const boardEl = document.getElementById('board');
+let cellEls = [], cellPx = 50;
+
+function cellSize() {
+    const avail = Math.min(window.innerWidth - 60, window.innerHeight - 330, 560);
+    return Math.max(N >= 12 ? 24 : 30, Math.floor(Math.max(avail, 250) / N));
+}
+
+function buildGameBoard() {
+    cellPx = cellSize();
+    cellEls = makeBoard(boardEl, N, regions, cellPx, THEMES[settings.theme] || REGION_COLORS);
+    render();
+}
+
+function render(popIdx = -1) {
+    const clashes = settings.helper ? findClashes() : new Set();
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+        const i = r * N + c, cell = cellEls[i];
+        setCell(cell, state[r][c], cellPx, i === popIdx);
+        cell.classList.toggle('clash', state[r][c] === 2 && clashes.has(i));
+        cell.classList.toggle('hint-cat', state[r][c] === 2 && hintCells.has(i));
+    }
+    const placed = state.flat().filter(v => v === 2).length;
+    document.getElementById('cats').textContent = `${placed}/${N}`;
+    renderHearts();
+}
+
+let heartsShown = 3;
+function maxHearts() { return settings.hearts || Infinity; }
+function renderHearts() {
+    const el = document.getElementById('hearts');
+    el.innerHTML = '';
+    if (maxHearts() === Infinity) { el.innerHTML = '<span>❤️</span><b style="font-size:18px">∞</b>'; return; }
+    for (let i = 0; i < maxHearts(); i++) {
+        const s = document.createElement('span');
+        s.textContent = '❤️';
+        if (i >= hearts) s.classList.add('lost');
+        if (i >= hearts && i < heartsShown) s.classList.add('breaking');
+        el.appendChild(s);
+    }
+    heartsShown = hearts;
+}
+
+function findClashes() {
+    const cats = [];
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (state[r][c] === 2) cats.push([r, c]);
+    const bad = new Set();
+    for (let i = 0; i < cats.length; i++) for (let j = i + 1; j < cats.length; j++) {
+        const [a, b] = cats[i], [x, y] = cats[j];
+        if (a === x || b === y || regions[a][b] === regions[x][y] || (Math.abs(a - x) <= 1 && Math.abs(b - y) <= 1)) {
+            bad.add(a * N + b); bad.add(x * N + y);
+        }
+    }
+    return bad;
+}
+
+const DIFF_NAMES = { easy: 'Easy', normal: 'Normal', hard: 'Hard', expert: 'Expert' };
+function renderLevels() {
+    document.getElementById('play-info').innerHTML =
+        `<b>Level ${level}</b> · ${DIFF_NAMES[difficulty]} · ${N} cats · Points ×${multiplier().toFixed(1)}`;
+    renderHintBtn();
+}
+
+function setLevel(lv) {
+    level = lv;
+    N = LEVELS[lv - 1];
+    settings.level = lv;
+    saveSettings();
+    renderLevels();
+    newGame();
+}
+
+function hintsLeft() { return settings.hints < 0 ? Infinity : settings.hints - hintsUsed; }
+function renderHintBtn() {
+    const b = document.getElementById('hint-btn');
+    const left = hintsLeft();
+    b.textContent = left === Infinity ? '💡 Hint' : `💡 Hint (${Math.max(0, left)})`;
+    b.disabled = left <= 0;
+}
+
+// ================= Playing =================
+function shakeBoard(el) {
+    el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake');
+}
+
+function placeCat(r, c, fromHint = false) {
+    if (over) return;
+    if (state[r][c] === 2) {
+        if (givens.has(r * N + c)) return;
+        state[r][c] = 0; hintCells.delete(r * N + c); render(); return;
+    }
+    if (solution[r] !== c) {
+        hearts--;
+        mistakes++;
+        state[r][c] = 1;
+        render();
+        shakeBoard(boardEl);
+        const cell = cellEls[r * N + c];
+        cell.classList.remove('oops'); void cell.offsetWidth; cell.classList.add('oops');
+        if (hearts <= 0) lose('hearts');
+        return;
+    }
+    state[r][c] = 2;
+    if (fromHint) hintCells.add(r * N + c);
+    render(r * N + c);
+    checkWin();
+}
+
+function autoMark(st, reg, n, r, c) {
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+        if (st[i][j] !== 0) continue;
+        if (i === r || j === c || reg[i][j] === reg[r][c] || (Math.abs(i - r) <= 1 && Math.abs(j - c) <= 1)) st[i][j] = 1;
+    }
+}
+
+function hint() {
+    if (over || hintsLeft() <= 0) return;
+    const open = [...Array(N).keys()].filter(r => state[r][solution[r]] !== 2);
+    if (!open.length) return;
+    const r = open[rnd(open.length)];
+    hintsUsed++;
+    renderHintBtn();
+    state[r][solution[r]] = 0;
+    placeCat(r, solution[r], true);
+}
+
+// ================= Score & cat upgrades =================
+const SCORE_KEY = 'catnaps_score';
+let totalScore = +(localStorage.getItem(SCORE_KEY) || 0);
+let hintsUsed = 0, mistakes = 0;
+
+// A new look every 1,000 points.
+const RANKS = [
+    { name: 'Little Kitten', fur: 0, gear: [] },
+    { name: 'Bow Cat', fur: 2, gear: ['bow'] },
+    { name: 'Cool Cat', fur: 1, gear: ['shades'] },
+    { name: 'King Cat', fur: 5, gear: ['crown'] },
+    { name: 'Wizard Cat', fur: 1, gear: ['wizard'] },
+    { name: 'Super Cat', fur: 0, gear: ['cape', 'mask'] },
+    { name: 'Space Cat', fur: 2, gear: ['helmet'] },
+    { name: 'Legend Cat', fur: 5, gear: ['aura', 'cape', 'crown'] },
+];
+function rankIndex(score) { return Math.floor(score / 1000); }
+function rankInfo(i) {
+    const base = RANKS[Math.min(i, RANKS.length - 1)];
+    const extra = i - (RANKS.length - 1);
+    return { ...base, name: extra > 0 ? `${base.name} ${'★'.repeat(Math.min(extra, 5))}${extra > 5 ? '+' : ''}` : base.name };
+}
+
+const GEAR_BACK = {
+    aura: `<circle cx="50" cy="55" r="62" fill="url(#aura)"/>
+        <g fill="#ffd84d"><path d="M-8 20 l3 7 7 3 -7 3 -3 7 -3 -7 -7 -3 7 -3z"/><path d="M106 8 l3 7 7 3 -7 3 -3 7 -3 -7 -7 -3 7 -3z"/><path d="M104 88 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2z"/></g>`,
+    cape: `<path d="M26 72 Q8 108 16 114 L84 114 Q92 108 74 72 Z" fill="#e8384f" stroke="${LINE}" stroke-width="4" stroke-linejoin="round"/>`,
+};
+const GEAR_FRONT = {
+    bow: `<g stroke="${LINE}" stroke-width="3" stroke-linejoin="round"><path d="M68 22 L54 12 L56 32 Z" fill="#ff6fa0"/><path d="M68 22 L82 12 L80 32 Z" fill="#ff6fa0"/><circle cx="68" cy="22" r="5" fill="#ff9fc0"/></g>`,
+    shades: `<g stroke="${LINE}" stroke-width="3"><rect x="24" y="48" width="24" height="15" rx="6" fill="#2a2433"/><rect x="52" y="48" width="24" height="15" rx="6" fill="#2a2433"/><path d="M48 54 h4" /></g>
+        <path d="M28 52 l7 0" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/><path d="M56 52 l7 0" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>`,
+    crown: `<path d="M30 30 L30 6 L40 18 L50 0 L60 18 L70 6 L70 30 Z" fill="#ffd23f" stroke="${LINE}" stroke-width="3.5" stroke-linejoin="round"/>
+        <circle cx="50" cy="20" r="3.5" fill="#ff5c7a"/><circle cx="38" cy="24" r="2.6" fill="#5cc8ff"/><circle cx="62" cy="24" r="2.6" fill="#5cc8ff"/>`,
+    wizard: `<path d="M26 32 Q50 24 74 32 L58 -28 Z" fill="#7b5cff" stroke="${LINE}" stroke-width="3.5" stroke-linejoin="round"/>
+        <ellipse cx="50" cy="32" rx="30" ry="6" fill="#6246e0" stroke="${LINE}" stroke-width="3.5"/>
+        <g fill="#ffe14d"><path d="M52 -2 l2 5 5 1 -4 3 1 5 -4 -3 -4 3 1 -5 -4 -3 5 -1z"/><circle cx="44" cy="16" r="2.5"/><circle cx="60" cy="10" r="2"/></g>`,
+    mask: `<path d="M20 50 Q50 40 80 50 L80 62 Q50 54 20 62 Z" fill="#e8384f" stroke="${LINE}" stroke-width="3" stroke-linejoin="round"/>
+        <ellipse cx="37" cy="55" rx="6" ry="4" fill="#fff"/><ellipse cx="63" cy="55" rx="6" ry="4" fill="#fff"/>`,
+    helmet: `<circle cx="50" cy="56" r="49" fill="#bfe8ff" fill-opacity="0.35" stroke="#7fb8e0" stroke-width="4"/>
+        <path d="M22 28 Q34 14 50 12" stroke="#fff" stroke-width="5" stroke-linecap="round" fill="none" opacity="0.8"/>
+        <path d="M50 7 L50 -10" stroke="#7fb8e0" stroke-width="4"/><circle cx="50" cy="-13" r="5" fill="#ff5c7a"/>`,
+};
+
+// Just the head (with hats etc.), drawn inside a nested svg. No cape: the room cat has a real body.
+function headInner(i, awake) {
+    const r = rankInfo(i);
+    const inner = catSVG(FURS[r.fur], awake && !r.gear.includes('shades'))
+        .replace('<svg viewBox="0 0 100 100"', '<svg x="0" y="0" width="100" height="100" viewBox="0 0 100 100"');
+    const gear = r.gear.filter(g => g !== 'cape' && g !== 'aura');
+    return inner + gear.map(g => GEAR_FRONT[g] || '').join('');
+}
+
+// Your cat grows up as it upgrades.
+const AGES = ['Kitten · 2 months', 'Kitten · 6 months', 'Young cat · 1 year', 'Young cat · 2 years',
+    'Grown-up · 4 years', 'Grown-up · 6 years', 'Wise cat · 9 years', 'Wise old cat · 12 years'];
+function ageName(i) { return i < AGES.length ? AGES[i] : `Legendary · ${12 + (i - AGES.length + 1) * 2} years`; }
+const BODY = [ // body width, body height, leg length, head size, overall size
+    { rx: 30, ry: 18, leg: 18, head: 1.32, size: 0.58 },
+    { rx: 34, ry: 19, leg: 21, head: 1.2, size: 0.68 },
+    { rx: 38, ry: 21, leg: 24, head: 1.1, size: 0.78 },
+    { rx: 41, ry: 22, leg: 26, head: 1.04, size: 0.86 },
+    { rx: 44, ry: 23, leg: 28, head: 1, size: 0.93 },
+    { rx: 45, ry: 24, leg: 29, head: 1, size: 0.98 },
+    { rx: 46, ry: 25, leg: 29, head: 0.98, size: 1.03 },
+    { rx: 47, ry: 26, leg: 30, head: 0.98, size: 1.08 },
+];
+
+// A better toy unlocks with every upgrade.
+const TOYS = [
+    { id: 'yarn', name: '🧶 Yarn ball', kind: 'roll' },
+    { id: 'mouse', name: '🐭 Toy mouse', kind: 'roll' },
+    { id: 'feather', name: '🪶 Feather wand', kind: 'bat' },
+    { id: 'ball', name: '🌈 Bouncy ball', kind: 'bounce' },
+    { id: 'laser', name: '🔴 Laser pointer', kind: 'laser' },
+    { id: 'post', name: '🪵 Scratching post', kind: 'post' },
+    { id: 'robot', name: '🤖 Robot mouse', kind: 'roll' },
+    { id: 'fish', name: '🐟 Golden fish plushie', kind: 'roll' },
+];
+function toysFor(i) { return TOYS.slice(0, Math.min(i + 1, TOYS.length)); }
+const TOY_SVG = {
+    yarn: `<svg viewBox="0 0 40 40"><path d="M20 36 Q4 40 -8 34" stroke="#ff5c93" stroke-width="2" fill="none"/><circle cx="20" cy="20" r="16" fill="#ff7aa8" stroke="${LINE}" stroke-width="2.5"/>
+        <path d="M8 14 Q20 22 32 12 M6 22 Q20 30 34 20 M12 32 Q20 18 18 5 M24 34 Q30 20 26 5" stroke="#d94c80" stroke-width="2" fill="none"/></svg>`,
+    mouse: `<svg viewBox="0 0 40 40"><path d="M6 28 Q-6 30 -6 20" stroke="#ff9fb2" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        <ellipse cx="21" cy="27" rx="15" ry="10" fill="#b8b8c8" stroke="${LINE}" stroke-width="2.5"/><circle cx="29" cy="17" r="6" fill="#ffc2d1" stroke="${LINE}" stroke-width="2.5"/>
+        <circle cx="31" cy="26" r="2" fill="${LINE}"/><circle cx="36" cy="29" r="2" fill="#ff7aa8"/></svg>`,
+    feather: `<svg viewBox="0 0 40 60" style="overflow:visible"><path d="M20 60 L20 18" stroke="#c49a6c" stroke-width="3"/>
+        <path d="M20 22 Q4 8 14 -12 Q22 0 20 22 Z" fill="#5cc8ff" stroke="${LINE}" stroke-width="2"/><path d="M20 22 Q36 8 28 -14 Q18 0 20 22 Z" fill="#ff7aa8" stroke="${LINE}" stroke-width="2"/>
+        <path d="M20 22 Q20 4 22 -18" stroke="#ffd23f" stroke-width="3" fill="none"/></svg>`,
+    ball: `<svg viewBox="0 0 40 40"><defs><clipPath id="bc"><circle cx="20" cy="20" r="16"/></clipPath></defs><g clip-path="url(#bc)">
+        <rect x="0" y="0" width="40" height="8" fill="#ff5c5c"/><rect x="0" y="8" width="40" height="7" fill="#ffb03a"/><rect x="0" y="15" width="40" height="7" fill="#ffe14d"/>
+        <rect x="0" y="22" width="40" height="7" fill="#6fd46f"/><rect x="0" y="29" width="40" height="11" fill="#5cb8ff"/></g>
+        <circle cx="20" cy="20" r="16" fill="none" stroke="${LINE}" stroke-width="2.5"/><circle cx="14" cy="13" r="3.5" fill="#fff" opacity="0.7"/></svg>`,
+    robot: `<svg viewBox="0 0 40 40"><path d="M6 30 Q-6 32 -6 22" stroke="#7f8a99" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        <ellipse cx="21" cy="28" rx="15" ry="9" fill="#d9e2ec" stroke="${LINE}" stroke-width="2.5"/><circle cx="29" cy="18" r="5" fill="#d9e2ec" stroke="${LINE}" stroke-width="2.5"/>
+        <path d="M24 20 L22 8" stroke="${LINE}" stroke-width="2"/><circle cx="22" cy="7" r="2.6" fill="#ff5c5c"/><circle cx="31" cy="27" r="2.4" fill="#3cf"/>
+        <circle cx="12" cy="37" r="3" fill="${LINE}"/><circle cx="28" cy="37" r="3" fill="${LINE}"/></svg>`,
+    fish: `<svg viewBox="0 0 44 40"><path d="M6 20 L-4 10 L-4 30 Z" fill="#ffb300" stroke="${LINE}" stroke-width="2.5" stroke-linejoin="round"/>
+        <ellipse cx="22" cy="20" rx="18" ry="12" fill="#ffd23f" stroke="${LINE}" stroke-width="2.5"/><circle cx="32" cy="17" r="2.6" fill="${LINE}"/>
+        <path d="M14 12 Q18 20 14 28 M20 10 Q24 20 20 30" stroke="#ffb300" stroke-width="2" fill="none"/><path d="M38 23 Q35 25 33 23" stroke="${LINE}" stroke-width="1.8" fill="none"/></svg>`,
+};
+
+function roomCatSVG(i, awake) {
+    const r = rankInfo(i);
+    const f = FURS[r.fur];
+    const b = BODY[Math.min(i, BODY.length - 1)];
+    const ground = 116;
+    const cx = 88, cy = ground - b.leg - b.ry * 0.4;
+    const legTop = cy + b.ry * 0.35, legH = ground - legTop;
+    const leg = (x, cls, shade) => `<g class="leg ${cls}"><rect x="${x - 5.5}" y="${legTop}" width="11" height="${legH}" rx="5.5" fill="${shade ? f.dark : f.fur}" stroke="${LINE}" stroke-width="3"/></g>`;
+    const bx = cx - b.rx + 6, by = cy - 2;
+    const hw = 70 * b.head, hh = 88 * b.head;
+    const hx = cx + b.rx * 0.78, hy = cy - b.ry * 0.8 - 8 * b.head;
+    const stripes = f.stripes ? `<path d="M${cx - 12} ${cy - b.ry + 3} q4 8 0 14 M${cx} ${cy - b.ry + 1} q4 9 0 16 M${cx + 12} ${cy - b.ry + 3} q4 8 0 14" stroke="${f.dark}" stroke-width="4" fill="none" stroke-linecap="round"/>` : '';
+    const cape = r.gear.includes('cape') ? `<path d="M${cx + b.rx * 0.5} ${cy - b.ry * 0.8} Q${cx - b.rx * 0.1} ${cy - b.ry * 1.25} ${cx - b.rx * 0.75} ${cy + b.ry * 0.1} L${cx - b.rx * 0.1} ${cy + b.ry * 0.1} Z" fill="#e8384f" stroke="${LINE}" stroke-width="3" stroke-linejoin="round"/>` : '';
+    return `<svg viewBox="0 -30 180 150" xmlns="http://www.w3.org/2000/svg"><g class="whole">
+        <g class="tail"><path d="M${bx} ${by} C${bx - 26} ${by - 2}, ${bx - 34} ${by - 24}, ${bx - 26} ${by - 46}" stroke="${LINE}" stroke-width="13" fill="none" stroke-linecap="round"/>
+            <path d="M${bx} ${by} C${bx - 26} ${by - 2}, ${bx - 34} ${by - 24}, ${bx - 26} ${by - 46}" stroke="${f.fur}" stroke-width="7" fill="none" stroke-linecap="round"/></g>
+        ${leg(cx - b.rx * 0.3, 'back b', true)}${leg(cx + b.rx * 0.62, 'front a', true)}
+        <g class="body"><ellipse cx="${cx}" cy="${cy}" rx="${b.rx}" ry="${b.ry}" fill="${f.fur}" stroke="${LINE}" stroke-width="3.5"/>
+            <ellipse cx="${cx + 4}" cy="${cy + b.ry * 0.45}" rx="${b.rx * 0.6}" ry="${b.ry * 0.4}" fill="#fff" opacity="0.45"/>${stripes}${cape}</g>
+        ${leg(cx - b.rx * 0.62, 'back a', false)}${leg(cx + b.rx * 0.32, 'front b', false)}
+        <g class="head"><svg x="${hx - hw / 2}" y="${hy - hh * 0.57}" width="${hw}" height="${hh}" viewBox="-14 -32 128 160" style="overflow:visible">${headInner(i, awake)}</svg></g>
+    </g></svg>`;
+}
+
+// ---------- The cat room: your cat wanders, naps, stretches and plays ----------
+const wait = ms => new Promise(res => setTimeout(res, ms));
+class CatRoom {
+    constructor(el, small) {
+        this.el = el;
+        this.small = small;
+        this.run = 0;
+        el.innerHTML = `<div class="window"></div><div class="bed"></div><div class="room-label"></div>`;
+        this.label = el.querySelector('.room-label');
+        this.cat = document.createElement('div');
+        this.cat.className = 'rcat';
+        this.cat.innerHTML = `<div class="flip"></div><div class="zzz2"><span style="font-size:14px;left:0;top:10px">z</span><span style="font-size:19px;left:10px;top:-4px;animation-delay:1s">z</span><span style="font-size:24px;left:22px;top:-22px;animation-delay:2s">Z</span></div><div class="bubble"></div>`;
+        el.appendChild(this.cat);
+        this.x = 160;
+        this.face = 1;
+        this.toys = [];
+        this.rank = -1;
+        el.addEventListener('click', () => this.poke());
+    }
+    get W() { return this.el.clientWidth || 500; }
+    get catW() { return (this.small ? 118 : 150) * BODY[Math.min(this.rank, BODY.length - 1)].size; }
+    setRank(i) {
+        if (i === this.rank) return;
+        this.rank = i;
+        const w = this.catW;
+        this.cat.style.width = w + 'px';
+        this.cat.style.height = w * 150 / 180 + 'px';
+        this.drawCat(true);
+        this.label.textContent = `${rankInfo(i).name} · ${ageName(i)}`;
+        this.buildToys();
+        this.start();
+    }
+    drawCat(awake) {
+        this.cat.querySelector('.flip').innerHTML = roomCatSVG(this.rank, awake);
+    }
+    buildToys() {
+        this.el.querySelectorAll('.toy, .laser, .post').forEach(t => t.remove());
+        this.toys = [];
+        this.laser = null;
+        this.post = null;
+        for (const t of toysFor(this.rank)) {
+            if (t.kind === 'laser') {
+                this.laser = document.createElement('div');
+                this.laser.className = 'laser';
+                this.el.appendChild(this.laser);
+            } else if (t.kind === 'post') {
+                this.post = document.createElement('div');
+                this.post.className = 'post';
+                this.post.innerHTML = '<div class="pole"></div><div class="top"></div><div class="base"></div>';
+                this.el.appendChild(this.post);
+            } else {
+                const d = document.createElement('div');
+                d.className = 'toy';
+                d.innerHTML = `<div class="spin">${TOY_SVG[t.id]}</div>`;
+                if (t.id === 'feather') { d.style.height = '44px'; }
+                const toy = { ...t, el: d, x: 150 + Math.random() * (this.W - 260), spin: 0 };
+                d.style.left = toy.x + 'px';
+                this.el.appendChild(d);
+                this.toys.push(toy);
+            }
+        }
+    }
+    setPose(...classes) {
+        this.cat.className = 'rcat' + (this.face < 0 ? ' left' : '') + classes.map(c => ' ' + c).join('');
+    }
+    place(x, secs) {
+        this.cat.style.transitionDuration = secs + 's';
+        this.cat.style.left = x - this.catW / 2 + 'px';
+        this.x = x;
+    }
+    say(text, ms = 1200) {
+        const b = this.cat.querySelector('.bubble');
+        b.textContent = text;
+        b.classList.add('show');
+        clearTimeout(this.sayT);
+        this.sayT = setTimeout(() => b.classList.remove('show'), ms);
+    }
+    async walkTo(x, run, speed) {
+        const min = this.catW / 2 + 4, max = this.W - this.catW / 2 - 4;
+        x = Math.max(min, Math.min(max, x));
+        const dx = x - this.x;
+        if (Math.abs(dx) < 4) return;
+        this.face = dx > 0 ? 1 : -1;
+        this.setPose('walk', run ? 'run' : '');
+        const secs = Math.abs(dx) / (speed || (run ? 230 : 75));
+        this.place(x, secs);
+        await wait(secs * 1000);
+    }
+    start() {
+        const id = ++this.run;
+        this.place(Math.min(this.x, this.W - 80), 0);
+        this.setPose('sit');
+        (async () => {
+            await wait(400);
+            while (id === this.run) {
+                await this.pickAction();
+            }
+        })();
+    }
+    async pickAction() {
+        const r = Math.random();
+        const hasToys = this.toys.length || this.laser || this.post;
+        if (this.wantPlay || (hasToys && r < 0.4)) { this.wantPlay = false; return this.play(); }
+        if (r < 0.58) return this.wander();
+        if (r < 0.72) return this.sit();
+        if (r < 0.84) return this.nap();
+        if (r < 0.92) return this.groom();
+        return this.stretch();
+    }
+    async wander() { await this.walkTo(60 + Math.random() * (this.W - 120)); }
+    async sit() { this.setPose('sit'); await wait(1800 + Math.random() * 2000); }
+    async stretch() { this.setPose('stretch'); this.say('*streeetch*'); await wait(1800); this.setPose('sit'); await wait(500); }
+    async groom() { this.setPose('groom'); await wait(2200); this.setPose('sit'); await wait(300); }
+    async nap() {
+        await this.walkTo(this.small ? 58 : 68);
+        this.setPose('sit');
+        await wait(500);
+        this.drawCat(false);
+        this.setPose('sleep');
+        await wait(5000 + Math.random() * 4000);
+        this.drawCat(true);
+        this.setPose('sit');
+        await wait(400);
+        await this.stretch();
+    }
+    async play() {
+        const options = [...this.toys];
+        if (this.laser) options.push({ kind: 'laser' });
+        if (this.post) options.push({ kind: 'post' });
+        const toy = options[Math.floor(Math.random() * options.length)];
+        if (toy.kind === 'laser') return this.chaseLaser();
+        if (toy.kind === 'post') return this.scratchPost();
+        if (toy.kind === 'bat') return this.batFeather(toy);
+        for (let n = 0; n < 2 + Math.floor(Math.random() * 2); n++) {
+            const side = this.x < toy.x ? -1 : 1;
+            await this.walkTo(toy.x + 15 + side * this.catW * 0.45, Math.random() < 0.5);
+            this.face = toy.x + 15 > this.x ? 1 : -1;
+            this.setPose('crouch');
+            await wait(450);
+            this.setPose('pounce');
+            await wait(420);
+            // whack! the toy goes flying
+            const dir = this.face;
+            const nx = Math.max(10, Math.min(this.W - 50, toy.x + dir * (90 + Math.random() * 160)));
+            toy.spin += (nx - toy.x) * 4;
+            toy.x = nx;
+            toy.el.style.left = nx + 'px';
+            toy.el.querySelector('.spin').style.transform = toy.id === 'robot' ? '' : `rotate(${toy.spin}deg)`;
+            if (toy.kind === 'bounce') { toy.el.classList.remove('bounce'); void toy.el.offsetWidth; toy.el.classList.add('bounce'); }
+            if (Math.random() < 0.4) this.say(['Gotcha!', 'Mine!', 'Pounce!', '♥'][Math.floor(Math.random() * 4)], 900);
+            await wait(500);
+            this.setPose('sit');
+            await wait(500);
+        }
+        if (toy.id === 'robot') this.robotZoom(toy);
+    }
+    robotZoom(toy) {
+        // the robot mouse drives off by itself
+        const nx = 20 + Math.random() * (this.W - 80);
+        toy.el.style.transition = 'left 2s ease-in-out';
+        toy.el.querySelector('.spin').style.transform = nx < toy.x ? 'scaleX(-1)' : '';
+        toy.x = nx;
+        toy.el.style.left = nx + 'px';
+        setTimeout(() => { toy.el.style.transition = ''; }, 2100);
+    }
+    async batFeather(toy) {
+        const side = this.x < toy.x ? -1 : 1;
+        await this.walkTo(toy.x + 15 + side * this.catW * 0.42);
+        this.face = toy.x + 15 > this.x ? 1 : -1;
+        toy.el.classList.add('wiggle');
+        this.setPose('sit', 'bat');
+        this.say('Swat swat!', 1200);
+        await wait(2400);
+        toy.el.classList.remove('wiggle');
+        this.setPose('sit');
+        await wait(400);
+    }
+    async chaseLaser() {
+        const L = this.laser;
+        L.classList.add('on');
+        for (let n = 0; n < 5; n++) {
+            const lx = 30 + Math.random() * (this.W - 60);
+            L.style.left = lx + 'px';
+            L.style.bottom = (8 + Math.random() * 24) + 'px';
+            this.setPose('crouch');
+            await wait(250);
+            await this.walkTo(lx - this.face * this.catW * 0.35, true);
+            this.setPose('pounce');
+            await wait(600);
+        }
+        L.classList.remove('on');
+        this.say('Where did it go?!', 1500);
+        this.setPose('sit');
+        await wait(1200);
+    }
+    async scratchPost() {
+        await this.walkTo(this.W - 37 - this.catW * 0.42);
+        this.face = 1;
+        this.setPose('scratch');
+        this.say('scratch scratch', 1300);
+        await wait(2200);
+        this.setPose('sit');
+        await wait(400);
+    }
+    poke() {
+        this.say(['Meow!', 'Mrrp?', 'Purrr ♥', 'Play with me!'][Math.floor(Math.random() * 4)]);
+        this.wantPlay = true;
+    }
+}
+const rooms = [];
+
+function myCatSVG(i, awake = true) {
+    const r = rankInfo(i);
+    const inner = catSVG(FURS[r.fur], awake && !r.gear.includes('shades'))
+        .replace('<svg viewBox="0 0 100 100"', '<svg x="0" y="0" width="100" height="100" viewBox="0 0 100 100"');
+    const back = r.gear.map(g => GEAR_BACK[g] || '').join('');
+    const front = r.gear.map(g => GEAR_FRONT[g] || '').join('');
+    return `<svg viewBox="-14 -32 128 160" xmlns="http://www.w3.org/2000/svg">
+        <defs><radialGradient id="aura"><stop offset="0.5" stop-color="#fff6a8" stop-opacity="0.9"/><stop offset="1" stop-color="#ffb3e6" stop-opacity="0"/></radialGradient></defs>
+        ${back}${inner}${front}</svg>`;
+}
+
+function renderMe() {
+    const i = rankIndex(totalScore);
+    const r = rankInfo(i);
+    const pct = (totalScore % 1000) / 10;
+    document.getElementById('me-art').innerHTML = myCatSVG(i);
+    document.getElementById('me-name').textContent = r.name;
+    document.getElementById('me-score').textContent = totalScore.toLocaleString();
+    document.getElementById('me-bar').style.width = pct + '%';
+    if (!rooms.length) {
+        rooms.push(new CatRoom(document.getElementById('home-room'), false));
+        rooms.push(new CatRoom(document.getElementById('game-room'), true));
+    }
+    rooms.forEach(room => room.setRank(i));
+    document.getElementById('home-facts').textContent =
+        `Age: ${ageName(i)} · Toys: ${toysFor(i).map(t => t.name).join(', ')}`;
+    document.getElementById('home-name').textContent = `Your cat: ${r.name}`;
+    document.getElementById('home-bar').style.width = pct + '%';
+    document.getElementById('home-next').textContent =
+        `⭐ ${totalScore.toLocaleString()} points · ${(1000 - totalScore % 1000).toLocaleString()} more until the next upgrade!`;
+}
+
+// Points for a solved puzzle.
+// Setup choices change how many points a puzzle is worth.
+function multiplierParts(o = settings) {
+    const heartName = o.hearts ? `${o.hearts} heart${o.hearts === 1 ? '' : 's'}` : 'Endless hearts';
+    return [
+        ['Start', 1],
+        [`Difficulty: ${DIFF_NAMES[o.difficulty]}`, { easy: -0.2, normal: 0, hard: 0.3, expert: 0.6 }[o.difficulty]],
+        [`Hearts: ${heartName}`, { 1: 0.4, 2: 0.2, 3: 0, 5: -0.2, 0: -0.4 }[o.hearts]],
+        [`Time limit: ${o.time ? o.time + ' min' : 'none'}`, { 0: 0, 10: 0.1, 5: 0.2, 3: 0.3, 2: 0.4, 1: 0.5 }[o.time]],
+        [`Hints: ${o.hints < 0 ? 'unlimited' : o.hints === 0 ? 'none' : o.hints}`, o.hints === 0 ? 0.2 : o.hints === 1 ? 0.1 : 0],
+        [`Starter cats: ${o.starters}`, -0.1 * o.starters],
+        [`Mistake glow: ${o.helper ? 'on' : 'off'}`, o.helper ? 0 : 0.1],
+    ];
+}
+function multiplier(o = settings) {
+    const m = multiplierParts(o).reduce((a, [, v]) => a + v, 0);
+    return Math.max(0.3, Math.round(m * 10) / 10);
+}
+
+const HEART_BONUS = 150;   // the most you can get for keeping hearts
+const MISTAKE_COST = 50;   // with endless hearts, each mistake takes this off instead
+
+// Every part of the score, with a short "how" note so players can see the maths.
+function scorePuzzle() {
+    const par = 30 + level * 30; // target seconds
+    const lines = [];
+    lines.push(['🏆 Level ' + level + ' solved', level * 100, `${level} × 100`]);
+
+    // Hearts are fair whatever you started with: the bonus is the SHARE of hearts you kept.
+    let heartPts, heartHow;
+    if (hearts === Infinity) {
+        heartPts = Math.max(0, HEART_BONUS - MISTAKE_COST * mistakes);
+        heartHow = `${HEART_BONUS} − ${MISTAKE_COST} × ${mistakes} mistake${mistakes === 1 ? '' : 's'}`;
+    } else {
+        const max = maxHearts();
+        heartPts = Math.round(HEART_BONUS * hearts / max);
+        heartHow = `${hearts} of ${max} kept → ${HEART_BONUS} × ${hearts}/${max}`;
+    }
+    lines.push(['❤️ Hearts bonus', heartPts, heartHow]);
+
+    const under = Math.max(0, par - seconds);
+    lines.push(['⏱ Speed bonus', Math.min(200, under * 3),
+        `${fmt(seconds)} vs target ${fmt(par)} → ${under}s × 3` + (under * 3 > 200 ? ' (max 200)' : '')]);
+    lines.push(['💡 Hints', -40 * hintsUsed, `${hintsUsed} × −40`]);
+
+    const raw = lines.reduce((a, l) => a + l[1], 0);
+    const sub = Math.max(20, raw);
+    const m = multiplier();
+    const total = Math.max(20, Math.round(sub * m));
+    return { lines, raw, sub, m, total };
+}
+
+function fmtPts(v) { return (v < 0 ? '−' : '+') + Math.abs(v); }
+
+function checkWin() {
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++)
+        if ((state[r][c] === 2) !== (solution[r] === c)) return;
+    over = true;
+    clearInterval(timer);
+    progress[level] = true;
+    localStorage.setItem(SAVE_KEY, JSON.stringify(progress));
+    renderLevels();
+    document.getElementById('win-text').textContent = `You solved Level ${level} in ${fmt(seconds)}!`;
+    const { lines, raw, sub, m, total } = scorePuzzle();
+    const before = rankIndex(totalScore);
+    totalScore += total;
+    localStorage.setItem(SCORE_KEY, totalScore);
+    const after = rankIndex(totalScore);
+    const parts = multiplierParts().filter(([, v], i) => i === 0 || v !== 0);
+    document.getElementById('score-lines').innerHTML =
+        lines.map(([t, v, how]) => `<div class="${v < 0 ? 'minus' : ''}"><span>${t}<em>${how}</em></span><span>${fmtPts(v)}</span></div>`).join('') +
+        `<div class="sub"><span>Subtotal${raw < 20 ? ' (lowest is 20)' : ''}</span><span>${sub}</span></div>` +
+        `<div class="mult-head"><span>Setup multiplier</span><span>×${m.toFixed(1)}</span></div>` +
+        parts.map(([t, v], i) => `<div class="mpart"><span>${i === 0 ? 'Everyone starts at' : t}</span><span>${i === 0 ? '×1.0' : (v > 0 ? '+' : '−') + Math.abs(v).toFixed(1)}</span></div>`).join('') +
+        `<div class="total"><span>${sub} × ${m.toFixed(1)} =</span><span>+${total}</span></div>`;
+    document.getElementById('upgrade-slot').innerHTML = after > before
+        ? `<div class="upgrade-box"><div style="font-weight:900;font-size:18px">🎉 CAT UPGRADE! 🎉</div>
+             <div class="up-art">${myCatSVG(after)}</div>
+             <div style="font-weight:800">Your cat is now a <b>${rankInfo(after).name}</b>!</div>
+             <div style="font-weight:800;margin-top:4px">🎂 It grew up: ${ageName(after)}</div>
+             ${after < TOYS.length ? `<div style="font-weight:800;margin-top:4px">🎁 New toy: <b>${TOYS[after].name}</b></div>` : ''}</div>`
+        : `<div style="font-weight:800;color:var(--dim);margin-bottom:10px">${(1000 - totalScore % 1000).toLocaleString()} more points until your cat upgrades!</div>`;
+    renderMe();
+    document.getElementById('win-next').style.display = level < LEVELS.length ? '' : 'none';
+    rain();
+    setTimeout(() => document.getElementById('win-overlay').classList.add('show'), 800);
+}
+
+function lose(why) {
+    over = true;
+    clearInterval(timer);
+    document.getElementById('lose-title').textContent = why === 'time' ? "Time's up!" : 'Out of hearts!';
+    document.getElementById('lose-text').textContent = why === 'time'
+        ? 'The alarm clock rang and woke all the cats! Want to try again?'
+        : 'The cats woke up grumpy. Want to try again?';
+    setTimeout(() => document.getElementById('lose-overlay').classList.add('show'), 500);
+}
+
+function rain() {
+    for (let i = 0; i < 36; i++) {
+        const el = document.createElement('div');
+        el.className = 'falling';
+        el.innerHTML = i % 4 === 0
+            ? PAW_SVG.replace(`fill="${LINE}"`, `fill="${['#ff8a1f', '#ff9fb2', '#8fbfff'][i % 3]}"`)
+            : catSVG(FURS[i % FURS.length], true);
+        el.style.left = Math.random() * 100 + 'vw';
+        el.style.animationDuration = 2.2 + Math.random() * 2.5 + 's';
+        el.style.animationDelay = Math.random() * 1.2 + 's';
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 5500);
+    }
+}
+
+function fmt(t) { return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; }
+
+function showTime() {
+    const el = document.getElementById('time');
+    if (settings.time) {
+        const left = Math.max(0, settings.time * 60 - seconds);
+        el.textContent = fmt(left);
+        el.style.color = left <= 15 ? 'var(--bad)' : '';
+    } else {
+        el.textContent = fmt(seconds);
+        el.style.color = '';
+    }
+}
+
+function startTimer() {
+    clearInterval(timer);
+    timer = setInterval(() => {
+        if (document.getElementById('tut-overlay').classList.contains('show')) return;
+        if (!document.getElementById('home').classList.contains('hide')) return;
+        if (!document.getElementById('setup').classList.contains('hide')) return;
+        if (over) return;
+        seconds++;
+        showTime();
+        if (settings.time && seconds >= settings.time * 60) lose('time');
+    }, 1000);
+}
+
+function resetBoard() {
+    document.querySelectorAll('#win-overlay, #lose-overlay').forEach(o => o.classList.remove('show'));
+    state = [...Array(N)].map(() => new Array(N).fill(0));
+    givens.forEach(i => { state[Math.floor(i / N)][i % N] = 2; });
+    hintCells.clear();
+    hearts = maxHearts(); heartsShown = hearts; seconds = 0; over = false; hintsUsed = 0; mistakes = 0;
+    showTime();
+    renderHintBtn();
+    buildGameBoard();
+    startTimer();
+}
+
+let puzzleId = 0;
+function newGame() {
+    // Big puzzles take a moment to make, so fade the board while we work.
+    boardEl.style.opacity = '0.35';
+    document.getElementById('cats').textContent = '…';
+    const id = ++puzzleId;
+    const finish = (pick, forId) => {
+        if (forId !== puzzleId) return; // an older puzzle finished after a newer one was asked for
+        usePuzzle(pick);
+        resetBoard();
+        boardEl.style.opacity = '';
+    };
+    if (worker && (N >= 9 || difficulty !== 'normal')) {
+        if (!boardEl.children.length || boardEl.children.length !== N * N) {
+            boardEl.innerHTML = '<div style="padding:40px 30px;color:#fff;font-weight:900;font-size:18px">Making your puzzle…' + (N >= 12 ? '<br><small>Big boards take a few seconds</small>' : '') + '</div>';
+            boardEl.style.gridTemplateColumns = '';
+        }
+        worker.onmessage = e => finish(e.data.pick, e.data.id);
+        worker.onerror = () => { worker = null; finish(pickPuzzle(), puzzleId); };
+        worker.postMessage({ id, N, difficulty });
+    } else {
+        finish(pickPuzzle(), id);
+    }
+}
+
+// ================= Input =================
+function cellFromEvent(e) {
+    const t = document.elementFromPoint(e.clientX, e.clientY);
+    const cell = t && t.closest('#board .cell');
+    return cell ? [+cell.dataset.r, +cell.dataset.c] : null;
+}
+
+let lastTap = { r: -1, c: -1, t: 0, prev: 0 };
+let dragging = false, dragValue = 0;
+
+boardEl.addEventListener('pointerdown', e => {
+    const rc = cellFromEvent(e);
+    if (!rc || over) return;
+    const [r, c] = rc;
+    const now = Date.now();
+    const doubleTap = lastTap.r === r && lastTap.c === c && now - lastTap.t < 350;
+    const prev = state[r][c];
+
+    if (tool === 'cat' || doubleTap) {
+        if (doubleTap && tool === 'x' && state[r][c] !== 2) state[r][c] = lastTap.prev === 2 ? 0 : lastTap.prev;
+        lastTap = { r: -1, c: -1, t: 0, prev: 0 };
+        placeCat(r, c);
+        return;
+    }
+    lastTap = { r, c, t: now, prev };
+    if (state[r][c] === 2) return;
+    dragging = true;
+    dragValue = state[r][c] === 1 ? 0 : 1;
+    state[r][c] = dragValue;
+    render();
+});
+
+boardEl.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const rc = cellFromEvent(e);
+    if (!rc) return;
+    const [r, c] = rc;
+    if (state[r][c] !== 2 && state[r][c] !== dragValue) {
+        state[r][c] = dragValue;
+        render();
+    }
+});
+window.addEventListener('pointerup', () => { dragging = false; });
+
+function setTool(t) {
+    tool = t;
+    document.getElementById('tool-x').classList.toggle('active', t === 'x');
+    document.getElementById('tool-cat').classList.toggle('active', t === 'cat');
+}
+document.getElementById('tool-x').innerHTML = X_SVG + 'Mark';
+document.getElementById('tool-cat').innerHTML = catSVG(FURS[0]) + 'Cat';
+document.getElementById('tool-x').addEventListener('click', () => setTool('x'));
+document.getElementById('tool-cat').addEventListener('click', () => setTool('cat'));
+
+
+document.getElementById('new-btn').addEventListener('click', newGame);
+document.getElementById('win-again').addEventListener('click', newGame);
+document.getElementById('win-next').addEventListener('click', () => setLevel(Math.min(level + 1, LEVELS.length)));
+document.getElementById('lose-new').addEventListener('click', newGame);
+document.getElementById('retry-btn').addEventListener('click', resetBoard);
+document.getElementById('hint-btn').addEventListener('click', hint);
+document.getElementById('clear-btn').addEventListener('click', () => {
+    state = state.map(row => row.map(v => (v === 1 ? 0 : v)));
+    render();
+});
+document.getElementById('back-to-didis').addEventListener('click', () => {
+    window.top.location.href = 'didis-games.html';
+});
+document.addEventListener('keydown', e => {
+    if (e.key === 'x' || e.key === 'X' || e.key === 'p' || e.key === 'P') setTool('x');
+    if (e.key === 'c' || e.key === 'C') setTool('cat');
+});
+
+let resizeT;
+window.addEventListener('resize', () => {
+    clearTimeout(resizeT);
+    resizeT = setTimeout(() => { if (cellSize() !== cellPx) buildGameBoard(); }, 150);
+});
+
+// ================= Tutorial =================
+// Practice puzzle: one answer, and every step is forced, so it can be guided.
+const T_REG = [[2, 6, 4, 4], [2, 4, 4, 4], [2, 3, 3, 3], [3, 3, 3, 3]];
+const T_SOL = [1, 3, 0, 2];
+// Example board for the rule pages (a different puzzle so the practice isn't spoiled).
+const EX_REG = [[0, 0, 1, 1], [0, 0, 1, 1], [7, 5, 5, 5], [7, 7, 5, 5]];
+const EX_SOL = [2, 0, 3, 1];
+
+const TUT = [
+    {
+        title: 'Welcome to Cat Naps!',
+        art: () => artCat(),
+        text: 'These sleepy cats each need their own nap spot. Your job is to find exactly where every cat goes.',
+    },
+    {
+        title: 'Rule 1: Rows & columns',
+        art: () => artExample('rows'),
+        text: 'Every <b>row</b> (across) and every <b>column</b> (up and down) gets <b>exactly one</b> cat.',
+    },
+    {
+        title: 'Rule 2: One per colour',
+        art: () => artExample('colour'),
+        text: 'Every <b>colour area</b> gets <b>exactly one</b> cat too. Thick lines show where the areas end.',
+    },
+    {
+        title: 'Rule 3: No cuddling!',
+        art: () => artNoTouch(),
+        text: 'Cats are grumpy when woken up, so two cats can <b>never touch</b>, not even corner to corner.',
+    },
+    {
+        title: 'X\'s & cats',
+        art: () => artTools(),
+        text: 'Tap a square to put an <b>X</b> on it, which means "no cat here". <b>Double-tap</b> (or switch to Cat) to place a cat. A wrong cat costs you a <b>heart</b>.',
+    },
+    { practice: 0, title: 'Let\'s practise!', text: 'The <b>purple</b> area is only one square, so its cat <b>must</b> go there. Tap it!' },
+    { practice: 1, title: 'Nice!', text: 'I put X\'s where cats can\'t go now. In the real game you mark these yourself! The <b>blue</b> area has just <b>one</b> free square left. Tap it!' },
+    { practice: 2, title: 'Keep going!', text: 'Look at the <b>yellow</b> area. Only one square is still free. Tap it!' },
+    { practice: 3, title: 'Last cat!', text: 'Which square is left in the <b>green</b> area?' },
+    {
+        title: 'Purr-fect! 🎉',
+        art: () => artPractice(true),
+        text: 'Every row, column and colour has one cat and nobody is touching. You\'re ready to play!',
+        final: true,
+    },
+];
+
+let tutStep = 0, tutState = null;
+const tutOverlay = document.getElementById('tut-overlay');
+
+function artCat() {
+    const d = document.createElement('div');
+    d.innerHTML = catSVG(FURS[0]);
+    d.style.width = d.style.height = '110px';
+    d.style.position = 'relative';
+    const z = document.createElement('span');
+    z.className = 'zzz'; z.textContent = 'z z'; z.style.fontSize = '22px';
+    d.appendChild(z);
+    return d;
+}
+
+function miniFrame(n, reg, st, size, glow = new Set(), dimSet = null) {
+    const frame = document.createElement('div');
+    frame.className = 'board-frame';
+    const b = document.createElement('div');
+    b.className = 'board';
+    frame.appendChild(b);
+    const cells = makeBoard(b, n, reg, size);
+    cells.forEach((cell, i) => {
+        setCell(cell, st[Math.floor(i / n)][i % n], size, false);
+        if (glow.has(i)) cell.classList.add('glow-line');
+        if (dimSet && !dimSet.has(i)) cell.classList.add('dim');
+    });
+    return { frame, cells, board: b };
+}
+
+function artExample(pick) {
+    const st = EX_SOL.map(c => [0, 1, 2, 3].map(j => (j === c ? 2 : 0)));
+    const glow = new Set();
+    const sets = {
+        rows: () => { for (let j = 0; j < 4; j++) glow.add(1 * 4 + j); for (let i = 0; i < 4; i++) glow.add(i * 4 + 2); },
+        colour: () => { for (let i = 0; i < 16; i++) if (EX_REG[Math.floor(i / 4)][i % 4] === 5) glow.add(i); },
+    };
+    sets[pick]();
+    return miniFrame(4, EX_REG, st, 46, glow, glow).frame;
+}
+
+function artNoTouch() {
+    const reg = [[3, 3, 3], [3, 3, 3], [3, 3, 3]];
+    const st = [[1, 1, 1], [1, 2, 1], [1, 1, 1]];
+    return miniFrame(3, reg, st, 52).frame;
+}
+
+function artTools() {
+    const wrap = document.createElement('div');
+    wrap.style.display = 'flex';
+    wrap.style.gap = '26px';
+    wrap.style.alignItems = 'center';
+    const reg = [[4]];
+    const a = miniFrame(1, reg, [[1]], 64).frame;
+    const b = miniFrame(1, [[1]], [[2]], 64).frame;
+    const label = (el, txt) => {
+        const d = document.createElement('div');
+        d.style.textAlign = 'center';
+        d.appendChild(el);
+        const t = document.createElement('div');
+        t.textContent = txt;
+        t.style.fontWeight = '900';
+        t.style.marginTop = '6px';
+        t.style.color = 'var(--dim)';
+        d.appendChild(t);
+        return d;
+    };
+    wrap.appendChild(label(a, 'Tap = X'));
+    wrap.appendChild(label(b, 'Double-tap = cat'));
+    return wrap;
+}
+
+function artPractice(done) {
+    if (done) tutState = T_SOL.map(c => [0, 1, 2, 3].map(j => (j === c ? 2 : 1)));
+    const { frame, cells, board } = miniFrame(4, T_REG, tutState, 56);
+    const step = TUT[tutStep].practice;
+    if (step !== undefined) {
+        const target = step * 4 + T_SOL[step];
+        cells[target].classList.add('target');
+        board.addEventListener('pointerdown', e => {
+            const cell = e.target.closest('.cell');
+            if (!cell) return;
+            const r = +cell.dataset.r, c = +cell.dataset.c;
+            if (r * 4 + c !== target) {
+                if (tutState[r][c] !== 2) { shakeBoard(board); }
+                return;
+            }
+            tutState[r][c] = 2;
+            autoMark(tutState, T_REG, 4, r, c);
+            setCell(cell, 2, 56, true);
+            cells.forEach((cl, i) => setCell(cl, tutState[Math.floor(i / 4)][i % 4], 56, false));
+            cell.classList.remove('target');
+            setTimeout(() => showTut(tutStep + 1), 750);
+        });
+    }
+    return frame;
+}
+
+function showTut(i) {
+    tutStep = i;
+    const s = TUT[i];
+    if (s.practice === 0 || (s.practice !== undefined && !tutState)) tutState = [...Array(4)].map(() => new Array(4).fill(0));
+    document.getElementById('tut-title').innerHTML = s.title;
+    document.getElementById('tut-text').innerHTML = s.text;
+    const art = document.getElementById('tut-art');
+    art.innerHTML = '';
+    art.appendChild(s.practice !== undefined ? artPractice(false) : s.art());
+
+    const dots = document.getElementById('tut-dots');
+    dots.innerHTML = TUT.map((_, k) => `<span class="${k === i ? 'on' : ''}"></span>`).join('');
+
+    const btns = document.getElementById('tut-buttons');
+    btns.innerHTML = '';
+    const backable = i > 0 && s.practice === undefined && !s.final;
+    if (backable) {
+        const b = document.createElement('button');
+        b.className = 'tool-btn soft';
+        b.textContent = '← Back';
+        b.onclick = () => showTut(i - 1);
+        btns.appendChild(b);
+    }
+    if (s.practice === undefined) {
+        const n = document.createElement('button');
+        n.className = 'tool-btn';
+        n.textContent = s.final ? '🐾 Let\'s play!' : (i === 4 ? 'Try it! ➜' : 'Next ➜');
+        n.onclick = s.final ? () => finishTut(true) : () => showTut(i + 1);
+        btns.appendChild(n);
+    }
+    document.getElementById('tut-skip').style.display = s.final ? 'none' : '';
+}
+
+function openTut() {
+    tutOverlay.classList.add('show');
+    showTut(0);
+}
+
+function finishTut(goToLevel1 = true) {
+    tutOverlay.classList.remove('show');
+    localStorage.setItem(TUT_KEY, '1');
+}
+
+document.getElementById('tut-skip').addEventListener('click', () => finishTut(false));
+document.getElementById('htp-btn').addEventListener('click', openTut);
+
+// ================= Home page =================
+const homeEl = document.getElementById('home');
+function showHome() {
+    renderMe();
+    homeEl.classList.remove('hide');
+}
+function hideHome() {
+    homeEl.classList.add('hide');
+    openSetup();
+}
+
+// ================= Setup page =================
+const setupEl = document.getElementById('setup');
+let draft = { ...settings };
+
+const PRESETS = [
+    { name: '🍼 Relaxed', note: 'Endless hearts', o: { difficulty: 'easy', hearts: 0, time: 0, hints: -1, starters: 2, helper: true } },
+    { name: '⭐ Classic', note: '3 hearts, no clock', o: { difficulty: 'normal', hearts: 3, time: 0, hints: -1, starters: 0, helper: true } },
+    { name: '🔥 Challenge', note: 'Beat the clock', o: { difficulty: 'hard', hearts: 2, time: 5, hints: 1, starters: 0, helper: true } },
+    { name: '💀 Master', note: 'One heart only!', o: { difficulty: 'expert', hearts: 1, time: 3, hints: 0, starters: 0, helper: false } },
+];
+
+const FUR_NAMES = ['Ginger', 'Grey', 'Cream', 'Brown', 'Black', 'Golden'];
+
+function chipRow(key, options, note) {
+    // options: [value, label, extraHTML?]
+    const wrap = document.createElement('div');
+    wrap.className = 'chips';
+    options.forEach(([val, label, extra]) => {
+        const b = document.createElement('button');
+        b.className = 'chip' + (draft[key] === val ? ' active' : '');
+        b.innerHTML = (extra || '') + `<span>${label}</span>`;
+        b.addEventListener('click', () => {
+            draft[key] = val;
+            renderSetup();
+        });
+        wrap.appendChild(b);
+    });
+    return wrap;
+}
+
+function section(title, note, body) {
+    const d = document.createElement('div');
+    d.className = 'opt';
+    d.innerHTML = `<div class="opt-label">${title}<small>${note || ''}</small></div>`;
+    d.appendChild(body);
+    return d;
+}
+
+function renderSetup() {
+    const card = document.getElementById('setup-card');
+    card.innerHTML = '';
+
+    const presets = document.createElement('div');
+    presets.className = 'chips preset-row';
+    PRESETS.forEach(p => {
+        const b = document.createElement('button');
+        const on = Object.entries(p.o).every(([k, v]) => draft[k] === v);
+        b.className = 'chip' + (on ? ' active' : '');
+        b.innerHTML = `${p.name}<span>${p.note}</span>`;
+        b.addEventListener('click', () => { Object.assign(draft, p.o); renderSetup(); });
+        presets.appendChild(b);
+    });
+    card.appendChild(section('⚡ Quick picks', 'Sets everything below in one tap', presets));
+
+    card.appendChild(section('🧠 Difficulty', 'How tricky the puzzle is', chipRow('difficulty', [
+        ['easy', '😊 Easy'], ['normal', '🙂 Normal'], ['hard', '😤 Hard'], ['expert', '🤯 Expert']])));
+
+    const lv = chipRow('level', LEVELS.map((n, i) => [i + 1, `Level ${i + 1}`, progress[i + 1] ? '<i class="check">✓</i>' : '']));
+    card.appendChild(section('🏆 Level', 'Higher levels have bigger boards', lv));
+
+    const cats = document.createElement('div');
+    cats.className = 'chips';
+    LEVELS.forEach((n, i) => {
+        const b = document.createElement('button');
+        b.className = 'chip' + (draft.level === i + 1 ? ' active' : '');
+        b.innerHTML = `<span>🐱 ${n}</span>`;
+        b.addEventListener('click', () => { draft.level = i + 1; renderSetup(); });
+        cats.appendChild(b);
+    });
+    card.appendChild(section('🐱 Cats needed', `${LEVELS[draft.level - 1]} cats on a ${LEVELS[draft.level - 1]}×${LEVELS[draft.level - 1]} board (goes with the level)`, cats));
+
+    card.appendChild(section('❤️ Hearts', 'Wrong cats cost a heart', chipRow('hearts', [
+        [1, '❤️ 1'], [2, '❤️ 2'], [3, '❤️ 3'], [5, '❤️ 5'], [0, '❤️ ∞ Endless']])));
+
+    card.appendChild(section('⏱ Time limit', 'Finish before the clock runs out', chipRow('time', [
+        [0, 'No limit'], [10, '10 min'], [5, '5 min'], [3, '3 min'], [2, '2 min'], [1, '1 min']])));
+
+    card.appendChild(section('💡 Hints', 'Each hint costs 40 points', chipRow('hints', [
+        [-1, 'Unlimited'], [3, '3'], [1, '1'], [0, 'None']])));
+
+    card.appendChild(section('🎁 Starter cats', 'Cats already napping when you begin', chipRow('starters', [
+        [0, 'None'], [1, '1'], [2, '2'], [3, '3']])));
+
+    card.appendChild(section('🔴 Mistake glow', 'Cats that break a rule glow red', chipRow('helper', [
+        [true, 'On'], [false, 'Off']])));
+
+    card.appendChild(section('🎨 Cat colour', '', chipRow('fur', [['mix', 'Mix', `<span class="mini">${catSVG(FURS[0])}</span>`]]
+        .concat(FURS.map((f, i) => [String(i), FUR_NAMES[i], `<span class="mini">${catSVG(f)}</span>`])))));
+
+    card.appendChild(section('🖼 Board colours', '', chipRow('theme', Object.keys(THEMES).map(k =>
+        [k, k[0].toUpperCase() + k.slice(1), `<span class="swatch">${THEMES[k].slice(0, 5).map(c => `<i style="background:${c}"></i>`).join('')}</span>`]))));
+
+    const howBox = document.createElement('div');
+    howBox.className = 'score-lines';
+    howBox.style.maxWidth = 'none';
+    howBox.style.margin = '0';
+    const L = draft.level;
+    howBox.innerHTML =
+        `<div><span>🏆 Solving the puzzle<em>Level × 100 (Level ${L} = ${L * 100})</em></span><span>+${L * 100}</span></div>` +
+        `<div><span>❤️ Hearts bonus<em>${draft.hearts ? `150 × hearts kept ÷ ${draft.hearts}. All kept = 150, half = 75` : '150 − 50 for each mistake'}</em></span><span>up to +150</span></div>` +
+        `<div><span>⏱ Speed bonus<em>3 points for each second under ${fmt(30 + L * 30)}</em></span><span>up to +200</span></div>` +
+        `<div class="minus"><span>💡 Hints<em>Each hint you use</em></span><span>−40</span></div>` +
+        `<div class="mult-head"><span>Then × setup multiplier</span><span>×${multiplier(draft).toFixed(1)}</span></div>` +
+        multiplierParts(draft).map(([t, v], i) => `<div class="mpart"><span>${i === 0 ? 'Everyone starts at' : t}</span><span>${i === 0 ? '×1.0' : v === 0 ? '±0' : (v > 0 ? '+' : '−') + Math.abs(v).toFixed(1)}</span></div>`).join('') +
+        `<div class="mpart"><span>(the multiplier never goes below ×0.3, and a win is always worth at least 20)</span><span></span></div>`;
+    card.appendChild(section('📊 How points work', 'Changes live as you pick', howBox));
+
+    document.getElementById('setup-mult').textContent = `⭐ Points ×${multiplier(draft).toFixed(1)}`;
+}
+
+function openSetup() {
+    draft = { ...settings };
+    renderSetup();
+    setupEl.classList.remove('hide');
+    setupEl.scrollTop = 0;
+}
+
+function playFromSetup() {
+    settings = { ...DEFAULTS, ...draft };
+    saveSettings();
+    level = settings.level;
+    difficulty = settings.difficulty;
+    N = LEVELS[level - 1];
+    setupEl.classList.add('hide');
+    homeEl.classList.add('hide');
+    renderLevels();
+    newGame();
+    if (!localStorage.getItem(TUT_KEY)) openTut();
+}
+
+document.getElementById('setup-play').addEventListener('click', playFromSetup);
+document.getElementById('setup-back').addEventListener('click', () => { setupEl.classList.add('hide'); showHome(); });
+document.getElementById('open-setup').addEventListener('click', openSetup);
+(function buildHome() {
+    document.getElementById('home-title').innerHTML = 'CAT NAPS'.split('')
+        .map((ch, i) => ch === ' ' ? '<span class="gap"></span>' : `<span style="animation-delay:${i * 0.12}s">${ch}</span>`).join('');
+    const floats = document.getElementById('home-floats');
+    for (let i = 0; i < 14; i++) {
+        const f = document.createElement('div');
+        f.className = 'home-float';
+        f.innerHTML = i % 3 === 0 ? PAW_SVG.replace(`fill="${LINE}"`, 'fill="#ff9fb2"') : catSVG(FURS[i % FURS.length], i % 2 === 0);
+        f.style.left = (i * 7.3 + rnd(5)) % 100 + 'vw';
+        const size = 36 + rnd(40);
+        f.style.width = f.style.height = size + 'px';
+        f.style.animationDuration = 9 + rnd(9) + 's';
+        f.style.animationDelay = -rnd(18) + 's';
+        floats.appendChild(f);
+    }
+})();
+document.getElementById('start-btn').addEventListener('click', hideHome);
+document.getElementById('home-tut').addEventListener('click', () => { homeEl.classList.add('hide'); openTut(); });
+document.getElementById('home-back').addEventListener('click', () => { window.top.location.href = 'didis-games.html'; });
+document.getElementById('home-btn').addEventListener('click', showHome);
+
+// ================= Start =================
+document.getElementById('logo').innerHTML = catSVG(FURS[0]);
+document.getElementById('win-art').innerHTML = catSVG(FURS[5], true);
+document.getElementById('lose-art').innerHTML = catSVG(FURS[1], true);
+renderLevels();
+renderMe();
+newGame();
+</script>
+</body>
+</html>
