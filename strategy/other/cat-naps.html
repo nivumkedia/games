@@ -314,6 +314,15 @@ h1 {
 .me-chip .me-art { width: 52px; height: 52px; }
 .me-chip .me-art svg, .home-cat svg, .up-art svg { width: 100%; height: 100%; overflow: visible; }
 .me-name { font-weight: 900; font-size: 15px; color: var(--accent-dark); }
+.lv-badge { position: relative; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+    border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff8d6, #ffd36b 60%, #f0a830);
+    border: 3px solid #fff; box-shadow: 0 0 0 2px #e39b2a, 0 3px 6px rgba(160, 90, 20, 0.35); line-height: 1; vertical-align: middle; }
+.lv-badge .lv-cat { width: 100%; height: 100%; display: block; border-radius: 50%; overflow: hidden; }
+.lv-badge .lv-cat svg { width: 100%; height: 100%; display: block; }
+.lv-badge b { position: absolute; right: -6px; bottom: -6px; min-width: 1.6em; height: 1.6em; padding: 0 3px; box-sizing: border-box;
+    display: flex; align-items: center; justify-content: center; border-radius: 999px; background: var(--accent-dark, #d9534f);
+    color: #fff; border: 2px solid #fff; font-weight: 900; }
+.home-rank .rank-row { display: flex; align-items: center; justify-content: center; gap: 12px; }
 .me-score { font-weight: 900; font-size: 14px; color: var(--text); }
 .bar { width: 150px; height: 9px; border-radius: 6px; background: #f3e2cf; overflow: hidden; margin-top: 3px; }
 .bar > div { height: 100%; background: linear-gradient(90deg, #ffb35c, #ff6fa0); border-radius: 6px; transition: width 1.2s cubic-bezier(.2, .8, .3, 1); }
@@ -735,7 +744,7 @@ h1 {
     <div class="home-tag">Help every sleepy cat find the perfect nap spot!</div>
 
     <div class="home-rank">
-        <div class="me-name" id="home-name"></div>
+        <div class="rank-row"><span id="home-badge"></span><div class="me-name" id="home-name"></div></div>
         <div class="bar"><div id="home-bar"></div></div>
         <small id="home-next"></small>
         <div class="cat-facts" id="home-facts"></div>
@@ -770,6 +779,7 @@ h1 {
 
 <div class="me-chip" title="Every 1,000 points your cat gets an upgrade!">
     <div class="me-art" id="me-art"></div>
+    <span id="me-badge"></span>
     <div>
         <div class="me-name" id="me-name"></div>
         <div class="me-score">⭐ <span id="me-score">0</span></div>
@@ -1340,16 +1350,21 @@ let hintsUsed = 0, mistakes = 0;
 
 // A new look every 1,000 points.
 const RANKS = [
-    { name: 'Little Kitten', fur: 0, gear: [] },
-    { name: 'Bow Cat', fur: 2, gear: ['bow'] },
-    { name: 'Cool Cat', fur: 1, gear: ['shades'] },
-    { name: 'King Cat', fur: 5, gear: ['crown'] },
-    { name: 'Wizard Cat', fur: 1, gear: ['wizard'] },
-    { name: 'Super Cat', fur: 0, gear: ['cape', 'mask'] },
-    { name: 'Space Cat', fur: 2, gear: ['helmet'] },
-    { name: 'Legend Cat', fur: 5, gear: ['aura', 'cape', 'crown'] },
+    { name: 'Little Kitten', icon: '🐾', fur: 0, gear: [] },
+    { name: 'Bow Cat', icon: '🎀', fur: 2, gear: ['bow'] },
+    { name: 'Cool Cat', icon: '😎', fur: 1, gear: ['shades'] },
+    { name: 'King Cat', icon: '👑', fur: 5, gear: ['crown'] },
+    { name: 'Wizard Cat', icon: '🧙', fur: 1, gear: ['wizard'] },
+    { name: 'Super Cat', icon: '🦸', fur: 0, gear: ['cape', 'mask'] },
+    { name: 'Space Cat', icon: '🚀', fur: 2, gear: ['helmet'] },
+    { name: 'Legend Cat', icon: '🌟', fur: 5, gear: ['aura', 'cape', 'crown'] },
 ];
 function rankIndex(score) { return Math.floor(score / 1000); }
+// Round level badge: rank icon + level number.
+function levelBadge(i, size = 40) {
+    const r = rankInfo(i);
+    return `<span class="lv-badge" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.5)}px" title="Level ${i + 1}: ${r.name}"><span class="lv-cat">${myCatSVG(i)}</span><b style="font-size:${Math.max(10, Math.round(size * 0.28))}px">${i + 1}</b></span>`;
+}
 function rankInfo(i) {
     const base = RANKS[Math.min(i, RANKS.length - 1)];
     const extra = i - (RANKS.length - 1);
@@ -2213,6 +2228,8 @@ function renderMe() {
     const pct = (totalScore % 1000) / 10;
     document.getElementById('me-art').innerHTML = catPhotoHTML(i, 'sit', 50);
     document.getElementById('me-name').textContent = r.name;
+    document.getElementById('me-badge').innerHTML = levelBadge(i, 48);
+    document.getElementById('home-badge').innerHTML = levelBadge(i, 84);
     document.getElementById('me-score').textContent = totalScore.toLocaleString();
     document.getElementById('me-bar').style.width = pct + '%';
     if (!homeCat) homeCat = new HomeCat(document.getElementById('home'));
@@ -2302,7 +2319,7 @@ function checkWin() {
     document.getElementById('upgrade-slot').innerHTML = after > before
         ? `<div class="upgrade-box"><div style="font-weight:900;font-size:18px">🎉 CAT UPGRADE! 🎉</div>
              <div class="up-art">${catPhotoHTML(after, 'sit', 120)}</div>
-             <div style="font-weight:800">Your cat is now a <b>${rankInfo(after).name}</b>!</div>
+             <div style="margin:6px 0">${levelBadge(after, 90)}</div><div style="font-weight:800">Your cat is now a <b>${rankInfo(after).name}</b>!</div>
              <div style="font-weight:800;margin-top:4px">🎂 It grew up: ${ageName(after)}</div>
              ${toysFor(after).some(t => t.rank === after) ? `<div style="font-weight:800;margin-top:4px">🎁 New toys: <b>${TOYS.filter(t => t.rank === after).map(t => t.name).join(', ')}</b></div>` : ''}</div>`
         : `<div style="font-weight:800;color:var(--dim);margin-bottom:10px">${(1000 - totalScore % 1000).toLocaleString()} more points until your cat upgrades!</div>`;
