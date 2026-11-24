@@ -10,8 +10,15 @@
   /* ---------- your homepage ---------- */
   #home {
     position: fixed; inset: 0; display: none; background: #1b2136; color: #e8ecf8;
-    padding: 48px 56px; box-sizing: border-box;
+    padding: 104px 56px 48px; box-sizing: border-box;
   }
+  /* the logo: one puzzle piece flies into this little box in the top-left corner */
+  #logo {
+    position: fixed; left: 24px; top: 24px; width: 64px; height: 64px; z-index: 20; display: none;
+    background: #ffffff; border-radius: 14px; /* double outline: a thin line inside + a white ring outside */
+    box-shadow: inset 0 0 0 4px #ffffff, inset 0 0 0 6px #1b2136, 0 0 0 4px #1b2136, 0 0 0 7px #ffffff, 0 10px 18px 4px rgba(0,0,0,0.35);
+  }
+  #logo canvas { width: 64px; height: 64px; display: block; }
   #home h1 { margin: 0 0 6px; font-size: 40px; letter-spacing: 1px; }
   #home .sub { margin: 0 0 32px; color: #8f9bc0; font-size: 18px; }
   #home h2 { margin: 0 0 16px; font-size: 24px; color: #c9d2ee; }
@@ -35,7 +42,7 @@
   /* ---------- browse puzzles ---------- */
   #browseScreen {
     position: fixed; inset: 0; display: none; background: #1b2136; color: #e8ecf8;
-    padding: 48px 56px; box-sizing: border-box; overflow-y: auto;
+    padding: 104px 56px 48px; box-sizing: border-box; overflow-y: auto;
   }
   #browseScreen h1 { margin: 0 0 6px; font-size: 40px; letter-spacing: 1px; }
   #browseScreen .sub { margin: 0 0 32px; color: #8f9bc0; font-size: 18px; }
@@ -201,6 +208,7 @@
 </head>
 <body>
 <canvas id="c"></canvas>
+<div id="logo"><canvas></canvas></div>
 <div id="home">
   <h1>Your Homepage</h1>
   <p class="sub">Pick up where you left off.</p>
@@ -246,10 +254,10 @@ const EQUATIONS = [
   '2x − 9 = 11', 'A = πr²', '¼ + ½ = ¾', '64 ÷ 8 = 8', '11 × 11 = 121', '%', '15% of 80 = 12',
 ];
 
-let W, H, dpr, u, cols, rows, ox, oy, pieces = [], bakeCanvas = null, btnRect = null, fontSize;
+let logoPt = null, logoPiece = null, W, H, dpr, u, cols, rows, ox, oy, pieces = [], bakeCanvas = null, btnRect = null, fontSize;
 let phase = 'intro', t0 = performance.now(), lockTime = 0, leaveTime = 0, hoverPlay = false, particles = [];
-const T_START = 0.35;   // plain white screen first
-const T_END = 2.6;      // every piece locks in at this exact moment
+const T_START = 0.2;    // plain white screen first
+const T_END = 1.7;      // every piece locks in at this exact moment
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = a => a[Math.floor(Math.random() * a.length)];
@@ -327,6 +335,7 @@ function layout() {
   const top = (H - (titleH + gap + btnHpx)) / 2;
   const titleCY = top + titleH / 2;
   const tw = textWidth(ctx, 'BRAINSTACK', fontSize);
+  logoPt = { x: W / 2 - tw / 2 + fontSize * 0.33, y: titleCY };
   const titleRect = { x: W / 2 - tw / 2 - u, y: titleCY - fontSize * 0.6, w: tw + 2 * u, h: fontSize * 1.25 };
 
   // play button snapped to the grid
@@ -443,9 +452,72 @@ function layout() {
     pieces.push({
       face, side, path, cx, cy, bw, bh, fw, fh, btn: bl.btn,
       s0: rand(3.5, 7), rot0: rand(-1.1, 1.1), tilt0: rand(-1.0, 1.0),
-      start: rand(T_START, T_START + 1.1), dx: rand(-60, 60), dy: rand(-60, 60), lift: 0,
+      start: rand(T_START, T_START + 0.7), dx: rand(-60, 60), dy: rand(-60, 60), lift: 0,
     });
   }
+  logoPiece = null; let best = Infinity;
+  for (const p of pieces) { // a big square piece right on the B of BRAINSTACK
+    if (p.btn) continue;
+    const dd = Math.hypot(p.cx - logoPt.x, p.cy - logoPt.y) + (p.bw === p.bh ? 0 : u * 3) - p.bw * 0.5;
+    if (dd < best) { best = dd; logoPiece = p; }
+  }
+}
+const LOGO = { x: 24, y: 24, s: 64 };
+function logoScale(p) { return LOGO.s * 0.78 / Math.max(p.bw, p.bh); }
+function drawLogoBox(g, a) { // the little double-outlined white box waiting in the top-left corner (matches #logo)
+  const { x, y, s: S } = LOGO;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0); g.globalAlpha = a;
+  g.fillStyle = '#ffffff'; g.beginPath(); g.roundRect(x - 7, y - 7, S + 14, S + 14, 21); g.fill();       // outer white ring
+  g.fillStyle = '#1b2136'; g.beginPath(); g.roundRect(x - 4, y - 4, S + 8, S + 8, 18); g.fill();         // gap
+  g.fillStyle = '#ffffff'; g.beginPath(); g.roundRect(x, y, S, S, 14); g.fill();                          // the square
+  g.strokeStyle = '#1b2136'; g.lineWidth = 2; g.beginPath(); g.roundRect(x + 5, y + 5, S - 10, S - 10, 10); g.stroke(); // inner line
+  g.globalAlpha = 1;
+}
+// the Brainstack logo — a "B" that is secretly three things at once:
+//   * a STACK: it is built from two puzzle pieces sitting on top of each other (they lock together)
+//   * a B: the round tabs sticking out on the right are the two bumps of the letter B
+//   * an EQUATION: the two holes inside the B line up into an = sign (the whole goal of Inequal)
+let logoArtCanvas = null;
+function logoArt() {
+  if (logoArtCanvas) return logoArtCanvas;
+  const S = LOGO.s, R = 4; // drawn 4x bigger than needed so it stays crisp when zooming
+  const c = document.createElement('canvas'); c.width = c.height = Math.round(S * R * dpr);
+  const g = c.getContext('2d'); g.scale(R * dpr, R * dpr);
+  const w = 19, h = 16.5, tab = 0.62;                               // each piece; the B is ~half the box → breathing room
+  const x0 = S / 2 - (w + tab * h) / 2, y0 = S / 2 - h;
+  const seam = (p, from, to) => edge(p, from, y0 + h, to, y0 + h, 1, from < to ? 0.24 : 0.76, 0.2); // tab on the left of the seam
+  const top = new Path2D(), bot = new Path2D();
+  top.moveTo(x0, y0); top.lineTo(x0 + w, y0);
+  edge(top, x0 + w, y0, x0 + w, y0 + h, 1, 0.5, tab);            // upper bump of the B
+  seam(top, x0 + w, x0); top.closePath();
+  bot.moveTo(x0, y0 + h);
+  edge(bot, x0, y0 + h, x0 + w, y0 + h, -1, 0.24, 0.2);          // hole that the top piece locks into
+  edge(bot, x0 + w, y0 + h, x0 + w, y0 + 2 * h, 1, 0.5, tab);    // lower bump of the B
+  bot.lineTo(x0, y0 + 2 * h); bot.closePath();
+  const piece = (path, c1, c2, sideCol) => {
+    for (let i = 4; i >= 1; i--) { g.save(); g.translate(0.45 * i, 0.65 * i); g.fillStyle = sideCol; g.fill(path); g.restore(); }
+    const gr = g.createLinearGradient(x0, y0, x0 + w + 6, y0 + 2 * h); gr.addColorStop(0, c1); gr.addColorStop(1, c2);
+    g.fillStyle = gr; g.fill(path);
+    g.save(); g.clip(path); g.fillStyle = 'rgba(255,255,255,0.28)'; g.fillRect(x0 - 2, y0 - 2, w + 12, 4.5 + (path === bot ? h : 0)); g.restore();
+    g.lineWidth = 0.7; g.strokeStyle = 'rgba(255,255,255,0.75)'; g.stroke(path);
+  };
+  g.save(); g.shadowColor = 'rgba(27,33,54,0.35)'; g.shadowBlur = 4; g.shadowOffsetY = 3; g.fillStyle = '#000';
+  g.fill(top); g.fill(bot); g.restore();
+  piece(bot, '#1eb6e8', '#8b5cf6', '#4b34b0');
+  piece(top, '#ff4757', '#ffc312', '#b8323c');
+  // the two holes of the B = the two bars of an "=" sign
+  g.globalCompositeOperation = 'destination-out';
+  const bar = y => { g.beginPath(); g.roundRect(x0 + 6.5, y, w - 3, 3.2, 1.6); g.fill(); };
+  bar(y0 + h - 6); bar(y0 + h + 2.8);
+  g.globalCompositeOperation = 'source-over';
+  return logoArtCanvas = c;
+}
+function makeLogo() { // the logo stays in the corner box
+  const el = document.getElementById('logo'), c = el.querySelector('canvas');
+  c.width = c.height = Math.round(LOGO.s * dpr);
+  const g = c.getContext('2d'); g.imageSmoothingQuality = 'high';
+  g.drawImage(logoArt(), 0, 0, c.width, c.height);
+  el.style.display = 'block';
 }
 
 // ---------- drawing ----------
@@ -455,7 +527,6 @@ function drawPiece(g, p, x, y, sc, rot, tilt, depthMul, pass, alpha = 1) {
   const ex = 0.4 * depth + Math.sin(tilt) * p.bw * 0.25 * sc, ey = 0.8 * depth;
   const cs = Math.cos(rot), sn = Math.sin(rot), sx = sc * squash, sy = sc;
   g.globalAlpha = alpha;
-  g.imageSmoothingQuality = 'high';
   const put = (img, px, py) => {
     g.setTransform(dpr * cs * sx, dpr * sn * sx, -dpr * sn * sy, dpr * cs * sy, dpr * px, dpr * py);
     g.drawImage(img, -p.fw / 2, -p.fh / 2, p.fw, p.fh);
@@ -466,6 +537,7 @@ function drawPiece(g, p, x, y, sc, rot, tilt, depthMul, pass, alpha = 1) {
 }
 
 function bake() {
+  logoArtCanvas = null; logoArt(); // build the logo now, while nothing is moving, so the fling-out never waits for it
   bakeCanvas = document.createElement('canvas');
   bakeCanvas.width = canvas.width; bakeCanvas.height = canvas.height;
   const g = bakeCanvas.getContext('2d');
@@ -510,6 +582,7 @@ function frame(now) {
     const squash = 1 + 0.02 * Math.exp(-lt * 14) * Math.abs(Math.cos(lt * 30)); // punch-in on impact, never shows the edges
     const jolt = 0;
     ctx.setTransform(squash, 0, 0, squash, (1 - squash) * canvas.width / 2, (1 - squash) * canvas.height / 2 + jolt * dpr);
+    if (lt < 0.1) for (const p of pieces) ctx.drawImage(p.face, 0, 0, 1, 1); // warm up every piece picture now (hidden under the board) so the fling-out doesn't hiccup
     ctx.drawImage(bakeCanvas, 0, 0);
     if (lt < 0.35) { ctx.globalAlpha = Math.pow(1 - lt / 0.35, 2); ctx.drawImage(flashCanvas, 0, 0); ctx.globalAlpha = 1; }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -523,20 +596,36 @@ function frame(now) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     if (lt < 0.12) { ctx.fillStyle = `rgba(255,255,255,${0.3 * (1 - lt / 0.12)})`; ctx.fillRect(0, 0, canvas.width, canvas.height); }
   } else if (phase === 'leaving') {
-    const lt = t - leaveTime, k = Math.min(1, lt / 0.85);
+    const lt = t - leaveTime, k = Math.min(1, lt / 0.6);
     ctx.fillStyle = '#1b2136'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     const draws = [];
     for (const p of pieces) {
+      if (p === logoPiece) continue;
       const kk = Math.max(0, Math.min(1, (k - p.leaveDelay) / (1 - p.leaveDelay)));
-      const sc = 1 + (p.s0 - 1) * kk * kk;
-      const x = CX + (p.cx - CX) * sc, y = CY + (p.cy - CY) * sc;
+      // fling outward fast but only grow a little: giant pieces covering the screen were what made this slow
+      const spread = 1 + 2.6 * kk * kk, sc = 1 + 0.7 * kk * kk;
+      const x = CX + (p.cx - CX) * spread, y = CY + (p.cy - CY) * spread;
       const rad = Math.max(p.fw, p.fh) * 0.75 * sc;
       if (x + rad < 0 || x - rad > W || y + rad < 0 || y - rad > H) continue;
-      draws.push({ p, x, y, sc, rot: p.rot0 * kk, tilt: p.tilt0 * kk, a: 1 - kk * kk });
+      const a = 1 - kk * kk; if (a < 0.04) continue;
+      draws.push({ p, x, y, sc, rot: p.rot0 * kk, tilt: p.tilt0 * kk, a });
     }
     draws.sort((a, b) => a.sc - b.sc);
-    for (const d of draws) drawPiece(ctx, d.p, d.x, d.y, d.sc, d.rot, d.tilt, 1, null, d.a);
-    if (k >= 1) { phase = 'home'; showHome(); }
+    for (const d of draws) drawPiece(ctx, d.p, d.x, d.y, d.sc, d.rot, d.tilt, 1, 'face', d.a); // face only: much faster
+    drawLogoBox(ctx, Math.min(1, k * 2.5)); // on top of the flying pieces, so you can see where the logo lands
+    if (logoPiece) { // one piece zooms into the corner box and becomes the logo
+      const p = logoPiece, e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2, hop = Math.sin(Math.PI * k);
+      const x = p.cx + (LOGO.x + LOGO.s / 2 - p.cx) * e, y = p.cy + (LOGO.y + LOGO.s / 2 - p.cy) * e;
+      const sc = (1 + (logoScale(p) - 1) * e) * (1 + 0.35 * hop);
+      const m = Math.max(0, Math.min(1, (k - 0.3) / 0.3)); // 0 = board piece, 1 = the logo
+      if (m < 1) drawPiece(ctx, p, x, y, sc, 0.5 * hop, 0, 1, null, 1 - m);
+      if (m > 0) {
+        const sz = LOGO.s * (1 + 1.2 * (1 - e)) * (1 + 0.35 * hop), rot = 0.5 * hop;
+        ctx.setTransform(dpr * Math.cos(rot), dpr * Math.sin(rot), -dpr * Math.sin(rot), dpr * Math.cos(rot), dpr * x, dpr * y);
+        ctx.globalAlpha = m; ctx.drawImage(logoArt(), -sz / 2, -sz / 2, sz, sz); ctx.globalAlpha = 1; // (no 'high' smoothing here: it made every later frame stall)
+      }
+    }
+    if (k >= 1) { phase = 'home'; makeLogo(); showHome(); }
   }
 
   // confetti
@@ -565,7 +654,7 @@ canvas.addEventListener('click', e => {
   if (!overPlay(e)) return;
   phase = 'leaving'; leaveTime = (performance.now() - t0) / 1000;
   canvas.style.cursor = 'default'; hoverPlay = false;
-  for (const p of pieces) p.leaveDelay = rand(0, 0.35);
+  for (const p of pieces) p.leaveDelay = rand(0, 0.25);
 });
 
 function startIntro() {
@@ -599,6 +688,9 @@ window.addEventListener('resize', () => {
     for (const el of [a, b]) { el.style.transition = 'none'; el.style.transform = ''; }
     const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
     const ta = a.innerHTML; a.innerHTML = b.innerHTML; b.innerHTML = ta;
+    // digits that land inside a green-underline group just become part of that green group
+    // (a purple/orange digit in there can't be dragged, so it stops being purple/orange)
+    for (const el of [a, b]) if (el.classList.contains('gu')) for (const c of el.children) c.className = 'd';
     // slide each number in from where the other one was
     for (const [el, from, to] of [[a, rb, ra], [b, ra, rb]]) {
       el.style.transition = 'none';
@@ -659,8 +751,8 @@ window.addEventListener('resize', () => {
     [{ t: '13' }, { t: '−' }, { t: '2' }, { t: '*−' }, { t: '3' }, { t: '=' }, { t: '10' }],
     // 4 orange digits in a short equation: 1 → into 87, 5 → end of 2, 8 → front of 2, 4 → after the 8 → 817 + 25 = 842 (only answer; needs all four)
     [{ t: '87*4' }, { t: '+' }, { t: '*52*1' }, { t: '=' }, { t: '2*8' }],
-    // 3 oranges, big numbers: 3 → end of 26, 6 → in front of 68, 7 → in front of 49 → 263 − 668 + 749 = 344 (needs all three)
-    [{ t: '2*76' }, { t: '−' }, { t: '68*3' }, { t: '+' }, { t: '4*69' }, { t: '=' }, { t: '344' }],
+    // 3 oranges, big numbers: 8 → front of 87, 4 → in front of 28, 5 → between the 4 and 9 → 428 + 459 = 887 (only answer; needs all three)
+    [{ t: '2*88' }, { t: '+' }, { t: '49*5' }, { t: '=' }, { t: '8*47' }],
     // orange signs break numbers apart so 3 orange digits can be put together into a brand-new number:
     // → 13 + 162 × 3 − 4 = 495 (the + moves into 3162, the 1 2 3 join back to 13; only answer)
     [{ t: '1' }, { t: '*+' }, { t: '*23' }, { t: '×' }, { t: '*63' }, { t: '*−' }, { t: '4' }, { t: '=' }, { t: '495*1' }],
@@ -938,7 +1030,7 @@ window.addEventListener('resize', () => {
       // save straight away so a refresh during the celebration still moves you on
       save(level + 1 < LEVELS.length ? { level: level + 1, tokens: null } : { done: true });
       updateProgress(level + 1, true);
-      if (level + 1 < LEVELS.length) nextTimer = setTimeout(() => nextLevel(level + 1), 2300); // 2 s after "You win!"
+      if (level + 1 < LEVELS.length) nextTimer = setTimeout(() => nextLevel(level + 1), 2300); // 2.3 s after "You win!"
     }
   }
 
@@ -1007,25 +1099,43 @@ window.addEventListener('resize', () => {
     cv.width = W * d; cv.height = H * d; cv.style.display = 'block';
     const LINES_IN = 0.45, MOVE = 1.3, LINES_OUT = 0.5;
     const ease = x => x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
-    const t0 = performance.now();
     swapAbort = false;
 
-    function drawCell(img, cell, x, y, rot, sc, lineAlpha, shadow) {
-      g.setTransform(d * sc * Math.cos(rot), d * sc * Math.sin(rot), -d * sc * Math.sin(rot), d * sc * Math.cos(rot), d * x, d * y);
-      if (shadow) { g.save(); g.shadowColor = 'rgba(27,33,54,0.25)'; g.shadowBlur = 18 * shadow; g.shadowOffsetY = 8 * shadow; g.fillStyle = '#fff'; g.fill(cell.path); g.restore(); }
-      g.save(); g.clip(cell.path);
-      g.drawImage(img, -cell.cx, -cell.cy, W, H);
-      g.restore();
-      if (lineAlpha > 0) { g.lineWidth = 2 / sc; g.strokeStyle = `rgba(150,158,175,${lineAlpha})`; g.stroke(cell.path); }
+    // speed: cut every piece out ONCE into its own small picture (plus one blurred shadow),
+    // so each frame just stamps small images instead of clipping the whole screen per piece
+    const m = Math.ceil(0.3 * Math.max(cw, ch) + 24), sw = cw + 2 * m, sh = ch + 2 * m;
+    function sprite(img, cell) {
+      const c = document.createElement('canvas'); c.width = Math.ceil(sw * d); c.height = Math.ceil(sh * d);
+      const x = c.getContext('2d'); x.setTransform(d, 0, 0, d, d * (m + cw / 2), d * (m + ch / 2));
+      x.save(); x.clip(cell.path);
+      const sx = cell.cx - cw / 2 - m, sy = cell.cy - ch / 2 - m;
+      x.drawImage(img, sx * d, sy * d, sw * d, sh * d, -cw / 2 - m, -ch / 2 - m, sw, sh);
+      x.restore();
+      x.lineWidth = 2; x.strokeStyle = 'rgb(150,158,175)'; x.stroke(cell.path);
+      return c;
     }
+    function shadowOf(cell) {
+      const c = document.createElement('canvas'); c.width = Math.ceil(sw * d); c.height = Math.ceil(sh * d);
+      const x = c.getContext('2d'); x.setTransform(d, 0, 0, d, d * (m + cw / 2), d * (m + ch / 2));
+      x.shadowColor = 'rgba(27,33,54,0.25)'; x.shadowBlur = 18 * d; x.shadowOffsetY = 8 * d; x.fillStyle = '#fff'; x.fill(cell.path);
+      return c;
+    }
+    for (const c of cells) { c.sprA = sprite(imgA, c); c.sprB = sprite(imgB, c); c.shadow = shadowOf(c); }
+    const allLines = new Path2D();
+    for (const c of cells) allLines.addPath(c.path, new DOMMatrix([1, 0, 0, 1, c.cx, c.cy]));
+    function lines(alpha) { g.setTransform(d, 0, 0, d, 0, 0); g.lineWidth = 2; g.strokeStyle = `rgba(150,158,175,${alpha})`; g.stroke(allLines); }
+    function stamp(spr, x, y, rot, sc, alpha) {
+      g.setTransform(d * sc * Math.cos(rot), d * sc * Math.sin(rot), -d * sc * Math.sin(rot), d * sc * Math.cos(rot), d * x, d * y);
+      g.globalAlpha = alpha; g.drawImage(spr, -cw / 2 - m, -ch / 2 - m, sw, sh); g.globalAlpha = 1;
+    }
+    const t0 = performance.now();
     (function frame(now) {
       if (swapAbort) { cv.style.display = 'none'; return; }
       const t = (now - t0) / 1000;
       g.setTransform(1, 0, 0, 1, 0, 0);
       g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
       if (t < LINES_IN) {
-        g.drawImage(imgA, 0, 0);
-        for (const c of cells) drawCell(imgA, c, c.cx, c.cy, 0, 1, t / LINES_IN, 0);
+        g.drawImage(imgA, 0, 0); lines(t / LINES_IN);
       } else if (t < LINES_IN + MOVE) {
         const list = pieces.map(p => {
           const k = Math.max(0, Math.min(1, (t - LINES_IN - p.delay) / (MOVE - 0.35)));
@@ -1034,13 +1144,14 @@ window.addEventListener('resize', () => {
         for (const { p, k, lift } of list) {
           const e = ease(k);
           const x = p.from.cx + (p.to.cx - p.from.cx) * e, y = p.from.cy + (p.to.cy - p.from.cy) * e;
-          const secret = k >= 0.5; // halfway there, the piece quietly becomes its new spot's Level-2 piece
-          drawCell(secret ? imgB : imgA, secret ? p.to : p.from, x, y, p.spin * lift, 1 + 0.12 * lift, 1, lift);
+          const secret = k >= 0.5; // halfway there, the piece quietly becomes its new spot's next-level piece
+          const rot = p.spin * lift, sc = 1 + 0.12 * lift;
+          if (lift > 0.02) stamp((secret ? p.to : p.from).shadow, x, y, rot, sc, lift);
+          stamp(secret ? p.to.sprB : p.from.sprA, x, y, rot, sc, 1);
         }
       } else {
         const k = Math.min(1, (t - LINES_IN - MOVE) / LINES_OUT);
-        g.drawImage(imgB, 0, 0);
-        for (const c of cells) drawCell(imgB, c, c.cx, c.cy, 0, 1, 1 - k, 0);
+        g.drawImage(imgB, 0, 0); lines(1 - k);
         if (k >= 1) { cv.style.display = 'none'; return; }
       }
       requestAnimationFrame(frame);
@@ -1436,7 +1547,7 @@ function showBrowse() {
       <span class="go">${status}</span>
     </button>`;
   document.getElementById('playInequal').onclick = () => {
-    document.getElementById('browseScreen').style.display = 'none';
+    document.getElementById('browseScreen').style.display = 'none'; document.getElementById('logo').style.display = 'none';
     window.inequalResume();
   };
   document.getElementById('home').style.display = 'none';
@@ -1454,10 +1565,11 @@ function showHome() {
     ? `<button class="card" id="resumeInequal"><span class="name">Inequal</span><span class="lvl">Level ${saved.level} of ${saved.of}</span><span class="go">Continue ▶</span></button>`
     : '<div class="empty">No puzzles in progress yet</div>';
   if (saved) document.getElementById('resumeInequal').onclick = () => {
-    document.getElementById('home').style.display = 'none';
+    document.getElementById('home').style.display = 'none'; document.getElementById('logo').style.display = 'none';
     window.inequalResume();
   };
   document.getElementById('home').style.display = 'block';
+  if (logoPiece) document.getElementById('logo').style.display = 'block';
 }
 
 // Inequal (open the page with #inequal to jump straight to level 1, #inequal-2 for level 2)
